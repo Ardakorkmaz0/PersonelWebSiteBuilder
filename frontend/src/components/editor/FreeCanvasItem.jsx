@@ -2,6 +2,7 @@ import { useEditorStore } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 
 const MIN = 20
+const ACCENT = '#2b579a'
 
 // [direction, absolute-position style, cursor]
 const HANDLES = [
@@ -96,10 +97,10 @@ export default function FreeCanvasItem({ component }) {
         cursor: 'move',
         zIndex: isSelected ? 20 : 1,
         opacity: hidden ? 0.35 : 1,
-        outline: isSelected ? '2px solid #3b82f6' : undefined,
+        outline: isSelected ? `2px solid ${ACCENT}` : undefined,
       }}
       className={
-        isSelected ? '' : 'hover:outline hover:outline-1 hover:outline-blue-300'
+        isSelected ? '' : 'hover:outline hover:outline-1 hover:outline-[#a6b7d6]'
       }
     >
       <div className="pointer-events-none h-full w-full select-none overflow-hidden">
@@ -109,7 +110,7 @@ export default function FreeCanvasItem({ component }) {
       {hidden && (
         <span
           style={{ position: 'absolute', top: 2, left: 2, zIndex: 25 }}
-          className="rounded bg-gray-800/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
+          className="rounded-[2px] bg-[#201f1e]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           Hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}
         </span>
@@ -125,7 +126,7 @@ export default function FreeCanvasItem({ component }) {
               remove(component.id)
             }}
             style={{ position: 'absolute', top: 2, right: 2, zIndex: 30 }}
-            className="rounded bg-red-500 px-2 py-0.5 text-xs font-medium text-white shadow"
+            className="rounded-[2px] bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
           >
             Delete
           </button>
@@ -137,9 +138,9 @@ export default function FreeCanvasItem({ component }) {
                 position: 'absolute',
                 width: 10,
                 height: 10,
-                background: '#3b82f6',
+                background: ACCENT,
                 border: '1px solid #ffffff',
-                borderRadius: 2,
+                borderRadius: 0,
                 zIndex: 30,
                 cursor,
                 ...pos,

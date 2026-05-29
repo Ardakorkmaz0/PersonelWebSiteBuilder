@@ -12,71 +12,215 @@ function genId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function emptySchema() {
+function blankPage(name = 'New Page', folder = '', id) {
   return {
-    pages: [
-      {
-        id: 'page_home',
-        name: 'Home',
-        components: [],
-        background: '#ffffff',
-        backgroundMobile: '#ffffff',
-        canvasWidth: CANVAS_WIDTH,
-        canvasFold: 0,
-        mobileWidth: MOBILE_CANVAS_WIDTH,
-        mobileFold: 0,
-      },
-    ],
+    id: id || genId('page'),
+    name,
+    folder,
+    components: [],
+    background: '#ffffff',
+    backgroundMobile: '#ffffff',
+    canvasWidth: CANVAS_WIDTH,
+    canvasFold: 0,
+    mobileWidth: MOBILE_CANVAS_WIDTH,
+    mobileFold: 0,
   }
 }
 
-function withComponents(schema, components) {
-  const pages = [...schema.pages]
-  pages[0] = { ...pages[0], components }
+function emptySchema() {
+  return { pages: [blankPage('Home', '', 'page_home')] }
+}
+
+// The page currently being edited (selector + internal lookup share this).
+export function selectCurrentPage(s) {
+  return s.schema.pages.find((p) => p.id === s.currentPageId) || s.schema.pages[0]
+}
+
+// Replace the current page via an updater function (immutably).
+function mapPage(schema, id, updater) {
+  const pages = schema.pages.map((p) => (p.id === id ? updater(p) : p))
   return { ...schema, pages }
 }
 
-// Derive a clean single-column phone layout from the desktop design. Components
-// are stacked top-to-bottom in desktop reading order; this is the professional
-// default the user then tweaks (it is NOT just the desktop layout shrunk).
-// Returns a map of component id -> { x, y, w, h } in mobile-canvas coordinates.
+function withComponents(schema, id, components) {
+  return mapPage(schema, id, (p) => ({ ...p, components }))
+}
+
+// --- Mobile auto-layout helpers ---------------------------------------------
+const BAND_PAD = 20 // inner padding for section "bands" on mobile
+
+function _num(v, def) {
+  const n = parseFloat(v)
+  return Number.isFinite(n) ? n : def
+}
+function _lineRatio(lh, fs) {
+  if (!lh) return 1.35
+  const n = parseFloat(lh)
+  if (!Number.isFinite(n)) return 1.35
+  return String(lh).includes('px') ? n / fs : n > 3 ? n / fs : n
+}
+function _padTB(p) {
+  if (!p) return 0
+  const a = String(p).trim().split(/\s+/).map((x) => _num(x, 0))
+  const t = a[0] || 0
+  const b = a.length >= 3 ? a[2] || 0 : t
+  return t + b
+}
+function _padLR(p) {
+  if (!p) return 0
+  const a = String(p).trim().split(/\s+/).map((x) => _num(x, 0))
+  const r = a.length >= 2 ? a[1] || 0 : a[0] || 0
+  const l = a.length >= 4 ? a[3] || 0 : r
+  return r + l
+}
+function _wrapH(text, fs, lr, w) {
+  const cpl = Math.max(6, Math.floor(w / (fs * 0.56)))
+  const lines = Math.max(1, Math.ceil(String(text || '').length / cpl))
+  return lines * fs * lr
+}
+const _FS = { heading: 30, text: 18, card: 17, button: 17, linkbutton: 17, navbar: 17, section: 24 }
+
+// Estimate the height a component needs at the given (narrow) mobile box width so
+// re-wrapped text isn't clipped. Falls back to the desktop height for non-text.
+function estMobileHeight(c, boxW) {
+  const s = c.styles || {}
+  const p = c.props || {}
+  const padTB = _padTB(s.padding)
+  const innerW = Math.max(40, boxW - _padLR(s.padding))
+  const fs = _num(s.fontSize, _FS[c.type] || 18)
+  const lr = _lineRatio(s.lineHeight, fs)
+  switch (c.type) {
+    case 'heading':
+      return Math.round(Math.max(40, _wrapH(p.text, fs, lr, innerW) + padTB + 10))
+    case 'text':
+      return Math.round(Math.max(32, _wrapH(p.text, fs, lr, innerW) + padTB + 8))
+    case 'card': {
+      const tt = p.title ? _wrapH(p.title, 20, 1.3, innerW) + 10 : 0
+      const bd = p.text ? _wrapH(p.text, fs, lr, innerW) : 0
+      return Math.round(Math.max(80, tt + bd + padTB + 28))
+    }
+    case 'button':
+    case 'linkbutton':
+      return Math.round(Math.max(40, fs * 1.25 + padTB + 16))
+    case 'navbar':
+      return Math.max(52, Math.round(c.layout?.h || 60))
+    case 'divider':
+      return Math.max(2, Math.round(c.layout?.h || 8))
+    case 'spacer':
+      return Math.max(8, Math.min(Math.round(c.layout?.h || 24), 64))
+    case 'image': {
+      const dl = c.layout || {}
+      const ratio = dl.w ? dl.h / dl.w : 0.6
+      return Math.max(40, Math.round(boxW * ratio))
+    }
+    case 'section': {
+      const head = p.heading ? _wrapH(p.heading, _num(s.fontSize, 24), 1.3, innerW) : 0
+      return Math.round(Math.max(80, head + padTB + 48))
+    }
+    default:
+      return Math.max(40, Math.round(c.layout?.h || 80))
+  }
+}
+
+// Place a single component within an available column [leftX, leftX+availW].
+function placeMobile(c, leftX, availW) {
+  if (c.type === 'image') {
+    return { x: leftX, w: availW, h: estMobileHeight(c, availW) }
+  }
+  if (c.type === 'button' || c.type === 'linkbutton') {
+    const w = Math.min(availW, Math.max(120, (c.props?.text || '').length * 10 + 48))
+    return { x: Math.round(leftX + (availW - w) / 2), w, h: estMobileHeight(c, w) }
+  }
+  return { x: leftX, w: availW, h: estMobileHeight(c, availW) }
+}
+
+// Build a clean single-column phone layout from the desktop design. Section
+// "bands" keep the components that sit on top of them grouped inside the band
+// (so heroes/feature sections survive), and every box is re-sized to fit its
+// re-wrapped content so nothing is clipped. Returns id -> { x, y, w, h }.
 export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) {
   const contentW = mobileWidth - MOBILE_PAD * 2
-  const ordered = components
-    .map((c, i) => ({ c, i }))
-    .sort((a, b) => {
-      const la = a.c.layout || { x: 0, y: 0 }
-      const lb = b.c.layout || { x: 0, y: 0 }
-      if (Math.abs((la.y || 0) - (lb.y || 0)) > 24) return (la.y || 0) - (lb.y || 0)
-      if ((la.x || 0) !== (lb.x || 0)) return (la.x || 0) - (lb.x || 0)
-      return a.i - b.i
+  const idx = new Map(components.map((c, i) => [c.id, i]))
+  const rectOf = (c) => {
+    const l = c.layout || {}
+    const x = l.x || 0
+    const y = l.y || 0
+    const w = l.w || 0
+    const h = l.h || 0
+    return { x, y, w, h, r: x + w, b: y + h, area: w * h }
+  }
+  const rects = new Map(components.map((c) => [c.id, rectOf(c)]))
+
+  // Assign each non-section component to the smallest section that contains it.
+  const sections = components.filter((c) => c.type === 'section')
+  const parentOf = new Map()
+  for (const c of components) {
+    if (c.type === 'section') continue
+    const cr = rects.get(c.id)
+    let best = null
+    let bestArea = Infinity
+    for (const sec of sections) {
+      const sr = rects.get(sec.id)
+      if (
+        sr.x - 8 <= cr.x && sr.y - 8 <= cr.y &&
+        sr.r + 8 >= cr.r && sr.b + 8 >= cr.b &&
+        sr.area > cr.area * 1.15 && sr.area < bestArea
+      ) {
+        best = sec.id
+        bestArea = sr.area
+      }
+    }
+    if (best) parentOf.set(c.id, best)
+  }
+  const childrenOf = new Map()
+  for (const [cid, pid] of parentOf) {
+    if (!childrenOf.has(pid)) childrenOf.set(pid, [])
+    childrenOf.get(pid).push(cid)
+  }
+
+  const byReading = (ids) =>
+    ids.slice().sort((a, b) => {
+      const ra = rects.get(a)
+      const rb = rects.get(b)
+      if (Math.abs(ra.y - rb.y) > 24) return ra.y - rb.y
+      if (ra.x !== rb.x) return ra.x - rb.x
+      return idx.get(a) - idx.get(b)
     })
+
+  const topLevel = components
+    .filter((c) => c.type === 'section' || !parentOf.has(c.id))
+    .map((c) => c.id)
 
   const out = {}
   let y = MOBILE_PAD
-  for (const { c } of ordered) {
-    const dl = c.layout || { w: 200, h: 80 }
-    let x, w, h
-    if (FULL_WIDTH_TYPES.has(c.type)) {
-      x = 0
-      w = mobileWidth
-      h = dl.h
-    } else if (c.type === 'image') {
-      x = MOBILE_PAD
-      w = contentW
-      const ratio = dl.w ? dl.h / dl.w : 0.66
-      h = Math.max(40, Math.round(w * ratio))
-    } else if (c.type === 'button' || c.type === 'linkbutton') {
-      w = Math.min(dl.w, contentW)
-      x = Math.round((mobileWidth - w) / 2)
-      h = dl.h
+  const byId = new Map(components.map((c) => [c.id, c]))
+
+  for (const id of byReading(topLevel)) {
+    const c = byId.get(id)
+    const kids = childrenOf.get(id)
+    if (c.type === 'section' && kids && kids.length) {
+      // Full-width band; stack its content inside.
+      const innerLeft = BAND_PAD
+      const innerW = mobileWidth - BAND_PAD * 2
+      let cy = y + BAND_PAD
+      for (const kid of byReading(kids)) {
+        const kc = byId.get(kid)
+        const pl = placeMobile(kc, innerLeft, innerW)
+        out[kid] = { x: pl.x, y: cy, w: pl.w, h: pl.h }
+        cy += pl.h + MOBILE_GAP
+      }
+      const bandH = cy - MOBILE_GAP + BAND_PAD - y
+      out[id] = { x: 0, y, w: mobileWidth, h: Math.round(bandH) }
+      y += Math.round(bandH) + MOBILE_GAP
+    } else if (FULL_WIDTH_TYPES.has(c.type)) {
+      const h = estMobileHeight(c, mobileWidth)
+      out[id] = { x: 0, y, w: mobileWidth, h }
+      y += h + MOBILE_GAP
     } else {
-      x = MOBILE_PAD
-      w = contentW
-      h = dl.h
+      const pl = placeMobile(c, MOBILE_PAD, contentW)
+      out[id] = { x: pl.x, y, w: pl.w, h: pl.h }
+      y += pl.h + MOBILE_GAP
     }
-    out[c.id] = { x, y, w, h }
-    y += h + MOBILE_GAP
   }
   return out
 }
@@ -130,36 +274,56 @@ function clampWidth(value, def, lo, hi) {
   return Math.round(Math.max(lo, Math.min(hi, n)))
 }
 
+// Bring any saved/loaded page up to the current shape (defaults + normalization).
+function normalizePage(page) {
+  const mobileWidth = clampWidth(page.mobileWidth, MOBILE_CANVAS_WIDTH, 240, 1200)
+  const canvasWidth = clampWidth(page.canvasWidth, CANVAS_WIDTH, 320, 4000)
+  return {
+    ...page,
+    id: page.id || genId('page'),
+    name: typeof page.name === 'string' && page.name ? page.name : 'Page',
+    folder: typeof page.folder === 'string' ? page.folder : '',
+    components: normalize(page.components || [], mobileWidth),
+    background: page.background || '#ffffff',
+    backgroundMobile: page.backgroundMobile || page.background || '#ffffff',
+    canvasWidth,
+    canvasFold: clampWidth(page.canvasFold, 0, 0, 20000),
+    mobileWidth,
+    mobileFold: clampWidth(page.mobileFold, 0, 0, 20000),
+  }
+}
+
 // History coalescing keys (module-level so they survive set() calls).
 let lastKey = null
 let lastTime = 0
 
 export const useEditorStore = create((set, get) => ({
   schema: emptySchema(),
+  currentPageId: 'page_home',
   selectedId: null,
   viewport: 'pc', // 'pc' | 'mobile' — which breakpoint is being edited
   dirty: false,
   past: [],
   future: [],
 
-  components: () => get().schema.pages[0].components,
+  components: () => selectCurrentPage(get()).components,
   // The active breakpoint's layout key for a component.
   layoutKey: () => (get().viewport === 'mobile' ? 'mobileLayout' : 'layout'),
   pageBackground: () => {
-    const p = get().schema.pages[0]
+    const p = selectCurrentPage(get())
     return get().viewport === 'mobile'
       ? p.backgroundMobile || p.background || '#ffffff'
       : p.background || '#ffffff'
   },
   // Active breakpoint's artboard width and fold (visible-screen) guide.
   frameWidth: () => {
-    const p = get().schema.pages[0]
+    const p = selectCurrentPage(get())
     return get().viewport === 'mobile'
       ? p.mobileWidth || MOBILE_CANVAS_WIDTH
       : p.canvasWidth || CANVAS_WIDTH
   },
   frameFold: () => {
-    const p = get().schema.pages[0]
+    const p = selectCurrentPage(get())
     return get().viewport === 'mobile' ? p.mobileFold || 0 : p.canvasFold || 0
   },
 
@@ -185,30 +349,18 @@ export const useEditorStore = create((set, get) => ({
     const valid =
       schema && Array.isArray(schema.pages) && schema.pages.length > 0
     const base = valid ? schema : emptySchema()
-    const page0 = base.pages[0]
-    const mobileWidth = clampWidth(page0.mobileWidth, MOBILE_CANVAS_WIDTH, 240, 1200)
-    const canvasWidth = clampWidth(page0.canvasWidth, CANVAS_WIDTH, 320, 4000)
-    const normalized = {
-      ...base,
-      pages: [
-        {
-          ...page0,
-          components: normalize(page0.components || [], mobileWidth),
-          background: page0.background || '#ffffff',
-          backgroundMobile:
-            page0.backgroundMobile || page0.background || '#ffffff',
-          canvasWidth,
-          canvasFold: clampWidth(page0.canvasFold, 0, 0, 20000),
-          mobileWidth,
-          mobileFold: clampWidth(page0.mobileFold, 0, 0, 20000),
-        },
-        ...base.pages.slice(1),
-      ],
-    }
+    const seen = new Set()
+    const pages = base.pages.map((p) => {
+      let np = normalizePage(p)
+      if (seen.has(np.id)) np = { ...np, id: genId('page') }
+      seen.add(np.id)
+      return np
+    })
     lastKey = null
     lastTime = 0
     set({
-      schema: normalized,
+      schema: { ...base, pages },
+      currentPageId: pages[0].id,
       selectedId: null,
       viewport: 'pc',
       dirty: false,
@@ -217,14 +369,128 @@ export const useEditorStore = create((set, get) => ({
     })
   },
 
+  // Import a project from a parsed JSON object (the app's own schema format, e.g.
+  // an exported file or the Code panel's schema.json). Unknown component types are
+  // dropped so it stays valid + safe; styles/URLs are sanitized at render and on
+  // save. Replaces the current design but is undoable and left unsaved (dirty).
+  importSchema: (raw) => {
+    const valid = raw && Array.isArray(raw.pages) && raw.pages.length > 0
+    if (!valid) return false
+    get().record('import')
+    set(() => {
+      const seen = new Set()
+      const pages = raw.pages.map((p) => {
+        const safe = {
+          ...p,
+          components: (Array.isArray(p.components) ? p.components : []).filter(
+            (c) => c && registry[c.type],
+          ),
+        }
+        let np = normalizePage(safe)
+        if (seen.has(np.id)) np = { ...np, id: genId('page') }
+        seen.add(np.id)
+        return np
+      })
+      return {
+        schema: { pages },
+        currentPageId: pages[0].id,
+        selectedId: null,
+        viewport: 'pc',
+        dirty: true,
+      }
+    })
+    return true
+  },
+
+  // ---- Pages -------------------------------------------------------------
+  selectPage: (id) =>
+    set((state) => {
+      if (!state.schema.pages.some((p) => p.id === id)) return {}
+      return { currentPageId: id, selectedId: null }
+    }),
+
+  addPage: (name = 'New Page', folder = '') => {
+    get().record('add-page')
+    set((state) => {
+      const page = blankPage(name, folder)
+      return {
+        schema: { ...state.schema, pages: [...state.schema.pages, page] },
+        currentPageId: page.id,
+        selectedId: null,
+        dirty: true,
+      }
+    })
+  },
+
+  renamePage: (id, name) => {
+    get().record('rename-page-' + id)
+    set((state) => ({
+      schema: mapPage(state.schema, id, (p) => ({ ...p, name })),
+      dirty: true,
+    }))
+  },
+
+  setPageFolder: (id, folder) => {
+    get().record('folder-page-' + id)
+    set((state) => ({
+      schema: mapPage(state.schema, id, (p) => ({ ...p, folder })),
+      dirty: true,
+    }))
+  },
+
+  duplicatePage: (id) => {
+    get().record('dup-page')
+    set((state) => {
+      const src = state.schema.pages.find((p) => p.id === id)
+      if (!src) return {}
+      const copy = {
+        ...structuredClone(src),
+        id: genId('page'),
+        name: `${src.name} copy`,
+        // Fresh component ids so classes/anchors stay unique across pages.
+        components: (src.components || []).map((c) => ({
+          ...structuredClone(c),
+          id: genId(c.type),
+        })),
+      }
+      const idx = state.schema.pages.findIndex((p) => p.id === id)
+      const pages = [...state.schema.pages]
+      pages.splice(idx + 1, 0, copy)
+      return {
+        schema: { ...state.schema, pages },
+        currentPageId: copy.id,
+        selectedId: null,
+        dirty: true,
+      }
+    })
+  },
+
+  deletePage: (id) => {
+    if (get().schema.pages.length <= 1) return // keep at least one page
+    get().record('del-page')
+    set((state) => {
+      const pages = state.schema.pages.filter((p) => p.id !== id)
+      const current =
+        state.currentPageId === id ? pages[0].id : state.currentPageId
+      return {
+        schema: { ...state.schema, pages },
+        currentPageId: current,
+        selectedId: null,
+        dirty: true,
+      }
+    })
+  },
+
+  // ---- Components (operate on the current page) --------------------------
   addComponent: (type, x = 24, y = 24) => {
     const def = registry[type]
     if (!def) return
     get().record('add')
     set((state) => {
+      const page = selectCurrentPage(state)
       const size = def.defaultSize || { w: 200, h: 80 }
-      const comps = state.schema.pages[0].components
-      const mobileWidth = state.schema.pages[0].mobileWidth || MOBILE_CANVAS_WIDTH
+      const comps = page.components
+      const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
       const id = genId(type)
       const fullWidth = FULL_WIDTH_TYPES.has(type)
 
@@ -274,7 +540,7 @@ export const useEditorStore = create((set, get) => ({
         hiddenMobile: false,
       }
       return {
-        schema: withComponents(state.schema, [...comps, component]),
+        schema: withComponents(state.schema, page.id, [...comps, component]),
         selectedId: id,
         dirty: true,
       }
@@ -286,20 +552,22 @@ export const useEditorStore = create((set, get) => ({
   updateProps: (id, patch) => {
     get().record('props-' + id)
     set((state) => {
-      const components = state.schema.pages[0].components.map((c) =>
+      const page = selectCurrentPage(state)
+      const components = page.components.map((c) =>
         c.id === id ? { ...c, props: { ...c.props, ...patch } } : c,
       )
-      return { schema: withComponents(state.schema, components), dirty: true }
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },
 
   updateStyles: (id, patch) => {
     get().record('style-' + id)
     set((state) => {
-      const components = state.schema.pages[0].components.map((c) =>
+      const page = selectCurrentPage(state)
+      const components = page.components.map((c) =>
         c.id === id ? { ...c, styles: { ...c.styles, ...patch } } : c,
       )
-      return { schema: withComponents(state.schema, components), dirty: true }
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },
 
@@ -308,25 +576,27 @@ export const useEditorStore = create((set, get) => ({
     const key = get().layoutKey()
     get().record('layout-' + key + '-' + id)
     set((state) => {
-      const components = state.schema.pages[0].components.map((c) => {
+      const page = selectCurrentPage(state)
+      const components = page.components.map((c) => {
         if (c.id !== id) return c
         const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
         return { ...c, [key]: clampLayout({ ...base, ...patch }) }
       })
-      return { schema: withComponents(state.schema, components), dirty: true }
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },
 
   // Page background, per breakpoint.
   setPageBackground: (color) => {
-    const key =
-      get().viewport === 'mobile' ? 'backgroundMobile' : 'background'
+    const key = get().viewport === 'mobile' ? 'backgroundMobile' : 'background'
     get().record('bg-' + key)
-    set((state) => {
-      const pages = [...state.schema.pages]
-      pages[0] = { ...pages[0], [key]: color }
-      return { schema: { ...state.schema, pages }, dirty: true }
-    })
+    set((state) => ({
+      schema: mapPage(state.schema, state.currentPageId, (p) => ({
+        ...p,
+        [key]: color,
+      })),
+      dirty: true,
+    }))
   },
 
   // Artboard / device size for the active breakpoint. width + fold (0 = no guide).
@@ -336,13 +606,19 @@ export const useEditorStore = create((set, get) => ({
       const isMobile = state.viewport === 'mobile'
       const wKey = isMobile ? 'mobileWidth' : 'canvasWidth'
       const fKey = isMobile ? 'mobileFold' : 'canvasFold'
-      const pages = [...state.schema.pages]
-      pages[0] = {
-        ...pages[0],
-        [wKey]: clampWidth(width, isMobile ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH, isMobile ? 240 : 320, isMobile ? 1200 : 4000),
-        [fKey]: clampWidth(fold, 0, 0, 20000),
+      return {
+        schema: mapPage(state.schema, state.currentPageId, (p) => ({
+          ...p,
+          [wKey]: clampWidth(
+            width,
+            isMobile ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH,
+            isMobile ? 240 : 320,
+            isMobile ? 1200 : 4000,
+          ),
+          [fKey]: clampWidth(fold, 0, 0, 20000),
+        })),
+        dirty: true,
       }
-      return { schema: { ...state.schema, pages }, dirty: true }
     })
   },
 
@@ -350,10 +626,11 @@ export const useEditorStore = create((set, get) => ({
   setVisibility: (id, patch) => {
     get().record('vis-' + id)
     set((state) => {
-      const components = state.schema.pages[0].components.map((c) =>
+      const page = selectCurrentPage(state)
+      const components = page.components.map((c) =>
         c.id === id ? { ...c, ...patch } : c,
       )
-      return { schema: withComponents(state.schema, components), dirty: true }
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },
 
@@ -361,21 +638,22 @@ export const useEditorStore = create((set, get) => ({
   autoArrangeMobile: () => {
     get().record('autoarrange')
     set((state) => {
-      const comps = state.schema.pages[0].components
-      const mobileWidth = state.schema.pages[0].mobileWidth || MOBILE_CANVAS_WIDTH
-      const auto = autoMobileLayout(comps, mobileWidth)
-      const components = comps.map((c) => ({
+      const page = selectCurrentPage(state)
+      const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
+      const auto = autoMobileLayout(page.components, mobileWidth)
+      const components = page.components.map((c) => ({
         ...c,
         mobileLayout: auto[c.id] || c.mobileLayout,
       }))
-      return { schema: withComponents(state.schema, components), dirty: true }
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },
 
   duplicateComponent: (id) => {
     get().record('dup')
     set((state) => {
-      const comps = state.schema.pages[0].components
+      const page = selectCurrentPage(state)
+      const comps = page.components
       const src = comps.find((c) => c.id === id)
       if (!src) return {}
       const copy = {
@@ -391,7 +669,7 @@ export const useEditorStore = create((set, get) => ({
           : undefined,
       }
       return {
-        schema: withComponents(state.schema, [...comps, copy]),
+        schema: withComponents(state.schema, page.id, [...comps, copy]),
         selectedId: copy.id,
         dirty: true,
       }
@@ -401,33 +679,34 @@ export const useEditorStore = create((set, get) => ({
   bringToFront: (id) => {
     get().record('zorder')
     set((state) => {
-      const comps = state.schema.pages[0].components
+      const page = selectCurrentPage(state)
+      const comps = page.components
       const c = comps.find((x) => x.id === id)
       if (!c) return {}
       const reordered = [...comps.filter((x) => x.id !== id), c]
-      return { schema: withComponents(state.schema, reordered), dirty: true }
+      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
     })
   },
 
   sendToBack: (id) => {
     get().record('zorder')
     set((state) => {
-      const comps = state.schema.pages[0].components
+      const page = selectCurrentPage(state)
+      const comps = page.components
       const c = comps.find((x) => x.id === id)
       if (!c) return {}
       const reordered = [c, ...comps.filter((x) => x.id !== id)]
-      return { schema: withComponents(state.schema, reordered), dirty: true }
+      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
     })
   },
 
   removeComponent: (id) => {
     get().record('remove')
     set((state) => {
-      const components = state.schema.pages[0].components.filter(
-        (c) => c.id !== id,
-      )
+      const page = selectCurrentPage(state)
+      const components = page.components.filter((c) => c.id !== id)
       return {
-        schema: withComponents(state.schema, components),
+        schema: withComponents(state.schema, page.id, components),
         selectedId: state.selectedId === id ? null : state.selectedId,
         dirty: true,
       }
@@ -439,8 +718,12 @@ export const useEditorStore = create((set, get) => ({
       if (state.past.length === 0) return {}
       lastKey = null
       const previous = state.past[state.past.length - 1]
+      const currentPageId = previous.pages.some((p) => p.id === state.currentPageId)
+        ? state.currentPageId
+        : previous.pages[0].id
       return {
         schema: previous,
+        currentPageId,
         past: state.past.slice(0, -1),
         future: [state.schema, ...state.future],
         selectedId: null,
@@ -453,8 +736,12 @@ export const useEditorStore = create((set, get) => ({
       if (state.future.length === 0) return {}
       lastKey = null
       const next = state.future[0]
+      const currentPageId = next.pages.some((p) => p.id === state.currentPageId)
+        ? state.currentPageId
+        : next.pages[0].id
       return {
         schema: next,
+        currentPageId,
         future: state.future.slice(1),
         past: [...state.past, state.schema],
         dirty: true,

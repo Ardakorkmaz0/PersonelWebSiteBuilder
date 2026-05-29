@@ -64,12 +64,22 @@ class SiteViewSet(viewsets.ModelViewSet):
 
 
 class PublicSiteView(APIView):
+    # AllowAny, but TokenAuthentication still populates request.user when a token
+    # is sent — so the owner can preview their own unpublished draft.
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
         try:
-            site = Site.objects.get(slug=slug, published=True)
+            site = Site.objects.get(slug=slug)
         except Site.DoesNotExist:
+            return Response(
+                {'detail': 'Site not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        is_owner = (
+            request.user.is_authenticated and site.owner_id == request.user.id
+        )
+        if not site.published and not is_owner:
             return Response(
                 {'detail': 'Site not found or not published.'},
                 status=status.HTTP_404_NOT_FOUND,

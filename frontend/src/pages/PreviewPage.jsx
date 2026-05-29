@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPublicSite } from '../api/sites.js'
-import { Renderer, canvasHeight } from '../components/renderer/Renderer.jsx'
+import { Renderer } from '../components/renderer/Renderer.jsx'
+import { canvasHeight } from '../components/renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
 
 const MOBILE_BREAKPOINT = 768
@@ -72,6 +73,7 @@ export default function PreviewPage() {
   const { slug } = useParams()
   const [site, setSite] = useState(null)
   const [status, setStatus] = useState('loading') // loading | ok | notfound | error
+  const [activeId, setActiveId] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -90,6 +92,19 @@ export default function PreviewPage() {
       active = false
     }
   }, [slug])
+
+  // Pick the visible page from the URL hash (#<pageId>) so links/anchors work.
+  useEffect(() => {
+    if (!site) return
+    const pages = site?.schema?.pages || []
+    const pick = () => {
+      const h = decodeURIComponent((window.location.hash || '').replace(/^#/, ''))
+      setActiveId(pages.some((p) => p.id === h) ? h : pages[0]?.id || null)
+    }
+    pick()
+    window.addEventListener('hashchange', pick)
+    return () => window.removeEventListener('hashchange', pick)
+  }, [site])
 
   if (status === 'loading') {
     return (
@@ -117,7 +132,62 @@ export default function PreviewPage() {
     )
   }
 
-  const page = site?.schema?.pages?.[0] || {}
+  // HTML site: render the raw document in a sandboxed iframe so its JavaScript
+  // runs (isolated — allow-scripts WITHOUT allow-same-origin, so it cannot touch
+  // this app or the visitor's session). Native, full-viewport, responsive.
+  if (site?.html) {
+    return (
+      <>
+        <iframe
+          title={site.title || 'site'}
+          srcDoc={site.html}
+          sandbox="allow-scripts allow-forms allow-popups allow-modals"
+          style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', border: 'none' }}
+        />
+        {site.published === false && (
+          <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-[2px] border border-[#8a8886] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
+            Draft preview — this site is not published yet, only you can see it.
+          </div>
+        )}
+      </>
+    )
+  }
 
-  return <ResponsiveSite page={page} />
+  const pages = site?.schema?.pages || []
+  const current = pages.find((p) => p.id === activeId) || pages[0] || {}
+
+  const go = (id) => {
+    setActiveId(id)
+    window.history.pushState(null, '', `#${encodeURIComponent(id)}`)
+  }
+
+  return (
+    <div>
+      {pages.length > 1 && (
+        <nav className="sticky top-0 z-50 flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/80 px-3 py-2 backdrop-blur">
+          {pages.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => go(p.id)}
+              className={`rounded-full px-3 py-1 text-sm transition ${
+                p.id === current.id
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </nav>
+      )}
+      <ResponsiveSite key={current.id} page={current} />
+
+      {site && site.published === false && (
+        <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-[2px] border border-[#8a8886] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
+          Draft preview — this site is not published yet, only you can see it.
+        </div>
+      )}
+    </div>
+  )
 }

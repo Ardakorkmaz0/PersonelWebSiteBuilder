@@ -51,26 +51,26 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
-          <h1 className="text-lg font-bold text-gray-800">My Sites</h1>
-          <div className="flex items-center gap-3 text-sm text-gray-500">
-            <span>{user?.username}</span>
-            <button onClick={onLogout} className="text-gray-500 hover:text-gray-800">
+    <div className="min-h-screen bg-[#f3f2f1]">
+      <header className="ms-appbar">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <span className="text-sm font-semibold">Mini Website Builder</span>
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-white/80">{user?.username}</span>
+            <button onClick={onLogout} className="text-white/90 hover:text-white hover:underline">
               Log out
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-8">
-        <form
-          onSubmit={onCreate}
-          className="mb-8 flex gap-2 rounded-xl bg-white p-4 shadow-sm"
-        >
+      <main className="mx-auto max-w-5xl px-6 py-8">
+        <h1 className="mb-4 text-xl font-semibold text-[#201f1e]">My sites</h1>
+        <form onSubmit={onCreate} className="ms-card mb-8 flex gap-2 p-4">
           <input
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="ms-input flex-1"
             placeholder="New site title (e.g. My Portfolio)"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -78,64 +78,58 @@ export default function DashboardPage() {
           <button
             type="submit"
             disabled={creating || !title.trim()}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            className="ms-btn ms-btn-primary whitespace-nowrap"
           >
-            {creating ? 'Creating...' : 'Create site'}
+            {creating ? 'Creating…' : 'Create site'}
           </button>
         </form>
 
         {error && (
-          <div className="mb-4 rounded bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="mb-4 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
           </div>
         )}
 
         {loading ? (
-          <p className="text-sm text-gray-400">Loading...</p>
+          <p className="text-sm text-[#605e5c]">Loading…</p>
         ) : sites.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 bg-white py-16 text-center text-gray-400">
+          <div className="ms-card border-dashed py-16 text-center text-[#605e5c]">
             No sites yet. Create your first site above.
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {sites.map((site) => (
-              <div
-                key={site.id}
-                className="flex flex-col rounded-xl bg-white p-5 shadow-sm"
-              >
-                <div className="mb-3 flex items-start justify-between">
-                  <div>
-                    <h2 className="font-semibold text-gray-800">{site.title}</h2>
-                    <p className="text-xs text-gray-400">/site/{site.slug}</p>
+              <div key={site.id} className="ms-card flex flex-col p-5 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="truncate font-semibold text-[#201f1e]">{site.title}</h2>
+                    <p className="truncate text-xs text-[#605e5c]">/site/{site.slug}</p>
                   </div>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    className={`shrink-0 px-2 py-0.5 text-xs font-semibold ${
                       site.published
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-500'
+                        ? 'bg-[#dff6dd] text-[#0b6a0b]'
+                        : 'bg-[#edebe9] text-[#605e5c]'
                     }`}
                   >
                     {site.published ? 'Published' : 'Draft'}
                   </span>
                 </div>
                 <div className="mt-auto flex items-center gap-3 text-sm">
-                  <Link
-                    to={`/editor/${site.id}`}
-                    className="rounded-lg bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700"
-                  >
+                  <Link to={`/editor/${site.id}`} className="ms-btn ms-btn-primary">
                     Open editor
                   </Link>
                   {site.published && (
                     <Link
                       to={`/site/${site.slug}`}
-                      className="text-blue-600 hover:underline"
+                      className="font-medium text-[#2b579a] hover:underline"
                     >
                       View
                     </Link>
                   )}
                   <button
                     onClick={() => onDelete(site.id)}
-                    className="ml-auto text-red-500 hover:underline"
+                    className="ml-auto text-[#a4262c] hover:underline"
                   >
                     Delete
                   </button>

@@ -168,7 +168,9 @@ def validate_and_clean_schema(schema):
             raise serializers.ValidationError('Page "components" must be an array.')
         clean_pages.append({
             'id': _str(page.get('id'), 'page'),
-            'name': _str(page.get('name'), 'Page'),
+            'name': _str(page.get('name'), 'Page')[:80],
+            # Optional organizational folder label (shown in the editor's page tree).
+            'folder': _str(page.get('folder'))[:80],
             'background': sanitize_color(page.get('background')),
             'backgroundMobile': sanitize_color(page.get('backgroundMobile')),
             # Per-breakpoint artboard width + optional "fold" (visible-screen) guide.

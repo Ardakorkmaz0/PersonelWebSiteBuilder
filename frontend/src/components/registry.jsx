@@ -262,19 +262,20 @@ export const MOBILE_CANVAS_WIDTH = 390
 // optional "fold" guide — the visible screen height for that aspect ratio / device,
 // drawn as a dashed line so the user sees what lands above the fold. fold:0 = off.
 export const PC_CANVAS_PRESETS = [
-  { id: 'std', label: 'Standart · 1000', width: 1000, fold: 0 },
+  { id: 'std', label: 'Standard · 1000', width: 1000, fold: 0 },
   { id: '16:9', label: '16:9 · 1280×720', width: 1280, fold: 720 },
   { id: '16:10', label: '16:10 · 1280×800', width: 1280, fold: 800 },
   { id: '4:3', label: '4:3 · 1024×768', width: 1024, fold: 768 },
-  { id: 'wide', label: 'Geniş · 1440×900', width: 1440, fold: 900 },
+  { id: 'wide', label: 'Wide · 1440×900', width: 1440, fold: 900 },
   { id: 'fhd', label: 'Full HD · 1920×1080', width: 1920, fold: 1080 },
 ]
 
 export const MOBILE_CANVAS_PRESETS = [
-  { id: 'std', label: 'Standart · 390', width: 390, fold: 0 },
+  { id: 'std', label: 'Standard · 390', width: 390, fold: 0 },
   { id: 'se', label: 'iPhone SE · 375×667', width: 375, fold: 667 },
-  { id: 'ip', label: 'iPhone 14 · 390×844', width: 390, fold: 844 },
+  { id: 'ip', label: 'iPhone 15 · 393×852', width: 393, fold: 852 },
   { id: 'max', label: 'iPhone Pro Max · 430×932', width: 430, fold: 932 },
-  { id: 'android', label: 'Android · 360×800', width: 360, fold: 800 },
-  { id: 'galaxy', label: 'Galaxy · 412×915', width: 412, fold: 915 },
+  { id: 'galaxy', label: 'Galaxy S · 360×780', width: 360, fold: 780 },
+  { id: 'ultra', label: 'Galaxy Ultra · 384×824', width: 384, fold: 824 },
+  { id: 'android', label: 'Android Large · 412×915', width: 412, fold: 915 },
 ]

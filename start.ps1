@@ -1,10 +1,10 @@
-# PersonelWebSiteBuilder - tek komutla her seyi baslatir.
-# - Gerekirse Python venv'i olusturur + bagimliliklari kurar
-# - Gerekirse frontend icin npm install yapar
-# - Backend (Django) ve frontend (Vite) sunucularini AYRI pencerelerde baslatir
-# - Tarayiciyi acar
+# PersonelWebSiteBuilder - starts everything with one command.
+# - Creates the Python venv and installs dependencies when needed
+# - Runs npm install for the frontend when needed
+# - Starts the backend (Django) and frontend (Vite) servers in separate windows
+# - Opens the browser
 #
-# Calistirma:  .\start.ps1        (veya start.bat'a cift tikla)
+# Run:  .\start.ps1        (or double-click start.bat)
 
 $ErrorActionPreference = 'Stop'
 $root     = $PSScriptRoot
@@ -19,27 +19,27 @@ function Test-Port($port) {
   } catch { return $false }
 }
 
-Write-Host "==> PersonelWebSiteBuilder baslatiliyor..." -ForegroundColor Cyan
+Write-Host "==> Starting PersonelWebSiteBuilder..." -ForegroundColor Cyan
 
-# --- Backend kurulum (sadece ilk seferde) ---
+# --- Backend setup (first run only) ---
 if (-not (Test-Path $venvPy)) {
-  Write-Host "==> Python venv yok, olusturuluyor + bagimliliklar kuruluyor..." -ForegroundColor Yellow
+  Write-Host "==> Python venv is missing; creating it and installing dependencies..." -ForegroundColor Yellow
   python -m venv (Join-Path $backend '.venv')
   & $venvPy -m pip install --upgrade pip
   & $venvPy -m pip install -r (Join-Path $backend 'requirements.txt')
 }
 
-# --- Frontend kurulum (sadece ilk seferde) ---
+# --- Frontend setup (first run only) ---
 if (-not (Test-Path (Join-Path $frontend 'node_modules'))) {
-  Write-Host "==> node_modules yok, npm install calisiyor..." -ForegroundColor Yellow
+  Write-Host "==> node_modules is missing; running npm install..." -ForegroundColor Yellow
   Push-Location $frontend; npm install; Pop-Location
 }
 
-# --- Backend sunucusu ---
+# --- Backend server ---
 if (Test-Port 8000) {
-  Write-Host "==> Backend zaten calisiyor (port 8000), atlaniyor." -ForegroundColor DarkGray
+  Write-Host "==> Backend is already running (port 8000), skipping." -ForegroundColor DarkGray
 } else {
-  Write-Host "==> Backend baslatiliyor -> http://127.0.0.1:8000" -ForegroundColor Green
+  Write-Host "==> Starting backend -> http://127.0.0.1:8000" -ForegroundColor Green
   $cmd = "Set-Location '$backend'; " +
          "Write-Host 'BACKEND  http://127.0.0.1:8000' -ForegroundColor Green; " +
          "& '$venvPy' manage.py migrate; " +
@@ -47,21 +47,21 @@ if (Test-Port 8000) {
   Start-Process powershell -ArgumentList '-NoExit', '-Command', $cmd
 }
 
-# --- Frontend sunucusu ---
+# --- Frontend server ---
 if (Test-Port 5173) {
-  Write-Host "==> Frontend zaten calisiyor (port 5173), atlaniyor." -ForegroundColor DarkGray
+  Write-Host "==> Frontend is already running (port 5173), skipping." -ForegroundColor DarkGray
 } else {
-  Write-Host "==> Frontend baslatiliyor -> http://localhost:5173" -ForegroundColor Green
+  Write-Host "==> Starting frontend -> http://localhost:5173" -ForegroundColor Green
   $cmd = "Set-Location '$frontend'; " +
          "Write-Host 'FRONTEND http://localhost:5173' -ForegroundColor Green; " +
          "npm run dev"
   Start-Process powershell -ArgumentList '-NoExit', '-Command', $cmd
 }
 
-# --- Tarayiciyi ac (frontend hazir olunca) ---
-Write-Host "==> Tarayici aciliyor..." -ForegroundColor Cyan
+# --- Open the browser once the frontend is ready ---
+Write-Host "==> Opening browser..." -ForegroundColor Cyan
 for ($i = 0; $i -lt 20; $i++) { if (Test-Port 5173) { break }; Start-Sleep -Milliseconds 500 }
 Start-Process 'http://localhost:5173'
 
-Write-Host "`nHazir! Iki sunucu da ayri pencerelerde calisiyor." -ForegroundColor Cyan
-Write-Host "Durdurmak icin o pencereleri kapat (veya Ctrl+C)." -ForegroundColor DarkGray
+Write-Host "`nReady! Both servers are running in separate windows." -ForegroundColor Cyan
+Write-Host "Close those windows (or press Ctrl+C) to stop them." -ForegroundColor DarkGray

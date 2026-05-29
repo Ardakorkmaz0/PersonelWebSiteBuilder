@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core'
-import { useEditorStore } from '../../store/editorStore.js'
-import { canvasHeight } from '../renderer/Renderer.jsx'
+import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
+import { canvasHeight } from '../renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import FreeCanvasItem from './FreeCanvasItem.jsx'
 
@@ -9,21 +9,21 @@ import FreeCanvasItem from './FreeCanvasItem.jsx'
 // true device-width phone canvas (1:1, no scaling) — independent designs. The
 // "fold" guide (if set) marks the visible screen height for the chosen device.
 export default function Canvas() {
-  const components = useEditorStore((s) => s.schema.pages[0].components)
+  const components = useEditorStore((s) => selectCurrentPage(s).components)
   const viewport = useEditorStore((s) => s.viewport)
-  const bg = useEditorStore((s) => s.schema.pages[0].background || '#ffffff')
+  const bg = useEditorStore((s) => selectCurrentPage(s).background || '#ffffff')
   const bgMobile = useEditorStore(
     (s) =>
-      s.schema.pages[0].backgroundMobile ||
-      s.schema.pages[0].background ||
+      selectCurrentPage(s).backgroundMobile ||
+      selectCurrentPage(s).background ||
       '#ffffff',
   )
-  const pcWidth = useEditorStore((s) => s.schema.pages[0].canvasWidth || CANVAS_WIDTH)
-  const pcFold = useEditorStore((s) => s.schema.pages[0].canvasFold || 0)
+  const pcWidth = useEditorStore((s) => selectCurrentPage(s).canvasWidth || CANVAS_WIDTH)
+  const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
   const mobileWidth = useEditorStore(
-    (s) => s.schema.pages[0].mobileWidth || MOBILE_CANVAS_WIDTH,
+    (s) => selectCurrentPage(s).mobileWidth || MOBILE_CANVAS_WIDTH,
   )
-  const mobileFold = useEditorStore((s) => s.schema.pages[0].mobileFold || 0)
+  const mobileFold = useEditorStore((s) => selectCurrentPage(s).mobileFold || 0)
   const select = useEditorStore((s) => s.selectComponent)
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' })
 
@@ -41,7 +41,7 @@ export default function Canvas() {
       onPointerDown={() => select(null)}
       style={{ position: 'relative', width: canvasW, minHeight, background }}
       className={`${isMobile ? '' : 'shadow-sm'} ${
-        isOver ? 'ring-2 ring-blue-300' : ''
+        isOver ? 'ring-2 ring-[#2b579a]' : ''
       }`}
     >
       {components.length === 0 && (
@@ -63,7 +63,7 @@ export default function Canvas() {
         >
           <div className="border-t-2 border-dashed border-amber-500" />
           <span className="absolute right-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-            Görünen ekran sınırı · {fold}px
+            Visible screen limit · {fold}px
           </span>
         </div>
       )}

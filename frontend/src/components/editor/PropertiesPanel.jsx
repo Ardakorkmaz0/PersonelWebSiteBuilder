@@ -1,4 +1,4 @@
-import { useEditorStore } from '../../store/editorStore.js'
+import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
 import {
   LabeledText,
@@ -162,12 +162,14 @@ function StyleControl({ styleKey, value, onChange }) {
 
 export default function PropertiesPanel() {
   const selectedId = useEditorStore((s) => s.selectedId)
-  const schema = useEditorStore((s) => s.schema)
+  const page = useEditorStore(selectCurrentPage)
   const viewport = useEditorStore((s) => s.viewport)
   const updateProps = useEditorStore((s) => s.updateProps)
   const updateStyles = useEditorStore((s) => s.updateStyles)
   const setLayout = useEditorStore((s) => s.setLayout)
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
+  const renamePage = useEditorStore((s) => s.renamePage)
+  const setPageFolder = useEditorStore((s) => s.setPageFolder)
   const setVisibility = useEditorStore((s) => s.setVisibility)
   const autoArrangeMobile = useEditorStore((s) => s.autoArrangeMobile)
   const duplicateComponent = useEditorStore((s) => s.duplicateComponent)
@@ -177,7 +179,6 @@ export default function PropertiesPanel() {
 
   const isMobile = viewport === 'mobile'
   const layoutKey = isMobile ? 'mobileLayout' : 'layout'
-  const page = schema.pages[0]
   const component = page.components.find((c) => c.id === selectedId)
   const pageBackground = isMobile
     ? page.backgroundMobile || page.background || '#ffffff'
@@ -186,13 +187,24 @@ export default function PropertiesPanel() {
   if (!component) {
     return (
       <div className="flex h-full flex-col">
-        <div className="border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-700">Page</h2>
-          <p className="text-xs text-gray-400">
+        <div className="border-b border-[#e1dfdd] px-4 py-3">
+          <h2 className="text-sm font-semibold text-[#201f1e]">Page</h2>
+          <p className="text-xs text-[#605e5c]">
             {isMobile ? 'Mobile design' : 'PC design'} — nothing selected
           </p>
         </div>
         <div className="space-y-4 p-4">
+          <LabeledText
+            label="Page name"
+            value={page.name}
+            onChange={(v) => renamePage(page.id, v)}
+          />
+          <LabeledText
+            label="Folder (optional)"
+            value={page.folder}
+            onChange={(v) => setPageFolder(page.id, v)}
+            placeholder="e.g. Marketing"
+          />
           <LabeledColor
             label={isMobile ? 'Page background (Mobile)' : 'Page background (PC)'}
             value={pageBackground}
@@ -202,12 +214,12 @@ export default function PropertiesPanel() {
             <button
               type="button"
               onClick={autoArrangeMobile}
-              className="w-full rounded bg-purple-50 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100"
+              className="w-full rounded-[2px] border border-[#8a8886] bg-white py-2 text-sm font-medium text-[#323130] hover:bg-[#f3f2f1]"
             >
               Auto-arrange mobile layout
             </button>
           )}
-          <p className="text-xs leading-relaxed text-gray-400">
+          <p className="text-xs leading-relaxed text-[#605e5c]">
             {isMobile
               ? 'Mobile is a separate design. Drag & resize components on the phone, or auto-arrange them into a clean single column.'
               : 'Select a component on the canvas to edit its content, style, position and size.'}
@@ -222,29 +234,23 @@ export default function PropertiesPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-gray-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-gray-700">{def.label}</h2>
-        <p className="text-xs text-gray-400">{component.id}</p>
+      <div className="border-b border-[#e1dfdd] px-4 py-3">
+        <h2 className="text-sm font-semibold text-[#201f1e]">{def.label}</h2>
+        <p className="text-xs text-[#605e5c]">{component.id}</p>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
         <div
-          className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 ${
-            isMobile ? 'bg-purple-50' : 'bg-blue-50'
-          }`}
+          className="flex items-center justify-between gap-2 rounded-[2px] bg-[#eff3fb] px-3 py-2"
         >
-          <span
-            className={`text-xs font-medium ${
-              isMobile ? 'text-purple-700' : 'text-blue-700'
-            }`}
-          >
+          <span className="text-xs font-semibold text-[#2b579a]">
             Editing {isMobile ? 'Mobile' : 'PC'} layout
           </span>
           {isMobile && (
             <button
               type="button"
               onClick={autoArrangeMobile}
-              className="rounded bg-white px-2 py-0.5 text-xs font-medium text-purple-700 shadow-sm hover:bg-purple-100"
+              className="rounded-[2px] border border-[#2b579a] bg-white px-2 py-0.5 text-xs font-semibold text-[#2b579a] hover:bg-[#eff3fb]"
             >
               Auto-arrange
             </button>
@@ -252,9 +258,9 @@ export default function PropertiesPanel() {
         </div>
 
         <section className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
             Position &amp; Size
-            <span className="ml-1 font-normal normal-case text-gray-300">
+            <span className="ml-1 font-normal normal-case text-[#a19f9d]">
               ({isMobile ? 'mobile' : 'PC'})
             </span>
           </h3>
@@ -283,7 +289,7 @@ export default function PropertiesPanel() {
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
             Visibility
           </h3>
           <LabeledCheckbox
@@ -300,7 +306,7 @@ export default function PropertiesPanel() {
 
         {def.editableProps.length > 0 && (
           <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
               Content
             </h3>
             {def.editableProps.map((field) => (
@@ -315,7 +321,7 @@ export default function PropertiesPanel() {
         )}
 
         <section className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
             Style
           </h3>
           {def.editableStyles.map((styleKey) => (
@@ -331,26 +337,26 @@ export default function PropertiesPanel() {
         </section>
       </div>
 
-      <div className="space-y-2 border-t border-gray-200 p-4">
+      <div className="space-y-2 border-t border-[#e1dfdd] p-4">
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => duplicateComponent(component.id)}
-            className="rounded bg-gray-100 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
           >
             Duplicate
           </button>
           <button
             type="button"
             onClick={() => bringToFront(component.id)}
-            className="rounded bg-gray-100 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
           >
             To front
           </button>
           <button
             type="button"
             onClick={() => sendToBack(component.id)}
-            className="rounded bg-gray-100 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
           >
             To back
           </button>
@@ -358,7 +364,7 @@ export default function PropertiesPanel() {
         <button
           type="button"
           onClick={() => removeComponent(component.id)}
-          className="w-full rounded bg-red-50 py-2 text-sm font-medium text-red-600 hover:bg-red-100"
+          className="w-full rounded-[2px] border border-[#d69ca5] bg-[#fde7e9] py-2 text-sm font-medium text-[#a4262c] hover:bg-[#f6d5d9]"
         >
           Delete component
         </button>

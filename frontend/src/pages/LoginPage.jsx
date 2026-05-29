@@ -4,9 +4,6 @@ import { login } from '../api/auth.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 
-const fieldCls =
-  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none'
-
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -31,28 +28,30 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-[#f3f2f1] p-4">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl bg-white p-8 shadow"
+        className="ms-card w-full max-w-sm space-y-5 p-8 shadow-sm"
       >
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Sign in</h1>
-          <p className="text-sm text-gray-500">Mini Website Builder</p>
+        <div className="border-l-4 border-[#2b579a] pl-3">
+          <h1 className="text-xl font-semibold leading-tight text-[#201f1e]">
+            Sign in
+          </h1>
+          <p className="text-xs text-[#605e5c]">Mini Website Builder</p>
         </div>
 
         {error && (
-          <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
           </div>
         )}
 
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">
+          <span className="mb-1 block text-sm font-semibold text-[#323130]">
             Username
           </span>
           <input
-            className={fieldCls}
+            className="ms-input"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
@@ -61,12 +60,12 @@ export default function LoginPage() {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">
+          <span className="mb-1 block text-sm font-semibold text-[#323130]">
             Password
           </span>
           <input
             type="password"
-            className={fieldCls}
+            className="ms-input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
@@ -74,17 +73,13 @@ export default function LoginPage() {
           />
         </label>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          {loading ? 'Signing in...' : 'Sign in'}
+        <button type="submit" disabled={loading} className="ms-btn ms-btn-primary w-full py-2">
+          {loading ? 'Signing in…' : 'Sign in'}
         </button>
 
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-sm text-[#605e5c]">
           No account?{' '}
-          <Link className="text-blue-600 hover:underline" to="/register">
+          <Link className="font-semibold text-[#2b579a] hover:underline" to="/register">
             Register
           </Link>
         </p>

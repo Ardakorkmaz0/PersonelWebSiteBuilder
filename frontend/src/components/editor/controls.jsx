@@ -1,7 +1,8 @@
-// Small, reusable form controls used by the PropertiesPanel.
+// Small, reusable form controls used by the PropertiesPanel:
+// square 2px corners, neutral borders, blue focus.
 const inputCls =
-  'w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none'
-const labelCls = 'block text-xs font-medium text-gray-600 mb-1'
+  'w-full rounded-[2px] border border-[#8a8886] px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none'
+const labelCls = 'block text-xs font-semibold text-[#605e5c] mb-1'
 
 export function LabeledText({ label, value, onChange, placeholder }) {
   return (
@@ -41,7 +42,7 @@ export function LabeledColor({ label, value, onChange }) {
       <div className="flex items-center gap-2">
         <input
           type="color"
-          className="h-8 w-10 cursor-pointer rounded border border-gray-300"
+          className="h-8 w-10 cursor-pointer rounded-[2px] border border-[#8a8886]"
           value={hex}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -91,7 +92,7 @@ export function LabeledPx({ label, value, onChange }) {
             onChange(e.target.value === '' ? '' : `${e.target.value}px`)
           }
         />
-        <span className="text-xs text-gray-400">px</span>
+        <span className="text-xs text-[#605e5c]">px</span>
       </div>
     </label>
   )
@@ -125,9 +126,9 @@ export function LabeledRange({ label, value, onChange, min = 0, max = 1, step = 
           step={step}
           value={v}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1"
+          className="flex-1 accent-[#2b579a]"
         />
-        <span className="w-8 text-right text-xs text-gray-400">{v}</span>
+        <span className="w-8 text-right text-xs text-[#605e5c]">{v}</span>
       </div>
     </label>
   )
@@ -138,12 +139,12 @@ export function LabeledCheckbox({ label, checked, onChange, hint }) {
     <label className="flex cursor-pointer items-center gap-2 py-0.5">
       <input
         type="checkbox"
-        className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        className="h-4 w-4 cursor-pointer rounded-[2px] border-[#8a8886] accent-[#2b579a]"
         checked={!!checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="text-sm text-gray-700">{label}</span>
-      {hint && <span className="text-xs text-gray-400">{hint}</span>}
+      <span className="text-sm text-[#323130]">{label}</span>
+      {hint && <span className="text-xs text-[#605e5c]">{hint}</span>}
     </label>
   )
 }
@@ -161,13 +162,13 @@ export function LinksEditor({ label, value, onChange }) {
       <span className={labelCls}>{label}</span>
       <div className="space-y-2">
         {links.map((link, i) => (
-          <div key={i} className="rounded border border-gray-200 p-2">
+          <div key={i} className="rounded-[2px] border border-[#e1dfdd] p-2">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs text-gray-400">Link {i + 1}</span>
+              <span className="text-xs text-[#605e5c]">Link {i + 1}</span>
               <button
                 type="button"
                 onClick={() => remove(i)}
-                className="text-xs text-red-500 hover:underline"
+                className="text-xs text-[#a4262c] hover:underline"
               >
                 Remove
               </button>
@@ -191,7 +192,7 @@ export function LinksEditor({ label, value, onChange }) {
         <button
           type="button"
           onClick={add}
-          className="w-full rounded border border-dashed border-gray-300 py-1 text-xs text-gray-500 hover:border-blue-400 hover:text-blue-500"
+          className="w-full rounded-[2px] border border-dashed border-[#8a8886] py-1 text-xs text-[#605e5c] hover:border-[#2b579a] hover:text-[#2b579a]"
         >
           + Add link
         </button>

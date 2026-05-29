@@ -21,6 +21,9 @@ class Site(models.Model):
     title = models.CharField(max_length=100)
     slug = models.SlugField(unique=True, max_length=140)
     schema = models.JSONField(default=default_schema)
+    # Optional raw HTML document for "HTML sites" (rendered in a sandboxed
+    # iframe so their JavaScript runs isolated from the app/visitor session).
+    html = models.TextField(blank=True, default='')
     published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

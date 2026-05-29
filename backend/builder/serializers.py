@@ -43,12 +43,21 @@ class SiteListSerializer(serializers.ModelSerializer):
 class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
-        fields = ('id', 'title', 'slug', 'schema', 'published',
+        fields = ('id', 'title', 'slug', 'schema', 'html', 'published',
                   'created_at', 'updated_at')
         read_only_fields = ('id', 'slug', 'created_at', 'updated_at')
 
     def validate_schema(self, value):
         return validate_and_clean_schema(value)
+
+    def validate_html(self, value):
+        # Stored as-is and rendered ONLY inside a sandboxed iframe (no
+        # allow-same-origin), so it cannot touch the app or a visitor's session.
+        if not isinstance(value, str):
+            return ''
+        if len(value) > 2_000_000:
+            raise serializers.ValidationError('HTML is too large (max ~2MB).')
+        return value
 
 
 class PublicSiteSerializer(serializers.ModelSerializer):
@@ -56,4 +65,4 @@ class PublicSiteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Site
-        fields = ('title', 'slug', 'schema', 'updated_at')
+        fields = ('title', 'slug', 'schema', 'html', 'published', 'updated_at')

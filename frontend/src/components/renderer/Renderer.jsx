@@ -7,25 +7,7 @@
 // hidden on the active breakpoint are skipped.
 import { registry, CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import { sanitizeStyles } from '../../utils/sanitize.js'
-
-function layoutFor(component, viewport) {
-  if (viewport === 'mobile') return component.mobileLayout || component.layout
-  return component.layout
-}
-
-function isHidden(component, viewport) {
-  return viewport === 'mobile' ? !!component.hiddenMobile : !!component.hidden
-}
-
-export function canvasHeight(components, viewport = 'pc') {
-  const list = Array.isArray(components) ? components : []
-  const bottom = list.reduce((max, c) => {
-    if (isHidden(c, viewport)) return max
-    const l = layoutFor(c, viewport) || {}
-    return Math.max(max, (l.y || 0) + (l.h || 0))
-  }, 0)
-  return Math.max(viewport === 'mobile' ? 400 : 600, bottom + 40)
-}
+import { canvasHeight, isHidden, layoutFor } from './layout.js'
 
 export function RenderComponent({ component }) {
   const def = registry[component.type]

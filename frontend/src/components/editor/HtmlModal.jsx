@@ -26,33 +26,24 @@ export default function HtmlModal({ html, onClose }) {
       onClick={onClose}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
+        className="ms-card flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-800">Generated HTML</h2>
+        <div className="flex items-center justify-between border-b border-[#e1dfdd] px-4 py-3">
+          <h2 className="text-sm font-semibold text-[#201f1e]">Generated HTML</h2>
           <div className="flex items-center gap-2">
-            <button
-              onClick={copy}
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-            >
+            <button onClick={copy} className="ms-btn ms-btn-primary">
               {copied ? 'Copied ✓' : 'Copy'}
             </button>
-            <button
-              onClick={download}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-            >
+            <button onClick={download} className="ms-btn">
               Download
             </button>
-            <button
-              onClick={onClose}
-              className="rounded px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
-            >
+            <button onClick={onClose} className="ms-btn ms-btn-subtle">
               Close
             </button>
           </div>
         </div>
-        <pre className="flex-1 overflow-auto bg-gray-900 p-4 text-xs leading-relaxed text-gray-100">
+        <pre className="flex-1 overflow-auto bg-[#1e1e1e] p-4 text-xs leading-relaxed text-gray-100">
           <code>{html}</code>
         </pre>
       </div>

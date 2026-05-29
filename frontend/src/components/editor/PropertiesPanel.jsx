@@ -1,0 +1,368 @@
+import { useEditorStore } from '../../store/editorStore.js'
+import { registry } from '../registry.jsx'
+import {
+  LabeledText,
+  LabeledTextarea,
+  LabeledColor,
+  LabeledSelect,
+  LabeledPx,
+  LabeledNumber,
+  LabeledRange,
+  LabeledCheckbox,
+  LinksEditor,
+} from './controls.jsx'
+
+// How each editable style key should be rendered.
+const STYLE_META = {
+  backgroundColor: { label: 'Background', control: 'color' },
+  color: { label: 'Text color', control: 'color' },
+  fontSize: { label: 'Font size', control: 'px' },
+  fontWeight: {
+    label: 'Font weight',
+    control: 'select',
+    options: [['normal', 'Normal'], ['500', 'Medium'], ['600', 'Semibold'], ['bold', 'Bold']],
+  },
+  fontStyle: {
+    label: 'Style',
+    control: 'select',
+    options: [['normal', 'Normal'], ['italic', 'Italic']],
+  },
+  fontFamily: {
+    label: 'Font',
+    control: 'select',
+    options: [
+      ['inherit', 'Default (San Francisco)'],
+      ['Arial, sans-serif', 'Arial'],
+      ['Georgia, serif', 'Georgia'],
+      ['"Times New Roman", serif', 'Times'],
+      ['"Courier New", monospace', 'Monospace'],
+      ['Verdana, sans-serif', 'Verdana'],
+      ['"Trebuchet MS", sans-serif', 'Trebuchet'],
+    ],
+  },
+  textAlign: {
+    label: 'Alignment',
+    control: 'select',
+    options: [['left', 'Left'], ['center', 'Center'], ['right', 'Right']],
+  },
+  textDecoration: {
+    label: 'Decoration',
+    control: 'select',
+    options: [['none', 'None'], ['underline', 'Underline']],
+  },
+  textTransform: {
+    label: 'Text case',
+    control: 'select',
+    options: [
+      ['none', 'Normal'],
+      ['uppercase', 'UPPERCASE'],
+      ['lowercase', 'lowercase'],
+      ['capitalize', 'Capitalize'],
+    ],
+  },
+  backgroundImage: {
+    label: 'Gradient',
+    control: 'select',
+    options: [
+      ['none', 'None'],
+      ['linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 'Purple'],
+      ['linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', 'Sky'],
+      ['linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', 'Mint'],
+      ['linear-gradient(135deg, #fa709a 0%, #fee140 100%)', 'Sunset'],
+      ['linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', 'Blossom'],
+      ['linear-gradient(135deg, #30cfd0 0%, #330867 100%)', 'Ocean'],
+      ['linear-gradient(180deg, #1d1d1f 0%, #434343 100%)', 'Charcoal'],
+    ],
+  },
+  lineHeight: { label: 'Line height', control: 'text', placeholder: 'e.g. 1.5' },
+  letterSpacing: { label: 'Letter spacing', control: 'px' },
+  borderRadius: { label: 'Corner radius', control: 'px' },
+  borderWidth: { label: 'Border width', control: 'px' },
+  borderStyle: {
+    label: 'Border style',
+    control: 'select',
+    options: [['none', 'None'], ['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted']],
+  },
+  borderColor: { label: 'Border color', control: 'color' },
+  boxShadow: {
+    label: 'Shadow',
+    control: 'select',
+    options: [
+      ['none', 'None'],
+      ['0 1px 3px rgba(0,0,0,0.15)', 'Small'],
+      ['0 4px 12px rgba(0,0,0,0.15)', 'Medium'],
+      ['0 10px 25px rgba(0,0,0,0.2)', 'Large'],
+    ],
+  },
+  opacity: { label: 'Opacity', control: 'range' },
+  objectFit: {
+    label: 'Image fit',
+    control: 'select',
+    options: [['fill', 'Fill'], ['cover', 'Cover'], ['contain', 'Contain']],
+  },
+  padding: { label: 'Padding', control: 'text', placeholder: 'e.g. 12px 20px' },
+  margin: { label: 'Margin', control: 'text', placeholder: 'e.g. 0 auto' },
+  width: { label: 'Width', control: 'text', placeholder: 'e.g. 100%' },
+  maxWidth: { label: 'Max width', control: 'text', placeholder: 'e.g. 640px' },
+  height: { label: 'Height', control: 'text', placeholder: 'e.g. 48px' },
+  minHeight: { label: 'Min height', control: 'text', placeholder: 'e.g. 200px' },
+}
+
+function PropControl({ field, value, onChange }) {
+  if (field.control === 'textarea') {
+    return <LabeledTextarea label={field.label} value={value} onChange={onChange} />
+  }
+  if (field.control === 'links') {
+    return <LinksEditor label={field.label} value={value} onChange={onChange} />
+  }
+  if (field.control === 'select') {
+    return (
+      <LabeledSelect
+        label={field.label}
+        value={value}
+        onChange={onChange}
+        options={field.options}
+      />
+    )
+  }
+  return <LabeledText label={field.label} value={value} onChange={onChange} />
+}
+
+function StyleControl({ styleKey, value, onChange }) {
+  const meta = STYLE_META[styleKey]
+  if (!meta) return null
+  if (meta.control === 'color') {
+    return <LabeledColor label={meta.label} value={value} onChange={onChange} />
+  }
+  if (meta.control === 'select') {
+    return (
+      <LabeledSelect
+        label={meta.label}
+        value={value}
+        onChange={onChange}
+        options={meta.options}
+      />
+    )
+  }
+  if (meta.control === 'px') {
+    return <LabeledPx label={meta.label} value={value} onChange={onChange} />
+  }
+  if (meta.control === 'range') {
+    return <LabeledRange label={meta.label} value={value} onChange={onChange} />
+  }
+  return (
+    <LabeledText
+      label={meta.label}
+      value={value}
+      onChange={onChange}
+      placeholder={meta.placeholder}
+    />
+  )
+}
+
+export default function PropertiesPanel() {
+  const selectedId = useEditorStore((s) => s.selectedId)
+  const schema = useEditorStore((s) => s.schema)
+  const viewport = useEditorStore((s) => s.viewport)
+  const updateProps = useEditorStore((s) => s.updateProps)
+  const updateStyles = useEditorStore((s) => s.updateStyles)
+  const setLayout = useEditorStore((s) => s.setLayout)
+  const setPageBackground = useEditorStore((s) => s.setPageBackground)
+  const setVisibility = useEditorStore((s) => s.setVisibility)
+  const autoArrangeMobile = useEditorStore((s) => s.autoArrangeMobile)
+  const duplicateComponent = useEditorStore((s) => s.duplicateComponent)
+  const bringToFront = useEditorStore((s) => s.bringToFront)
+  const sendToBack = useEditorStore((s) => s.sendToBack)
+  const removeComponent = useEditorStore((s) => s.removeComponent)
+
+  const isMobile = viewport === 'mobile'
+  const layoutKey = isMobile ? 'mobileLayout' : 'layout'
+  const page = schema.pages[0]
+  const component = page.components.find((c) => c.id === selectedId)
+  const pageBackground = isMobile
+    ? page.backgroundMobile || page.background || '#ffffff'
+    : page.background || '#ffffff'
+
+  if (!component) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="border-b border-gray-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-gray-700">Page</h2>
+          <p className="text-xs text-gray-400">
+            {isMobile ? 'Mobile design' : 'PC design'} — nothing selected
+          </p>
+        </div>
+        <div className="space-y-4 p-4">
+          <LabeledColor
+            label={isMobile ? 'Page background (Mobile)' : 'Page background (PC)'}
+            value={pageBackground}
+            onChange={setPageBackground}
+          />
+          {isMobile && (
+            <button
+              type="button"
+              onClick={autoArrangeMobile}
+              className="w-full rounded bg-purple-50 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100"
+            >
+              Auto-arrange mobile layout
+            </button>
+          )}
+          <p className="text-xs leading-relaxed text-gray-400">
+            {isMobile
+              ? 'Mobile is a separate design. Drag & resize components on the phone, or auto-arrange them into a clean single column.'
+              : 'Select a component on the canvas to edit its content, style, position and size.'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const def = registry[component.type]
+  const layout = component[layoutKey] || component.layout
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-gray-200 px-4 py-3">
+        <h2 className="text-sm font-semibold text-gray-700">{def.label}</h2>
+        <p className="text-xs text-gray-400">{component.id}</p>
+      </div>
+
+      <div className="flex-1 space-y-5 overflow-y-auto p-4">
+        <div
+          className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 ${
+            isMobile ? 'bg-purple-50' : 'bg-blue-50'
+          }`}
+        >
+          <span
+            className={`text-xs font-medium ${
+              isMobile ? 'text-purple-700' : 'text-blue-700'
+            }`}
+          >
+            Editing {isMobile ? 'Mobile' : 'PC'} layout
+          </span>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={autoArrangeMobile}
+              className="rounded bg-white px-2 py-0.5 text-xs font-medium text-purple-700 shadow-sm hover:bg-purple-100"
+            >
+              Auto-arrange
+            </button>
+          )}
+        </div>
+
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Position &amp; Size
+            <span className="ml-1 font-normal normal-case text-gray-300">
+              ({isMobile ? 'mobile' : 'PC'})
+            </span>
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <LabeledNumber
+              label="X"
+              value={layout.x}
+              onChange={(v) => setLayout(component.id, { x: v })}
+            />
+            <LabeledNumber
+              label="Y"
+              value={layout.y}
+              onChange={(v) => setLayout(component.id, { y: v })}
+            />
+            <LabeledNumber
+              label="Width"
+              value={layout.w}
+              onChange={(v) => setLayout(component.id, { w: v })}
+            />
+            <LabeledNumber
+              label="Height"
+              value={layout.h}
+              onChange={(v) => setLayout(component.id, { h: v })}
+            />
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Visibility
+          </h3>
+          <LabeledCheckbox
+            label="Show on PC"
+            checked={!component.hidden}
+            onChange={(c) => setVisibility(component.id, { hidden: !c })}
+          />
+          <LabeledCheckbox
+            label="Show on Mobile"
+            checked={!component.hiddenMobile}
+            onChange={(c) => setVisibility(component.id, { hiddenMobile: !c })}
+          />
+        </section>
+
+        {def.editableProps.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Content
+            </h3>
+            {def.editableProps.map((field) => (
+              <PropControl
+                key={field.key}
+                field={field}
+                value={component.props[field.key]}
+                onChange={(val) => updateProps(component.id, { [field.key]: val })}
+              />
+            ))}
+          </section>
+        )}
+
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Style
+          </h3>
+          {def.editableStyles.map((styleKey) => (
+            <StyleControl
+              key={styleKey}
+              styleKey={styleKey}
+              value={component.styles[styleKey]}
+              onChange={(val) =>
+                updateStyles(component.id, { [styleKey]: val })
+              }
+            />
+          ))}
+        </section>
+      </div>
+
+      <div className="space-y-2 border-t border-gray-200 p-4">
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => duplicateComponent(component.id)}
+            className="rounded bg-gray-100 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+          >
+            Duplicate
+          </button>
+          <button
+            type="button"
+            onClick={() => bringToFront(component.id)}
+            className="rounded bg-gray-100 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+          >
+            To front
+          </button>
+          <button
+            type="button"
+            onClick={() => sendToBack(component.id)}
+            className="rounded bg-gray-100 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+          >
+            To back
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => removeComponent(component.id)}
+          className="w-full rounded bg-red-50 py-2 text-sm font-medium text-red-600 hover:bg-red-100"
+        >
+          Delete component
+        </button>
+      </div>
+    </div>
+  )
+}

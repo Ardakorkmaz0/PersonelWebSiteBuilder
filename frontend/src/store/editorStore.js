@@ -24,6 +24,8 @@ function blankPage(name = 'New Page', folder = '', id) {
     canvasFold: 0,
     mobileWidth: MOBILE_CANVAS_WIDTH,
     mobileFold: 0,
+    mobileManual: false,
+    flowMode: false,
   }
 }
 
@@ -42,8 +44,33 @@ function mapPage(schema, id, updater) {
   return { ...schema, pages }
 }
 
+function orderForFlow(components) {
+  return components
+    .map((c, i) => ({ c, i, l: c.layout || { x: 0, y: 0, w: 0, h: 0 } }))
+    .sort((a, b) => {
+      const ay = a.l.y || 0
+      const by = b.l.y || 0
+      if (Math.abs(ay - by) > 24) return ay - by
+      return (a.l.x || 0) - (b.l.x || 0) || a.i - b.i
+    })
+    .map((item) => item.c)
+}
+
+// Update a page's components. When mobile is in AUTO mode (not manually edited),
+// re-derive every mobileLayout from the desktop design so the phone layout always
+// follows the PC layout. Manual mobile edits set page.mobileManual = true.
 function withComponents(schema, id, components) {
-  return mapPage(schema, id, (p) => ({ ...p, components }))
+  return mapPage(schema, id, (p) => {
+    if (p.mobileManual) return { ...p, components }
+    const auto = autoMobileLayout(components, p.mobileWidth || MOBILE_CANVAS_WIDTH)
+    return {
+      ...p,
+      components: components.map((c) => ({
+        ...c,
+        mobileLayout: auto[c.id] || c.mobileLayout,
+      })),
+    }
+  })
 }
 
 // --- Mobile auto-layout helpers ---------------------------------------------
@@ -178,14 +205,35 @@ export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) 
     childrenOf.get(pid).push(cid)
   }
 
-  const byReading = (ids) =>
-    ids.slice().sort((a, b) => {
-      const ra = rects.get(a)
-      const rb = rects.get(b)
-      if (Math.abs(ra.y - rb.y) > 24) return ra.y - rb.y
-      if (ra.x !== rb.x) return ra.x - rb.x
-      return idx.get(a) - idx.get(b)
-    })
+  // True reading order. A "|a.y - b.y| > 24 ? y : x" comparator is NOT transitive
+  // and makes Array.sort scramble the order (the reported bug). Instead: sort by
+  // top edge, group into rows by vertical overlap, then order rows top-to-bottom
+  // and items left-to-right within each row.
+  const byReading = (ids) => {
+    const sorted = ids
+      .slice()
+      .sort((a, b) => rects.get(a).y - rects.get(b).y || idx.get(a) - idx.get(b))
+    const rows = []
+    for (const id of sorted) {
+      const r = rects.get(id)
+      const row = rows[rows.length - 1]
+      // Same row if this element vertically overlaps the row's anchor element.
+      if (row && r.y < row.anchorBottom - 6) {
+        row.items.push(id)
+        row.anchorBottom = Math.max(row.anchorBottom, r.b)
+      } else {
+        rows.push({ anchorBottom: r.b, items: [id] })
+      }
+    }
+    const result = []
+    for (const row of rows) {
+      row.items.sort(
+        (a, b) => rects.get(a).x - rects.get(b).x || idx.get(a) - idx.get(b),
+      )
+      result.push(...row.items)
+    }
+    return result
+  }
 
   const topLevel = components
     .filter((c) => c.type === 'section' || !parentOf.has(c.id))
@@ -278,18 +326,29 @@ function clampWidth(value, def, lo, hi) {
 function normalizePage(page) {
   const mobileWidth = clampWidth(page.mobileWidth, MOBILE_CANVAS_WIDTH, 240, 1200)
   const canvasWidth = clampWidth(page.canvasWidth, CANVAS_WIDTH, 320, 4000)
+  const flowMode = !!page.flowMode
+  const mobileManual = flowMode ? false : !!page.mobileManual
+  let components = normalize(page.components || [], mobileWidth)
+  // Auto mode: re-derive the phone layout from the desktop design on load too, so
+  // existing sites pick up reading-order fixes without a manual re-arrange.
+  if (!mobileManual) {
+    const auto = autoMobileLayout(components, mobileWidth)
+    components = components.map((c) => ({ ...c, mobileLayout: auto[c.id] || c.mobileLayout }))
+  }
   return {
     ...page,
     id: page.id || genId('page'),
     name: typeof page.name === 'string' && page.name ? page.name : 'Page',
     folder: typeof page.folder === 'string' ? page.folder : '',
-    components: normalize(page.components || [], mobileWidth),
+    components,
     background: page.background || '#ffffff',
     backgroundMobile: page.backgroundMobile || page.background || '#ffffff',
     canvasWidth,
     canvasFold: clampWidth(page.canvasFold, 0, 0, 20000),
     mobileWidth,
     mobileFold: clampWidth(page.mobileFold, 0, 0, 20000),
+    mobileManual,
+    flowMode,
   }
 }
 
@@ -308,7 +367,11 @@ export const useEditorStore = create((set, get) => ({
 
   components: () => selectCurrentPage(get()).components,
   // The active breakpoint's layout key for a component.
-  layoutKey: () => (get().viewport === 'mobile' ? 'mobileLayout' : 'layout'),
+  layoutKey: () => {
+    const p = selectCurrentPage(get())
+    if (p.flowMode) return 'layout'
+    return get().viewport === 'mobile' ? 'mobileLayout' : 'layout'
+  },
   pageBackground: () => {
     const p = selectCurrentPage(get())
     return get().viewport === 'mobile'
@@ -328,6 +391,20 @@ export const useEditorStore = create((set, get) => ({
   },
 
   setViewport: (v) => set({ viewport: v === 'mobile' ? 'mobile' : 'pc' }),
+
+  enableFlowMode: () => {
+    get().record('enable-flow')
+    set((state) => ({
+      schema: mapPage(state.schema, state.currentPageId, (p) => ({
+        ...p,
+        flowMode: true,
+        mobileManual: false,
+        components: orderForFlow(p.components || []),
+      })),
+      selectedId: null,
+      dirty: true,
+    }))
+  },
 
   // Snapshot the current schema for undo, coalescing rapid same-key bursts
   // (a drag or a run of keystrokes becomes a single undo step).
@@ -494,6 +571,34 @@ export const useEditorStore = create((set, get) => ({
       const id = genId(type)
       const fullWidth = FULL_WIDTH_TYPES.has(type)
 
+      if (page.flowMode) {
+        const component = {
+          id,
+          type,
+          props: structuredClone(def.defaultProps),
+          styles: structuredClone(def.defaultStyles),
+          layout: {
+            x: 0,
+            y: 0,
+            w: fullWidth ? page.canvasWidth || CANVAS_WIDTH : size.w,
+            h: size.h,
+          },
+          mobileLayout: {
+            x: 0,
+            y: 0,
+            w: fullWidth ? mobileWidth : Math.min(size.w, mobileWidth - MOBILE_PAD * 2),
+            h: size.h,
+          },
+          hidden: false,
+          hiddenMobile: false,
+        }
+        return {
+          schema: withComponents(state.schema, page.id, [...comps, component]),
+          selectedId: id,
+          dirty: true,
+        }
+      }
+
       let layout, mobileLayout
       if (state.viewport === 'mobile') {
         // Drop lands on the mobile canvas; give the desktop a stacked default.
@@ -539,11 +644,14 @@ export const useEditorStore = create((set, get) => ({
         hidden: false,
         hiddenMobile: false,
       }
-      return {
-        schema: withComponents(state.schema, page.id, [...comps, component]),
-        selectedId: id,
-        dirty: true,
-      }
+      const nextComps = [...comps, component]
+      // Dropping on the mobile canvas is a manual mobile edit; a PC drop keeps
+      // mobile auto-syncing (withComponents re-derives it).
+      const schema =
+        state.viewport === 'mobile'
+          ? mapPage(state.schema, page.id, (p) => ({ ...p, components: nextComps, mobileManual: true }))
+          : withComponents(state.schema, page.id, nextComps)
+      return { schema, selectedId: id, dirty: true }
     })
   },
 
@@ -582,7 +690,13 @@ export const useEditorStore = create((set, get) => ({
         const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
         return { ...c, [key]: clampLayout({ ...base, ...patch }) }
       })
-      return { schema: withComponents(state.schema, page.id, components), dirty: true }
+      // Editing the mobile layout directly switches that page to manual mode (it
+      // stops auto-following PC); PC edits keep mobile in auto sync.
+      const schema =
+        key === 'mobileLayout'
+          ? mapPage(state.schema, page.id, (p) => ({ ...p, components, mobileManual: true }))
+          : withComponents(state.schema, page.id, components)
+      return { schema, dirty: true }
     })
   },
 
@@ -607,16 +721,27 @@ export const useEditorStore = create((set, get) => ({
       const wKey = isMobile ? 'mobileWidth' : 'canvasWidth'
       const fKey = isMobile ? 'mobileFold' : 'canvasFold'
       return {
-        schema: mapPage(state.schema, state.currentPageId, (p) => ({
-          ...p,
-          [wKey]: clampWidth(
-            width,
-            isMobile ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH,
-            isMobile ? 240 : 320,
-            isMobile ? 1200 : 4000,
-          ),
-          [fKey]: clampWidth(fold, 0, 0, 20000),
-        })),
+        schema: mapPage(state.schema, state.currentPageId, (p) => {
+          const np = {
+            ...p,
+            [wKey]: clampWidth(
+              width,
+              isMobile ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH,
+              isMobile ? 240 : 320,
+              isMobile ? 1200 : 4000,
+            ),
+            [fKey]: clampWidth(fold, 0, 0, 20000),
+          }
+          // Re-fit the auto mobile layout to the new phone width.
+          if (isMobile && !p.mobileManual) {
+            const auto = autoMobileLayout(np.components, np.mobileWidth)
+            np.components = np.components.map((c) => ({
+              ...c,
+              mobileLayout: auto[c.id] || c.mobileLayout,
+            }))
+          }
+          return np
+        }),
         dirty: true,
       }
     })
@@ -645,7 +770,11 @@ export const useEditorStore = create((set, get) => ({
         ...c,
         mobileLayout: auto[c.id] || c.mobileLayout,
       }))
-      return { schema: withComponents(state.schema, page.id, components), dirty: true }
+      // Re-enable auto mode so mobile follows the PC design again going forward.
+      return {
+        schema: mapPage(state.schema, page.id, (p) => ({ ...p, components, mobileManual: false })),
+        dirty: true,
+      }
     })
   },
 

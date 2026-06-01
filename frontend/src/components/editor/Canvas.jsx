@@ -1,37 +1,34 @@
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
-import { canvasHeight } from '../renderer/layout.js'
+import { canvasHeight, flowCanvasHeight, flowGap, flowSidePad } from '../renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import FreeCanvasItem from './FreeCanvasItem.jsx'
+import FlowCanvasItem from './FlowCanvasItem.jsx'
 
 // One editable free canvas, rendered at the active breakpoint's chosen artboard
 // width. PC edits each component's `layout`; Mobile edits its `mobileLayout` on a
 // true device-width phone canvas (1:1, no scaling) — independent designs. The
 // "fold" guide (if set) marks the visible screen height for the chosen device.
 export default function Canvas() {
-  const components = useEditorStore((s) => selectCurrentPage(s).components)
+  const page = useEditorStore(selectCurrentPage)
+  const components = page.components
   const viewport = useEditorStore((s) => s.viewport)
-  const bg = useEditorStore((s) => selectCurrentPage(s).background || '#ffffff')
-  const bgMobile = useEditorStore(
-    (s) =>
-      selectCurrentPage(s).backgroundMobile ||
-      selectCurrentPage(s).background ||
-      '#ffffff',
-  )
-  const pcWidth = useEditorStore((s) => selectCurrentPage(s).canvasWidth || CANVAS_WIDTH)
-  const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
-  const mobileWidth = useEditorStore(
-    (s) => selectCurrentPage(s).mobileWidth || MOBILE_CANVAS_WIDTH,
-  )
-  const mobileFold = useEditorStore((s) => selectCurrentPage(s).mobileFold || 0)
+  const bg = page.background || '#ffffff'
+  const bgMobile = page.backgroundMobile || page.background || '#ffffff'
+  const pcWidth = page.canvasWidth || CANVAS_WIDTH
+  const pcFold = page.canvasFold || 0
+  const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
+  const mobileFold = page.mobileFold || 0
   const select = useEditorStore((s) => s.selectComponent)
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' })
 
   const isMobile = viewport === 'mobile'
+  const flowMode = !!page.flowMode
   const canvasW = isMobile ? mobileWidth : pcWidth
+  const sidePad = flowSidePad(viewport)
   const fold = isMobile ? mobileFold : pcFold
   const background = isMobile ? bgMobile : bg
-  const contentH = canvasHeight(components, viewport)
+  const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
   const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
 
   const canvas = (
@@ -39,7 +36,24 @@ export default function Canvas() {
       id="free-canvas"
       ref={setNodeRef}
       onPointerDown={() => select(null)}
-      style={{ position: 'relative', width: canvasW, minHeight, background }}
+      style={{
+        position: 'relative',
+        width: canvasW,
+        minHeight,
+        background,
+        ...(flowMode
+          ? {
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'stretch',
+              justifyContent: 'flex-start',
+              gap: flowGap(viewport),
+              padding: `0 ${sidePad}px`,
+              boxSizing: 'border-box',
+            }
+          : {}),
+      }}
       className={`${isMobile ? '' : 'shadow-sm'} ${
         isOver ? 'ring-2 ring-[#2b579a]' : ''
       }`}
@@ -52,9 +66,13 @@ export default function Canvas() {
           </p>
         </div>
       )}
-      {components.map((component) => (
-        <FreeCanvasItem key={component.id} component={component} />
-      ))}
+      {components.map((component) =>
+        flowMode ? (
+          <FlowCanvasItem key={component.id} component={component} canvasWidth={canvasW} />
+        ) : (
+          <FreeCanvasItem key={component.id} component={component} />
+        ),
+      )}
 
       {fold > 0 && (
         <div
@@ -81,8 +99,12 @@ export default function Canvas() {
             {canvas}
           </div>
           <p className="mt-3 max-w-[360px] text-center text-xs text-gray-400">
+            {flowMode ? `Flow layout (${canvasW}px) - the same order adapts to mobile and PC.` : (
+              <>
             Mobile layout ({canvasW}px) — a separate design from PC. Drag &amp;
             resize freely, or use "Auto-arrange" in the panel.
+              </>
+            )}
           </p>
         </div>
       </main>

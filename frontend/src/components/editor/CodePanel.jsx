@@ -3,9 +3,9 @@ import { useEditorStore } from '../../store/editorStore.js'
 import { schemaToFiles } from '../../utils/schemaToFiles.js'
 
 // Read-only live code view. Regenerates the project's HTML/CSS from the current
-// schema on every edit — drag/resize an element and the markup updates here. The
+// schema on every edit. Drag/resize an element and the markup updates here. The
 // user never types code (XSS-safe by construction). Builder UI styling.
-const ICON = { html: '📄', css: '🎨', json: '{ }' }
+const ICON = { html: 'HTML', css: 'CSS', json: '{ }' }
 
 export default function CodePanel() {
   const schema = useEditorStore((s) => s.schema)
@@ -28,7 +28,9 @@ export default function CodePanel() {
           : 'text-[#323130] hover:bg-[#f3f2f1]'
       }`}
     >
-      <span className="text-[11px]">{ICON[f.lang] || '📄'}</span>
+      <span className="w-8 text-[10px] font-semibold text-[#605e5c]">
+        {ICON[f.lang] || 'FILE'}
+      </span>
       <span className="truncate">{f.name}</span>
     </button>
   )
@@ -45,10 +47,10 @@ export default function CodePanel() {
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-[#e1dfdd] px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
-          Explorer
+          Code files
         </span>
         <span className="ml-auto rounded-[2px] bg-[#dff6dd] px-1.5 py-0.5 text-[10px] font-semibold text-[#0b6a0b]">
-          live · read-only
+          live generated
         </span>
       </div>
 
@@ -56,11 +58,11 @@ export default function CodePanel() {
         {/* File tree */}
         <div className="w-36 shrink-0 overflow-y-auto border-r border-[#e1dfdd] bg-[#faf9f8] p-1.5">
           <div className="flex items-center gap-1 px-1 py-1 text-xs font-semibold text-[#323130]">
-            <span>📁</span>
+            <span className="font-mono text-[10px]">/</span>
             <span>my-site</span>
           </div>
           <div className="flex items-center gap-1 py-1 pl-3 text-xs font-medium text-[#605e5c]">
-            <span>📁</span>
+            <span className="font-mono text-[10px]">/</span>
             <span>pages</span>
           </div>
           {htmlFiles.map((f) => (
@@ -80,7 +82,7 @@ export default function CodePanel() {
               onClick={copy}
               className="rounded-[2px] border border-[#8a8886] px-2 py-0.5 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
             >
-              {copied ? 'Copied ✓' : 'Copy'}
+              {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
           <pre className="min-h-0 flex-1 overflow-auto bg-[#1e1e1e] p-3 font-mono text-[11px] leading-relaxed text-gray-100">

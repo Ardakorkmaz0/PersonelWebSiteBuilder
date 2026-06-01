@@ -178,7 +178,8 @@ export default function PropertiesPanel() {
   const removeComponent = useEditorStore((s) => s.removeComponent)
 
   const isMobile = viewport === 'mobile'
-  const layoutKey = isMobile ? 'mobileLayout' : 'layout'
+  const isFlow = !!page.flowMode
+  const layoutKey = isFlow ? 'layout' : isMobile ? 'mobileLayout' : 'layout'
   const component = page.components.find((c) => c.id === selectedId)
   const pageBackground = isMobile
     ? page.backgroundMobile || page.background || '#ffffff'
@@ -190,7 +191,9 @@ export default function PropertiesPanel() {
         <div className="border-b border-[#e1dfdd] px-4 py-3">
           <h2 className="text-sm font-semibold text-[#201f1e]">Page</h2>
           <p className="text-xs text-[#605e5c]">
-            {isMobile ? 'Mobile design' : 'PC design'} — nothing selected
+            {isFlow
+              ? 'HTML flow layout - nothing selected'
+              : `${isMobile ? 'Mobile layout' : 'PC layout'} - nothing selected`}
           </p>
         </div>
         <div className="space-y-4 p-4">
@@ -206,11 +209,17 @@ export default function PropertiesPanel() {
             placeholder="e.g. Marketing"
           />
           <LabeledColor
-            label={isMobile ? 'Page background (Mobile)' : 'Page background (PC)'}
+            label={
+              isFlow
+                ? 'Page background'
+                : isMobile
+                  ? 'Page background (Mobile)'
+                  : 'Page background (PC)'
+            }
             value={pageBackground}
             onChange={setPageBackground}
           />
-          {isMobile && (
+          {isMobile && !isFlow && (
             <button
               type="button"
               onClick={autoArrangeMobile}
@@ -220,9 +229,11 @@ export default function PropertiesPanel() {
             </button>
           )}
           <p className="text-xs leading-relaxed text-[#605e5c]">
-            {isMobile
-              ? 'Mobile is a separate design. Drag & resize components on the phone, or auto-arrange them into a clean single column.'
-              : 'Select a component on the canvas to edit its content, style, position and size.'}
+            {isFlow
+              ? 'Flow mode uses one document order that adapts across PC and mobile.'
+              : isMobile
+                ? 'Mobile is a separate design. Drag & resize components on the phone, or auto-arrange them into a clean single column.'
+                : 'Select a component on the canvas to edit its content, style, position and size.'}
           </p>
         </div>
       </div>
@@ -244,9 +255,9 @@ export default function PropertiesPanel() {
           className="flex items-center justify-between gap-2 rounded-[2px] bg-[#eff3fb] px-3 py-2"
         >
           <span className="text-xs font-semibold text-[#2b579a]">
-            Editing {isMobile ? 'Mobile' : 'PC'} layout
+            {isFlow ? 'Editing HTML flow layout' : `Editing ${isMobile ? 'Mobile' : 'PC'} layout`}
           </span>
-          {isMobile && (
+          {isMobile && !isFlow && (
             <button
               type="button"
               onClick={autoArrangeMobile}
@@ -259,29 +270,33 @@ export default function PropertiesPanel() {
 
         <section className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
-            Position &amp; Size
+            {isFlow ? 'Layout Size' : 'Position & Size'}
             <span className="ml-1 font-normal normal-case text-[#a19f9d]">
-              ({isMobile ? 'mobile' : 'PC'})
+              ({isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC'})
             </span>
           </h3>
           <div className="grid grid-cols-2 gap-2">
+            {!isFlow && (
+              <>
+                <LabeledNumber
+                  label="X"
+                  value={layout.x}
+                  onChange={(v) => setLayout(component.id, { x: v })}
+                />
+                <LabeledNumber
+                  label="Y"
+                  value={layout.y}
+                  onChange={(v) => setLayout(component.id, { y: v })}
+                />
+              </>
+            )}
             <LabeledNumber
-              label="X"
-              value={layout.x}
-              onChange={(v) => setLayout(component.id, { x: v })}
-            />
-            <LabeledNumber
-              label="Y"
-              value={layout.y}
-              onChange={(v) => setLayout(component.id, { y: v })}
-            />
-            <LabeledNumber
-              label="Width"
+              label={isFlow ? 'Max width' : 'Width'}
               value={layout.w}
               onChange={(v) => setLayout(component.id, { w: v })}
             />
             <LabeledNumber
-              label="Height"
+              label={isFlow ? 'Min height' : 'Height'}
               value={layout.h}
               onChange={(v) => setLayout(component.id, { h: v })}
             />
@@ -351,14 +366,14 @@ export default function PropertiesPanel() {
             onClick={() => bringToFront(component.id)}
             className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
           >
-            To front
+            {isFlow ? 'Move to end' : 'To front'}
           </button>
           <button
             type="button"
             onClick={() => sendToBack(component.id)}
             className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
           >
-            To back
+            {isFlow ? 'Move to start' : 'To back'}
           </button>
         </div>
         <button

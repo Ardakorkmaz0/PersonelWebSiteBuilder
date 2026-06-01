@@ -20,8 +20,6 @@ import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import CodePanel from '../components/editor/CodePanel.jsx'
 import HtmlWorkspace from '../components/editor/HtmlWorkspace.jsx'
-import HtmlModal from '../components/editor/HtmlModal.jsx'
-import { schemaToHtml } from '../utils/exportHtml.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { apiError } from '../utils/errors.js'
 
@@ -31,6 +29,7 @@ export default function EditorPage() {
   const loadSchema = useEditorStore((s) => s.loadSchema)
   const importSchema = useEditorStore((s) => s.importSchema)
   const addComponent = useEditorStore((s) => s.addComponent)
+  const enableFlowMode = useEditorStore((s) => s.enableFlowMode)
   const setLayout = useEditorStore((s) => s.setLayout)
   const viewport = useEditorStore((s) => s.viewport)
   const setViewport = useEditorStore((s) => s.setViewport)
@@ -39,6 +38,7 @@ export default function EditorPage() {
   const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
   const mobileW = useEditorStore((s) => selectCurrentPage(s).mobileWidth || 390)
   const mobileFold = useEditorStore((s) => selectCurrentPage(s).mobileFold || 0)
+  const flowMode = useEditorStore((s) => !!selectCurrentPage(s).flowMode)
   const duplicateComponent = useEditorStore((s) => s.duplicateComponent)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
@@ -55,7 +55,6 @@ export default function EditorPage() {
   const [error, setError] = useState('')
   const [activeType, setActiveType] = useState(null)
   const [justSaved, setJustSaved] = useState(false)
-  const [htmlPreview, setHtmlPreview] = useState(null)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
   const [importOpen, setImportOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -137,6 +136,7 @@ export default function EditorPage() {
         state.removeComponent(sel)
         return
       }
+      if (selectCurrentPage(state).flowMode) return
       const key = state.viewport === 'mobile' ? 'mobileLayout' : 'layout'
       const comp = selectCurrentPage(state).components.find((c) => c.id === sel)
       const layout = comp?.[key] || comp?.layout
@@ -233,7 +233,7 @@ export default function EditorPage() {
       let ok = false
       if (htmls.length) {
         // Keep the HTML exactly as-is (with its JavaScript). The site becomes an
-        // HTML site — viewed/edited in the embedded workspace and published inside
+        // HTML site: viewed/edited in the embedded workspace and published inside
         // a sandboxed iframe so its JS runs.
         setSiteHtml(await htmlFilesToDocument(files))
         setHtmlDirty(true)
@@ -297,6 +297,31 @@ export default function EditorPage() {
         <div className="ml-auto flex items-center gap-2">
           {!isHtmlSite && (
           <>
+          {flowMode ? (
+            <span
+              title="HTML flow mode is always responsive and cannot be turned off for this page."
+              className="rounded-[2px] border border-[#107c10] bg-[#dff6dd] px-3 py-1.5 text-sm font-semibold text-[#0b6a0b]"
+            >
+              HTML Flow On
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Enable HTML Flow mode? Components will follow normal HTML document order, so PC and mobile share the same responsive layout. This mode cannot be turned off for this page.',
+                  )
+                ) {
+                  enableFlowMode()
+                }
+              }}
+              title="Use normal HTML document flow so the same component order works on PC and mobile"
+              className="rounded-[2px] border border-[#2b579a] px-3 py-1.5 text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+            >
+              HTML Flow
+            </button>
+          )}
           <div className="flex items-center rounded-[2px] border border-[#8a8886] p-0.5 text-xs font-medium">
             <button
               onClick={() => setViewport('pc')}
@@ -338,7 +363,7 @@ export default function EditorPage() {
               </option>
             ))}
             {curPresetId === 'custom' && (
-              <option value="custom">Custom · {curW}px</option>
+              <option value="custom">Custom - {curW}px</option>
             )}
           </select>
           <button
@@ -406,9 +431,9 @@ export default function EditorPage() {
                 />
                 <div className="absolute right-0 z-50 mt-1 w-52 overflow-hidden rounded-[2px] border border-[#e1dfdd] bg-white py-1 shadow-lg">
                   {[
-                    ['HTML file…', htmlInputRef],
-                    ['Project folder…', folderInputRef],
-                    ['Project JSON…', jsonInputRef],
+                    ['HTML file...', htmlInputRef],
+                    ['Project folder...', folderInputRef],
+                    ['Project JSON...', jsonInputRef],
                   ].map(([label, ref]) => (
                     <button
                       key={label}
@@ -433,14 +458,6 @@ export default function EditorPage() {
             className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
           >
             Export
-          </button>
-          <button
-            onClick={() =>
-              setHtmlPreview(schemaToHtml(useEditorStore.getState().schema, title))
-            }
-            className="rounded-[2px] px-3 py-1.5 font-mono text-sm text-[#323130] hover:bg-[#f3f2f1]"
-          >
-            &lt;/&gt; HTML
           </button>
           </>
           )}
@@ -585,9 +602,6 @@ export default function EditorPage() {
         </DragOverlay>
       </DndContext>
 
-      {htmlPreview !== null && (
-        <HtmlModal html={htmlPreview} onClose={() => setHtmlPreview(null)} />
-      )}
     </div>
   )
 }

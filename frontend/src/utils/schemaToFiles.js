@@ -9,6 +9,17 @@
 import { sanitizeStyles, sanitizeUrl } from './sanitize.js'
 
 const MOBILE_BREAKPOINT = 768
+const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
+const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
+const FLOW_MAX_HEIGHT = {
+  navbar: 88,
+  heading: 120,
+  text: 180,
+  button: 64,
+  linkbutton: 56,
+  card: 240,
+  section: 220,
+}
 
 function esc(s) {
   return String(s ?? '').replace(
@@ -148,6 +159,23 @@ function pageMinHeight(comps, key, fallback) {
   return Math.max(fallback, bottom + 40)
 }
 
+function flowPageMinHeight(comps, key, fallback) {
+  const visible = comps || []
+  if (!visible.length) return fallback
+  const total = visible.reduce((sum, c) => {
+    return sum + flowHeight(c, key)
+  }, 0)
+  return Math.max(fallback, total + Math.max(0, visible.length - 1) * 20)
+}
+
+function flowHeight(c, key) {
+  const l = (key === 'mobileLayout' ? c.mobileLayout : c.layout) || {}
+  const base = Math.max(4, Math.round(l.h || 80))
+  if (FLOW_FIXED_HEIGHT_TYPES.has(c.type)) return base
+  if (c.type === 'navbar' && key === 'mobileLayout') return Math.max(88, Math.min(base, 120))
+  return FLOW_MAX_HEIGHT[c.type] ? Math.min(base, FLOW_MAX_HEIGHT[c.type]) : base
+}
+
 export function schemaToCss(schema) {
   const pages = schema?.pages || []
   let css = `/* Auto-generated from your design — read-only. */
@@ -165,11 +193,25 @@ body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
     const comps = page.components || []
     const w = page.canvasWidth || 1000
     css += `\n/* ===== ${page.name} (desktop) ===== */\n`
-    css += `.p-${page.id} { width: ${w}px; min-height: ${pageMinHeight(comps, 'layout', 600)}px; background: ${cssValue(page.background || '#ffffff')}; }\n`
+    if (page.flowMode) {
+      css += `.p-${page.id} { width: 100%; max-width: ${w}px; min-height: ${flowPageMinHeight(comps, 'layout', 600)}px; background: ${cssValue(page.background || '#ffffff')}; display:flex; flex-direction:row; flex-wrap:wrap; align-items:stretch; justify-content:flex-start; gap:20px; padding:0 24px; box-sizing:border-box; }\n`
+    } else {
+      css += `.p-${page.id} { width: ${w}px; min-height: ${pageMinHeight(comps, 'layout', 600)}px; background: ${cssValue(page.background || '#ffffff')}; }\n`
+    }
     for (const c of comps) {
       const l = c.layout || {}
       const hide = c.hidden ? ' display:none;' : ''
-      css += `.c-${c.id} { position:absolute; left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+      if (page.flowMode) {
+        const full = FLOW_FULL_WIDTH_TYPES.has(c.type)
+        const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
+        const width = full ? 'calc(100% + 48px)' : `min(${l.w || 240}px, 100%)`
+        const height = fixed ? `height:${l.h || 80}px;` : `min-height:${flowHeight(c, 'layout')}px;`
+        const flex = full ? '0 0 100%' : `0 1 min(${l.w || 240}px, 100%)`
+        const margin = full ? ' margin-left:-24px; margin-right:-24px;' : ''
+        css += `.c-${c.id} { position:relative; width:${width}; ${height} flex:${flex}; overflow:${fixed ? 'hidden' : 'visible'};${margin} ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+      } else {
+        css += `.c-${c.id} { position:absolute; left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+      }
     }
   }
   // Mobile
@@ -177,11 +219,26 @@ body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
   for (const page of pages) {
     const comps = page.components || []
     const mw = page.mobileWidth || 390
-    css += `  .p-${page.id} { width: ${mw}px; min-height: ${pageMinHeight(comps, 'mobileLayout', 400)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; }\n`
+    if (page.flowMode) {
+      css += `  .p-${page.id} { width: 100%; max-width: ${mw}px; min-height: ${flowPageMinHeight(comps, 'mobileLayout', 400)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; gap:16px; padding:0 16px; }\n`
+    } else {
+      css += `  .p-${page.id} { width: ${mw}px; min-height: ${pageMinHeight(comps, 'mobileLayout', 400)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; }\n`
+    }
     for (const c of comps) {
       const l = c.mobileLayout || c.layout || {}
       const hide = c.hiddenMobile ? ' display:none;' : ''
-      css += `  .c-${c.id} { left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px;${hide} }\n`
+      if (page.flowMode) {
+        const full = FLOW_FULL_WIDTH_TYPES.has(c.type)
+        const mobileBlock = ['navbar', 'heading', 'text', 'image', 'section', 'card', 'divider'].includes(c.type)
+        const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
+        const width = full ? 'calc(100% + 32px)' : mobileBlock ? '100%' : `min(${l.w || 240}px, 100%)`
+        const height = fixed ? `height:${l.h || 80}px;` : `min-height:${flowHeight(c, 'mobileLayout')}px;`
+        const flex = full || mobileBlock ? '0 0 100%' : `0 1 min(${l.w || 240}px, 100%)`
+        const margin = full ? ' margin-left:-16px; margin-right:-16px;' : ''
+        css += `  .c-${c.id} { width:${width}; ${height} flex:${flex}; overflow:${fixed ? 'hidden' : 'visible'};${margin}${hide} }\n`
+      } else {
+        css += `  .c-${c.id} { left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px;${hide} }\n`
+      }
     }
   }
   css += `}\n`

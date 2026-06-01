@@ -25,6 +25,7 @@ export function schemaToHtml(schema, title = 'My Site') {
       viewport="pc"
       width={page.canvasWidth || CANVAS_WIDTH}
       background={bg}
+      flowMode={!!page.flowMode}
     />,
   )
   const mobile = renderToStaticMarkup(
@@ -33,6 +34,7 @@ export function schemaToHtml(schema, title = 'My Site') {
       viewport="mobile"
       width={page.mobileWidth || MOBILE_CANVAS_WIDTH}
       background={bgMobile}
+      flowMode={!!page.flowMode}
     />,
   )
 

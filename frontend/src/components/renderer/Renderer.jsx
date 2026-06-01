@@ -7,25 +7,71 @@
 // hidden on the active breakpoint are skipped.
 import { registry, CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import { sanitizeStyles } from '../../utils/sanitize.js'
-import { canvasHeight, isHidden, layoutFor } from './layout.js'
+import {
+  canvasHeight,
+  flowCanvasHeight,
+  flowGap,
+  flowItemStyle,
+  flowSidePad,
+  isHidden,
+  layoutFor,
+} from './layout.js'
 
-export function RenderComponent({ component }) {
+export function RenderComponent({ component, flowMode = false }) {
   const def = registry[component.type]
   if (!def) return null
   const Comp = def.Render
+  const fixedFlow = flowMode && ['image', 'divider', 'spacer'].includes(component.type)
   const style = {
     width: '100%',
-    height: '100%',
+    ...(flowMode ? (fixedFlow ? { height: '100%' } : { minHeight: '100%' }) : { height: '100%' }),
     boxSizing: 'border-box',
-    overflow: 'hidden',
+    overflow: flowMode ? 'visible' : 'hidden',
     ...sanitizeStyles(component.styles),
   }
   return <Comp props={component.props || {}} style={style} />
 }
 
-export function Renderer({ components, width, background = '#ffffff', viewport = 'pc' }) {
+export function Renderer({
+  components,
+  width,
+  background = '#ffffff',
+  viewport = 'pc',
+  flowMode = false,
+}) {
   const list = Array.isArray(components) ? components : []
   const canvasW = width || (viewport === 'mobile' ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH)
+  const sidePad = flowSidePad(viewport)
+  if (flowMode) {
+    return (
+      <div
+        style={{
+          width: canvasW,
+          minHeight: flowCanvasHeight(list, viewport, canvasW),
+          padding: `0 ${sidePad}px`,
+          boxSizing: 'border-box',
+          margin: '0 auto',
+          background,
+          display: 'flex',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'stretch',
+          justifyContent: 'flex-start',
+          gap: flowGap(viewport),
+        }}
+      >
+        {list.map((c) => {
+          if (isHidden(c, viewport)) return null
+          return (
+            <div key={c.id} style={flowItemStyle(c, viewport, canvasW)}>
+              <RenderComponent component={c} flowMode />
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div
       style={{

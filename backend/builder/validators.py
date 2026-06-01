@@ -178,6 +178,8 @@ def validate_and_clean_schema(schema):
             'canvasFold': _num(page.get('canvasFold'), 0, 0, 20000),
             'mobileWidth': _num(page.get('mobileWidth'), 390, 240, 1200),
             'mobileFold': _num(page.get('mobileFold'), 0, 0, 20000),
+            'mobileManual': bool(page.get('mobileManual')),
+            'flowMode': bool(page.get('flowMode')),
             'components': [sanitize_component(c) for c in comps],
         })
     return {'pages': clean_pages}

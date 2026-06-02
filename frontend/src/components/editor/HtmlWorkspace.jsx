@@ -1,5 +1,9 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { HTML_ALLOW, HTML_SANDBOX, installBuilderRuntime } from '../../utils/htmlRuntime.js'
+import {
+  HTML_ALLOW,
+  HTML_VIEW_SANDBOX,
+  withBuilderRuntimeHtml,
+} from '../../utils/htmlRuntime.js'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
 // - View: real document in a sandboxed iframe with scripts enabled.
@@ -86,10 +90,6 @@ function HtmlWorkspace({ html, onCommit }, ref) {
   }
 
   function onIframeLoad() {
-    if (mode === 'view') {
-      installBuilderRuntime(iframeRef.current)
-      return
-    }
     if (mode === 'edit') {
       try {
         const doc = iframeRef.current.contentDocument
@@ -110,8 +110,8 @@ function HtmlWorkspace({ html, onCommit }, ref) {
       : device.h
   const scale = Math.min(1, (stage.w - 24) / contentW || 1, (stage.h - 24) / contentH || 1)
 
-  const srcDoc = mode === 'view' ? (compat ? withCompat(html) : html) : editSeed
-  const sandbox = mode === 'view' ? HTML_SANDBOX : 'allow-same-origin'
+  const srcDoc = mode === 'view' ? withBuilderRuntimeHtml(compat ? withCompat(html) : html) : editSeed
+  const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
   const toggleBtn = (active) =>
     active ? 'rounded-[2px] bg-[#2b579a] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#323130]'

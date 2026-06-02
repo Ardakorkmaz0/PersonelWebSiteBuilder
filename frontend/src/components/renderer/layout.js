@@ -46,33 +46,60 @@ export function flowSidePad(viewport = 'pc') {
   return viewport === 'mobile' ? FLOW_MOBILE_SIDE_PAD : FLOW_SIDE_PAD
 }
 
+const FLOW_INLINE_TYPES = new Set(['button', 'linkbutton', 'image'])
+
 export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
-  const l = layoutFor(component, viewport) || {}
+  // Flow is a single design that adapts to both breakpoints, so the box metrics
+  // come from `layout` on PC and mobile alike (editable from either viewport).
+  const l = component.layout || {}
   const full = isFlowFullWidth(component)
   const sidePad = flowSidePad(viewport)
   const mobileBlock = viewport === 'mobile' && FLOW_MOBILE_BLOCK_TYPES.has(component?.type)
+  const inline = FLOW_INLINE_TYPES.has(component?.type)
   const boxW = Math.max(8, Math.round(l.w || (full ? canvasWidth : 240)))
   const boxH = flowBoxHeight(component, viewport)
-  const width = full
-    ? `calc(100% + ${sidePad * 2}px)`
-    : mobileBlock
-      ? '100%'
-      : `min(${boxW}px, 100%)`
+
+  let flex
+  let width
+  if (full) {
+    // Full-bleed bands span the whole row and bleed into the side padding. Use
+    // flex-basis auto (0 0 auto) so the explicit calc() width actually applies —
+    // a percentage flex-basis would otherwise override it and leave a side gap.
+    flex = '0 0 auto'
+    width = `calc(100% + ${sidePad * 2}px)`
+  } else if (mobileBlock) {
+    flex = '0 0 100%'
+    width = '100%'
+  } else if (inline) {
+    // Buttons keep the designed width, but do not grow to fill leftover row
+    // space like text/card blocks.
+    flex = '0 0 auto'
+    width = `min(${boxW}px, 100%)`
+  } else {
+    // Block items GROW to share/fill their row proportionally to their box width,
+    // so no leftover gap is left on the side. Resizing the width changes an item's
+    // share of the row; items wrap only once their min-width no longer fits.
+    flex = `${boxW} 1 0`
+    width = 'auto'
+  }
+
   return {
     position: 'relative',
     width,
+    minWidth: full || mobileBlock || inline ? undefined : Math.min(boxW, 160),
+    // Full-bleed bands must keep their calc(100% + padding) width; only cap the
+    // others so a long inline item can't overflow the row.
+    maxWidth: full ? undefined : '100%',
     minHeight: boxH,
     height: FLOW_FIXED_HEIGHT_TYPES.has(component?.type) ? boxH : 'auto',
     marginLeft: full ? -sidePad : undefined,
     marginRight: full ? -sidePad : undefined,
-    flex: full || mobileBlock
-      ? '0 0 100%'
-      : `0 1 min(${boxW}px, 100%)`,
+    flex,
   }
 }
 
 function flowBoxHeight(component, viewport = 'pc') {
-  const l = layoutFor(component, viewport) || {}
+  const l = component.layout || {}
   const base = Math.max(4, Math.round(l.h || 80))
   if (FLOW_FIXED_HEIGHT_TYPES.has(component?.type)) return base
   if (component?.type === 'navbar' && viewport === 'mobile') {
@@ -84,7 +111,8 @@ function flowBoxHeight(component, viewport = 'pc') {
 
 export function flowCanvasHeight(components, viewport = 'pc', canvasWidth = 1000) {
   const list = Array.isArray(components) ? components.filter((c) => !isHidden(c, viewport)) : []
-  if (!list.length) return viewport === 'mobile' ? 400 : 600
+  // Empty canvas: a modest drop target (not a big blank band).
+  if (!list.length) return viewport === 'mobile' ? 320 : 360
   const gap = flowGap(viewport)
   const sidePad = flowSidePad(viewport)
   const available = Math.max(1, canvasWidth - sidePad * 2)
@@ -100,7 +128,7 @@ export function flowCanvasHeight(components, viewport = 'pc', canvasWidth = 1000
   }
 
   for (const c of list) {
-    const l = layoutFor(c, viewport) || {}
+    const l = c.layout || {}
     const full = isFlowFullWidth(c)
     const mobileBlock = viewport === 'mobile' && FLOW_MOBILE_BLOCK_TYPES.has(c.type)
     const w = full ? canvasWidth : mobileBlock
@@ -119,5 +147,7 @@ export function flowCanvasHeight(components, viewport = 'pc', canvasWidth = 1000
     rowH = Math.max(rowH, h)
   }
   flush()
-  return Math.max(viewport === 'mobile' ? 400 : 600, total)
+  // Fit the content height (+ a little breathing room to drop the next block)
+  // instead of forcing a tall fixed minimum that looks empty.
+  return total + (viewport === 'mobile' ? 24 : 32)
 }

@@ -1,25 +1,22 @@
-// Turns the design schema into a small read-only "project" of files: one .html
-// per page (components reference .c-<id> classes), a shared styles.css with the
-// extracted/positioned styles + a responsive @media block, and schema.json.
+// Turns the design schema into a small read-only "project" of files: one
+// self-contained .html per page plus schema.json.
 //
 // This is for DISPLAY (the VS Code-style code panel) and export. It never runs
 // user input: text is HTML-escaped, URLs go through sanitizeUrl, style keys are
 // whitelisted by sanitizeStyles, and CSS values are stripped of `;{}<` so a
 // value can't break out of its rule.
 import { sanitizeStyles, sanitizeUrl } from './sanitize.js'
+import { customCssBlock, themeVariablesCss } from './theme.js'
+import {
+  flowCanvasHeight,
+  flowGap,
+  flowItemStyle,
+  flowSidePad,
+} from '../components/renderer/layout.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
 const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
-const FLOW_MAX_HEIGHT = {
-  navbar: 88,
-  heading: 120,
-  text: 180,
-  button: 64,
-  linkbutton: 56,
-  card: 240,
-  section: 220,
-}
 
 function esc(s) {
   return String(s ?? '').replace(
@@ -43,11 +40,28 @@ function styleBlock(styles) {
     .join(' ')
 }
 
+function cssUnit(key, value) {
+  if (value === undefined || value === null) return ''
+  if (typeof value === 'number') {
+    return ['opacity', 'zIndex', 'fontWeight', 'lineHeight'].includes(key)
+      ? String(value)
+      : `${value}px`
+  }
+  return cssValue(value)
+}
+
+function styleObjectBlock(styles) {
+  return Object.entries(styles || {})
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${kebab(k)}: ${cssUnit(k, v)};`)
+    .join(' ')
+}
+
 // Flex/layout behaviour each component's wrapper has in the live renderer.
 function baseRules(type) {
   switch (type) {
     case 'navbar':
-      return 'display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;'
+      return 'display:flex; align-items:center; justify-content:center;'
     case 'heading':
     case 'text':
     case 'section':
@@ -86,7 +100,7 @@ function innerHtml(c) {
           return `<a href="${esc(href || '#')}"${ext}>${esc(l.label)}</a>`
         })
         .join('\n        ')
-      return `<span class="brand">${esc(p.brand)}</span>\n      <div class="links">\n        ${items}\n      </div>`
+      return `<div class="nav-inner">\n        <span class="brand">${esc(p.brand)}</span>\n        <div class="links">\n          ${items}\n        </div>\n      </div>`
     }
     case 'heading': {
       const lvl = ['h1', 'h2', 'h3'].includes(p.level) ? p.level : 'h2'
@@ -98,7 +112,7 @@ function innerHtml(c) {
     case 'linkbutton':
       return esc(p.text)
     case 'section':
-      return p.heading ? `<h2 class="m0">${esc(p.heading)}</h2>` : ''
+      return `<div class="section-inner">${p.heading ? `<h2 class="m0">${esc(p.heading)}</h2>` : ''}</div>`
     case 'card':
       return `${p.title ? `<h3 class="card-title">${esc(p.title)}</h3>` : ''}${
         p.text ? `\n      <p class="m0">${esc(p.text)}</p>` : ''
@@ -126,15 +140,6 @@ function openTag(c) {
 }
 
 function pageHtml(page, fileTitle, cssHref = 'styles.css') {
-  const comps = Array.isArray(page.components) ? page.components : []
-  const body = comps
-    .map((c) => {
-      const tag = tagFor(c.type)
-      if (tag === 'img') return `    ${openTag(c)}`
-      const inner = innerHtml(c)
-      return `    ${openTag(c)}${inner ? `\n      ${inner}\n    ` : ''}</${tag}>`
-    })
-    .join('\n')
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -145,10 +150,22 @@ function pageHtml(page, fileTitle, cssHref = 'styles.css') {
   </head>
   <body>
     <div class="page p-${page.id}">
-${body}
+${pageBody(page)}
     </div>
   </body>
 </html>`
+}
+
+function pageBody(page) {
+  const comps = Array.isArray(page.components) ? page.components : []
+  return comps
+    .map((c) => {
+      const tag = tagFor(c.type)
+      if (tag === 'img') return `      ${openTag(c)}`
+      const inner = innerHtml(c)
+      return `      ${openTag(c)}${inner ? `\n        ${inner}\n      ` : ''}</${tag}>`
+    })
+    .join('\n')
 }
 
 function pageMinHeight(comps, key, fallback) {
@@ -159,33 +176,19 @@ function pageMinHeight(comps, key, fallback) {
   return Math.max(fallback, bottom + 40)
 }
 
-function flowPageMinHeight(comps, key, fallback) {
-  const visible = comps || []
-  if (!visible.length) return fallback
-  const total = visible.reduce((sum, c) => {
-    return sum + flowHeight(c, key)
-  }, 0)
-  return Math.max(fallback, total + Math.max(0, visible.length - 1) * 20)
-}
-
-function flowHeight(c, key) {
-  const l = (key === 'mobileLayout' ? c.mobileLayout : c.layout) || {}
-  const base = Math.max(4, Math.round(l.h || 80))
-  if (FLOW_FIXED_HEIGHT_TYPES.has(c.type)) return base
-  if (c.type === 'navbar' && key === 'mobileLayout') return Math.max(88, Math.min(base, 120))
-  return FLOW_MAX_HEIGHT[c.type] ? Math.min(base, FLOW_MAX_HEIGHT[c.type]) : base
-}
-
-export function schemaToCss(schema) {
+export function schemaToCss(schema, options = {}) {
   const pages = schema?.pages || []
-  let css = `/* Auto-generated from your design — read-only. */
+  let css = `/* Auto-generated from your design - read-only. */
+${themeVariablesCss(schema?.theme)}
 * { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
+body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, sans-serif); color: var(--site-text, #1d1d1f); background: var(--site-bg, #ffffff); }
 .page { position: relative; margin: 0 auto; }
 .brand { font-weight: bold; font-size: 18px; }
-.links { display: flex; gap: 20px; flex-wrap: wrap; }
+.nav-inner { display: flex; width: 100%; margin-left: auto; margin-right: auto; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.links { display: flex; gap: 20px; row-gap: 6px; flex-wrap: wrap; }
 .links a { color: inherit; text-decoration: none; }
-.m0 { margin: 0; }
+.section-inner { width: 100%; margin-left: auto; margin-right: auto; }
+.m0 { margin: 0; font-size: inherit; font-weight: inherit; font-family: inherit; letter-spacing: inherit; line-height: 1.15; overflow-wrap: break-word; word-break: break-word; }
 .card-title { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
 `
   // Desktop
@@ -194,7 +197,7 @@ body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
     const w = page.canvasWidth || 1000
     css += `\n/* ===== ${page.name} (desktop) ===== */\n`
     if (page.flowMode) {
-      css += `.p-${page.id} { width: 100%; max-width: ${w}px; min-height: ${flowPageMinHeight(comps, 'layout', 600)}px; background: ${cssValue(page.background || '#ffffff')}; display:flex; flex-direction:row; flex-wrap:wrap; align-items:stretch; justify-content:flex-start; gap:20px; padding:0 24px; box-sizing:border-box; }\n`
+      css += `.p-${page.id} { width: 100%; min-height: ${flowCanvasHeight(comps, 'pc', w)}px; background: ${cssValue(page.background || '#ffffff')}; display:flex; flex-direction:row; flex-wrap:wrap; align-items:stretch; align-content:flex-start; justify-content:flex-start; gap:${flowGap('pc')}px; padding:0 ${flowSidePad('pc')}px; box-sizing:border-box; }\n`
     } else {
       css += `.p-${page.id} { width: ${w}px; min-height: ${pageMinHeight(comps, 'layout', 600)}px; background: ${cssValue(page.background || '#ffffff')}; }\n`
     }
@@ -202,13 +205,11 @@ body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
       const l = c.layout || {}
       const hide = c.hidden ? ' display:none;' : ''
       if (page.flowMode) {
-        const full = FLOW_FULL_WIDTH_TYPES.has(c.type)
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
-        const width = full ? 'calc(100% + 48px)' : `min(${l.w || 240}px, 100%)`
-        const height = fixed ? `height:${l.h || 80}px;` : `min-height:${flowHeight(c, 'layout')}px;`
-        const flex = full ? '0 0 100%' : `0 1 min(${l.w || 240}px, 100%)`
-        const margin = full ? ' margin-left:-24px; margin-right:-24px;' : ''
-        css += `.c-${c.id} { position:relative; width:${width}; ${height} flex:${flex}; overflow:${fixed ? 'hidden' : 'visible'};${margin} ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+        css += `.c-${c.id} { ${styleObjectBlock(flowItemStyle(c, 'pc', w))} overflow:${fixed ? 'hidden' : 'visible'}; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+        if (FLOW_FULL_WIDTH_TYPES.has(c.type)) {
+          css += `.c-${c.id} > .nav-inner, .c-${c.id} > .section-inner { max-width:${Math.round(c.layout?.w || w)}px; }\n`
+        }
       } else {
         css += `.c-${c.id} { position:absolute; left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
       }
@@ -220,7 +221,7 @@ body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
     const comps = page.components || []
     const mw = page.mobileWidth || 390
     if (page.flowMode) {
-      css += `  .p-${page.id} { width: 100%; max-width: ${mw}px; min-height: ${flowPageMinHeight(comps, 'mobileLayout', 400)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; gap:16px; padding:0 16px; }\n`
+      css += `  .p-${page.id} { width: 100%; min-height: ${flowCanvasHeight(comps, 'mobile', mw)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; gap:${flowGap('mobile')}px; padding:0 ${flowSidePad('mobile')}px; }\n`
     } else {
       css += `  .p-${page.id} { width: ${mw}px; min-height: ${pageMinHeight(comps, 'mobileLayout', 400)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; }\n`
     }
@@ -228,20 +229,17 @@ body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
       const l = c.mobileLayout || c.layout || {}
       const hide = c.hiddenMobile ? ' display:none;' : ''
       if (page.flowMode) {
-        const full = FLOW_FULL_WIDTH_TYPES.has(c.type)
-        const mobileBlock = ['navbar', 'heading', 'text', 'image', 'section', 'card', 'divider'].includes(c.type)
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
-        const width = full ? 'calc(100% + 32px)' : mobileBlock ? '100%' : `min(${l.w || 240}px, 100%)`
-        const height = fixed ? `height:${l.h || 80}px;` : `min-height:${flowHeight(c, 'mobileLayout')}px;`
-        const flex = full || mobileBlock ? '0 0 100%' : `0 1 min(${l.w || 240}px, 100%)`
-        const margin = full ? ' margin-left:-16px; margin-right:-16px;' : ''
-        css += `  .c-${c.id} { width:${width}; ${height} flex:${flex}; overflow:${fixed ? 'hidden' : 'visible'};${margin}${hide} }\n`
+        css += `  .c-${c.id} { ${styleObjectBlock(flowItemStyle(c, 'mobile', mw))} overflow:${fixed ? 'hidden' : 'visible'};${hide} }\n`
       } else {
         css += `  .c-${c.id} { left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px;${hide} }\n`
       }
     }
   }
+  css += `  .nav-inner { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 10px; }\n`
+  css += `  .links { gap: 16px; row-gap: 6px; }\n`
   css += `}\n`
+  if (options.includeCustomCss !== false) css += customCssBlock(schema?.customCss)
   return css
 }
 
@@ -252,6 +250,99 @@ function slug(name) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
   return s || 'page'
+}
+
+// A single, self-contained .html file. It preserves the same renderer semantics
+// as public preview: absolute pages keep their exact PC/mobile designs and scale
+// to the visitor's viewport width; flow pages fill the viewport naturally.
+export function schemaToSingleHtml(schema, title = 'My Site') {
+  const page = (schema?.pages || [])[0] || {}
+  if (!page.flowMode) return schemaToScaledHtml(page, title, schema)
+
+  const css = schemaToCss(
+    {
+      pages: [page],
+      theme: schema?.theme,
+      customCss: schema?.customCss,
+    },
+    { includeCustomCss: false },
+  )
+  const html = pageHtml(page, title)
+  return html.replace(
+    '<link rel="stylesheet" href="styles.css" />',
+    `<style>\n${css}${customCssBlock(schema?.customCss)}\n    </style>`,
+  )
+}
+
+function schemaToScaledHtml(page, title = 'My Site', schema = {}) {
+  const comps = page.components || []
+  const desktopW = page.canvasWidth || 1000
+  const mobileW = page.mobileWidth || 390
+  const desktopH = pageMinHeight(comps, 'layout', 600)
+  const mobileH = pageMinHeight(comps, 'mobileLayout', 400)
+  const desktopBg = cssValue(page.background || '#ffffff')
+  const mobileBg = cssValue(page.backgroundMobile || page.background || '#ffffff')
+  const cfg = JSON.stringify({
+    breakpoint: MOBILE_BREAKPOINT,
+    desktop: { w: desktopW, h: desktopH, bg: desktopBg },
+    mobile: { w: mobileW, h: mobileH, bg: mobileBg },
+  }).replace(/</g, '\\u003c')
+  const css = schemaToCss(
+    {
+      pages: [page],
+      theme: schema?.theme,
+      customCss: schema?.customCss,
+    },
+    { includeCustomCss: false },
+  )
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${esc(title)}</title>
+    <style>
+${css}
+      html, body { width: 100%; min-height: 100%; overflow-x: hidden; }
+      body { background: ${desktopBg}; }
+      .export-viewport { width: 100%; min-height: 100vh; overflow: hidden; background: ${desktopBg}; }
+      .export-stage { position: relative; width: 100%; overflow: hidden; background: inherit; }
+      .export-stage .page { margin: 0; transform-origin: top left; }
+${customCssBlock(schema?.customCss)}
+    </style>
+  </head>
+  <body>
+    <div class="export-viewport">
+      <div class="export-stage">
+        <div class="page p-${page.id}">
+${pageBody(page)}
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var cfg = ${cfg};
+        var viewport = document.querySelector('.export-viewport');
+        var stage = document.querySelector('.export-stage');
+        var page = document.querySelector('.page');
+        function applyLayout() {
+          var screenW = Math.max(1, window.innerWidth || document.documentElement.clientWidth || cfg.desktop.w);
+          var mode = screenW <= cfg.breakpoint ? cfg.mobile : cfg.desktop;
+          var scale = screenW / mode.w;
+          document.body.style.background = mode.bg;
+          viewport.style.background = mode.bg;
+          stage.style.height = Math.ceil(mode.h * scale) + 'px';
+          page.style.width = mode.w + 'px';
+          page.style.minHeight = mode.h + 'px';
+          page.style.transform = 'scale(' + scale + ')';
+        }
+        window.addEventListener('resize', applyLayout);
+        applyLayout();
+      })();
+    </script>
+  </body>
+</html>`
 }
 
 export function schemaToFiles(schema) {
@@ -267,10 +358,12 @@ export function schemaToFiles(schema) {
     files.push({
       name,
       lang: 'html',
-      content: pageHtml(page, page.name || 'My Site'),
+      content: schemaToSingleHtml(
+        { pages: [page], theme: schema?.theme, customCss: schema?.customCss },
+        page.name || 'My Site',
+      ),
     })
   })
-  files.push({ name: 'styles.css', lang: 'css', content: schemaToCss(schema) })
   files.push({
     name: 'schema.json',
     lang: 'json',

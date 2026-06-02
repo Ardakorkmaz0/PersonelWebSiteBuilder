@@ -10,34 +10,52 @@ function linkAttrs(href) {
     : {}
 }
 
-export function Navbar({ props, style }) {
+export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
   const links = Array.isArray(props.links) ? props.links : []
+  const isMobile = viewport === 'mobile'
   return (
-    <nav
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '16px',
-        flexWrap: 'wrap',
-        ...style,
-      }}
-    >
-      <span style={{ fontWeight: 'bold', fontSize: '18px' }}>{props.brand}</span>
-      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-        {links.map((link, i) => {
-          const href = sanitizeUrl(link.href)
-          return (
-            <a
-              key={i}
-              href={href || undefined}
-              style={{ color: 'inherit', textDecoration: 'none' }}
-              {...linkAttrs(href)}
-            >
-              {link.label}
-            </a>
-          )
-        })}
+    // The bar keeps its (possibly full-bleed) background; the inner row is capped
+    // at `contentWidth` (the Max width) and centered — like a real site header.
+    <nav style={{ ...style, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div
+        style={{
+          display: 'flex',
+          width: '100%',
+          maxWidth: contentWidth || undefined,
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          // On mobile, stack the brand over the links (left-aligned, tight) instead
+          // of spreading them edge-to-edge, which looks cramped on a phone.
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          justifyContent: isMobile ? 'flex-start' : 'space-between',
+          gap: isMobile ? '10px' : '16px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <span style={{ fontWeight: 'bold', fontSize: '18px' }}>{props.brand}</span>
+        <div
+          style={{
+            display: 'flex',
+            gap: isMobile ? '16px' : '20px',
+            rowGap: '6px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {links.map((link, i) => {
+            const href = sanitizeUrl(link.href)
+            return (
+              <a
+                key={i}
+                href={href || undefined}
+                style={{ color: 'inherit', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                {...linkAttrs(href)}
+              >
+                {link.label}
+              </a>
+            )
+          })}
+        </div>
       </div>
     </nav>
   )
@@ -123,10 +141,19 @@ export function Image({ props, style }) {
   )
 }
 
-export function Section({ props, style }) {
+export function Section({ props, style, contentWidth }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, ...style }}>
-      {props.heading ? <h2 style={headingTagStyle}>{props.heading}</h2> : null}
+    <section style={{ ...style, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: contentWidth || undefined,
+          marginLeft: 'auto',
+          marginRight: 'auto',
+        }}
+      >
+        {props.heading ? <h2 style={headingTagStyle}>{props.heading}</h2> : null}
+      </div>
     </section>
   )
 }
@@ -144,8 +171,17 @@ export function Card({ props, style }) {
   )
 }
 
-export function Divider({ style }) {
-  return <div style={{ ...style }} />
+export function Divider({ style, contentWidth }) {
+  return (
+    <div
+      style={{
+        ...style,
+        maxWidth: contentWidth || undefined,
+        marginLeft: contentWidth ? 'auto' : undefined,
+        marginRight: contentWidth ? 'auto' : undefined,
+      }}
+    />
+  )
 }
 
 export function Spacer({ style }) {

@@ -5,6 +5,7 @@ import { Renderer } from '../components/renderer/Renderer.jsx'
 import { canvasHeight } from '../components/renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
 import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../utils/htmlRuntime.js'
+import { customCssBlock, themeVariablesCss } from '../utils/theme.js'
 
 const MOBILE_BREAKPOINT = 768
 
@@ -177,6 +178,9 @@ export default function PreviewPage() {
 
   const pages = site?.schema?.pages || []
   const current = pages.find((p) => p.id === activeId) || pages[0] || {}
+  const siteCss = `${themeVariablesCss(site?.schema?.theme)}
+body { font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, sans-serif); color: var(--site-text, #1d1d1f); background: var(--site-bg, #ffffff); }
+${customCssBlock(site?.schema?.customCss)}`
 
   const go = (id) => {
     setActiveId(id)
@@ -185,6 +189,7 @@ export default function PreviewPage() {
 
   return (
     <div>
+      <style>{siteCss}</style>
       {pages.length > 1 && (
         <nav className="sticky top-0 z-50 flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/80 px-3 py-2 backdrop-blur">
           {pages.map((p) => (

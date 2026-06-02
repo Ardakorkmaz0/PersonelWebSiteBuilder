@@ -41,12 +41,17 @@ export default function Canvas() {
         width: canvasW,
         minHeight,
         background,
+        // Clip selection chrome (resize handles, outline) and any off-artboard
+        // content at the canvas edge so you can't scroll into empty space beside
+        // the page. Vertical content is unaffected (clip is X-only).
+        overflowX: 'clip',
         ...(flowMode
           ? {
               display: 'flex',
               flexDirection: 'row',
               flexWrap: 'wrap',
               alignItems: 'stretch',
+              alignContent: 'flex-start',
               justifyContent: 'flex-start',
               gap: flowGap(viewport),
               padding: `0 ${sidePad}px`,

@@ -1,8 +1,9 @@
-// Turn a component design into a GENUINELY responsive HTML document — using
+// Turn a component design into a genuinely responsive HTML document using
 // flexbox rows, a centered fluid container, full-bleed bands and @media
 // breakpoints (content reflows / stacks), instead of absolute positions + scale.
 // The result becomes an "HTML site" that adapts natively on every device.
 import { sanitizeStyles, sanitizeUrl } from './sanitize.js'
+import { customCssBlock, themeVariablesCss } from './theme.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
 // Visual styles we keep on elements; layout/box metrics come from the flow.
@@ -112,8 +113,9 @@ function item(c, multi) {
 
 export function schemaToResponsiveHtml(schema, title = 'My Site') {
   const page = schema?.pages?.[0] || {}
-  const components = page.components || []
+  const components = (page.components || []).filter((c) => !c.hidden)
   const bg = cssVal(page.background || '#ffffff')
+  const maxW = Math.max(320, Math.min(1280, Math.round(page.canvasWidth || 1120)))
 
   const rows = readingRows(components)
   let body = ''
@@ -124,16 +126,25 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
     buffer = []
   }
   for (const row of rows) {
-    if (row.length === 1 && FULL_WIDTH.has(row[0].type)) {
+    let inline = []
+    const flushInline = () => {
+      if (!inline.length) return
+      const multi = inline.length > 1
+      buffer.push(`<div class="rh-row">${inline.map((c) => item(c, multi)).join('')}</div>`)
+      inline = []
+    }
+    for (const c of row) {
+      if (!FULL_WIDTH.has(c.type)) {
+        inline.push(c)
+        continue
+      }
+      flushInline()
       flush()
-      const c = row[0]
       if (c.type === 'navbar') body += '\n    ' + navbar(c)
       else if (c.type === 'section') body += '\n    ' + section(c)
       else body += `\n    <hr class="rh-divider"${styleAttr(c)} />`
-    } else {
-      const multi = row.length > 1
-      buffer.push(`<div class="rh-row">${row.map((c) => item(c, multi)).join('')}</div>`)
     }
+    flushInline()
   }
   flush()
 
@@ -144,12 +155,13 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(title)}</title>
     <style>
+      ${themeVariablesCss(schema?.theme)}
       *{ box-sizing: border-box; }
       html, body { overflow-x: hidden; }
-      body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1d1d1f; background: ${bg}; line-height: 1.5; }
+      body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif); color: var(--site-text, #1d1d1f); background: ${bg}; line-height: 1.5; }
       img { max-width: 100%; height: auto; display: block; }
       a { color: inherit; text-decoration: none; }
-      .rh-container { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+      .rh-container { width: 100%; max-width: ${maxW}px; margin: 0 auto; padding: 0 24px; }
       .rh-wrap { display: flex; flex-direction: column; gap: 32px; padding: 40px 0; }
       .rh-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; justify-content: center; }
       .rh-item { min-width: 0; max-width: 100%; }
@@ -176,6 +188,7 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
         .rh-section { padding: 40px 0; }
         .rh-wrap { gap: 24px; padding: 28px 0; }
       }
+      ${customCssBlock(schema?.customCss)}
     </style>
   </head>
   <body>${body}

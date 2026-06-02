@@ -17,7 +17,9 @@ import {
   layoutFor,
 } from './layout.js'
 
-export function RenderComponent({ component, flowMode = false }) {
+const FULL_BLEED_TYPES = ['navbar', 'section', 'divider']
+
+export function RenderComponent({ component, flowMode = false, viewport = 'pc' }) {
   const def = registry[component.type]
   if (!def) return null
   const Comp = def.Render
@@ -29,7 +31,21 @@ export function RenderComponent({ component, flowMode = false }) {
     overflow: flowMode ? 'visible' : 'hidden',
     ...sanitizeStyles(component.styles),
   }
-  return <Comp props={component.props || {}} style={style} />
+  // In flow, full-bleed bands (navbar/section/divider) keep an edge-to-edge
+  // background but center their CONTENT at the component's Max width (layout.w),
+  // so "Max width" actually does something on these blocks.
+  const contentWidth =
+    flowMode && FULL_BLEED_TYPES.includes(component.type)
+      ? Math.round(component.layout?.w || 0) || undefined
+      : undefined
+  return (
+    <Comp
+      props={component.props || {}}
+      style={style}
+      viewport={viewport}
+      contentWidth={contentWidth}
+    />
+  )
 }
 
 export function Renderer({
@@ -60,6 +76,7 @@ export function Renderer({
           flexDirection: 'row',
           flexWrap: 'wrap',
           alignItems: 'stretch',
+          alignContent: 'flex-start',
           justifyContent: 'flex-start',
           gap: flowGap(viewport),
         }}
@@ -68,7 +85,7 @@ export function Renderer({
           if (isHidden(c, viewport)) return null
           return (
             <div key={c.id} style={flowItemStyle(c, viewport, canvasW)}>
-              <RenderComponent component={c} flowMode />
+              <RenderComponent component={c} flowMode viewport={viewport} />
             </div>
           )
         })}
@@ -100,7 +117,7 @@ export function Renderer({
               height: l.h || 80,
             }}
           >
-            <RenderComponent component={c} />
+            <RenderComponent component={c} viewport={viewport} />
           </div>
         )
       })}

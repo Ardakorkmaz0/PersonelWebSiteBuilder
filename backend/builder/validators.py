@@ -5,6 +5,8 @@ public page, so the backend only ever stores whitelisted component types, style
 keys and safe URLs. Anything unexpected is dropped (styles/props) or rejected
 (structure / unknown component types).
 """
+import re
+
 from rest_framework import serializers
 
 ALLOWED_COMPONENT_TYPES = {
@@ -22,6 +24,21 @@ ALLOWED_STYLE_KEYS = {
 
 ALLOWED_URL_SCHEMES = ('http://', 'https://', 'mailto:', 'tel:')
 BLOCKED_URL_SCHEMES = ('javascript:', 'vbscript:', 'data:', 'file:')
+
+DEFAULT_THEME = {
+    'primaryColor': '#0071e3',
+    'textColor': '#1d1d1f',
+    'mutedColor': '#6e6e73',
+    'backgroundColor': '#ffffff',
+    'surfaceColor': '#ffffff',
+    'softColor': '#f5f5f7',
+    'headerColor': '#1d1d1f',
+    'headerTextColor': '#f5f5f7',
+    'fontFamily': "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    'radius': '18px',
+    'buttonRadius': '980px',
+    'shadow': '0 4px 20px rgba(0,0,0,0.08)',
+}
 
 
 def _str(value, default=''):
@@ -152,6 +169,34 @@ def sanitize_color(value, default='#ffffff'):
     return v[:64]
 
 
+def sanitize_theme_value(value, default):
+    v = _str(value).strip()
+    if not v:
+        return default
+    low = v.lower()
+    if 'javascript:' in low or 'url(' in low or 'expression(' in low:
+        return default
+    return v.replace(';', '').replace('{', '').replace('}', '').replace('<', '').replace('>', '')[:180]
+
+
+def sanitize_theme(theme):
+    if not isinstance(theme, dict):
+        theme = {}
+    return {
+        key: sanitize_theme_value(theme.get(key), default)
+        for key, default in DEFAULT_THEME.items()
+    }
+
+
+def sanitize_custom_css(value):
+    css = _str(value)[:20000]
+    css = re.sub(r'</style', '<\\/style', css, flags=re.IGNORECASE)
+    css = re.sub(r'<\s*script', '', css, flags=re.IGNORECASE)
+    css = css.replace('<', '').replace('>', '')
+    css = re.sub(r'javascript:', '', css, flags=re.IGNORECASE)
+    return css
+
+
 def validate_and_clean_schema(schema):
     """Validate the overall structure and return a fully sanitized copy."""
     if not isinstance(schema, dict):
@@ -182,4 +227,8 @@ def validate_and_clean_schema(schema):
             'flowMode': bool(page.get('flowMode')),
             'components': [sanitize_component(c) for c in comps],
         })
-    return {'pages': clean_pages}
+    return {
+        'theme': sanitize_theme(schema.get('theme')),
+        'customCss': sanitize_custom_css(schema.get('customCss')),
+        'pages': clean_pages,
+    }

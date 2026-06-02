@@ -1,11 +1,19 @@
 import { create } from 'zustand'
 import { registry, CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
+import {
+  DEFAULT_THEME,
+  applyThemeToSchema,
+  normalizeTheme,
+  themedStyles,
+} from '../utils/theme.js'
+import { componentPresetStyles } from '../utils/componentPresets.js'
 
 const HISTORY_LIMIT = 60
 const COALESCE_MS = 500
 
 const MOBILE_PAD = 16
 const MOBILE_GAP = 16
+const MOBILE_IMAGE_MAX_WIDTH = 280
 const FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
 
 function genId(type) {
@@ -30,7 +38,11 @@ function blankPage(name = 'New Page', folder = '', id) {
 }
 
 function emptySchema() {
-  return { pages: [blankPage('Home', '', 'page_home')] }
+  return {
+    theme: normalizeTheme(DEFAULT_THEME),
+    customCss: '',
+    pages: [blankPage('Home', '', 'page_home')],
+  }
 }
 
 // The page currently being edited (selector + internal lookup share this).
@@ -152,7 +164,13 @@ function estMobileHeight(c, boxW) {
 // Place a single component within an available column [leftX, leftX+availW].
 function placeMobile(c, leftX, availW) {
   if (c.type === 'image') {
-    return { x: leftX, w: availW, h: estMobileHeight(c, availW) }
+    const designedW = Math.max(80, Math.round(c.layout?.w || MOBILE_IMAGE_MAX_WIDTH))
+    const w = Math.min(availW, Math.max(140, Math.min(designedW, MOBILE_IMAGE_MAX_WIDTH)))
+    return {
+      x: Math.round(leftX + (availW - w) / 2),
+      w,
+      h: estMobileHeight(c, w),
+    }
   }
   if (c.type === 'button' || c.type === 'linkbutton') {
     const w = Math.min(availW, Math.max(120, (c.props?.text || '').length * 10 + 48))
@@ -352,6 +370,32 @@ function normalizePage(page) {
   }
 }
 
+function normalizeSchema(schema, options = {}) {
+  const valid = schema && Array.isArray(schema.pages) && schema.pages.length > 0
+  const base = valid ? schema : emptySchema()
+  const seen = new Set()
+  const pages = base.pages.map((p) => {
+    const safe = options.filterUnknown
+      ? {
+          ...p,
+          components: (Array.isArray(p.components) ? p.components : []).filter(
+            (c) => c && registry[c.type],
+          ),
+        }
+      : p
+    let np = normalizePage(safe)
+    if (seen.has(np.id)) np = { ...np, id: genId('page') }
+    seen.add(np.id)
+    return np
+  })
+  return {
+    ...base,
+    theme: normalizeTheme(base.theme),
+    customCss: typeof base.customCss === 'string' ? base.customCss : '',
+    pages,
+  }
+}
+
 // History coalescing keys (module-level so they survive set() calls).
 let lastKey = null
 let lastTime = 0
@@ -423,21 +467,12 @@ export const useEditorStore = create((set, get) => ({
   },
 
   loadSchema: (schema) => {
-    const valid =
-      schema && Array.isArray(schema.pages) && schema.pages.length > 0
-    const base = valid ? schema : emptySchema()
-    const seen = new Set()
-    const pages = base.pages.map((p) => {
-      let np = normalizePage(p)
-      if (seen.has(np.id)) np = { ...np, id: genId('page') }
-      seen.add(np.id)
-      return np
-    })
+    const normalized = normalizeSchema(schema)
     lastKey = null
     lastTime = 0
     set({
-      schema: { ...base, pages },
-      currentPageId: pages[0].id,
+      schema: normalized,
+      currentPageId: normalized.pages[0].id,
       selectedId: null,
       viewport: 'pc',
       dirty: false,
@@ -455,22 +490,10 @@ export const useEditorStore = create((set, get) => ({
     if (!valid) return false
     get().record('import')
     set(() => {
-      const seen = new Set()
-      const pages = raw.pages.map((p) => {
-        const safe = {
-          ...p,
-          components: (Array.isArray(p.components) ? p.components : []).filter(
-            (c) => c && registry[c.type],
-          ),
-        }
-        let np = normalizePage(safe)
-        if (seen.has(np.id)) np = { ...np, id: genId('page') }
-        seen.add(np.id)
-        return np
-      })
+      const normalized = normalizeSchema(raw, { filterUnknown: true })
       return {
-        schema: { pages },
-        currentPageId: pages[0].id,
+        schema: normalized,
+        currentPageId: normalized.pages[0].id,
         selectedId: null,
         viewport: 'pc',
         dirty: true,
@@ -570,13 +593,14 @@ export const useEditorStore = create((set, get) => ({
       const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
       const id = genId(type)
       const fullWidth = FULL_WIDTH_TYPES.has(type)
+      const styles = themedStyles(type, def.defaultStyles, state.schema.theme)
 
       if (page.flowMode) {
         const component = {
           id,
           type,
           props: structuredClone(def.defaultProps),
-          styles: structuredClone(def.defaultStyles),
+          styles,
           layout: {
             x: 0,
             y: 0,
@@ -638,7 +662,7 @@ export const useEditorStore = create((set, get) => ({
         id,
         type,
         props: structuredClone(def.defaultProps),
-        styles: structuredClone(def.defaultStyles),
+        styles,
         layout,
         mobileLayout,
         hidden: false,
@@ -711,6 +735,53 @@ export const useEditorStore = create((set, get) => ({
       })),
       dirty: true,
     }))
+  },
+
+  updateTheme: (patch) => {
+    get().record('theme')
+    set((state) => ({
+      schema: {
+        ...state.schema,
+        theme: normalizeTheme({ ...(state.schema.theme || {}), ...patch }),
+      },
+      dirty: true,
+    }))
+  },
+
+  applyTheme: () => {
+    get().record('apply-theme')
+    set((state) => ({
+      schema: applyThemeToSchema(state.schema),
+      dirty: true,
+    }))
+  },
+
+  setCustomCss: (css) => {
+    get().record('custom-css')
+    set((state) => ({
+      schema: {
+        ...state.schema,
+        customCss: typeof css === 'string' ? css : '',
+      },
+      dirty: true,
+    }))
+  },
+
+  applyComponentPreset: (id, presetId) => {
+    get().record('preset-' + id)
+    set((state) => {
+      const styles = componentPresetStyles(
+        selectCurrentPage(state).components.find((c) => c.id === id)?.type,
+        presetId,
+        state.schema.theme,
+      )
+      if (!styles) return {}
+      const page = selectCurrentPage(state)
+      const components = page.components.map((c) =>
+        c.id === id ? { ...c, styles: { ...c.styles, ...styles } } : c,
+      )
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
+    })
   },
 
   // Artboard / device size for the active breakpoint. width + fold (0 = no guide).
@@ -825,6 +896,34 @@ export const useEditorStore = create((set, get) => ({
       const c = comps.find((x) => x.id === id)
       if (!c) return {}
       const reordered = [c, ...comps.filter((x) => x.id !== id)]
+      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
+    })
+  },
+
+  // Move one step later in the order (toward the end / "next" in flow reading order).
+  moveForward: (id) => {
+    get().record('zorder')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const comps = page.components
+      const i = comps.findIndex((x) => x.id === id)
+      if (i < 0 || i >= comps.length - 1) return {}
+      const reordered = [...comps]
+      ;[reordered[i], reordered[i + 1]] = [reordered[i + 1], reordered[i]]
+      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
+    })
+  },
+
+  // Move one step earlier in the order (toward the start / "before" in flow order).
+  moveBackward: (id) => {
+    get().record('zorder')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const comps = page.components
+      const i = comps.findIndex((x) => x.id === id)
+      if (i <= 0) return {}
+      const reordered = [...comps]
+      ;[reordered[i], reordered[i - 1]] = [reordered[i - 1], reordered[i]]
       return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
     })
   },

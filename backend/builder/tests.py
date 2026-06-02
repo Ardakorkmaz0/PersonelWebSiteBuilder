@@ -5,6 +5,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from .models import Site
+from .validators import validate_and_clean_schema
 
 
 class PublicSiteViewTests(TestCase):
@@ -59,3 +60,28 @@ class PublicSiteViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['html'], site.html)
         self.assertTrue(response.data['published'])
+
+
+class SchemaValidatorTests(TestCase):
+    def test_preserves_theme_and_sanitizes_custom_css(self):
+        clean = validate_and_clean_schema({
+            'theme': {
+                'primaryColor': '#ff0066',
+                'fontFamily': 'Inter, sans-serif',
+            },
+            'customCss': '.card{color:red}</STYLE><ScRiPt>alert(1)</script>a{background:url(JavaScript:alert(1))}',
+            'pages': [
+                {
+                    'id': 'home',
+                    'name': 'Home',
+                    'components': [],
+                },
+            ],
+        })
+
+        self.assertEqual(clean['theme']['primaryColor'], '#ff0066')
+        self.assertEqual(clean['theme']['fontFamily'], 'Inter, sans-serif')
+        self.assertIn('customCss', clean)
+        self.assertNotIn('<script', clean['customCss'])
+        self.assertNotIn('</style', clean['customCss'])
+        self.assertNotIn('JavaScript:', clean['customCss'])

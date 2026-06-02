@@ -155,7 +155,7 @@ export const registry = {
     label: 'Image',
     icon: '\u{1F5BC}',
     Render: Image,
-    defaultSize: { w: 360, h: 240 },
+    defaultSize: { w: 260, h: 170 },
     defaultProps: {
       src: 'https://picsum.photos/640/480',
       alt: 'Placeholder image',

@@ -51,7 +51,7 @@ function Thumb({ html }) {
 
 // Modal grid of ready-made responsive HTML templates. onPick(tpl) is called with
 // the chosen template; the caller turns it into the site's HTML.
-export default function TemplatePicker({ open, title, onPick, onClose }) {
+export default function TemplatePicker({ open, title, theme, onPick, onClose }) {
   if (!open) return null
   return (
     <div
@@ -65,11 +65,11 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
         <div className="flex shrink-0 items-center justify-between border-b border-[#e1dfdd] px-5 py-3">
           <div>
             <h2 className="text-base font-semibold text-[#201f1e]">
-              Hazır responsive şablonlar
+              Ready-made responsive templates
             </h2>
             <p className="text-xs text-[#605e5c]">
-              Bir şablon seç — tüm cihazlarda uyumlu HTML olarak yüklenir, sonra
-              düzenleyebilirsin.
+              Pick a template — it loads as device-friendly HTML you can edit
+              afterwards.
             </p>
           </div>
           <button
@@ -86,7 +86,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
               key={tpl.id}
               className="flex flex-col overflow-hidden rounded-[2px] border border-[#e1dfdd] transition hover:border-[#2b579a] hover:shadow-md"
             >
-              <Thumb html={tpl.build(title || 'My Site')} />
+              <Thumb html={tpl.build(title || 'My Site', theme)} />
               <div className="flex flex-1 flex-col p-3">
                 <div className="text-sm font-semibold text-[#201f1e]">
                   {tpl.name}
@@ -96,7 +96,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
                   onClick={() => onPick(tpl)}
                   className="mt-3 rounded-[2px] bg-[#2b579a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#1e3f6f]"
                 >
-                  Bu şablonu kullan
+                  Use this template
                 </button>
               </div>
             </div>

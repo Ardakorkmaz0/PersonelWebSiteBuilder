@@ -19,12 +19,12 @@ export function LabeledText({ label, value, onChange, placeholder }) {
   )
 }
 
-export function LabeledTextarea({ label, value, onChange, placeholder }) {
+export function LabeledTextarea({ label, value, onChange, placeholder, rows = 3 }) {
   return (
     <label className="block">
       <span className={labelCls}>{label}</span>
       <textarea
-        rows={3}
+        rows={rows}
         className={inputCls + ' resize-y'}
         value={value ?? ''}
         placeholder={placeholder}

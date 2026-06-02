@@ -49,6 +49,7 @@ export default function EditorPage() {
   const canRedo = useEditorStore((s) => s.future.length > 0)
   const markSaved = useEditorStore((s) => s.markSaved)
   const dirty = useEditorStore((s) => s.dirty)
+  const theme = useEditorStore((s) => s.schema.theme)
 
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
@@ -194,11 +195,25 @@ export default function EditorPage() {
       markSaved()
       setJustSaved(true)
       setTimeout(() => setJustSaved(false), 1500)
+      return data
     } catch (e) {
       setError(apiError(e))
+      return null
     } finally {
       setSaving(false)
     }
+  }
+
+  async function previewCurrentSite() {
+    const previewWindow = window.open('', '_blank')
+    const data = await save()
+    const nextSlug = data?.slug || slug
+    if (!data || !nextSlug) {
+      previewWindow?.close()
+      return
+    }
+    if (previewWindow) previewWindow.location.href = `/site/${nextSlug}`
+    else window.open(`/site/${nextSlug}`, '_blank')
   }
 
   // Download the current design as a portable project file (.json).
@@ -220,7 +235,7 @@ export default function EditorPage() {
   function convertToResponsiveHtml() {
     if (
       !window.confirm(
-        'Tasarımı gerçek responsive bir HTML siteye çevir? Bileşen tasarımın korunur (HTML’i kaldır ile geri dönebilirsin). Save’e basana kadar kaydedilmez.',
+        'Convert the design into a genuinely responsive HTML site? Your component design is kept (use "Remove HTML" to go back). Nothing is saved until you press Save.',
       )
     )
       return
@@ -233,11 +248,11 @@ export default function EditorPage() {
     setImportOpen(false)
     if (
       !window.confirm(
-        'Boş bir responsive HTML şablonuyla başla? Mevcut içerik değişir (HTML’i kaldır ile geri dönebilirsin). Save’e basana kadar kaydedilmez.',
+        'Start from a blank responsive HTML template? Your current content changes (use "Remove HTML" to go back). Nothing is saved until you press Save.',
       )
     )
       return
-    setSiteHtml(blankResponsiveSite(title || 'My Site'))
+    setSiteHtml(blankResponsiveSite(title || 'My Site', useEditorStore.getState().schema.theme))
     setHtmlDirty(true)
   }
 
@@ -246,11 +261,11 @@ export default function EditorPage() {
     setTemplateOpen(false)
     if (
       !window.confirm(
-        `“${tpl.name}” şablonuyla başla? Mevcut içerik değişir (HTML’i kaldır ile geri dönebilirsin). Save’e basana kadar kaydedilmez.`,
+        `Start from the “${tpl.name}” template? Your current content changes (use "Remove HTML" to go back). Nothing is saved until you press Save.`,
       )
     )
       return
-    setSiteHtml(tpl.build(title || 'My Site'))
+    setSiteHtml(tpl.build(title || 'My Site', useEditorStore.getState().schema.theme))
     setHtmlDirty(true)
   }
 
@@ -480,13 +495,13 @@ export default function EditorPage() {
                     }}
                     className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
                   >
-                    Hazır şablon seç...
+                    Choose a template...
                   </button>
                   <button
                     onClick={startBlankHtml}
                     className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
                   >
-                    Boş HTML başlat
+                    Start blank HTML
                   </button>
                   {!isHtmlSite && (
                     <button
@@ -496,7 +511,7 @@ export default function EditorPage() {
                       }}
                       className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
                     >
-                      Responsive HTML'e çevir
+                      Convert to responsive HTML
                     </button>
                   )}
                   <div className="my-1 border-t border-[#e1dfdd]" />
@@ -544,14 +559,14 @@ export default function EditorPage() {
               Remove HTML
             </button>
           )}
-          <a
-            href={`/site/${slug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
+          <button
+            type="button"
+            onClick={previewCurrentSite}
+            disabled={saving}
+            className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-60"
           >
             Preview
-          </a>
+          </button>
           <button
             onClick={() => save()}
             disabled={saving}
@@ -675,6 +690,7 @@ export default function EditorPage() {
       <TemplatePicker
         open={templateOpen}
         title={title}
+        theme={theme}
         onPick={pickTemplate}
         onClose={() => setTemplateOpen(false)}
       />

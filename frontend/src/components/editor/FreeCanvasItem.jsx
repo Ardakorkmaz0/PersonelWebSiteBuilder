@@ -104,7 +104,7 @@ export default function FreeCanvasItem({ component }) {
       }
     >
       <div className="pointer-events-none h-full w-full select-none overflow-hidden">
-        <RenderComponent component={component} />
+        <RenderComponent component={component} viewport={viewport} />
       </div>
 
       {hidden && (

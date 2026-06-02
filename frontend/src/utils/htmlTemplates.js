@@ -1,26 +1,33 @@
 // Ready-made, genuinely responsive HTML starters for "HTML sites". They use CSS
 // grid/flex + clamp() + @media breakpoints, so they reflow natively on any
 // screen. Used by "Start blank HTML" and the template picker.
+import { normalizeTheme } from './theme.js'
 
 const escTitle = (t) =>
   String(t || 'My Site').replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))
 
-// Lean, genuinely responsive Turkish starter: just a navbar + hero + footer, so
-// it feels like a real blank canvas (not a full template) but is still complete
-// and editable. Rich starts live in the template picker.
-export function blankResponsiveSite(title = 'Sitem') {
+function templateVars(theme) {
+  const t = normalizeTheme(theme)
+  return `--accent:${t.primaryColor}; --ink:${t.textColor}; --muted:${t.mutedColor}; --soft:${t.softColor}; --surface:${t.surfaceColor}; --radius:${t.radius}; --button-radius:${t.buttonRadius}; --shadow:${t.shadow}; --font:${t.fontFamily};`
+}
+
+// Lean, genuinely responsive starter: just a navbar + hero + footer, so it feels
+// like a real blank canvas (not a full template) but is still complete and
+// editable. Rich starts live in the template picker.
+export function blankResponsiveSite(title = 'My Site', theme) {
   const t = escTitle(title)
+  const vars = templateVars(theme)
   return `<!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${t}</title>
     <style>
-      :root { --accent: #0071e3; --ink: #1d1d1f; --muted: #6e6e73; }
+      :root { ${vars} }
       * { box-sizing: border-box; }
       html, body { overflow-x: hidden; }
-      body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--ink); line-height: 1.6; background: #fff; }
+      body { margin: 0; font-family: var(--font), system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--ink); line-height: 1.6; background: var(--surface); }
       img { max-width: 100%; height: auto; display: block; }
       a { color: inherit; text-decoration: none; }
       .container { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
@@ -32,7 +39,7 @@ export function blankResponsiveSite(title = 'Sitem') {
       .hero { padding: 96px 0; max-width: 720px; }
       .hero h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 18px; }
       .hero p { font-size: clamp(16px, 2.4vw, 20px); color: var(--muted); margin: 0 0 28px; }
-      .btn { display: inline-block; background: var(--accent); color: #fff; padding: 14px 28px; border-radius: 980px; font-weight: 600; }
+      .btn { display: inline-block; background: var(--accent); color: #fff; padding: 14px 28px; border-radius: var(--button-radius); font-weight: 600; }
       footer { color: var(--muted); padding: 40px 0; border-top: 1px solid #ededed; font-size: 14px; }
       @media (max-width: 768px) {
         .hero { padding: 56px 0; }
@@ -45,17 +52,17 @@ export function blankResponsiveSite(title = 'Sitem') {
       <div class="container nav">
         <span class="brand">${t}</span>
         <nav>
-          <a href="#hakkimda">Hakkımda</a>
-          <a href="#iletisim">İletişim</a>
+          <a href="#about">About</a>
+          <a href="#contact">Contact</a>
         </nav>
       </div>
     </header>
 
     <main>
       <section class="container hero">
-        <h1>Merhaba, ben ${t}.</h1>
-        <p>Buraya kendinizi kısaca anlatın. Bu metni doğrudan tıklayıp ya da Source modunda düzenleyebilirsiniz.</p>
-        <a class="btn" href="#iletisim">İletişime geç</a>
+        <h1>Hi, I'm ${t}.</h1>
+        <p>Write a short introduction about yourself here. You can edit this text directly or in Source mode.</p>
+        <a class="btn" href="#contact">Get in touch</a>
       </section>
     </main>
 
@@ -67,8 +74,9 @@ export function blankResponsiveSite(title = 'Sitem') {
 }
 
 // Portfolio: hero + filterable-looking project grid + about + contact.
-export function portfolioTemplate(title = 'My Site') {
+export function portfolioTemplate(title = 'My Site', theme) {
   const t = escTitle(title)
+  const vars = templateVars(theme)
   const shots = [
     ['Aurora', 'Brand & web', 'linear-gradient(135deg,#f6d365,#fda085)'],
     ['Nimbus', 'Product UI', 'linear-gradient(135deg,#a1c4fd,#c2e9fb)'],
@@ -91,10 +99,10 @@ export function portfolioTemplate(title = 'My Site') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${t} — Portfolio</title>
     <style>
-      :root { --ink:#13151a; --muted:#6b7280; --accent:#5b5bd6; --soft:#f4f4f7; }
+      :root { ${vars} }
       * { box-sizing: border-box; }
       html, body { overflow-x: hidden; }
-      body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Arial, sans-serif; color: var(--ink); line-height: 1.6; background: #fff; }
+      body { margin: 0; font-family: var(--font), system-ui, 'Segoe UI', Roboto, Arial, sans-serif; color: var(--ink); line-height: 1.6; background: var(--surface); }
       img { max-width: 100%; height: auto; display: block; }
       a { color: inherit; text-decoration: none; }
       .container { width: 100%; max-width: 1140px; margin: 0 auto; padding: 0 24px; }
@@ -108,7 +116,7 @@ export function portfolioTemplate(title = 'My Site') {
       .hero h1 { font-size: clamp(36px, 7vw, 68px); line-height: 1.02; letter-spacing: -0.03em; margin: 0 0 18px; }
       .hero p { font-size: clamp(17px, 2.4vw, 21px); color: var(--muted); margin: 0; }
       .works { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding: 24px 0 88px; }
-      .work-shot { aspect-ratio: 4 / 3; border-radius: 16px; }
+      .work-shot { aspect-ratio: 4 / 3; border-radius: var(--radius); }
       .work-meta { display: flex; align-items: baseline; justify-content: space-between; padding: 12px 4px 0; }
       .work-meta span { color: var(--muted); font-size: 14px; }
       .work { transition: transform .15s ease; }
@@ -119,7 +127,7 @@ export function portfolioTemplate(title = 'My Site') {
       .about p { color: var(--muted); margin: 0 0 14px; }
       .contact { text-align: center; padding: 96px 0; }
       .contact h2 { font-size: clamp(28px, 5vw, 48px); margin: 0 0 12px; letter-spacing: -0.02em; }
-      .contact a.btn { display: inline-block; margin-top: 18px; background: var(--ink); color: #fff; padding: 15px 32px; border-radius: 12px; font-weight: 600; }
+      .contact a.btn { display: inline-block; margin-top: 18px; background: var(--ink); color: #fff; padding: 15px 32px; border-radius: var(--radius); font-weight: 600; }
       footer { color: var(--muted); font-size: 14px; padding: 28px 0; border-top: 1px solid #eee; display: flex; justify-content: space-between; }
       @media (max-width: 860px) { .works { grid-template-columns: repeat(2, 1fr); } .about { grid-template-columns: 1fr; gap: 28px; padding: 56px 0; } }
       @media (max-width: 520px) { .works { grid-template-columns: 1fr; } footer { flex-direction: column; gap: 8px; } }
@@ -175,8 +183,9 @@ export function portfolioTemplate(title = 'My Site') {
 }
 
 // SaaS / product landing page: hero + logos + feature grid + CTA.
-export function landingTemplate(title = 'My Site') {
+export function landingTemplate(title = 'My Site', theme) {
   const t = escTitle(title)
+  const vars = templateVars(theme)
   const features = [
     ['⚡', 'Fast by default', 'Ships in milliseconds with zero configuration and a tiny footprint.'],
     ['🔒', 'Secure', 'Sandboxed by design, so your data and your users stay protected.'],
@@ -200,10 +209,10 @@ export function landingTemplate(title = 'My Site') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${t} — Product</title>
     <style>
-      :root { --ink:#0f172a; --muted:#64748b; --accent:#2563eb; --soft:#f1f5f9; }
+      :root { ${vars} }
       * { box-sizing: border-box; }
       html, body { overflow-x: hidden; }
-      body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Arial, sans-serif; color: var(--ink); line-height: 1.6; background: #fff; }
+      body { margin: 0; font-family: var(--font), system-ui, 'Segoe UI', Roboto, Arial, sans-serif; color: var(--ink); line-height: 1.6; background: var(--surface); }
       a { color: inherit; text-decoration: none; }
       .container { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 24px; }
       header { border-bottom: 1px solid #eef2f7; }
@@ -211,13 +220,13 @@ export function landingTemplate(title = 'My Site') {
       .brand { font-weight: 800; font-size: 19px; letter-spacing: -0.02em; }
       .nav .spacer { flex: 1; }
       .nav a.link { color: var(--muted); font-size: 15px; }
-      .nav a.cta { background: var(--accent); color: #fff; padding: 9px 18px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+      .nav a.cta { background: var(--accent); color: #fff; padding: 9px 18px; border-radius: var(--radius); font-weight: 600; font-size: 14px; }
       .hero { text-align: center; padding: 92px 0 64px; }
       .pill { display: inline-block; background: var(--soft); color: var(--accent); font-weight: 600; font-size: 13px; padding: 6px 14px; border-radius: 999px; margin-bottom: 22px; }
       .hero h1 { font-size: clamp(38px, 7vw, 72px); line-height: 1.03; letter-spacing: -0.03em; margin: 0 auto 20px; max-width: 14ch; }
       .hero p { font-size: clamp(17px, 2.6vw, 22px); color: var(--muted); margin: 0 auto 30px; max-width: 56ch; }
       .actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-      .btn { padding: 14px 28px; border-radius: 12px; font-weight: 600; }
+      .btn { padding: 14px 28px; border-radius: var(--radius); font-weight: 600; }
       .btn.primary { background: var(--accent); color: #fff; }
       .btn.ghost { background: var(--soft); color: var(--ink); }
       .shot { margin: 56px auto 0; max-width: 980px; aspect-ratio: 16 / 9; border-radius: 20px; background: linear-gradient(135deg,#dbeafe,#eff6ff); border: 1px solid #e2e8f0; }
@@ -280,8 +289,9 @@ export function landingTemplate(title = 'My Site') {
 }
 
 // Résumé / CV: sticky sidebar (name + contact + skills) + scrolling main column.
-export function resumeTemplate(title = 'My Site') {
+export function resumeTemplate(title = 'My Site', theme) {
   const t = escTitle(title)
+  const vars = `${templateVars(theme)} --line:#e7e5e4;`
   const exp = [
     ['Senior Product Designer', 'Northwind', '2022 — Present', 'Led the redesign of the core product, improving activation by 28%. Built and maintained the design system used across 6 teams.'],
     ['Product Designer', 'Contoso', '2019 — 2022', 'Owned end-to-end design for the mobile app from research to ship. Partnered closely with engineering on a fluid, responsive UI.'],
@@ -305,10 +315,10 @@ export function resumeTemplate(title = 'My Site') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${t} — Résumé</title>
     <style>
-      :root { --ink:#1a1a1a; --muted:#6b6b6b; --accent:#b45309; --line:#e7e5e4; --soft:#faf9f7; }
+      :root { ${vars} }
       * { box-sizing: border-box; }
       html, body { overflow-x: hidden; }
-      body { margin: 0; font-family: Georgia, 'Times New Roman', serif; color: var(--ink); line-height: 1.65; background: #fff; }
+      body { margin: 0; font-family: var(--font), Georgia, 'Times New Roman', serif; color: var(--ink); line-height: 1.65; background: var(--surface); }
       a { color: inherit; }
       .wrap { display: grid; grid-template-columns: 320px 1fr; max-width: 1100px; margin: 0 auto; min-height: 100vh; }
       .side { background: var(--soft); border-right: 1px solid var(--line); padding: 56px 36px; position: sticky; top: 0; align-self: start; }
@@ -366,26 +376,26 @@ export function resumeTemplate(title = 'My Site') {
 export const SITE_TEMPLATES = [
   {
     id: 'blank',
-    name: 'Sade',
-    desc: 'Nav + hero + 3 kart + footer. Temiz başlangıç.',
+    name: 'Simple',
+    desc: 'Navbar + hero + footer. A clean starting point.',
     build: blankResponsiveSite,
   },
   {
     id: 'portfolio',
-    name: 'Portfolyo',
-    desc: 'Proje galerisi, hakkımda ve iletişim bölümleri.',
+    name: 'Portfolio',
+    desc: 'Project gallery, about and contact sections.',
     build: portfolioTemplate,
   },
   {
     id: 'landing',
-    name: 'Ürün / Landing',
-    desc: 'Hero, özellik grid’i ve çağrı bandı (SaaS tarzı).',
+    name: 'Product / Landing',
+    desc: 'Hero, feature grid and a call-to-action band (SaaS style).',
     build: landingTemplate,
   },
   {
     id: 'resume',
-    name: 'Özgeçmiş / CV',
-    desc: 'Yapışkan kenar çubuğu + deneyim listesi.',
+    name: 'Résumé / CV',
+    desc: 'Sticky sidebar + experience list.',
     build: resumeTemplate,
   },
 ]

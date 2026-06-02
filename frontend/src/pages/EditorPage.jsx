@@ -20,7 +20,10 @@ import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import CodePanel from '../components/editor/CodePanel.jsx'
 import HtmlWorkspace from '../components/editor/HtmlWorkspace.jsx'
+import TemplatePicker from '../components/editor/TemplatePicker.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
+import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
+import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 
 export default function EditorPage() {
@@ -57,6 +60,7 @@ export default function EditorPage() {
   const [justSaved, setJustSaved] = useState(false)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
   const [importOpen, setImportOpen] = useState(false)
+  const [templateOpen, setTemplateOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const jsonInputRef = useRef(null)
   const htmlInputRef = useRef(null)
@@ -209,6 +213,45 @@ export default function EditorPage() {
     a.download = `${slug || title || 'project'}.json`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Convert the component design into a genuinely responsive HTML site (flexbox
+  // rows + fluid container + @media breakpoints) and switch the editor to it.
+  function convertToResponsiveHtml() {
+    if (
+      !window.confirm(
+        'Tasarımı gerçek responsive bir HTML siteye çevir? Bileşen tasarımın korunur (HTML’i kaldır ile geri dönebilirsin). Save’e basana kadar kaydedilmez.',
+      )
+    )
+      return
+    setSiteHtml(schemaToResponsiveHtml(useEditorStore.getState().schema, title))
+    setHtmlDirty(true)
+  }
+
+  // Start a fresh, genuinely responsive HTML site from a clean starter.
+  function startBlankHtml() {
+    setImportOpen(false)
+    if (
+      !window.confirm(
+        'Boş bir responsive HTML şablonuyla başla? Mevcut içerik değişir (HTML’i kaldır ile geri dönebilirsin). Save’e basana kadar kaydedilmez.',
+      )
+    )
+      return
+    setSiteHtml(blankResponsiveSite(title || 'My Site'))
+    setHtmlDirty(true)
+  }
+
+  // Load a ready-made responsive template as the site's HTML.
+  function pickTemplate(tpl) {
+    setTemplateOpen(false)
+    if (
+      !window.confirm(
+        `“${tpl.name}” şablonuyla başla? Mevcut içerik değişir (HTML’i kaldır ile geri dönebilirsin). Save’e basana kadar kaydedilmez.`,
+      )
+    )
+      return
+    setSiteHtml(tpl.build(title || 'My Site'))
+    setHtmlDirty(true)
   }
 
   // Unified importer for an HTML file, a project folder (HTML + CSS), or a
@@ -430,6 +473,33 @@ export default function EditorPage() {
                   onClick={() => setImportOpen(false)}
                 />
                 <div className="absolute right-0 z-50 mt-1 w-52 overflow-hidden rounded-[2px] border border-[#e1dfdd] bg-white py-1 shadow-lg">
+                  <button
+                    onClick={() => {
+                      setImportOpen(false)
+                      setTemplateOpen(true)
+                    }}
+                    className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+                  >
+                    Hazır şablon seç...
+                  </button>
+                  <button
+                    onClick={startBlankHtml}
+                    className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+                  >
+                    Boş HTML başlat
+                  </button>
+                  {!isHtmlSite && (
+                    <button
+                      onClick={() => {
+                        setImportOpen(false)
+                        convertToResponsiveHtml()
+                      }}
+                      className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+                    >
+                      Responsive HTML'e çevir
+                    </button>
+                  )}
+                  <div className="my-1 border-t border-[#e1dfdd]" />
                   {[
                     ['HTML file...', htmlInputRef],
                     ['Project folder...', folderInputRef],
@@ -602,6 +672,12 @@ export default function EditorPage() {
         </DragOverlay>
       </DndContext>
 
+      <TemplatePicker
+        open={templateOpen}
+        title={title}
+        onPick={pickTemplate}
+        onClose={() => setTemplateOpen(false)}
+      />
     </div>
   )
 }

@@ -43,19 +43,33 @@ export function Navbar({ props, style }) {
   )
 }
 
+// The heading tag (h1/h2/h3) inherits font metrics from the styled wrapper so it
+// renders at EXACTLY the configured size — otherwise the browser's default
+// `h1{font-size:2em}` doubles it (e.g. 44px → 88px) and the text overflows.
+const headingTagStyle = {
+  margin: 0,
+  fontSize: 'inherit',
+  fontWeight: 'inherit',
+  fontFamily: 'inherit',
+  letterSpacing: 'inherit',
+  lineHeight: 1.15,
+  overflowWrap: 'break-word',
+  wordBreak: 'break-word',
+}
+
 export function Heading({ props, style }) {
   const Tag = ['h1', 'h2', 'h3'].includes(props.level) ? props.level : 'h2'
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', ...style }}>
-      <Tag style={{ margin: 0 }}>{props.text}</Tag>
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, ...style }}>
+      <Tag style={headingTagStyle}>{props.text}</Tag>
     </div>
   )
 }
 
 export function Text({ props, style }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', ...style }}>
-      <p style={{ margin: 0 }}>{props.text}</p>
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, ...style }}>
+      <p style={{ margin: 0, overflowWrap: 'break-word', wordBreak: 'break-word' }}>{props.text}</p>
     </div>
   )
 }
@@ -111,8 +125,8 @@ export function Image({ props, style }) {
 
 export function Section({ props, style }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', ...style }}>
-      {props.heading ? <h2 style={{ margin: 0 }}>{props.heading}</h2> : null}
+    <section style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, ...style }}>
+      {props.heading ? <h2 style={headingTagStyle}>{props.heading}</h2> : null}
     </section>
   )
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPublicSite } from '../api/sites.js'
 import { Renderer } from '../components/renderer/Renderer.jsx'
-import { canvasHeight, flowCanvasHeight } from '../components/renderer/layout.js'
+import { canvasHeight } from '../components/renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
 import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../utils/htmlRuntime.js'
 
@@ -29,18 +29,36 @@ function ResponsiveSite({ page }) {
 
   const isMobileView = width < MOBILE_BREAKPOINT
   const viewport = isMobileView ? 'mobile' : 'pc'
-  const designW = isMobileView
-    ? page.mobileWidth || MOBILE_CANVAS_WIDTH
-    : page.canvasWidth || CANVAS_WIDTH
   const background = isMobileView
     ? page.backgroundMobile || page.background || '#ffffff'
     : page.background || '#ffffff'
-  // Scale the design to FILL the viewport width (no side margins) — scaling up on
-  // screens wider than the design and down on narrower ones. The desktop/mobile
-  // layouts switch at 768px.
+
+  // FLOW (fluid) mode: render at the visitor's ACTUAL width with no scaling, so
+  // the flex/wrap layout reflows natively at every screen size — like a normal
+  // responsive website (no magnified design, no side margins).
+  if (page.flowMode) {
+    return (
+      <div ref={ref} style={{ width: '100%', minHeight: '100vh', background }}>
+        <Renderer
+          components={components}
+          background={background}
+          viewport={viewport}
+          width={width}
+          flowMode
+        />
+      </div>
+    )
+  }
+
+  const designW = isMobileView
+    ? page.mobileWidth || MOBILE_CANVAS_WIDTH
+    : page.canvasWidth || CANVAS_WIDTH
+  // Absolute mode: scale the design to FILL the viewport width (no side margins) —
+  // scaling up on screens wider than the design and down on narrower ones. The
+  // desktop/mobile layouts switch at 768px.
   const scale = width / designW
   const left = Math.max(0, (width - designW * scale) / 2)
-  const height = (page.flowMode ? flowCanvasHeight(components, viewport, designW) : canvasHeight(components, viewport)) * scale
+  const height = canvasHeight(components, viewport) * scale
 
   return (
     <div

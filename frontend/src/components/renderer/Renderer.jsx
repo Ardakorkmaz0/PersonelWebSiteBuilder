@@ -38,6 +38,7 @@ export function Renderer({
   background = '#ffffff',
   viewport = 'pc',
   flowMode = false,
+  fluid = false,
 }) {
   const list = Array.isArray(components) ? components : []
   const canvasW = width || (viewport === 'mobile' ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH)
@@ -46,7 +47,10 @@ export function Renderer({
     return (
       <div
         style={{
-          width: canvasW,
+          // `fluid` (used by the static export) makes the flow fill its parent so
+          // it reflows at any width with no horizontal overflow; otherwise the
+          // container is the fixed artboard/design width used by the editor.
+          width: fluid ? '100%' : canvasW,
           minHeight: flowCanvasHeight(list, viewport, canvasW),
           padding: `0 ${sidePad}px`,
           boxSizing: 'border-box',

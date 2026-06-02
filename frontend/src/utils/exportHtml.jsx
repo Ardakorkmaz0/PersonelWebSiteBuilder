@@ -19,13 +19,15 @@ export function schemaToHtml(schema, title = 'My Site') {
   const bg = page.background || '#ffffff'
   const bgMobile = page.backgroundMobile || bg
 
+  const flow = !!page.flowMode
   const desktop = renderToStaticMarkup(
     <Renderer
       components={components}
       viewport="pc"
       width={page.canvasWidth || CANVAS_WIDTH}
       background={bg}
-      flowMode={!!page.flowMode}
+      flowMode={flow}
+      fluid={flow}
     />,
   )
   const mobile = renderToStaticMarkup(
@@ -34,7 +36,8 @@ export function schemaToHtml(schema, title = 'My Site') {
       viewport="mobile"
       width={page.mobileWidth || MOBILE_CANVAS_WIDTH}
       background={bgMobile}
-      flowMode={!!page.flowMode}
+      flowMode={flow}
+      fluid={flow}
     />,
   )
 

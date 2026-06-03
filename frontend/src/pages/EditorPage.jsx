@@ -168,6 +168,13 @@ export default function EditorPage() {
     // Only palette drops add components; existing items move via FreeCanvasItem.
     if (!over || data?.from !== 'palette') return
 
+    // Dropped onto a container (any droppable other than the page canvas) → add it
+    // as a flowing child of that container instead of on the page.
+    if (over.id && over.id !== 'canvas') {
+      addComponent(data.type, 0, 0, over.id)
+      return
+    }
+
     // Drop position relative to the canvas, from the dragged preview's rect.
     let x = 24
     let y = 24

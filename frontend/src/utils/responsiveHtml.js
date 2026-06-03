@@ -4,6 +4,7 @@
 // The result becomes an "HTML site" that adapts natively on every device.
 import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
 import { iconSvg } from './icons.js'
+import { ALERT_VARIANTS } from '../components/renderer/components.jsx'
 import { customCssBlock, themeVariablesCss } from './theme.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
@@ -83,18 +84,18 @@ const LINKABLE = new Set(['heading', 'text', 'image', 'card', 'badge', 'icon'])
 // One element inside a row, optionally wrapped in a link (display:contents keeps
 // the flex layout intact). `multi` = the row has more than one item, so columns
 // share the width proportionally to their desktop widths; a lone item fills.
-function item(c, multi) {
-  const el = itemEl(c, multi)
+function item(c, multi, colOverride) {
+  const el = itemEl(c, multi, colOverride)
   const href = LINKABLE.has(c.type) ? sanitizeUrl((c.props || {}).href) : ''
   if (!href) return el
   const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''
   return `<a href="${esc(href)}" style="display:contents"${ext}>${el}</a>`
 }
 
-function itemEl(c, multi) {
+function itemEl(c, multi, colOverride) {
   const p = c.props || {}
   const w = Math.round(c.layout?.w || 300)
-  const col = multi ? `flex:${w} 1 0` : 'flex:1 1 100%'
+  const col = colOverride || (multi ? `flex:${w} 1 0` : 'flex:1 1 100%')
   const cls = multi ? 'rh-item rh-col' : 'rh-item'
   switch (c.type) {
     case 'heading': {
@@ -143,6 +144,32 @@ function itemEl(c, multi) {
       return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px`)}>${
         p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
       }<input type="${t}" placeholder="${esc(p.placeholder)}" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" /></label>`
+    }
+    case 'select': {
+      const opts = String(p.options || '').split('\n').map((s) => s.trim()).filter(Boolean)
+      return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px`)}>${
+        p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+      }<select style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff">${
+        p.placeholder ? `<option value="" disabled selected>${esc(p.placeholder)}</option>` : ''
+      }${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`
+    }
+    case 'alert': {
+      const v = ALERT_VARIANTS[p.variant] || ALERT_VARIANTS.info
+      return `<div class="${cls}"${styleAttr(c, `${col};display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;border:1px solid ${v.border};background:${v.bg};color:${v.color}`)}>${iconSvg(p.icon || 'check')}<span>${esc(p.text)}</span></div>`
+    }
+    case 'accordion':
+      return `<details class="${cls}"${styleAttr(c, `${col};border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px`)}><summary style="cursor:pointer;font-weight:600;padding:12px 0">${esc(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${esc(p.text)}</div></details>`
+    case 'container': {
+      const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+      const gap = Number(p.gap)
+      const row = p.direction === 'row'
+      // Children flow inside; a row keeps proportional columns, a column stacks.
+      const childCol = (ch) =>
+        row ? `flex:${Math.round(ch.layout?.w || 240)} 1 0;min-width:120px` : 'flex:0 0 auto;width:100%'
+      const inner = kids.map((ch) => item(ch, row, childCol(ch))).join('')
+      // Wrap is forced on in the export so a row never overflows a small screen.
+      const flex = `display:flex;flex-direction:${row ? 'row' : 'column'};flex-wrap:wrap;align-items:${p.align || 'stretch'};justify-content:${p.justify || 'flex-start'};gap:${Number.isFinite(gap) ? gap : 16}px`
+      return `<div class="${cls}"${styleAttr(c, `${col};${flex}`)}>${inner}</div>`
     }
     default:
       return ''

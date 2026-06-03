@@ -35,6 +35,38 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
     overflow: flowMode ? 'visible' : 'hidden',
     ...sanitizeStyles(component.styles),
   }
+
+  // A container lays its nested children out in a flex box (children always flow,
+  // so they stay responsive). Rendering recurses through RenderComponent.
+  if (component.type === 'container') {
+    const p = component.props || {}
+    const kids = Array.isArray(component.children) ? component.children : []
+    const gap = Number(p.gap)
+    const cw = Math.round(component.layout?.w || 600)
+    return (
+      <div
+        style={{
+          ...style,
+          overflow: sanitizeStyles(component.styles).overflow || 'visible',
+          display: 'flex',
+          flexDirection: p.direction === 'row' ? 'row' : 'column',
+          flexWrap: p.wrap ? 'wrap' : 'nowrap',
+          alignItems: p.align || 'stretch',
+          justifyContent: p.justify || 'flex-start',
+          gap: Number.isFinite(gap) ? gap : 16,
+        }}
+      >
+        {kids.map((c) =>
+          isHidden(c, viewport) ? null : (
+            <div key={c.id} style={flowItemStyle(c, viewport, cw)}>
+              <RenderComponent component={c} flowMode viewport={viewport} />
+            </div>
+          ),
+        )}
+      </div>
+    )
+  }
+
   // In flow, full-bleed bands (navbar/section/divider) keep an edge-to-edge
   // background but center their CONTENT at the component's Max width (layout.w),
   // so "Max width" actually does something on these blocks.

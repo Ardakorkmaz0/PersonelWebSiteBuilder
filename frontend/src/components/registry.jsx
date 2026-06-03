@@ -19,6 +19,10 @@ import {
   Badge,
   Icon,
   Input,
+  Select,
+  Alert,
+  Accordion,
+  Container,
   Divider,
   Spacer,
 } from './renderer/components.jsx'
@@ -340,6 +344,131 @@ export const registry = {
       },
     ],
     editableStyles: ['color', 'fontSize', 'fontFamily', 'textAlign', 'opacity'],
+  },
+
+  select: {
+    type: 'select',
+    label: 'Dropdown',
+    icon: '▾',
+    Render: Select,
+    defaultSize: { w: 320, h: 70 },
+    defaultProps: {
+      label: 'Choose an option',
+      options: 'Option 1\nOption 2\nOption 3',
+      placeholder: 'Select…',
+    },
+    defaultStyles: { fontSize: '15px', color: '#1d1d1f' },
+    editableProps: [
+      { key: 'label', label: 'Label', control: 'text' },
+      { key: 'options', label: 'Options (one per line)', control: 'textarea' },
+      { key: 'placeholder', label: 'Placeholder', control: 'text' },
+    ],
+    editableStyles: ['color', 'fontSize', 'fontFamily', 'textAlign', 'opacity'],
+  },
+
+  alert: {
+    type: 'alert',
+    label: 'Alert',
+    icon: 'ⓘ',
+    Render: Alert,
+    defaultSize: { w: 460, h: 56 },
+    defaultProps: { text: 'Suitable — all checks passed.', variant: 'success', icon: 'check' },
+    defaultStyles: {},
+    editableProps: [
+      { key: 'text', label: 'Text', control: 'textarea' },
+      {
+        key: 'variant',
+        label: 'Type',
+        control: 'select',
+        options: [
+          ['success', 'Success'],
+          ['info', 'Info'],
+          ['warning', 'Warning'],
+          ['danger', 'Danger'],
+        ],
+      },
+      { key: 'icon', label: 'Icon', control: 'select', options: ICON_OPTIONS },
+    ],
+    editableStyles: ['fontSize', 'fontWeight', 'fontFamily', 'borderRadius', 'padding', 'opacity'],
+  },
+
+  accordion: {
+    type: 'accordion',
+    label: 'Accordion',
+    icon: '⊟',
+    Render: Accordion,
+    defaultSize: { w: 460, h: 56 },
+    defaultProps: {
+      title: 'Advanced settings',
+      text: 'Content that expands when the header is clicked — no JavaScript needed.',
+    },
+    defaultStyles: { fontSize: '15px', color: '#1d1d1f' },
+    editableProps: [
+      { key: 'title', label: 'Title', control: 'text' },
+      { key: 'text', label: 'Content', control: 'textarea' },
+    ],
+    editableStyles: [
+      'color', 'fontSize', 'fontFamily', 'backgroundColor', 'borderRadius',
+      'borderColor', 'borderWidth', 'borderStyle', 'padding', 'opacity',
+    ],
+  },
+
+  container: {
+    type: 'container',
+    label: 'Container',
+    icon: '▭',
+    Render: Container,
+    defaultSize: { w: 600, h: 200 },
+    defaultProps: {
+      direction: 'column',
+      gap: 16,
+      align: 'stretch',
+      justify: 'flex-start',
+      wrap: '',
+    },
+    defaultStyles: { backgroundColor: '#f5f5f7', borderRadius: '12px', padding: '20px' },
+    editableProps: [
+      {
+        key: 'direction',
+        label: 'Direction',
+        control: 'select',
+        options: [['column', 'Vertical'], ['row', 'Horizontal']],
+      },
+      { key: 'gap', label: 'Gap (px)', control: 'text' },
+      {
+        key: 'align',
+        label: 'Align items',
+        control: 'select',
+        options: [
+          ['stretch', 'Stretch'],
+          ['flex-start', 'Start'],
+          ['center', 'Center'],
+          ['flex-end', 'End'],
+        ],
+      },
+      {
+        key: 'justify',
+        label: 'Justify',
+        control: 'select',
+        options: [
+          ['flex-start', 'Start'],
+          ['center', 'Center'],
+          ['flex-end', 'End'],
+          ['space-between', 'Space between'],
+          ['space-around', 'Space around'],
+        ],
+      },
+      {
+        key: 'wrap',
+        label: 'Wrap',
+        control: 'select',
+        options: [['', 'No'], ['1', 'Yes']],
+      },
+    ],
+    editableStyles: [
+      'backgroundColor', 'backgroundImage', 'borderRadius', 'padding',
+      'borderWidth', 'borderStyle', 'borderColor', 'boxShadow', 'opacity',
+    ],
   },
 
   divider: {

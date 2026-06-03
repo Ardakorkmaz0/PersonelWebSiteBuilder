@@ -269,6 +269,102 @@ export function Input({ props, style }) {
   )
 }
 
+// Status/callout colour sets, shared with the HTML export.
+export const ALERT_VARIANTS = {
+  success: { bg: '#ecfdf5', border: '#34d399', color: '#065f46' },
+  info: { bg: '#eff6ff', border: '#60a5fa', color: '#1e40af' },
+  warning: { bg: '#fffbeb', border: '#fbbf24', color: '#92400e' },
+  danger: { bg: '#fef2f2', border: '#f87171', color: '#991b1b' },
+}
+
+export function Select({ props, style }) {
+  const opts = String(props.options || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', ...style }}>
+      {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
+      <select
+        defaultValue=""
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          border: '1px solid #cbd5e1',
+          borderRadius: '8px',
+          font: 'inherit',
+          background: '#fff',
+        }}
+      >
+        {props.placeholder ? (
+          <option value="" disabled>
+            {props.placeholder}
+          </option>
+        ) : null}
+        {opts.map((o, i) => (
+          <option key={i} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+export function Alert({ props, style }) {
+  const v = ALERT_VARIANTS[props.variant] || ALERT_VARIANTS.info
+  const d = ICONS[props.icon] || ICONS.check
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '12px 16px',
+        borderRadius: '10px',
+        border: `1px solid ${v.border}`,
+        background: v.bg,
+        color: v.color,
+        ...style,
+      }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="20"
+        height="20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ flexShrink: 0 }}
+      >
+        <path d={d} />
+      </svg>
+      <span style={{ overflowWrap: 'break-word' }}>{props.text}</span>
+    </div>
+  )
+}
+
+export function Accordion({ props, style }) {
+  return (
+    <details style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '2px 16px', ...style }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 600, padding: '12px 0' }}>
+        {props.title}
+      </summary>
+      <div style={{ paddingBottom: '14px', color: '#4b5563', overflowWrap: 'break-word' }}>
+        {props.text}
+      </div>
+    </details>
+  )
+}
+
+// Placeholder for the registry; the real (recursive) container rendering lives in
+// RenderComponent, which lays its children out in a flex box.
+export function Container({ style }) {
+  return <div style={{ display: 'flex', flexDirection: 'column', ...style }} />
+}
+
 export function Divider({ style, contentWidth }) {
   return (
     <div

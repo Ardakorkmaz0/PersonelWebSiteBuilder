@@ -13,7 +13,11 @@ ALLOWED_COMPONENT_TYPES = {
     'navbar', 'text', 'heading', 'button', 'linkbutton', 'image',
     'section', 'card', 'divider', 'spacer',
     'list', 'quote', 'badge', 'icon', 'input',
+    'container', 'select', 'alert', 'accordion',
 }
+
+MAX_NESTING_DEPTH = 4
+MAX_CHILDREN = 60
 
 ALLOWED_STYLE_KEYS = {
     'backgroundColor', 'backgroundImage', 'color', 'fontSize', 'fontWeight',
@@ -165,6 +169,34 @@ def sanitize_props(ctype, props):
             'placeholder': _str(props.get('placeholder')),
             'inputType': itype if itype in ('text', 'email', 'number', 'tel', 'url') else 'text',
         }
+    if ctype == 'select':
+        return {
+            'label': _str(props.get('label')),
+            'options': _str(props.get('options')),
+            'placeholder': _str(props.get('placeholder')),
+        }
+    if ctype == 'alert':
+        variant = props.get('variant')
+        return {
+            'text': _str(props.get('text')),
+            'variant': variant if variant in ('success', 'info', 'warning', 'danger') else 'info',
+            'icon': _str(props.get('icon'))[:40],
+        }
+    if ctype == 'accordion':
+        return {'title': _str(props.get('title')), 'text': _str(props.get('text'))}
+    if ctype == 'container':
+        direction = props.get('direction')
+        align = props.get('align')
+        justify = props.get('justify')
+        return {
+            'direction': direction if direction in ('row', 'column') else 'column',
+            'align': align if align in ('flex-start', 'center', 'flex-end', 'stretch') else 'stretch',
+            'justify': justify
+            if justify in ('flex-start', 'center', 'flex-end', 'space-between', 'space-around')
+            else 'flex-start',
+            'gap': _num(props.get('gap'), 16, 0, 200),
+            'wrap': bool(props.get('wrap')),
+        }
     return {}
 
 
@@ -190,7 +222,7 @@ def sanitize_layout(layout):
     }
 
 
-def sanitize_component(comp):
+def sanitize_component(comp, depth=0):
     if not isinstance(comp, dict):
         raise serializers.ValidationError('Each component must be an object.')
     ctype = comp.get('type')
@@ -199,7 +231,7 @@ def sanitize_component(comp):
     cid = comp.get('id')
     if not isinstance(cid, str) or not cid:
         raise serializers.ValidationError('Each component needs a non-empty string id.')
-    return {
+    clean = {
         'id': cid,
         'type': ctype,
         'props': sanitize_props(ctype, comp.get('props')),
@@ -210,6 +242,19 @@ def sanitize_component(comp):
         'hidden': bool(comp.get('hidden')),
         'hiddenMobile': bool(comp.get('hiddenMobile')),
     }
+    # Containers hold nested components (children), recursively cleaned with a
+    # depth + count cap. Invalid children are dropped instead of failing the save.
+    if ctype == 'container':
+        children = comp.get('children')
+        clean_children = []
+        if depth < MAX_NESTING_DEPTH and isinstance(children, list):
+            for ch in children[:MAX_CHILDREN]:
+                try:
+                    clean_children.append(sanitize_component(ch, depth + 1))
+                except serializers.ValidationError:
+                    continue
+        clean['children'] = clean_children
+    return clean
 
 
 def sanitize_color(value, default='#ffffff'):

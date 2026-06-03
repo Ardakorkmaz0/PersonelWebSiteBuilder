@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
+import { ContainerEditor } from './FlowCanvasItem.jsx'
 
 const MIN = 20
 const ACCENT = '#2b579a'
@@ -103,9 +104,15 @@ export default function FreeCanvasItem({ component }) {
         isSelected ? '' : 'hover:outline hover:outline-1 hover:outline-[#a6b7d6]'
       }
     >
-      <div className="pointer-events-none h-full w-full select-none overflow-hidden">
-        <RenderComponent component={component} viewport={viewport} />
-      </div>
+      {component.type === 'container' ? (
+        <div className="h-full w-full overflow-hidden">
+          <ContainerEditor component={component} viewport={viewport} />
+        </div>
+      ) : (
+        <div className="pointer-events-none h-full w-full select-none overflow-hidden">
+          <RenderComponent component={component} viewport={viewport} />
+        </div>
+      )}
 
       {hidden && (
         <span

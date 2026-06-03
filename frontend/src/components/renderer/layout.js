@@ -6,7 +6,7 @@ const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
 const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
 const FLOW_MOBILE_BLOCK_TYPES = new Set([
   'navbar', 'heading', 'text', 'image', 'section', 'card', 'divider',
-  'list', 'quote', 'input',
+  'list', 'quote', 'input', 'container', 'select', 'alert', 'accordion',
 ])
 const FLOW_MAX_HEIGHT = {
   navbar: 88,

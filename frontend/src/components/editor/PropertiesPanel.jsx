@@ -171,6 +171,18 @@ const STYLE_GROUPS = [
   { title: 'Effects', keys: ['boxShadow', 'opacity', 'objectFit'] },
 ]
 
+// Find a component anywhere in the tree (containers nest children).
+function findComponentDeep(components, id) {
+  for (const c of components || []) {
+    if (c.id === id) return c
+    if (c.type === 'container' && Array.isArray(c.children)) {
+      const found = findComponentDeep(c.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 function SectionTitle({ children }) {
   return (
     <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
@@ -274,7 +286,7 @@ export default function PropertiesPanel() {
   const isMobile = viewport === 'mobile'
   const isFlow = !!page.flowMode
   const layoutKey = isFlow ? 'layout' : isMobile ? 'mobileLayout' : 'layout'
-  const component = page.components.find((c) => c.id === selectedId)
+  const component = findComponentDeep(page.components, selectedId)
   const pageBackground = isMobile
     ? page.backgroundMobile || page.background || '#ffffff'
     : page.background || '#ffffff'

@@ -7,6 +7,7 @@
 // value can't break out of its rule.
 import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
 import { iconSvg } from './icons.js'
+import { ALERT_VARIANTS } from '../components/renderer/components.jsx'
 import { customCssBlock, themeVariablesCss } from './theme.js'
 import {
   flowCanvasHeight,
@@ -95,6 +96,48 @@ function linkWrap(c, html) {
   if (!href) return html
   const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''
   return `<a href="${esc(href)}" style="display:contents"${ext}>${html}</a>`
+}
+
+// Render a node (and a container's whole subtree) with INLINE styles. Used so a
+// container's nested children survive the classed export without recursive CSS.
+function inlineNode(c) {
+  const p = c.props || {}
+  const styleStr = styleBlock(c.styles)
+  if (c.type === 'container') {
+    const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+    const row = p.direction === 'row'
+    const gap = Number(p.gap)
+    const flex = `display:flex; flex-direction:${row ? 'row' : 'column'}; flex-wrap:wrap; align-items:${p.align || 'stretch'}; justify-content:${p.justify || 'flex-start'}; gap:${Number.isFinite(gap) ? gap : 16}px;`
+    const inner = kids
+      .map((ch) => {
+        const cw = row ? `flex:${Math.round(ch.layout?.w || 240)} 1 0; min-width:120px;` : 'flex:0 0 auto; width:100%;'
+        return `<div style="${cw}">${linkWrap(ch, inlineNode(ch))}</div>`
+      })
+      .join('')
+    return `<div style="${flex} ${styleStr}">${inner}</div>`
+  }
+  if (c.type === 'select') {
+    const opts = String(p.options || '').split('\n').map((s) => s.trim()).filter(Boolean)
+    return `<label style="display:flex;flex-direction:column;gap:6px;${styleStr}">${
+      p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+    }<select style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff">${
+      p.placeholder ? `<option value="" disabled selected>${esc(p.placeholder)}</option>` : ''
+    }${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`
+  }
+  if (c.type === 'alert') {
+    const v = ALERT_VARIANTS[p.variant] || ALERT_VARIANTS.info
+    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;border:1px solid ${v.border};background:${v.bg};color:${v.color};${styleStr}">${iconSvg(p.icon || 'check')}<span>${esc(p.text)}</span></div>`
+  }
+  if (c.type === 'accordion') {
+    return `<details style="border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px;${styleStr}"><summary style="cursor:pointer;font-weight:600;padding:12px 0">${esc(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${esc(p.text)}</div></details>`
+  }
+  const tag = tagFor(c.type)
+  const base = baseRules(c.type)
+  if (tag === 'img') {
+    const src = sanitizeImageSrc(p.src)
+    return `<img src="${esc(src)}" alt="${esc(p.alt)}" style="${base} ${styleStr} max-width:100%;" />`
+  }
+  return `<${tag} style="${base} ${styleStr}">${innerHtml(c)}</${tag}>`
 }
 
 function tagFor(type) {
@@ -205,6 +248,9 @@ function pageBody(page) {
   const comps = Array.isArray(page.components) ? page.components : []
   return comps
     .map((c) => {
+      if (['container', 'select', 'alert', 'accordion'].includes(c.type)) {
+        return `      ${linkWrap(c, inlineNode(c))}`
+      }
       const tag = tagFor(c.type)
       const el =
         tag === 'img'

@@ -1,6 +1,8 @@
+import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore } from '../../store/editorStore.js'
 import { flowItemStyle, isHidden, isFlowFullWidth } from '../renderer/layout.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
+import { sanitizeStyles } from '../../utils/sanitize.js'
 
 const ACCENT = '#2b579a'
 const MIN = 20
@@ -100,16 +102,20 @@ export default function FlowCanvasItem({ component, canvasWidth }) {
       }}
       className={isSelected ? '' : 'hover:outline hover:outline-1 hover:outline-[#a6b7d6]'}
     >
-      <div
-        className="pointer-events-none w-full select-none"
-        style={{
-          height: fixedHeight ? '100%' : 'auto',
-          minHeight: fixedHeight ? undefined : '100%',
-          overflow: 'visible',
-        }}
-      >
-        <RenderComponent component={component} flowMode viewport={viewport} />
-      </div>
+      {component.type === 'container' ? (
+        <ContainerEditor component={component} viewport={viewport} />
+      ) : (
+        <div
+          className="pointer-events-none w-full select-none"
+          style={{
+            height: fixedHeight ? '100%' : 'auto',
+            minHeight: fixedHeight ? undefined : '100%',
+            overflow: 'visible',
+          }}
+        >
+          <RenderComponent component={component} flowMode viewport={viewport} />
+        </div>
+      )}
 
       {isSelected && (
         <button
@@ -142,6 +148,43 @@ export default function FlowCanvasItem({ component, canvasWidth }) {
           }}
         />
       ))}
+    </div>
+  )
+}
+
+// The editable inside of a container: a droppable flex box whose children are
+// themselves editable FlowCanvasItems (they always flow, so they stay responsive).
+export function ContainerEditor({ component, viewport }) {
+  const p = component.props || {}
+  const kids = Array.isArray(component.children) ? component.children : []
+  const gap = Number(p.gap)
+  const cw = Math.round(component.layout?.w || 600)
+  const { setNodeRef, isOver } = useDroppable({ id: component.id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        ...sanitizeStyles(component.styles),
+        width: '100%',
+        minHeight: '100%',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: p.direction === 'row' ? 'row' : 'column',
+        flexWrap: p.wrap ? 'wrap' : 'nowrap',
+        alignItems: p.align || 'stretch',
+        justifyContent: p.justify || 'flex-start',
+        gap: Number.isFinite(gap) ? gap : 16,
+        outline: isOver ? `2px dashed ${ACCENT}` : undefined,
+        outlineOffset: -2,
+      }}
+    >
+      {kids.length === 0 ? (
+        <div className="pointer-events-none m-auto py-4 text-center text-xs text-[#a19f9d]">
+          Drop components here
+        </div>
+      ) : (
+        kids.map((c) => <FlowCanvasItem key={c.id} component={c} canvasWidth={cw} />)
+      )}
     </div>
   )
 }

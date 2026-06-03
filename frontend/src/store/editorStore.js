@@ -56,6 +56,100 @@ function mapPage(schema, id, updater) {
   return { ...schema, pages }
 }
 
+// ---- Recursive component-tree helpers ------------------------------------
+// Components form a tree: a `container` holds nested `children`. These walk the
+// tree so a component can be found / edited / removed anywhere, not just at the
+// top level. Top-level mobile auto-layout still only runs on the page's roots.
+const hasKids = (c) => c.type === 'container' && Array.isArray(c.children)
+
+function mapTree(components, id, fn) {
+  return components.map((c) => {
+    if (c.id === id) return fn(c)
+    if (hasKids(c)) return { ...c, children: mapTree(c.children, id, fn) }
+    return c
+  })
+}
+
+function removeFromTree(components, id) {
+  const out = []
+  for (const c of components) {
+    if (c.id === id) continue
+    out.push(hasKids(c) ? { ...c, children: removeFromTree(c.children, id) } : c)
+  }
+  return out
+}
+
+function findInTree(components, id) {
+  for (const c of components) {
+    if (c.id === id) return c
+    if (hasKids(c)) {
+      const f = findInTree(c.children, id)
+      if (f) return f
+    }
+  }
+  return null
+}
+
+function addChildToTree(components, containerId, child) {
+  return components.map((c) => {
+    if (c.id === containerId && c.type === 'container') {
+      return { ...c, children: [...(c.children || []), child] }
+    }
+    if (hasKids(c)) return { ...c, children: addChildToTree(c.children, containerId, child) }
+    return c
+  })
+}
+
+// Swap a component one step within its OWN parent array (dir +1 later, -1 earlier).
+function moveInTree(components, id, dir) {
+  const i = components.findIndex((c) => c.id === id)
+  if (i >= 0) {
+    const j = dir > 0 ? i + 1 : i - 1
+    if (j < 0 || j >= components.length) return components
+    const next = [...components]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    return next
+  }
+  return components.map((c) =>
+    hasKids(c) ? { ...c, children: moveInTree(c.children, id, dir) } : c,
+  )
+}
+
+// Deep-clone a subtree with fresh ids.
+function cloneTree(c) {
+  const copy = { ...structuredClone(c), id: genId(c.type) }
+  if (hasKids(c)) copy.children = c.children.map(cloneTree)
+  return copy
+}
+
+// Insert a node right after `id` within its parent array.
+function insertAfterInTree(components, id, node) {
+  const i = components.findIndex((c) => c.id === id)
+  if (i >= 0) {
+    const next = [...components]
+    next.splice(i + 1, 0, node)
+    return next
+  }
+  return components.map((c) =>
+    hasKids(c) ? { ...c, children: insertAfterInTree(c.children, id, node) } : c,
+  )
+}
+
+// Move a component to the end (toEnd) or start of its OWN parent array.
+function toEdgeInTree(components, id, toEnd) {
+  const i = components.findIndex((c) => c.id === id)
+  if (i >= 0) {
+    const c = components[i]
+    const rest = components.filter((x) => x.id !== id)
+    return toEnd ? [...rest, c] : [c, ...rest]
+  }
+  return components.map((c) =>
+    hasKids(c) ? { ...c, children: toEdgeInTree(c.children, id, toEnd) } : c,
+  )
+}
+
+const isTopLevel = (components, id) => components.some((c) => c.id === id)
+
 function orderForFlow(components) {
   return components
     .map((c, i) => ({ c, i, l: c.layout || { x: 0, y: 0, w: 0, h: 0 } }))
@@ -320,6 +414,10 @@ function normalize(components, mobileWidth = MOBILE_CANVAS_WIDTH) {
           : fallback,
       hidden: !!c.hidden,
       hiddenMobile: !!c.hiddenMobile,
+      // Containers: normalize their nested children too (they flow inside).
+      ...(c.type === 'container'
+        ? { children: normalize(Array.isArray(c.children) ? c.children : [], mobileWidth) }
+        : {}),
     }
   })
 }
@@ -582,7 +680,7 @@ export const useEditorStore = create((set, get) => ({
   },
 
   // ---- Components (operate on the current page) --------------------------
-  addComponent: (type, x = 24, y = 24) => {
+  addComponent: (type, x = 24, y = 24, parentId = null) => {
     const def = registry[type]
     if (!def) return
     get().record('add')
@@ -594,6 +692,41 @@ export const useEditorStore = create((set, get) => ({
       const id = genId(type)
       const fullWidth = FULL_WIDTH_TYPES.has(type)
       const styles = themedStyles(type, def.defaultStyles, state.schema.theme)
+      const kids = type === 'container' ? { children: [] } : {}
+
+      // Dropping a palette item INTO a container: it becomes a flowing child.
+      if (parentId) {
+        const child = {
+          id,
+          type,
+          props: structuredClone(def.defaultProps),
+          styles,
+          layout: {
+            x: 0,
+            y: 0,
+            w: fullWidth ? page.canvasWidth || CANVAS_WIDTH : size.w,
+            h: size.h,
+          },
+          mobileLayout: {
+            x: 0,
+            y: 0,
+            w: fullWidth ? mobileWidth : Math.min(size.w, mobileWidth - MOBILE_PAD * 2),
+            h: size.h,
+          },
+          hidden: false,
+          hiddenMobile: false,
+          ...kids,
+        }
+        return {
+          schema: withComponents(
+            state.schema,
+            page.id,
+            addChildToTree(page.components, parentId, child),
+          ),
+          selectedId: id,
+          dirty: true,
+        }
+      }
 
       if (page.flowMode) {
         const component = {
@@ -615,6 +748,7 @@ export const useEditorStore = create((set, get) => ({
           },
           hidden: false,
           hiddenMobile: false,
+          ...kids,
         }
         return {
           schema: withComponents(state.schema, page.id, [...comps, component]),
@@ -667,6 +801,7 @@ export const useEditorStore = create((set, get) => ({
         mobileLayout,
         hidden: false,
         hiddenMobile: false,
+        ...kids,
       }
       const nextComps = [...comps, component]
       // Dropping on the mobile canvas is a manual mobile edit; a PC drop keeps
@@ -685,9 +820,10 @@ export const useEditorStore = create((set, get) => ({
     get().record('props-' + id)
     set((state) => {
       const page = selectCurrentPage(state)
-      const components = page.components.map((c) =>
-        c.id === id ? { ...c, props: { ...c.props, ...patch } } : c,
-      )
+      const components = mapTree(page.components, id, (c) => ({
+        ...c,
+        props: { ...c.props, ...patch },
+      }))
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },
@@ -696,21 +832,23 @@ export const useEditorStore = create((set, get) => ({
     get().record('style-' + id)
     set((state) => {
       const page = selectCurrentPage(state)
-      const components = page.components.map((c) =>
-        c.id === id ? { ...c, styles: { ...c.styles, ...patch } } : c,
-      )
+      const components = mapTree(page.components, id, (c) => ({
+        ...c,
+        styles: { ...c.styles, ...patch },
+      }))
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },
 
   // Move and resize both flow through here, editing the ACTIVE breakpoint only.
+  // Nested children always flow, so they only ever edit their single `layout`.
   setLayout: (id, patch) => {
-    const key = get().layoutKey()
+    const page0 = selectCurrentPage(get())
+    const key = isTopLevel(page0.components, id) ? get().layoutKey() : 'layout'
     get().record('layout-' + key + '-' + id)
     set((state) => {
       const page = selectCurrentPage(state)
-      const components = page.components.map((c) => {
-        if (c.id !== id) return c
+      const components = mapTree(page.components, id, (c) => {
         const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
         return { ...c, [key]: clampLayout({ ...base, ...patch }) }
       })
@@ -853,23 +991,20 @@ export const useEditorStore = create((set, get) => ({
     get().record('dup')
     set((state) => {
       const page = selectCurrentPage(state)
-      const comps = page.components
-      const src = comps.find((c) => c.id === id)
+      const src = findInTree(page.components, id)
       if (!src) return {}
-      const copy = {
-        ...structuredClone(src),
-        id: genId(src.type),
-        layout: {
+      const copy = cloneTree(src)
+      // Nudge a top-level free-canvas copy so it doesn't sit exactly on the original.
+      if (isTopLevel(page.components, id)) {
+        copy.layout = {
           ...src.layout,
           x: (src.layout?.x || 0) + 24,
           y: (src.layout?.y || 0) + 24,
-        },
-        mobileLayout: src.mobileLayout
-          ? { ...src.mobileLayout, y: (src.mobileLayout.y || 0) + 24 }
-          : undefined,
+        }
       }
+      const components = insertAfterInTree(page.components, id, copy)
       return {
-        schema: withComponents(state.schema, page.id, [...comps, copy]),
+        schema: withComponents(state.schema, page.id, components),
         selectedId: copy.id,
         dirty: true,
       }
@@ -880,11 +1015,10 @@ export const useEditorStore = create((set, get) => ({
     get().record('zorder')
     set((state) => {
       const page = selectCurrentPage(state)
-      const comps = page.components
-      const c = comps.find((x) => x.id === id)
-      if (!c) return {}
-      const reordered = [...comps.filter((x) => x.id !== id), c]
-      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
+      return {
+        schema: withComponents(state.schema, page.id, toEdgeInTree(page.components, id, true)),
+        dirty: true,
+      }
     })
   },
 
@@ -892,11 +1026,10 @@ export const useEditorStore = create((set, get) => ({
     get().record('zorder')
     set((state) => {
       const page = selectCurrentPage(state)
-      const comps = page.components
-      const c = comps.find((x) => x.id === id)
-      if (!c) return {}
-      const reordered = [c, ...comps.filter((x) => x.id !== id)]
-      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
+      return {
+        schema: withComponents(state.schema, page.id, toEdgeInTree(page.components, id, false)),
+        dirty: true,
+      }
     })
   },
 
@@ -905,12 +1038,10 @@ export const useEditorStore = create((set, get) => ({
     get().record('zorder')
     set((state) => {
       const page = selectCurrentPage(state)
-      const comps = page.components
-      const i = comps.findIndex((x) => x.id === id)
-      if (i < 0 || i >= comps.length - 1) return {}
-      const reordered = [...comps]
-      ;[reordered[i], reordered[i + 1]] = [reordered[i + 1], reordered[i]]
-      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
+      return {
+        schema: withComponents(state.schema, page.id, moveInTree(page.components, id, 1)),
+        dirty: true,
+      }
     })
   },
 
@@ -919,12 +1050,10 @@ export const useEditorStore = create((set, get) => ({
     get().record('zorder')
     set((state) => {
       const page = selectCurrentPage(state)
-      const comps = page.components
-      const i = comps.findIndex((x) => x.id === id)
-      if (i <= 0) return {}
-      const reordered = [...comps]
-      ;[reordered[i], reordered[i - 1]] = [reordered[i - 1], reordered[i]]
-      return { schema: withComponents(state.schema, page.id, reordered), dirty: true }
+      return {
+        schema: withComponents(state.schema, page.id, moveInTree(page.components, id, -1)),
+        dirty: true,
+      }
     })
   },
 
@@ -932,7 +1061,7 @@ export const useEditorStore = create((set, get) => ({
     get().record('remove')
     set((state) => {
       const page = selectCurrentPage(state)
-      const components = page.components.filter((c) => c.id !== id)
+      const components = removeFromTree(page.components, id)
       return {
         schema: withComponents(state.schema, page.id, components),
         selectedId: state.selectedId === id ? null : state.selectedId,

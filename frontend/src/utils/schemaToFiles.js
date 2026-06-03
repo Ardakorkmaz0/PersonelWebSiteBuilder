@@ -5,7 +5,8 @@
 // user input: text is HTML-escaped, URLs go through sanitizeUrl, style keys are
 // whitelisted by sanitizeStyles, and CSS values are stripped of `;{}<` so a
 // value can't break out of its rule.
-import { sanitizeStyles, sanitizeUrl } from './sanitize.js'
+import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
+import { iconSvg } from './icons.js'
 import { customCssBlock, themeVariablesCss } from './theme.js'
 import {
   flowCanvasHeight,
@@ -73,9 +74,27 @@ function baseRules(type) {
       return 'display:flex; align-items:center; justify-content:center; text-decoration:none;'
     case 'image':
       return 'display:block; object-fit:cover;'
+    case 'quote':
+      return 'border-left:4px solid currentColor; padding-left:18px; font-style:italic;'
+    case 'badge':
+      return 'display:inline-flex; align-items:center;'
+    case 'icon':
+      return 'display:inline-flex; align-items:center; line-height:0;'
+    case 'input':
+      return 'display:flex; flex-direction:column; gap:6px;'
     default:
       return ''
   }
+}
+
+const LINKABLE = new Set(['heading', 'text', 'image', 'card', 'badge', 'icon'])
+
+// Wrap an element in an <a> (display:contents keeps the layout) when it has a link.
+function linkWrap(c, html) {
+  const href = LINKABLE.has(c.type) ? sanitizeUrl((c.props || {}).href) : ''
+  if (!href) return html
+  const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''
+  return `<a href="${esc(href)}" style="display:contents"${ext}>${html}</a>`
 }
 
 function tagFor(type) {
@@ -83,6 +102,9 @@ function tagFor(type) {
   if (type === 'image') return 'img'
   if (type === 'navbar') return 'nav'
   if (type === 'section') return 'section'
+  if (type === 'quote') return 'blockquote'
+  if (type === 'badge' || type === 'icon') return 'span'
+  if (type === 'input') return 'label'
   return 'div'
 }
 
@@ -117,6 +139,29 @@ function innerHtml(c) {
       return `${p.title ? `<h3 class="card-title">${esc(p.title)}</h3>` : ''}${
         p.text ? `\n      <p class="m0">${esc(p.text)}</p>` : ''
       }`
+    case 'list': {
+      const items = String(p.text || '').split('\n').map((s) => s.trim()).filter(Boolean)
+      const tag = p.ordered ? 'ol' : 'ul'
+      return `<${tag} style="margin:0;padding-left:1.4em">${items
+        .map((it) => `<li style="margin-bottom:6px">${esc(it)}</li>`)
+        .join('')}</${tag}>`
+    }
+    case 'quote':
+      return `<p class="m0">${esc(p.text)}</p>${
+        p.author
+          ? `<footer style="margin-top:8px;font-style:normal;font-size:.85em;opacity:.7">— ${esc(p.author)}</footer>`
+          : ''
+      }`
+    case 'badge':
+      return esc(p.text)
+    case 'icon':
+      return iconSvg(p.name)
+    case 'input': {
+      const t = ['text', 'email', 'number', 'tel', 'url'].includes(p.inputType) ? p.inputType : 'text'
+      return `${
+        p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+      }<input type="${t}" placeholder="${esc(p.placeholder)}" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" />`
+    }
     default:
       return ''
   }
@@ -133,7 +178,7 @@ function openTag(c) {
     return `<a class="${cls}" href="${esc(href || '#')}"${ext}>`
   }
   if (tag === 'img') {
-    const src = sanitizeUrl((c.props || {}).src)
+    const src = sanitizeImageSrc((c.props || {}).src)
     return `<img class="${cls}" src="${esc(src)}" alt="${esc((c.props || {}).alt)}" />`
   }
   return `<${tag} class="${cls}">`
@@ -161,9 +206,11 @@ function pageBody(page) {
   return comps
     .map((c) => {
       const tag = tagFor(c.type)
-      if (tag === 'img') return `      ${openTag(c)}`
-      const inner = innerHtml(c)
-      return `      ${openTag(c)}${inner ? `\n        ${inner}\n      ` : ''}</${tag}>`
+      const el =
+        tag === 'img'
+          ? openTag(c)
+          : `${openTag(c)}${innerHtml(c) ? `\n        ${innerHtml(c)}\n      ` : ''}</${tag}>`
+      return `      ${linkWrap(c, el)}`
     })
     .join('\n')
 }

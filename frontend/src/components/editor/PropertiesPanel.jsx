@@ -1,10 +1,12 @@
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
+import { LINKABLE_TYPES } from '../renderer/Renderer.jsx'
 import { DEFAULT_THEME, FONT_OPTIONS } from '../../utils/theme.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
 import {
   LabeledText,
   LabeledTextarea,
+  LabeledImage,
   LabeledColor,
   LabeledSelect,
   LabeledPx,
@@ -99,7 +101,54 @@ const STYLE_META = {
   maxWidth: { label: 'Max width', control: 'text', placeholder: 'e.g. 640px' },
   height: { label: 'Height', control: 'text', placeholder: 'e.g. 48px' },
   minHeight: { label: 'Min height', control: 'text', placeholder: 'e.g. 200px' },
+  // Advanced / standard CSS knobs, available on every component.
+  transform: { label: 'Transform', control: 'text', placeholder: 'e.g. rotate(-3deg) scale(1.05)' },
+  filter: { label: 'Filter', control: 'text', placeholder: 'e.g. blur(2px) brightness(1.1)' },
+  backdropFilter: { label: 'Backdrop filter', control: 'text', placeholder: 'e.g. blur(8px)' },
+  textShadow: { label: 'Text shadow', control: 'text', placeholder: 'e.g. 0 2px 6px rgba(0,0,0,.3)' },
+  aspectRatio: { label: 'Aspect ratio', control: 'text', placeholder: 'e.g. 16 / 9' },
+  objectPosition: { label: 'Image position', control: 'text', placeholder: 'e.g. center' },
+  backgroundSize: {
+    label: 'Background size',
+    control: 'select',
+    options: [['auto', 'Auto'], ['cover', 'Cover'], ['contain', 'Contain']],
+  },
+  backgroundPosition: { label: 'Background position', control: 'text', placeholder: 'e.g. center' },
+  backgroundRepeat: {
+    label: 'Background repeat',
+    control: 'select',
+    options: [
+      ['no-repeat', 'No repeat'],
+      ['repeat', 'Repeat'],
+      ['repeat-x', 'Repeat X'],
+      ['repeat-y', 'Repeat Y'],
+    ],
+  },
+  cursor: {
+    label: 'Cursor',
+    control: 'select',
+    options: [
+      ['auto', 'Auto'],
+      ['pointer', 'Pointer'],
+      ['default', 'Default'],
+      ['move', 'Move'],
+      ['text', 'Text'],
+      ['not-allowed', 'Not allowed'],
+    ],
+  },
+  overflow: {
+    label: 'Overflow',
+    control: 'select',
+    options: [['visible', 'Visible'], ['hidden', 'Hidden'], ['auto', 'Auto'], ['scroll', 'Scroll']],
+  },
 }
+
+// Universal advanced style controls shown for every component (standard CSS).
+const ADVANCED_STYLE_KEYS = [
+  'transform', 'filter', 'backdropFilter', 'textShadow', 'aspectRatio',
+  'objectPosition', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+  'cursor', 'overflow',
+]
 
 const STYLE_GROUPS = [
   {
@@ -136,6 +185,9 @@ function PropControl({ field, value, onChange }) {
   }
   if (field.control === 'links') {
     return <LinksEditor label={field.label} value={value} onChange={onChange} />
+  }
+  if (field.control === 'image') {
+    return <LabeledImage label={field.label} value={value} onChange={onChange} />
   }
   if (field.control === 'select') {
     return (
@@ -475,6 +527,17 @@ export default function PropertiesPanel() {
           </section>
         )}
 
+        {LINKABLE_TYPES.has(component.type) && (
+          <section className="space-y-3">
+            <SectionTitle>Link</SectionTitle>
+            <PropControl
+              field={{ key: 'href', label: 'Link URL (optional)', control: 'text' }}
+              value={component.props.href}
+              onChange={(val) => updateProps(component.id, { href: val })}
+            />
+          </section>
+        )}
+
         {groupedStyles(def.editableStyles || []).map((group) => (
           <section key={group.title} className="space-y-3">
             <SectionTitle>{group.title}</SectionTitle>
@@ -488,6 +551,18 @@ export default function PropertiesPanel() {
             ))}
           </section>
         ))}
+
+        <section className="space-y-3">
+          <SectionTitle>Advanced CSS</SectionTitle>
+          {ADVANCED_STYLE_KEYS.map((styleKey) => (
+            <StyleControl
+              key={styleKey}
+              styleKey={styleKey}
+              value={component.styles[styleKey]}
+              onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
+            />
+          ))}
+        </section>
       </div>
 
       <div className="space-y-2 border-t border-[#e1dfdd] p-4">

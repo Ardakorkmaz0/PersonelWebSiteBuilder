@@ -1,3 +1,6 @@
+import { useRef, useState } from 'react'
+import { PRESET_IMAGES } from '../../utils/presetImages.js'
+
 // Small, reusable form controls used by the PropertiesPanel:
 // square 2px corners, neutral borders, blue focus.
 const inputCls =
@@ -31,6 +34,85 @@ export function LabeledTextarea({ label, value, onChange, placeholder, rows = 3 
         onChange={(e) => onChange(e.target.value)}
       />
     </label>
+  )
+}
+
+// Image source: paste a URL, upload your own (embedded as a data URL so it travels
+// with the site), or pick a built-in preset. The value is a plain string (src).
+export function LabeledImage({ label, value, onChange }) {
+  const fileRef = useRef(null)
+  const [err, setErr] = useState('')
+
+  function onFile(e) {
+    const f = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!f) return
+    if (!f.type.startsWith('image/')) {
+      setErr('Please choose an image file.')
+      return
+    }
+    if (f.size > 3 * 1024 * 1024) {
+      setErr('Image is too large (max 3 MB). Try a smaller one.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setErr('')
+      onChange(String(reader.result))
+    }
+    reader.onerror = () => setErr('Could not read the file.')
+    reader.readAsDataURL(f)
+  }
+
+  return (
+    <div className="block">
+      <span className={labelCls}>{label}</span>
+      <input
+        type="text"
+        className={inputCls}
+        value={value ?? ''}
+        placeholder="Paste an image URL…"
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="mt-1.5 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => fileRef.current && fileRef.current.click()}
+          className="rounded-[2px] border border-[#8a8886] px-2 py-1 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
+        >
+          Upload image
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="rounded-[2px] px-2 py-1 text-xs text-[#605e5c] hover:bg-[#f3f2f1]"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      {err ? <p className="mt-1 text-xs text-[#a4262c]">{err}</p> : null}
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        {PRESET_IMAGES.map((p) => (
+          <button
+            key={p.name}
+            type="button"
+            title={p.name}
+            onClick={() => onChange(p.src)}
+            style={{ aspectRatio: '4 / 3' }}
+            className={`overflow-hidden rounded-[2px] border ${
+              value === p.src
+                ? 'border-[#2b579a] ring-1 ring-[#2b579a]'
+                : 'border-[#e1dfdd] hover:border-[#8a8886]'
+            }`}
+          >
+            <img src={p.src} alt={p.name} className="h-full w-full object-cover" />
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 

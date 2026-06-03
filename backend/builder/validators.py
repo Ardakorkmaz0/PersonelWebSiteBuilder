@@ -12,6 +12,7 @@ from rest_framework import serializers
 ALLOWED_COMPONENT_TYPES = {
     'navbar', 'text', 'heading', 'button', 'linkbutton', 'image',
     'section', 'card', 'divider', 'spacer',
+    'list', 'quote', 'badge', 'icon', 'input',
 }
 
 ALLOWED_STYLE_KEYS = {
@@ -20,6 +21,9 @@ ALLOWED_STYLE_KEYS = {
     'lineHeight', 'letterSpacing', 'padding', 'margin', 'borderRadius', 'border',
     'borderColor', 'borderWidth', 'borderStyle', 'width', 'maxWidth',
     'minHeight', 'height', 'boxShadow', 'display', 'gap', 'objectFit', 'opacity',
+    'transform', 'filter', 'backdropFilter', 'textShadow', 'aspectRatio',
+    'objectPosition', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+    'cursor', 'overflow',
 }
 
 ALLOWED_URL_SCHEMES = ('http://', 'https://', 'mailto:', 'tel:')
@@ -64,6 +68,26 @@ def sanitize_url(value):
     return v if '://' not in low else ''
 
 
+# Inline image data URLs are safe ONLY in an <img src> (image bytes can't execute
+# scripts — even SVG is rendered in secure static mode), so they are allowed for
+# image sources but never for links. Capped so a base64 blob can't bloat the row.
+_DATA_IMAGE_RE = re.compile(
+    r'^data:image/(png|jpe?g|gif|webp|avif|svg\+xml);base64,[A-Za-z0-9+/\r\n=]+$',
+    re.IGNORECASE,
+)
+_MAX_DATA_IMAGE = 5 * 1024 * 1024  # 5 MB of base64 text
+
+
+def sanitize_image_src(value):
+    """Like sanitize_url, but also accepts inline data:image/*;base64 images."""
+    v = _str(value).strip()
+    if not v:
+        return ''
+    if v[:11].lower() == 'data:image/':
+        return v if len(v) <= _MAX_DATA_IMAGE and _DATA_IMAGE_RE.match(v) else ''
+    return sanitize_url(v)
+
+
 def sanitize_styles(styles):
     if not isinstance(styles, dict):
         return {}
@@ -94,23 +118,53 @@ def sanitize_props(ctype, props):
                     })
         return {'brand': _str(props.get('brand')), 'links': links}
     if ctype == 'text':
-        return {'text': _str(props.get('text'))}
+        return {'text': _str(props.get('text')), 'href': sanitize_url(props.get('href'))}
     if ctype == 'heading':
         level = props.get('level')
         return {
             'text': _str(props.get('text')),
             'level': level if level in ('h1', 'h2', 'h3') else 'h2',
+            'href': sanitize_url(props.get('href')),
         }
     if ctype in ('divider', 'spacer'):
         return {}
     if ctype in ('button', 'linkbutton'):
         return {'text': _str(props.get('text')), 'href': sanitize_url(props.get('href'))}
     if ctype == 'image':
-        return {'src': sanitize_url(props.get('src')), 'alt': _str(props.get('alt'))}
+        return {
+            'src': sanitize_image_src(props.get('src')),
+            'alt': _str(props.get('alt')),
+            'href': sanitize_url(props.get('href')),
+        }
     if ctype == 'section':
         return {'heading': _str(props.get('heading'))}
     if ctype == 'card':
-        return {'title': _str(props.get('title')), 'text': _str(props.get('text'))}
+        return {
+            'title': _str(props.get('title')),
+            'text': _str(props.get('text')),
+            'href': sanitize_url(props.get('href')),
+        }
+    if ctype == 'list':
+        return {
+            'text': _str(props.get('text')),
+            'ordered': '1' if props.get('ordered') else '',
+        }
+    if ctype == 'quote':
+        return {'text': _str(props.get('text')), 'author': _str(props.get('author'))}
+    if ctype == 'badge':
+        return {'text': _str(props.get('text')), 'href': sanitize_url(props.get('href'))}
+    if ctype == 'icon':
+        return {
+            'name': _str(props.get('name'))[:40],
+            'href': sanitize_url(props.get('href')),
+        }
+    if ctype == 'input':
+        itype = props.get('inputType')
+        return {
+            'label': _str(props.get('label')),
+            'placeholder': _str(props.get('placeholder')),
+            'inputType': itype if itype in ('text', 'email', 'number', 'tel', 'url') else 'text',
+        }
     return {}
 
 

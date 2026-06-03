@@ -14,9 +14,16 @@ import {
   Image,
   Section,
   Card,
+  List,
+  Quote,
+  Badge,
+  Icon,
+  Input,
   Divider,
   Spacer,
 } from './renderer/components.jsx'
+import { PRESET_IMAGES } from '../utils/presetImages.js'
+import { ICON_OPTIONS } from '../utils/icons.js'
 
 export const registry = {
   navbar: {
@@ -157,12 +164,12 @@ export const registry = {
     Render: Image,
     defaultSize: { w: 260, h: 170 },
     defaultProps: {
-      src: 'https://picsum.photos/640/480',
+      src: PRESET_IMAGES[0].src,
       alt: 'Placeholder image',
     },
     defaultStyles: { borderRadius: '18px', objectFit: 'cover' },
     editableProps: [
-      { key: 'src', label: 'Image URL', control: 'text' },
+      { key: 'src', label: 'Image', control: 'image' },
       { key: 'alt', label: 'Alt text', control: 'text' },
     ],
     editableStyles: [
@@ -218,6 +225,121 @@ export const registry = {
       'textAlign', 'letterSpacing', 'borderRadius', 'padding', 'borderWidth',
       'borderStyle', 'borderColor', 'boxShadow', 'opacity',
     ],
+  },
+
+  list: {
+    type: 'list',
+    label: 'List',
+    icon: '☰',
+    Render: List,
+    defaultSize: { w: 360, h: 150 },
+    defaultProps: {
+      text: 'First item\nSecond item\nThird item',
+      ordered: '',
+    },
+    defaultStyles: { fontSize: '16px', color: '#1d1d1f', lineHeight: '1.7' },
+    editableProps: [
+      { key: 'text', label: 'Items (one per line)', control: 'textarea' },
+      {
+        key: 'ordered',
+        label: 'Style',
+        control: 'select',
+        options: [['', 'Bulleted (•)'], ['1', 'Numbered (1.)']],
+      },
+    ],
+    editableStyles: [
+      'color', 'fontSize', 'fontWeight', 'fontFamily', 'lineHeight',
+      'letterSpacing', 'textAlign', 'opacity',
+    ],
+  },
+
+  quote: {
+    type: 'quote',
+    label: 'Quote',
+    icon: '❝',
+    Render: Quote,
+    defaultSize: { w: 480, h: 130 },
+    defaultProps: {
+      text: 'Design is not just what it looks like and feels like. Design is how it works.',
+      author: 'Steve Jobs',
+    },
+    defaultStyles: { fontSize: '20px', color: '#374151' },
+    editableProps: [
+      { key: 'text', label: 'Quote', control: 'textarea' },
+      { key: 'author', label: 'Author', control: 'text' },
+    ],
+    editableStyles: [
+      'color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily',
+      'textAlign', 'letterSpacing', 'opacity',
+    ],
+  },
+
+  badge: {
+    type: 'badge',
+    label: 'Badge',
+    icon: '◉',
+    Render: Badge,
+    defaultSize: { w: 90, h: 30 },
+    defaultProps: { text: 'New' },
+    defaultStyles: {
+      backgroundColor: '#2563eb',
+      color: '#ffffff',
+      fontSize: '13px',
+      fontWeight: '600',
+      padding: '4px 12px',
+      borderRadius: '999px',
+    },
+    editableProps: [{ key: 'text', label: 'Text', control: 'text' }],
+    editableStyles: [
+      'backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily',
+      'textTransform', 'letterSpacing', 'padding', 'borderRadius',
+      'borderWidth', 'borderStyle', 'borderColor', 'opacity',
+    ],
+  },
+
+  icon: {
+    type: 'icon',
+    label: 'Icon',
+    icon: '★',
+    Render: Icon,
+    defaultSize: { w: 48, h: 48 },
+    defaultProps: { name: 'star' },
+    defaultStyles: { fontSize: '40px', color: '#2563eb' },
+    editableProps: [
+      { key: 'name', label: 'Icon', control: 'select', options: ICON_OPTIONS },
+    ],
+    editableStyles: ['color', 'fontSize', 'opacity'],
+  },
+
+  input: {
+    type: 'input',
+    label: 'Input',
+    icon: '⌨',
+    Render: Input,
+    defaultSize: { w: 320, h: 70 },
+    defaultProps: {
+      label: 'Email',
+      placeholder: 'you@example.com',
+      inputType: 'email',
+    },
+    defaultStyles: { fontSize: '15px', color: '#1d1d1f' },
+    editableProps: [
+      { key: 'label', label: 'Label', control: 'text' },
+      { key: 'placeholder', label: 'Placeholder', control: 'text' },
+      {
+        key: 'inputType',
+        label: 'Type',
+        control: 'select',
+        options: [
+          ['text', 'Text'],
+          ['email', 'Email'],
+          ['number', 'Number'],
+          ['tel', 'Phone'],
+          ['url', 'URL'],
+        ],
+      },
+    ],
+    editableStyles: ['color', 'fontSize', 'fontFamily', 'textAlign', 'opacity'],
   },
 
   divider: {

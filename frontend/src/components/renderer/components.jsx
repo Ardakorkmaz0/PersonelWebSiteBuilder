@@ -2,7 +2,8 @@
 // Each receives { props, style }. The passed `style` already includes
 // width/height 100% so the component fills its free-canvas box. They never use
 // dangerouslySetInnerHTML, so React escapes all text. URLs go through sanitizeUrl.
-import { sanitizeUrl } from '../../utils/sanitize.js'
+import { sanitizeUrl, sanitizeImageSrc } from '../../utils/sanitize.js'
+import { ICONS } from '../../utils/icons.js'
 
 function linkAttrs(href) {
   return /^https?:\/\//i.test(href)
@@ -131,12 +132,20 @@ export function LinkButton({ props, style }) {
 }
 
 export function Image({ props, style }) {
-  const src = sanitizeUrl(props.src)
+  const src = sanitizeImageSrc(props.src)
   return (
     <img
       src={src || undefined}
       alt={props.alt || ''}
-      style={{ display: 'block', objectFit: 'cover', ...style }}
+      style={{
+        display: 'block',
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        ...style,
+        // Always cap so the image (and any border) can never overflow its column.
+        maxWidth: '100%',
+      }}
     />
   )
 }
@@ -168,6 +177,95 @@ export function Card({ props, style }) {
       ) : null}
       {props.text ? <p style={{ margin: 0 }}>{props.text}</p> : null}
     </div>
+  )
+}
+
+export function List({ props, style }) {
+  const items = String(props.text || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const Tag = props.ordered ? 'ol' : 'ul'
+  return (
+    <Tag style={{ margin: 0, paddingLeft: '1.4em', ...style }}>
+      {items.map((it, i) => (
+        <li key={i} style={{ marginBottom: '6px' }}>
+          {it}
+        </li>
+      ))}
+    </Tag>
+  )
+}
+
+export function Quote({ props, style }) {
+  return (
+    <blockquote
+      style={{
+        margin: 0,
+        borderLeft: '4px solid currentColor',
+        paddingLeft: '18px',
+        fontStyle: 'italic',
+        overflowWrap: 'break-word',
+        ...style,
+      }}
+    >
+      <p style={{ margin: 0 }}>{props.text}</p>
+      {props.author ? (
+        <footer style={{ marginTop: '8px', fontStyle: 'normal', fontSize: '0.85em', opacity: 0.7 }}>
+          — {props.author}
+        </footer>
+      ) : null}
+    </blockquote>
+  )
+}
+
+export function Badge({ props, style }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', ...style }}>
+      {props.text}
+    </span>
+  )
+}
+
+export function Icon({ props, style }) {
+  const d = ICONS[props.name] || ICONS.star
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0, fontSize: '32px', ...style }}>
+      <svg
+        viewBox="0 0 24 24"
+        width="1em"
+        height="1em"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d={d} />
+      </svg>
+    </span>
+  )
+}
+
+export function Input({ props, style }) {
+  const type = ['text', 'email', 'number', 'tel', 'url'].includes(props.inputType)
+    ? props.inputType
+    : 'text'
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', ...style }}>
+      {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
+      <input
+        type={type}
+        placeholder={props.placeholder || ''}
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          border: '1px solid #cbd5e1',
+          borderRadius: '8px',
+          font: 'inherit',
+        }}
+      />
+    </label>
   )
 }
 

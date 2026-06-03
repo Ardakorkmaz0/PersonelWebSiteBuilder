@@ -4,7 +4,10 @@ const FLOW_SIDE_PAD = 24
 const FLOW_MOBILE_SIDE_PAD = 16
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
 const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
-const FLOW_MOBILE_BLOCK_TYPES = new Set(['navbar', 'heading', 'text', 'image', 'section', 'card', 'divider'])
+const FLOW_MOBILE_BLOCK_TYPES = new Set([
+  'navbar', 'heading', 'text', 'image', 'section', 'card', 'divider',
+  'list', 'quote', 'input',
+])
 const FLOW_MAX_HEIGHT = {
   navbar: 88,
   heading: 120,
@@ -46,7 +49,7 @@ export function flowSidePad(viewport = 'pc') {
   return viewport === 'mobile' ? FLOW_MOBILE_SIDE_PAD : FLOW_SIDE_PAD
 }
 
-const FLOW_INLINE_TYPES = new Set(['button', 'linkbutton', 'image'])
+const FLOW_INLINE_TYPES = new Set(['button', 'linkbutton', 'badge', 'icon'])
 
 export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
   // Flow is a single design that adapts to both breakpoints, so the box metrics
@@ -56,6 +59,7 @@ export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
   const sidePad = flowSidePad(viewport)
   const mobileBlock = viewport === 'mobile' && FLOW_MOBILE_BLOCK_TYPES.has(component?.type)
   const inline = FLOW_INLINE_TYPES.has(component?.type)
+  const isImage = component?.type === 'image'
   const boxW = Math.max(8, Math.round(l.w || (full ? canvasWidth : 240)))
   const boxH = flowBoxHeight(component, viewport)
 
@@ -90,8 +94,11 @@ export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
     // Full-bleed bands must keep their calc(100% + padding) width; only cap the
     // others so a long inline item can't overflow the row.
     maxWidth: full ? undefined : '100%',
-    minHeight: boxH,
-    height: FLOW_FIXED_HEIGHT_TYPES.has(component?.type) ? boxH : 'auto',
+    // Images scale by aspect ratio (height follows width) so they stay
+    // proportional on every screen instead of a fixed, distorting height.
+    minHeight: isImage ? undefined : boxH,
+    height: isImage ? 'auto' : FLOW_FIXED_HEIGHT_TYPES.has(component?.type) ? boxH : 'auto',
+    aspectRatio: isImage ? `${boxW} / ${Math.max(1, boxH)}` : undefined,
     marginLeft: full ? -sidePad : undefined,
     marginRight: full ? -sidePad : undefined,
     flex,

@@ -2,7 +2,8 @@
 // flexbox rows, a centered fluid container, full-bleed bands and @media
 // breakpoints (content reflows / stacks), instead of absolute positions + scale.
 // The result becomes an "HTML site" that adapts natively on every device.
-import { sanitizeStyles, sanitizeUrl } from './sanitize.js'
+import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
+import { iconSvg } from './icons.js'
 import { customCssBlock, themeVariablesCss } from './theme.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
@@ -77,9 +78,20 @@ function section(c) {
     </section>`
 }
 
-// One element inside a row. `multi` = the row has more than one item, so columns
+const LINKABLE = new Set(['heading', 'text', 'image', 'card', 'badge', 'icon'])
+
+// One element inside a row, optionally wrapped in a link (display:contents keeps
+// the flex layout intact). `multi` = the row has more than one item, so columns
 // share the width proportionally to their desktop widths; a lone item fills.
 function item(c, multi) {
+  const el = itemEl(c, multi)
+  const href = LINKABLE.has(c.type) ? sanitizeUrl((c.props || {}).href) : ''
+  if (!href) return el
+  const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''
+  return `<a href="${esc(href)}" style="display:contents"${ext}>${el}</a>`
+}
+
+function itemEl(c, multi) {
   const p = c.props || {}
   const w = Math.round(c.layout?.w || 300)
   const col = multi ? `flex:${w} 1 0` : 'flex:1 1 100%'
@@ -97,7 +109,7 @@ function item(c, multi) {
       return `<a class="rh-item rh-btn" href="${esc(href || '#')}"${linkAttrs(href)}${styleAttr(c, 'flex:0 0 auto')}>${esc(p.text)}</a>`
     }
     case 'image': {
-      const src = sanitizeUrl(p.src)
+      const src = sanitizeImageSrc(p.src)
       return `<img class="${cls} rh-img" src="${esc(src)}" alt="${esc(p.alt)}"${styleAttr(c, col)} />`
     }
     case 'card':
@@ -106,6 +118,32 @@ function item(c, multi) {
       }${p.text ? `<p class="rh-m0">${esc(p.text)}</p>` : ''}</div>`
     case 'spacer':
       return `<div class="rh-item" style="flex:1 1 100%;height:${Math.round(c.layout?.h || 24)}px"></div>`
+    case 'list': {
+      const items = String(p.text || '').split('\n').map((s) => s.trim()).filter(Boolean)
+      const tag = p.ordered ? 'ol' : 'ul'
+      return `<${tag} class="${cls}"${styleAttr(c, `${col};margin:0;padding-left:1.4em`)}>${items
+        .map((it) => `<li>${esc(it)}</li>`)
+        .join('')}</${tag}>`
+    }
+    case 'quote':
+      return `<blockquote class="${cls}"${styleAttr(
+        c,
+        `${col};border-left:4px solid currentColor;padding-left:18px;font-style:italic;margin:0`,
+      )}><p class="rh-m0">${esc(p.text)}</p>${
+        p.author
+          ? `<footer style="margin-top:8px;font-style:normal;font-size:.85em;opacity:.7">— ${esc(p.author)}</footer>`
+          : ''
+      }</blockquote>`
+    case 'badge':
+      return `<span class="rh-item"${styleAttr(c, 'flex:0 0 auto;display:inline-flex;align-items:center')}>${esc(p.text)}</span>`
+    case 'icon':
+      return `<span class="rh-item"${styleAttr(c, 'flex:0 0 auto;display:inline-flex;align-items:center;line-height:0')}>${iconSvg(p.name)}</span>`
+    case 'input': {
+      const t = ['text', 'email', 'number', 'tel', 'url'].includes(p.inputType) ? p.inputType : 'text'
+      return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px`)}>${
+        p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+      }<input type="${t}" placeholder="${esc(p.placeholder)}" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" /></label>`
+    }
     default:
       return ''
   }

@@ -6,7 +6,7 @@
 // `layout`, 'mobile' uses its independently-designed `mobileLayout`. Components
 // hidden on the active breakpoint are skipped.
 import { registry, CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
-import { sanitizeStyles } from '../../utils/sanitize.js'
+import { sanitizeStyles, sanitizeUrl } from '../../utils/sanitize.js'
 import {
   canvasHeight,
   flowCanvasHeight,
@@ -18,6 +18,10 @@ import {
 } from './layout.js'
 
 const FULL_BLEED_TYPES = ['navbar', 'section', 'divider']
+// Components that can optionally be wrapped in a link (like you can in plain HTML).
+export const LINKABLE_TYPES = new Set([
+  'heading', 'text', 'image', 'card', 'badge', 'icon',
+])
 
 export function RenderComponent({ component, flowMode = false, viewport = 'pc' }) {
   const def = registry[component.type]
@@ -38,7 +42,7 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
     flowMode && FULL_BLEED_TYPES.includes(component.type)
       ? Math.round(component.layout?.w || 0) || undefined
       : undefined
-  return (
+  const el = (
     <Comp
       props={component.props || {}}
       style={style}
@@ -46,6 +50,22 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
       contentWidth={contentWidth}
     />
   )
+  // Optional link wrapper: `display:contents` keeps the layout identical while
+  // making the whole component clickable, just like wrapping any element in <a>.
+  const href = LINKABLE_TYPES.has(component.type)
+    ? sanitizeUrl(component.props?.href)
+    : ''
+  if (href) {
+    const ext = /^https?:\/\//i.test(href)
+      ? { target: '_blank', rel: 'noopener noreferrer' }
+      : {}
+    return (
+      <a href={href} style={{ display: 'contents' }} {...ext}>
+        {el}
+      </a>
+    )
+  }
+  return el
 }
 
 export function Renderer({

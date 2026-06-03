@@ -1,7 +1,18 @@
 import { useMemo, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore.js'
 import { schemaToFiles, schemaToSingleHtml } from '../../utils/schemaToFiles.js'
+import { schemaToResponsiveHtml } from '../../utils/responsiveHtml.js'
 import { zipFiles } from '../../utils/zip.js'
+
+// Produce a GENUINELY responsive standalone .html for one page: flow pages are
+// already responsive (their classed CSS uses flex + @media), while free/absolute
+// pages are converted into responsive flex rows so the export fits every screen
+// instead of being a fixed-width, one-screen layout.
+function pageToResponsiveHtml(page, title) {
+  return page?.flowMode
+    ? schemaToSingleHtml({ pages: [page] }, title)
+    : schemaToResponsiveHtml({ pages: [page] }, title)
+}
 
 // Read-only live code view. Regenerates the project's HTML/CSS from the current
 // schema on every edit. Drag/resize an element and the markup updates here. The
@@ -68,16 +79,27 @@ export default function CodePanel() {
     }
   }
 
-  // Download all generated files (self-contained HTML pages + schema.json) as a .zip.
+  // Download all pages as self-contained, responsive .html files + schema.json (zip).
   function downloadZip() {
-    saveAs(`${base}.zip`, zipFiles(files))
+    const pages = schema?.pages || []
+    const used = new Set()
+    const out = []
+    pages.forEach((page, i) => {
+      let name = `${i === 0 ? 'index' : slugName(page.name)}.html`
+      let n = 2
+      while (used.has(name)) name = `${slugName(page.name)}-${n++}.html`
+      used.add(name)
+      out.push({ name, content: pageToResponsiveHtml(page, page.name || 'My Site') })
+    })
+    out.push({ name: 'schema.json', content: JSON.stringify(schema, null, 2) })
+    saveAs(`${base}.zip`, zipFiles(out))
   }
 
-  // Download one self-contained responsive .html file.
+  // Download one self-contained, responsive .html file (the home page).
   function downloadSingleHtml() {
     saveAs(
       `${base}.html`,
-      schemaToSingleHtml(schema, schema?.pages?.[0]?.name || 'My Site'),
+      pageToResponsiveHtml(schema?.pages?.[0] || {}, schema?.pages?.[0]?.name || 'My Site'),
       'text/html',
     )
   }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
@@ -9,6 +10,7 @@ import {
   groupSnippets,
   jsSnippets,
 } from '../../utils/snippets.js'
+import { AI_MODELS, getApiKey, getModel, setApiKey, setModel } from '../../utils/aiAssistant.js'
 import {
   LabeledText,
   LabeledTextarea,
@@ -25,6 +27,90 @@ import {
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
+
+// Read/write the saved Gemini API key. The key is stored in localStorage and
+// sent directly from the browser to Google's API — the Django backend never
+// sees it. Saved per browser, not per site.
+function AiAssistantSection() {
+  const [value, setValue] = useState(() => getApiKey())
+  const [reveal, setReveal] = useState(false)
+  const [savedFlash, setSavedFlash] = useState(false)
+  const [model, setModelState] = useState(() => getModel())
+  useEffect(() => {
+    setApiKey(value || '')
+    if (value) {
+      setSavedFlash(true)
+      const t = setTimeout(() => setSavedFlash(false), 1200)
+      return () => clearTimeout(t)
+    }
+    return undefined
+  }, [value])
+  useEffect(() => {
+    setModel(model)
+  }, [model])
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">AI Assistant</h3>
+      <p className="text-xs leading-relaxed text-[#605e5c]">
+        Paste a free Gemini API key from{' '}
+        <a
+          href="https://aistudio.google.com/app/apikey"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#2b579a] underline"
+        >
+          aistudio.google.com
+        </a>
+        . The key stays in your browser and is sent directly to Google — never to our server.
+      </p>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Gemini API key</span>
+        <div className="flex gap-2">
+          <input
+            type={reveal ? 'text' : 'password'}
+            value={value}
+            onChange={(e) => setValue(e.target.value.trim())}
+            placeholder="AIza..."
+            className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            onClick={() => setReveal((r) => !r)}
+            className="rounded-[2px] border border-[#8a8886] px-2 text-xs text-[#323130] hover:bg-[#f3f2f1]"
+          >
+            {reveal ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </label>
+      <p className="text-xs text-[#605e5c]">
+        {value
+          ? savedFlash
+            ? 'Saved ✓'
+            : 'Key saved. The AI button in the toolbar opens the chat panel.'
+          : 'No key set — the AI button in the toolbar is in setup mode.'}
+      </p>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Model</span>
+        <select
+          value={model}
+          onChange={(e) => setModelState(e.target.value)}
+          className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+        >
+          {AI_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-[11px] text-[#605e5c]">
+          {AI_MODELS.find((m) => m.id === model)?.note}
+        </span>
+      </label>
+    </section>
+  )
+}
 
 // Optional snippet picker. Empty selection is the default — writing by hand
 // stays the primary workflow; this is just a shortcut.
@@ -236,6 +322,96 @@ function SectionTitle({ children }) {
   )
 }
 
+// 6 alignment buttons in a 2×3 grid (Drive / Word / Canva style), plus two
+// distribute actions that operate on the selected component's siblings. Hidden
+// when alignment doesn't apply (top-level flow → flex layout, not positional).
+function AlignmentSection({ component, page, isFlow, alignComponent, distributeSiblings }) {
+  const isTopLevel = (page.components || []).some((c) => c.id === component.id)
+  const flowTopLevel = isFlow && isTopLevel
+  if (flowTopLevel) return null
+
+  // Distribute targets the parent's children. For a top-level (non-flow)
+  // selection we distribute siblings on the page itself.
+  const parentId = isTopLevel
+    ? null
+    : findParentId(page.components, component.id)
+  const siblingCount = parentId
+    ? (findInPage(page.components, parentId)?.children || []).length
+    : (page.components || []).length
+  const canDistribute = siblingCount >= 3
+
+  const Btn = ({ label, glyph, onClick, title }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="grid h-8 place-items-center rounded-[2px] border border-[#c8c6c4] bg-white text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] hover:text-[#2b579a]"
+    >
+      <span aria-hidden className="text-base leading-none">{glyph}</span>
+      <span className="sr-only">{label}</span>
+    </button>
+  )
+
+  return (
+    <section className="space-y-2">
+      <SectionTitle>Alignment</SectionTitle>
+      <p className="text-[11px] text-[#605e5c]">
+        Align to {isTopLevel ? 'the artboard' : "the parent's box"}.
+      </p>
+      <div className="grid grid-cols-3 gap-1.5">
+        <Btn label="Align left"     glyph="⫷" title="Align left edge"    onClick={() => alignComponent(component.id, 'left')} />
+        <Btn label="Center horizontal" glyph="↔" title="Center horizontally" onClick={() => alignComponent(component.id, 'centerH')} />
+        <Btn label="Align right"    glyph="⫸" title="Align right edge"   onClick={() => alignComponent(component.id, 'right')} />
+        <Btn label="Align top"      glyph="⫶" title="Align top edge"     onClick={() => alignComponent(component.id, 'top')} />
+        <Btn label="Center vertical"   glyph="↕" title="Center vertically"   onClick={() => alignComponent(component.id, 'middleV')} />
+        <Btn label="Align bottom"   glyph="⫯" title="Align bottom edge"  onClick={() => alignComponent(component.id, 'bottom')} />
+      </div>
+      <div className="grid grid-cols-2 gap-1.5 pt-1">
+        <button
+          type="button"
+          onClick={() => distributeSiblings(parentId, 'x')}
+          disabled={!canDistribute}
+          title="Distribute siblings horizontally (equal X gaps)"
+          className="rounded-[2px] border border-[#c8c6c4] bg-white px-2 py-1 text-[11px] font-medium text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] hover:text-[#2b579a] disabled:cursor-not-allowed disabled:bg-[#f3f2f1] disabled:text-[#a19f9d]"
+        >
+          Distribute X
+        </button>
+        <button
+          type="button"
+          onClick={() => distributeSiblings(parentId, 'y')}
+          disabled={!canDistribute}
+          title="Distribute siblings vertically (equal Y gaps)"
+          className="rounded-[2px] border border-[#c8c6c4] bg-white px-2 py-1 text-[11px] font-medium text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] hover:text-[#2b579a] disabled:cursor-not-allowed disabled:bg-[#f3f2f1] disabled:text-[#a19f9d]"
+        >
+          Distribute Y
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function findParentId(components, id) {
+  for (const c of components || []) {
+    if (Array.isArray(c.children)) {
+      if (c.children.some((ch) => ch.id === id)) return c.id
+      const deep = findParentId(c.children, id)
+      if (deep) return deep
+    }
+  }
+  return null
+}
+
+function findInPage(components, id) {
+  for (const c of components || []) {
+    if (c.id === id) return c
+    if (Array.isArray(c.children)) {
+      const f = findInPage(c.children, id)
+      if (f) return f
+    }
+  }
+  return null
+}
+
 function PropControl({ field, value, onChange, extras }) {
   if (field.control === 'textarea') {
     return <LabeledTextarea label={field.label} value={value} onChange={onChange} />
@@ -355,6 +531,8 @@ export default function PropertiesPanel() {
   const setCustomJs = useEditorStore((s) => s.setCustomJs)
   const applyComponentPreset = useEditorStore((s) => s.applyComponentPreset)
   const setLayout = useEditorStore((s) => s.setLayout)
+  const alignComponent = useEditorStore((s) => s.alignComponent)
+  const distributeSiblings = useEditorStore((s) => s.distributeSiblings)
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
   const renamePage = useEditorStore((s) => s.renamePage)
   const setPageFolder = useEditorStore((s) => s.setPageFolder)
@@ -543,6 +721,9 @@ export default function PropertiesPanel() {
             />
           </section>
 
+          <AiAssistantSection />
+
+
           <p className="text-xs leading-relaxed text-[#605e5c]">
             {isFlow
               ? 'Flow mode uses one document order that adapts across PC and mobile.'
@@ -628,6 +809,12 @@ export default function PropertiesPanel() {
             />
           </div>
         </section>
+
+        {/* Alignment buttons removed in favour of live snap guides during
+            drag. The store actions stay (still exposed to the AI as
+            alignComponent / distributeSiblings tools) but the manual UX is
+            now: just drag, the dashed magenta guides snap you to centres
+            and edges. */}
 
         <section className="space-y-2">
           <SectionTitle>Responsive</SectionTitle>

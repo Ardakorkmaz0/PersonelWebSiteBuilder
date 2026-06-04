@@ -187,6 +187,54 @@ function toEdgeInTree(components, id, toEnd) {
 
 const isTopLevel = (components, id) => components.some((c) => c.id === id)
 
+// Resolve the box (x:0, y:0, w, h) the alignment math should treat as "the
+// parent" — artboard for top-level, parent.layout for nested children. Flow
+// mode top-level returns null so horizontal alignment isn't attempted there
+// (flex layout already controls those positions). Vertical alignment for
+// nested children inside a tabs panel uses the tabs widget's design height.
+function computeAlignParentBox(page, viewport, id, components) {
+  const topLevel = isTopLevel(components, id)
+  if (topLevel) {
+    if (page.flowMode) return null
+    const isMobile = viewport === 'mobile'
+    return {
+      w: isMobile ? page.mobileWidth || 390 : page.canvasWidth || 1000,
+      h: 0, // y is not constrained — page grows; vertical align is a no-op
+    }
+  }
+  const parent = findParentInTree(components, id)
+  if (!parent) return null
+  return {
+    w: Math.round(parent.layout?.w || 0) || 600,
+    h: Math.round(parent.layout?.h || 0) || 400,
+  }
+}
+
+// Compute the new x or y for the requested alignment mode given the box.
+function applyAlignMode(layout, bounds, mode) {
+  const l = layout || {}
+  const w = Math.max(8, Math.round(l.w || 0))
+  const h = Math.max(4, Math.round(l.h || 0))
+  switch (mode) {
+    case 'left':
+      return { x: 0 }
+    case 'centerH':
+      return { x: Math.max(0, Math.round((bounds.w - w) / 2)) }
+    case 'right':
+      return { x: Math.max(0, bounds.w - w) }
+    case 'top':
+      return { y: 0 }
+    case 'middleV':
+      if (!bounds.h) return {}
+      return { y: Math.max(0, Math.round((bounds.h - h) / 2)) }
+    case 'bottom':
+      if (!bounds.h) return {}
+      return { y: Math.max(0, bounds.h - h) }
+    default:
+      return {}
+  }
+}
+
 function orderForFlow(components) {
   return components
     .map((c, i) => ({ c, i, l: c.layout || { x: 0, y: 0, w: 0, h: 0 } }))
@@ -594,6 +642,12 @@ export const useEditorStore = create((set, get) => ({
   dirty: false,
   past: [],
   future: [],
+  // Live snap guide overlay state, set during free-canvas drags by
+  // FreeCanvasItem / TabsCanvasItem and rendered by Canvas. Each guide:
+  // { type: 'v'|'h', pos } in canvas coordinate pixels.
+  dragGuides: [],
+  setDragGuides: (guides) => set({ dragGuides: Array.isArray(guides) ? guides : [] }),
+  clearDragGuides: () => set({ dragGuides: [] }),
 
   components: () => selectCurrentPage(get()).components,
   // The active breakpoint's layout key for a component.
@@ -919,6 +973,86 @@ export const useEditorStore = create((set, get) => ({
   },
 
   selectComponent: (id) => set({ selectedId: id }),
+
+  // Align a component to one of its parent box edges or to centre. Mode is
+  // one of left | centerH | right | top | middleV | bottom. For top-level
+  // components on a free canvas the parent box is the artboard; for nested
+  // children it's the parent container/tabs panel (which uses absolute
+  // positioning at PC design pixels — same coordinate space as layout).
+  //
+  // Flow-mode top-level alignment is intentionally a no-op for left/right —
+  // those positions are governed by flex layout; only vertical edges of
+  // children inside nested containers make sense there.
+  alignComponent: (id, mode) => {
+    get().record('align-' + mode + '-' + id)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const bounds = computeAlignParentBox(page, state.viewport, id, page.components)
+      if (!bounds) return {}
+      const components = mapTree(page.components, id, (c) => {
+        const baseKey = isTopLevel(page.components, id)
+          ? page.flowMode
+            ? 'layout'
+            : state.viewport === 'mobile'
+              ? 'mobileLayout'
+              : 'layout'
+          : 'layout'
+        const base = c[baseKey] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
+        const next = applyAlignMode(base, bounds, mode)
+        return { ...c, [baseKey]: { ...base, ...next } }
+      })
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
+    })
+  },
+
+  // Distribute the children of a container/tabs (or top-level free-canvas
+  // siblings if id == null) evenly along the requested axis. axis = 'x' for
+  // equal horizontal gaps, 'y' for equal vertical gaps. Useful when a row /
+  // column of cards has uneven spacing.
+  distributeSiblings: (parentId, axis = 'y') => {
+    get().record('distribute-' + axis + '-' + (parentId || 'page'))
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const parent = parentId
+        ? findInTree(page.components, parentId)
+        : null
+      const siblings = parent
+        ? parent.children || []
+        : page.components
+      if (siblings.length < 3) return {} // nothing to redistribute
+      const sorted = [...siblings].sort((a, b) =>
+        ((a.layout?.[axis] || 0) - (b.layout?.[axis] || 0)),
+      )
+      const first = sorted[0].layout || { x: 0, y: 0, w: 0, h: 0 }
+      const last = sorted[sorted.length - 1].layout || { x: 0, y: 0, w: 0, h: 0 }
+      const sizeKey = axis === 'x' ? 'w' : 'h'
+      const span =
+        (last[axis] || 0) + (last[sizeKey] || 0) - (first[axis] || 0)
+      const totalSize = sorted.reduce((sum, s) => sum + (s.layout?.[sizeKey] || 0), 0)
+      const gap = (span - totalSize) / (sorted.length - 1)
+      let cursor = first[axis] || 0
+      const newPositions = new Map()
+      for (const c of sorted) {
+        const l = c.layout || {}
+        newPositions.set(c.id, { ...l, [axis]: Math.round(cursor) })
+        cursor += (l[sizeKey] || 0) + gap
+      }
+      const apply = (arr) =>
+        arr.map((c) => {
+          if (newPositions.has(c.id)) {
+            return { ...c, layout: newPositions.get(c.id) }
+          }
+          if (Array.isArray(c.children)) {
+            return { ...c, children: apply(c.children) }
+          }
+          return c
+        })
+      return {
+        schema: withComponents(state.schema, page.id, apply(page.components)),
+        dirty: true,
+      }
+    })
+  },
 
   // Replace a Tabs component's children array (used when removing a tab also
   // reassigns its orphaned children to another tab).

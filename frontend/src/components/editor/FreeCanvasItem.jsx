@@ -1,6 +1,7 @@
-import { useEditorStore } from '../../store/editorStore.js'
+import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, TabsEditor } from './FlowCanvasItem.jsx'
+import { snapDraggedRect } from '../../utils/snapping.js'
 
 const MIN = 20
 const ACCENT = '#2b579a'
@@ -22,6 +23,8 @@ export default function FreeCanvasItem({ component }) {
   const viewport = useEditorStore((s) => s.viewport)
   const select = useEditorStore((s) => s.selectComponent)
   const setLayout = useEditorStore((s) => s.setLayout)
+  const setDragGuides = useEditorStore((s) => s.setDragGuides)
+  const clearDragGuides = useEditorStore((s) => s.clearDragGuides)
   const remove = useEditorStore((s) => s.removeComponent)
 
   const isSelected = selectedId === component.id
@@ -41,15 +44,37 @@ export default function FreeCanvasItem({ component }) {
     const sx = e.clientX
     const sy = e.clientY
     const orig = { x, y }
-    function onMove(ev) {
-      setLayout(component.id, {
-        x: orig.x + (ev.clientX - sx),
-        y: orig.y + (ev.clientY - sy),
+    // Snapshot siblings (other top-level components on this page) + the
+    // artboard size ONCE per drag so onMove stays cheap.
+    const state = useEditorStore.getState()
+    const page = selectCurrentPage(state)
+    const isMobile = state.viewport === 'mobile'
+    const layoutKey = isMobile ? 'mobileLayout' : 'layout'
+    const siblings = (page.components || [])
+      .filter((c) => c.id !== component.id)
+      .map((c) => {
+        const l = c[layoutKey] || c.layout || {}
+        return { id: c.id, x: l.x || 0, y: l.y || 0, w: l.w || 0, h: l.h || 0 }
       })
+    const artboard = {
+      w: isMobile ? page.mobileWidth || 390 : page.canvasWidth || 1000,
+      h: 0, // unbounded → vertical guides off the centre/bottom of the page
+    }
+    function onMove(ev) {
+      const rawX = orig.x + (ev.clientX - sx)
+      const rawY = orig.y + (ev.clientY - sy)
+      const snap = snapDraggedRect(
+        { id: component.id, x: rawX, y: rawY, w, h },
+        siblings,
+        artboard,
+      )
+      setLayout(component.id, { x: snap.x, y: snap.y })
+      setDragGuides(snap.guides)
     }
     function onUp() {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      clearDragGuides()
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)

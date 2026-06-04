@@ -16,6 +16,7 @@ import {
   PC_CANVAS_PRESETS,
   MOBILE_CANVAS_PRESETS,
 } from '../components/registry.jsx'
+import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
@@ -418,6 +419,7 @@ export default function EditorPage() {
               HTML Flow
             </button>
           )}
+          <AiBar />
           <div className="flex items-center rounded-[2px] border border-[#8a8886] p-0.5 text-xs font-medium">
             <button
               onClick={() => setViewport('pc')}

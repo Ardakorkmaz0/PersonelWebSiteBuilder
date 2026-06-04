@@ -24,6 +24,7 @@ export default function Canvas() {
 
   const isMobile = viewport === 'mobile'
   const flowMode = !!page.flowMode
+  const dragGuides = useEditorStore((s) => s.dragGuides)
   const canvasW = isMobile ? mobileWidth : pcWidth
   const sidePad = flowSidePad(viewport)
   const fold = isMobile ? mobileFold : pcFold
@@ -90,6 +91,40 @@ export default function Canvas() {
           </span>
         </div>
       )}
+
+      {/* Live snap guides rendered during free-canvas drags. Each guide is a
+          dashed magenta line at the snapped edge/centre coordinate, extending
+          across the whole artboard so the alignment is obvious. */}
+      {!flowMode && dragGuides && dragGuides.length > 0 &&
+        dragGuides.map((g, i) =>
+          g.type === 'v' ? (
+            <div
+              key={`v${i}`}
+              className="pointer-events-none absolute"
+              style={{
+                left: g.pos,
+                top: 0,
+                bottom: 0,
+                width: 0,
+                borderLeft: '1px dashed #ec4899',
+                zIndex: 45,
+              }}
+            />
+          ) : (
+            <div
+              key={`h${i}`}
+              className="pointer-events-none absolute"
+              style={{
+                top: g.pos,
+                left: 0,
+                right: 0,
+                height: 0,
+                borderTop: '1px dashed #ec4899',
+                zIndex: 45,
+              }}
+            />
+          ),
+        )}
     </div>
   )
 

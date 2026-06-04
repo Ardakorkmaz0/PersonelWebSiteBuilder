@@ -4,6 +4,7 @@
 // dangerouslySetInnerHTML, so React escapes all text. URLs go through sanitizeUrl.
 import { sanitizeUrl, sanitizeImageSrc } from '../../utils/sanitize.js'
 import { ICONS } from '../../utils/icons.js'
+import { ALERT_VARIANTS } from './constants.js'
 
 function linkAttrs(href) {
   return /^https?:\/\//i.test(href)
@@ -247,34 +248,38 @@ export function Icon({ props, style }) {
   )
 }
 
+function controlFieldStyle(props) {
+  return {
+    width: '100%',
+    height: props.fieldHeight || '44px',
+    padding: props.fieldPadding || '10px 12px',
+    borderWidth: props.fieldBorderWidth || '1px',
+    borderStyle: 'solid',
+    borderColor: props.fieldBorderColor || '#cbd5e1',
+    borderRadius: props.fieldBorderRadius || '8px',
+    font: 'inherit',
+    color: props.fieldColor || 'inherit',
+    background: props.fieldBackgroundColor || '#fff',
+    boxShadow: props.fieldBoxShadow || 'none',
+    boxSizing: 'border-box',
+    minWidth: 0,
+  }
+}
+
 export function Input({ props, style }) {
   const type = ['text', 'email', 'number', 'tel', 'url'].includes(props.inputType)
     ? props.inputType
     : 'text'
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', ...style }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, ...style }}>
       {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
       <input
         type={type}
         placeholder={props.placeholder || ''}
-        style={{
-          width: '100%',
-          padding: '10px 12px',
-          border: '1px solid #cbd5e1',
-          borderRadius: '8px',
-          font: 'inherit',
-        }}
+        style={controlFieldStyle(props)}
       />
     </label>
   )
-}
-
-// Status/callout colour sets, shared with the HTML export.
-export const ALERT_VARIANTS = {
-  success: { bg: '#ecfdf5', border: '#34d399', color: '#065f46' },
-  info: { bg: '#eff6ff', border: '#60a5fa', color: '#1e40af' },
-  warning: { bg: '#fffbeb', border: '#fbbf24', color: '#92400e' },
-  danger: { bg: '#fef2f2', border: '#f87171', color: '#991b1b' },
 }
 
 export function Select({ props, style }) {
@@ -283,18 +288,11 @@ export function Select({ props, style }) {
     .map((s) => s.trim())
     .filter(Boolean)
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', ...style }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, ...style }}>
       {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
       <select
-        defaultValue=""
-        style={{
-          width: '100%',
-          padding: '10px 12px',
-          border: '1px solid #cbd5e1',
-          borderRadius: '8px',
-          font: 'inherit',
-          background: '#fff',
-        }}
+        defaultValue={props.placeholder ? '' : opts[0] || ''}
+        style={controlFieldStyle(props)}
       >
         {props.placeholder ? (
           <option value="" disabled>
@@ -363,6 +361,40 @@ export function Accordion({ props, style }) {
 // RenderComponent, which lays its children out in a flex box.
 export function Container({ style }) {
   return <div style={{ display: 'flex', flexDirection: 'column', ...style }} />
+}
+
+// Placeholder; real recursive rendering (tab strip + per-panel children) lives in
+// RenderComponent so it can recurse like Container does.
+export function Tabs({ style }) {
+  return <div style={{ display: 'flex', flexDirection: 'column', ...style }} />
+}
+
+// HTML embed: arbitrary user HTML/CSS/JS rendered inside a sandboxed iframe so
+// it can't reach the editor or other components on the page. The iframe runs
+// allow-scripts + allow-same-origin only when explicitly needed; the default
+// `allow-scripts` keeps an opaque origin so the embed can't read parent storage.
+export function HtmlEmbed({ props, style }) {
+  const code = typeof props.code === 'string' ? props.code : ''
+  // Wrap fragments in a minimal document so users can paste a body snippet.
+  const looksFull = /^\s*<!DOCTYPE|<html[\s>]/i.test(code)
+  const srcDoc = looksFull
+    ? code
+    : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
+  return (
+    <iframe
+      title="Embedded HTML"
+      srcDoc={srcDoc}
+      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
+      style={{
+        display: 'block',
+        width: '100%',
+        height: '100%',
+        border: '0',
+        background: 'transparent',
+        ...style,
+      }}
+    />
+  )
 }
 
 export function Divider({ style, contentWidth }) {

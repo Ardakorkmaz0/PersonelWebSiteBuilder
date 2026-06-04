@@ -1,8 +1,14 @@
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
-import { LINKABLE_TYPES } from '../renderer/Renderer.jsx'
+import { LINKABLE_TYPES } from '../renderer/constants.js'
 import { DEFAULT_THEME, FONT_OPTIONS } from '../../utils/theme.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
+import {
+  appendSnippet,
+  cssSnippets,
+  groupSnippets,
+  jsSnippets,
+} from '../../utils/snippets.js'
 import {
   LabeledText,
   LabeledTextarea,
@@ -14,7 +20,45 @@ import {
   LabeledRange,
   LabeledCheckbox,
   LinksEditor,
+  TabsEditorControl,
 } from './controls.jsx'
+
+const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
+const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
+
+// Optional snippet picker. Empty selection is the default — writing by hand
+// stays the primary workflow; this is just a shortcut.
+function SnippetPicker({ groups, list, onPick }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-semibold text-[#605e5c]">
+        Insert snippet (optional)
+      </span>
+      <select
+        value=""
+        onChange={(e) => {
+          const id = e.target.value
+          if (!id) return
+          const snippet = list.find((s) => s.id === id)
+          if (snippet) onPick(snippet)
+          e.target.value = ''
+        }}
+        className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+      >
+        <option value="">— pick a snippet to append —</option>
+        {groups.map((g) => (
+          <optgroup key={g.category} label={g.category}>
+            {g.items.map((s) => (
+              <option key={s.id} value={s.id} title={s.description}>
+                {s.name}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
+  )
+}
 
 const STYLE_META = {
   backgroundColor: { label: 'Background', control: 'color' },
@@ -171,12 +215,13 @@ const STYLE_GROUPS = [
   { title: 'Effects', keys: ['boxShadow', 'opacity', 'objectFit'] },
 ]
 
-// Find a component anywhere in the tree (containers nest children).
-function findComponentDeep(components, id) {
+// Find a component anywhere in the tree (containers and tabs nest children).
+const NESTING_TYPES = new Set(['container', 'tabs'])
+function findComponentEntry(components, id, parent = null) {
   for (const c of components || []) {
-    if (c.id === id) return c
-    if (c.type === 'container' && Array.isArray(c.children)) {
-      const found = findComponentDeep(c.children, id)
+    if (c.id === id) return { component: c, parent }
+    if (NESTING_TYPES.has(c.type) && Array.isArray(c.children)) {
+      const found = findComponentEntry(c.children, id, c)
       if (found) return found
     }
   }
@@ -191,15 +236,53 @@ function SectionTitle({ children }) {
   )
 }
 
-function PropControl({ field, value, onChange }) {
+function PropControl({ field, value, onChange, extras }) {
   if (field.control === 'textarea') {
     return <LabeledTextarea label={field.label} value={value} onChange={onChange} />
+  }
+  if (field.control === 'code') {
+    return (
+      <div className="space-y-2">
+        <SnippetPicker
+          groups={JS_SNIPPET_GROUPS}
+          list={jsSnippets}
+          onPick={(s) => onChange(appendSnippet(value, s, 'js'))}
+        />
+        <LabeledTextarea
+          label={field.label}
+          value={value}
+          onChange={onChange}
+          rows={14}
+          mono
+          placeholder={'<div>Your custom HTML</div>\n<style>/* CSS */</style>\n<script>/* JS */<\\/script>'}
+        />
+      </div>
+    )
   }
   if (field.control === 'links') {
     return <LinksEditor label={field.label} value={value} onChange={onChange} />
   }
+  if (field.control === 'tabs') {
+    return (
+      <TabsEditorControl
+        label={field.label}
+        value={value}
+        onChange={onChange}
+        activeId={extras?.activeId}
+        onActiveChange={extras?.onActiveChange}
+        children={extras?.children}
+        onChildrenChange={extras?.onChildrenChange}
+      />
+    )
+  }
   if (field.control === 'image') {
     return <LabeledImage label={field.label} value={value} onChange={onChange} />
+  }
+  if (field.control === 'color') {
+    return <LabeledColor label={field.label} value={value} onChange={onChange} />
+  }
+  if (field.control === 'px') {
+    return <LabeledPx label={field.label} value={value} onChange={onChange} />
   }
   if (field.control === 'select') {
     return (
@@ -269,6 +352,7 @@ export default function PropertiesPanel() {
   const updateTheme = useEditorStore((s) => s.updateTheme)
   const applyTheme = useEditorStore((s) => s.applyTheme)
   const setCustomCss = useEditorStore((s) => s.setCustomCss)
+  const setCustomJs = useEditorStore((s) => s.setCustomJs)
   const applyComponentPreset = useEditorStore((s) => s.applyComponentPreset)
   const setLayout = useEditorStore((s) => s.setLayout)
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
@@ -282,11 +366,17 @@ export default function PropertiesPanel() {
   const moveForward = useEditorStore((s) => s.moveForward)
   const moveBackward = useEditorStore((s) => s.moveBackward)
   const removeComponent = useEditorStore((s) => s.removeComponent)
+  const setActiveTab = useEditorStore((s) => s.setActiveTab)
+  const setTabsChildren = useEditorStore((s) => s.setTabsChildren)
 
   const isMobile = viewport === 'mobile'
   const isFlow = !!page.flowMode
   const layoutKey = isFlow ? 'layout' : isMobile ? 'mobileLayout' : 'layout'
-  const component = findComponentDeep(page.components, selectedId)
+  const selectedEntry = findComponentEntry(page.components, selectedId)
+  const component = selectedEntry?.component || null
+  const parentComponent = selectedEntry?.parent || null
+  const isAbsoluteNested = parentComponent?.type === 'tabs' || parentComponent?.type === 'container'
+  const showPositionControls = !isFlow || isAbsoluteNested
   const pageBackground = isMobile
     ? page.backgroundMobile || page.background || '#ffffff'
     : page.background || '#ffffff'
@@ -416,12 +506,40 @@ export default function PropertiesPanel() {
 
           <section className="space-y-3">
             <SectionTitle>Custom CSS</SectionTitle>
+            <SnippetPicker
+              groups={CSS_SNIPPET_GROUPS}
+              list={cssSnippets}
+              onPick={(s) => setCustomCss(appendSnippet(schema.customCss, s, 'css'))}
+            />
             <LabeledTextarea
               label="CSS"
               value={schema.customCss || ''}
               onChange={setCustomCss}
               rows={8}
+              mono
               placeholder=".page { scroll-behavior: smooth; }"
+            />
+          </section>
+
+          <section className="space-y-3">
+            <SectionTitle>Custom JavaScript</SectionTitle>
+            <p className="text-xs leading-relaxed text-[#605e5c]">
+              Runs on the published site inside a sandboxed iframe — full DOM,
+              fetch, setTimeout, third-party CDNs, etc. Cannot reach this app or
+              the visitor&apos;s session.
+            </p>
+            <SnippetPicker
+              groups={JS_SNIPPET_GROUPS}
+              list={jsSnippets}
+              onPick={(s) => setCustomJs(appendSnippet(schema.customJs, s, 'js'))}
+            />
+            <LabeledTextarea
+              label="JS"
+              value={schema.customJs || ''}
+              onChange={setCustomJs}
+              rows={10}
+              mono
+              placeholder={'document.addEventListener("DOMContentLoaded", () => {\n  // your code\n})'}
             />
           </section>
 
@@ -478,13 +596,13 @@ export default function PropertiesPanel() {
 
         <section className="space-y-3">
           <SectionTitle>
-            {isFlow ? 'Layout Size' : 'Position & Size'}
+            {showPositionControls ? 'Position & Size' : 'Layout Size'}
             <span className="ml-1 font-normal normal-case text-[#a19f9d]">
               ({isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC'})
             </span>
           </SectionTitle>
           <div className="grid grid-cols-2 gap-2">
-            {!isFlow && (
+            {showPositionControls && (
               <>
                 <LabeledNumber
                   label="X"
@@ -534,6 +652,16 @@ export default function PropertiesPanel() {
                 field={field}
                 value={component.props[field.key]}
                 onChange={(val) => updateProps(component.id, { [field.key]: val })}
+                extras={
+                  component.type === 'tabs' && field.control === 'tabs'
+                    ? {
+                        activeId: component.props.activeId,
+                        onActiveChange: (id) => setActiveTab(component.id, id),
+                        children: component.children || [],
+                        onChildrenChange: (next) => setTabsChildren(component.id, next),
+                      }
+                    : undefined
+                }
               />
             ))}
           </section>

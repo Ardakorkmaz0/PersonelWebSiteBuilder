@@ -4,8 +4,9 @@
 // The result becomes an "HTML site" that adapts natively on every device.
 import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
 import { iconSvg } from './icons.js'
-import { ALERT_VARIANTS } from '../components/renderer/components.jsx'
-import { customCssBlock, themeVariablesCss } from './theme.js'
+import { ALERT_VARIANTS } from '../components/renderer/constants.js'
+import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
+import { builderInteractiveTags } from './htmlRuntime.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
 // Visual styles we keep on elements; layout/box metrics come from the flow.
@@ -21,6 +22,54 @@ function esc(s) {
 }
 const cssVal = (v) => String(v).replace(/[;{}<]/g, '').trim()
 const kebab = (k) => k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())
+
+function safeCssProp(value, fallback = '') {
+  const raw = value === undefined || value === null || value === '' ? fallback : value
+  const out = cssVal(raw)
+  const low = out.toLowerCase()
+  if (low.includes('javascript:') || low.includes('expression(') || low.includes('url(')) {
+    return cssVal(fallback)
+  }
+  return out
+}
+
+function controlFieldCss(props = {}) {
+  return [
+    'width:100%',
+    `height:${safeCssProp(props.fieldHeight, '44px')}`,
+    `padding:${safeCssProp(props.fieldPadding, '10px 12px')}`,
+    `border-width:${safeCssProp(props.fieldBorderWidth, '1px')}`,
+    'border-style:solid',
+    `border-color:${safeCssProp(props.fieldBorderColor, '#cbd5e1')}`,
+    `border-radius:${safeCssProp(props.fieldBorderRadius, '8px')}`,
+    'font:inherit',
+    `color:${safeCssProp(props.fieldColor, 'inherit')}`,
+    `background:${safeCssProp(props.fieldBackgroundColor, '#fff')}`,
+    `box-shadow:${safeCssProp(props.fieldBoxShadow, 'none')}`,
+    'box-sizing:border-box',
+    'min-width:0',
+  ].join(';')
+}
+
+function tabsCssVars(props = {}) {
+  return [
+    `--builder-tab-bg:${safeCssProp(props.tabBackgroundColor, 'transparent')}`,
+    `--builder-tab-color:${safeCssProp(props.tabTextColor, '#6b7280')}`,
+    `--builder-tab-active-bg:${safeCssProp(props.activeTabBackgroundColor, 'transparent')}`,
+    `--builder-tab-active-color:${safeCssProp(props.activeTabColor, '#1d1d1f')}`,
+    `--builder-tab-active-border:${safeCssProp(props.activeTabBorderColor, '#2563eb')}`,
+    `--builder-tab-radius:${safeCssProp(props.tabBorderRadius, '0')}`,
+    `--builder-tab-padding:${safeCssProp(props.tabPadding, '8px 14px')}`,
+    `--builder-tab-gap:${safeCssProp(props.tabGap, '4px')}`,
+    `--builder-tablist-bg:${safeCssProp(props.tablistBackgroundColor, 'transparent')}`,
+    `--builder-tablist-border:${safeCssProp(props.tablistBorderColor, '#e5e7eb')}`,
+    `--builder-tablist-padding:${safeCssProp(props.tablistPadding, '0')}`,
+    `--builder-panel-bg:${safeCssProp(props.panelBackgroundColor, 'transparent')}`,
+    `--builder-panel-border:${safeCssProp(props.panelBorderColor, 'transparent')}`,
+    `--builder-panel-radius:${safeCssProp(props.panelBorderRadius, '0')}`,
+    `--builder-panel-padding:${safeCssProp(props.panelPadding, '0')}`,
+  ].join(';')
+}
 
 function styleAttr(component, extra = '') {
   const clean = sanitizeStyles(component.styles || {})
@@ -107,7 +156,7 @@ function itemEl(c, multi, colOverride) {
     case 'button':
     case 'linkbutton': {
       const href = sanitizeUrl(p.href)
-      return `<a class="rh-item rh-btn" href="${esc(href || '#')}"${linkAttrs(href)}${styleAttr(c, 'flex:0 0 auto')}>${esc(p.text)}</a>`
+      return `<a class="rh-item rh-btn" href="${esc(href || '#')}"${linkAttrs(href)}${styleAttr(c, colOverride || 'flex:0 0 auto')}>${esc(p.text)}</a>`
     }
     case 'image': {
       const src = sanitizeImageSrc(p.src)
@@ -136,20 +185,20 @@ function itemEl(c, multi, colOverride) {
           : ''
       }</blockquote>`
     case 'badge':
-      return `<span class="rh-item"${styleAttr(c, 'flex:0 0 auto;display:inline-flex;align-items:center')}>${esc(p.text)}</span>`
+      return `<span class="rh-item"${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center')}>${esc(p.text)}</span>`
     case 'icon':
-      return `<span class="rh-item"${styleAttr(c, 'flex:0 0 auto;display:inline-flex;align-items:center;line-height:0')}>${iconSvg(p.name)}</span>`
+      return `<span class="rh-item"${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center;line-height:0')}>${iconSvg(p.name)}</span>`
     case 'input': {
       const t = ['text', 'email', 'number', 'tel', 'url'].includes(p.inputType) ? p.inputType : 'text'
-      return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px`)}>${
+      return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px;min-width:0`)}>${
         p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
-      }<input type="${t}" placeholder="${esc(p.placeholder)}" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" /></label>`
+      }<input type="${t}" placeholder="${esc(p.placeholder)}" style="${controlFieldCss(p)}" /></label>`
     }
     case 'select': {
       const opts = String(p.options || '').split('\n').map((s) => s.trim()).filter(Boolean)
-      return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px`)}>${
+      return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px;min-width:0`)}>${
         p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
-      }<select style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff">${
+      }<select style="${controlFieldCss(p)}">${
         p.placeholder ? `<option value="" disabled selected>${esc(p.placeholder)}</option>` : ''
       }${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`
     }
@@ -161,19 +210,91 @@ function itemEl(c, multi, colOverride) {
       return `<details class="${cls}"${styleAttr(c, `${col};border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px`)}><summary style="cursor:pointer;font-weight:600;padding:12px 0">${esc(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${esc(p.text)}</div></details>`
     case 'container': {
       const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
-      const gap = Number(p.gap)
-      const row = p.direction === 'row'
-      // Children flow inside; a row keeps proportional columns, a column stacks.
-      const childCol = (ch) =>
-        row ? `flex:${Math.round(ch.layout?.w || 240)} 1 0;min-width:120px` : 'flex:0 0 auto;width:100%'
-      const inner = kids.map((ch) => item(ch, row, childCol(ch))).join('')
-      // Wrap is forced on in the export so a row never overflows a small screen.
-      const flex = `display:flex;flex-direction:${row ? 'row' : 'column'};flex-wrap:wrap;align-items:${p.align || 'stretch'};justify-content:${p.justify || 'flex-start'};gap:${Number.isFinite(gap) ? gap : 16}px`
-      return `<div class="${cls}"${styleAttr(c, `${col};${flex}`)}>${inner}</div>`
+      const h = absolutePanelHeight(kids, Math.round(c.layout?.h || 160))
+      const inner = kids
+        .map((ch) => {
+          const l = ch.layout || {}
+          return item(
+            ch,
+            false,
+            `position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px`,
+          )
+        })
+        .join('')
+      return `<div class="${cls}"${styleAttr(c, `${col};display:block;position:relative;min-height:${h}px`)}>${inner}</div>`
     }
+    case 'tabs':
+      return tabsHtml(c, cls, col)
+    case 'html':
+      return htmlEmbed(c, cls, col)
     default:
       return ''
   }
+}
+
+// Render an HTML Embed as a sandboxed iframe; pass the user's code via srcdoc
+// so it can never read the surrounding document. Defaults to a fixed pixel
+// height (boxH) since iframe content can't size itself from outside.
+function htmlEmbed(c, cls, col) {
+  const p = c.props || {}
+  const code = typeof p.code === 'string' ? p.code : ''
+  const looksFull = /^\s*<!DOCTYPE|<html[\s>]/i.test(code)
+  const doc = looksFull
+    ? code
+    : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
+  const h = Math.max(40, Math.round(c.layout?.h || 240))
+  const safeDoc = doc.replace(/"/g, '&quot;')
+  return `<iframe class="${cls}" srcdoc="${safeDoc}" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy"${styleAttr(c, `${col};width:100%;height:${h}px;border:0;background:transparent`)}></iframe>`
+}
+
+// Render a `tabs` widget as a tab strip + one panel per tab. The runtime JS
+// shim toggles `[hidden]` on panels and `aria-selected` on tabs on click.
+function absolutePanelHeight(children, minHeight = 120) {
+  return Math.max(
+    minHeight,
+    children.reduce((max, ch) => {
+      const l = ch.layout || {}
+      return Math.max(max, (l.y || 0) + (l.h || 0))
+    }, 0) + 16,
+  )
+}
+
+function tabsHtml(c, cls, col) {
+  const p = c.props || {}
+  const tabs = (Array.isArray(p.tabs) ? p.tabs : []).filter((t) => t && t.id)
+  const safeTabs = tabs.length ? tabs : [{ id: 't1', label: 'Tab' }]
+  const activeId = safeTabs.some((t) => t.id === p.activeId) ? p.activeId : safeTabs[0].id
+  const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+  const strip = safeTabs
+    .map(
+      (t) =>
+        `<button type="button" role="tab" data-builder-tab="${esc(t.id)}" aria-selected="${
+          t.id === activeId ? 'true' : 'false'
+        }">${esc(t.label || 'Tab')}</button>`,
+    )
+    .join('')
+  const panels = safeTabs
+    .map((t) => {
+      const panelKids = kids.filter((ch) => (ch.tabId || safeTabs[0].id) === t.id)
+      const panelH = absolutePanelHeight(panelKids, 120)
+      const inner = panelKids
+        .map((ch) => {
+          const l = ch.layout || {}
+          return item(
+            ch,
+            false,
+            `position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px`,
+          )
+        })
+        .join('')
+      const hidden = t.id === activeId ? '' : ' hidden'
+      return `<div role="tabpanel" data-builder-panel="${esc(t.id)}"${hidden} style="display:block;position:relative;min-height:${panelH}px">${inner}</div>`
+    })
+    .join('')
+  return `<div class="${cls}" data-builder-tabs="${esc(c.id)}"${styleAttr(
+    c,
+    `${col};display:flex;flex-direction:column;${tabsCssVars(p)}`,
+  )}><div role="tablist">${strip}</div>${panels}</div>`
 }
 
 export function schemaToResponsiveHtml(schema, title = 'My Site') {
@@ -257,6 +378,8 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
     </style>
   </head>
   <body>${body}
+  ${builderInteractiveTags()}
+  ${customJsBlock(schema?.customJs)}
   </body>
 </html>`
 }

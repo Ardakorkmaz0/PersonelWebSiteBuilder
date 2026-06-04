@@ -4,6 +4,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
   rectIntersection,
   useSensor,
   useSensors,
@@ -25,6 +26,25 @@ import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
+
+function nestedFirstCollision(args) {
+  const pointerHits = pointerWithin(args)
+  const hits = pointerHits.length ? pointerHits : rectIntersection(args)
+  const nested = hits.filter((hit) => hit.id !== 'canvas')
+  if (!nested.length) return hits
+  return nested.slice().sort((a, b) => {
+    const ar = args.droppableRects.get(a.id)
+    const br = args.droppableRects.get(b.id)
+    const areaA = ar ? ar.width * ar.height : Number.MAX_SAFE_INTEGER
+    const areaB = br ? br.width * br.height : Number.MAX_SAFE_INTEGER
+    return areaA - areaB || (b.data?.value || 0) - (a.data?.value || 0)
+  })
+}
+
+function cssEscape(value) {
+  if (window.CSS?.escape) return window.CSS.escape(String(value))
+  return String(value).replace(/["\\]/g, '\\$&')
+}
 
 export default function EditorPage() {
   const { id } = useParams()
@@ -167,11 +187,22 @@ export default function EditorPage() {
     const data = active.data.current
     // Only palette drops add components; existing items move via FreeCanvasItem.
     if (!over || data?.from !== 'palette') return
+    const translated = active.rect.current.translated
 
     // Dropped onto a container (any droppable other than the page canvas) → add it
     // as a flowing child of that container instead of on the page.
     if (over.id && over.id !== 'canvas') {
-      addComponent(data.type, 0, 0, over.id)
+      let x = 12
+      let y = 12
+      const targetEl = document.querySelector(
+        `[data-builder-droppable-id="${cssEscape(over.id)}"]`,
+      )
+      if (targetEl && translated) {
+        const rect = targetEl.getBoundingClientRect()
+        x = translated.left - rect.left
+        y = translated.top - rect.top
+      }
+      addComponent(data.type, x, y, over.id)
       return
     }
 
@@ -179,7 +210,6 @@ export default function EditorPage() {
     let x = 24
     let y = 24
     const canvasEl = document.getElementById('free-canvas')
-    const translated = active.rect.current.translated
     if (canvasEl && translated) {
       const rect = canvasEl.getBoundingClientRect()
       x = translated.left - rect.left
@@ -219,8 +249,9 @@ export default function EditorPage() {
       previewWindow?.close()
       return
     }
-    if (previewWindow) previewWindow.location.href = `/site/${nextSlug}`
-    else window.open(`/site/${nextSlug}`, '_blank')
+    const mode = siteHtml && siteHtml.trim() ? '?mode=static' : ''
+    if (previewWindow) previewWindow.location.href = `/site/${nextSlug}${mode}`
+    else window.open(`/site/${nextSlug}${mode}`, '_blank')
   }
 
   // Download the current design as a portable project file (.json).
@@ -607,7 +638,7 @@ export default function EditorPage() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={rectIntersection}
+        collisionDetection={nestedFirstCollision}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >

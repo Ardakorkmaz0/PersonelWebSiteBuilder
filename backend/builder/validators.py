@@ -13,8 +13,18 @@ ALLOWED_COMPONENT_TYPES = {
     'navbar', 'text', 'heading', 'button', 'linkbutton', 'image',
     'section', 'card', 'divider', 'spacer',
     'list', 'quote', 'badge', 'icon', 'input',
-    'container', 'select', 'alert', 'accordion',
+    'container', 'tabs', 'select', 'alert', 'accordion',
+    'html',
 }
+
+# Custom HTML embed cap. The embed renders inside its own sandboxed iframe so
+# the runtime threat is contained; we just bound the saved size.
+MAX_HTML_EMBED = 50 * 1024
+
+# Component types that hold a nested child list (recursively sanitized).
+PARENT_TYPES = {'container', 'tabs'}
+MAX_TABS = 12
+TAB_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
 
 MAX_NESTING_DEPTH = 4
 MAX_CHILDREN = 60
@@ -51,6 +61,29 @@ DEFAULT_THEME = {
 
 def _str(value, default=''):
     return value if isinstance(value, str) else default
+
+
+def _css_value(value, default=''):
+    v = _str(value, default).strip()
+    if not v:
+        return default
+    low = v.lower()
+    if 'javascript:' in low or 'expression(' in low or 'url(' in low:
+        return default
+    return v.replace(';', '').replace('{', '').replace('}', '').replace('<', '').replace('>', '')[:180]
+
+
+def _control_props(props):
+    return {
+        'fieldBackgroundColor': _css_value(props.get('fieldBackgroundColor'), '#ffffff'),
+        'fieldColor': _css_value(props.get('fieldColor'), '#1d1d1f'),
+        'fieldBorderColor': _css_value(props.get('fieldBorderColor'), '#cbd5e1'),
+        'fieldBorderWidth': _css_value(props.get('fieldBorderWidth'), '1px'),
+        'fieldBorderRadius': _css_value(props.get('fieldBorderRadius'), '8px'),
+        'fieldPadding': _css_value(props.get('fieldPadding'), '10px 12px'),
+        'fieldHeight': _css_value(props.get('fieldHeight'), '44px'),
+        'fieldBoxShadow': _css_value(props.get('fieldBoxShadow'), 'none'),
+    }
 
 
 def sanitize_url(value):
@@ -168,12 +201,14 @@ def sanitize_props(ctype, props):
             'label': _str(props.get('label')),
             'placeholder': _str(props.get('placeholder')),
             'inputType': itype if itype in ('text', 'email', 'number', 'tel', 'url') else 'text',
+            **_control_props(props),
         }
     if ctype == 'select':
         return {
             'label': _str(props.get('label')),
             'options': _str(props.get('options')),
             'placeholder': _str(props.get('placeholder')),
+            **_control_props(props),
         }
     if ctype == 'alert':
         variant = props.get('variant')
@@ -196,6 +231,49 @@ def sanitize_props(ctype, props):
             else 'flex-start',
             'gap': _num(props.get('gap'), 16, 0, 200),
             'wrap': bool(props.get('wrap')),
+        }
+    if ctype == 'html':
+        code = _str(props.get('code'))[:MAX_HTML_EMBED]
+        # Only literal `</script` is escaped — the embed runs inside its own
+        # sandboxed iframe at render time, which is what enforces isolation.
+        code = re.sub(r'</\s*script', '<\\/script', code, flags=re.IGNORECASE)
+        return {'code': code}
+    if ctype == 'tabs':
+        raw_tabs = props.get('tabs')
+        tabs = []
+        seen_ids = set()
+        if isinstance(raw_tabs, list):
+            for t in raw_tabs[:MAX_TABS]:
+                if not isinstance(t, dict):
+                    continue
+                tid = _str(t.get('id'))
+                if not TAB_ID_RE.match(tid) or tid in seen_ids:
+                    continue
+                seen_ids.add(tid)
+                tabs.append({'id': tid, 'label': _str(t.get('label'))[:60]})
+        if not tabs:
+            tabs = [{'id': 't1', 'label': 'Tab one'}]
+        active = _str(props.get('activeId'))
+        if active not in seen_ids and tabs:
+            active = tabs[0]['id']
+        return {
+            'tabs': tabs,
+            'activeId': active,
+            'tabBackgroundColor': _css_value(props.get('tabBackgroundColor'), 'transparent'),
+            'tabTextColor': _css_value(props.get('tabTextColor'), '#6b7280'),
+            'activeTabBackgroundColor': _css_value(props.get('activeTabBackgroundColor'), 'transparent'),
+            'activeTabColor': _css_value(props.get('activeTabColor'), '#1d1d1f'),
+            'activeTabBorderColor': _css_value(props.get('activeTabBorderColor'), '#2563eb'),
+            'tabBorderRadius': _css_value(props.get('tabBorderRadius'), '0px'),
+            'tabPadding': _css_value(props.get('tabPadding'), '8px 14px'),
+            'tabGap': _css_value(props.get('tabGap'), '4px'),
+            'tablistBackgroundColor': _css_value(props.get('tablistBackgroundColor'), 'transparent'),
+            'tablistBorderColor': _css_value(props.get('tablistBorderColor'), '#e5e7eb'),
+            'tablistPadding': _css_value(props.get('tablistPadding'), '0'),
+            'panelBackgroundColor': _css_value(props.get('panelBackgroundColor'), 'transparent'),
+            'panelBorderColor': _css_value(props.get('panelBorderColor'), 'transparent'),
+            'panelBorderRadius': _css_value(props.get('panelBorderRadius'), '0px'),
+            'panelPadding': _css_value(props.get('panelPadding'), '0'),
         }
     return {}
 
@@ -242,17 +320,36 @@ def sanitize_component(comp, depth=0):
         'hidden': bool(comp.get('hidden')),
         'hiddenMobile': bool(comp.get('hiddenMobile')),
     }
-    # Containers hold nested components (children), recursively cleaned with a
-    # depth + count cap. Invalid children are dropped instead of failing the save.
-    if ctype == 'container':
+    # Containers / tabs hold nested components (children), recursively cleaned
+    # with a depth + count cap. Invalid children are dropped instead of failing
+    # the save. Tabs children also carry an optional tabId pointing at one of
+    # the tabs declared on the parent.
+    if ctype in PARENT_TYPES:
         children = comp.get('children')
         clean_children = []
+        valid_tab_ids = (
+            {t['id'] for t in clean['props'].get('tabs', [])}
+            if ctype == 'tabs'
+            else None
+        )
+        fallback_tab = (
+            clean['props']['tabs'][0]['id']
+            if ctype == 'tabs' and clean['props'].get('tabs')
+            else None
+        )
         if depth < MAX_NESTING_DEPTH and isinstance(children, list):
             for ch in children[:MAX_CHILDREN]:
                 try:
-                    clean_children.append(sanitize_component(ch, depth + 1))
+                    cleaned_child = sanitize_component(ch, depth + 1)
                 except serializers.ValidationError:
                     continue
+                if ctype == 'tabs':
+                    raw_tab_id = ch.get('tabId') if isinstance(ch, dict) else None
+                    tab_id = _str(raw_tab_id)
+                    if tab_id not in valid_tab_ids:
+                        tab_id = fallback_tab
+                    cleaned_child['tabId'] = tab_id
+                clean_children.append(cleaned_child)
         clean['children'] = clean_children
     return clean
 
@@ -296,6 +393,18 @@ def sanitize_custom_css(value):
     return css
 
 
+# Custom JS runs inside a sandboxed iframe on the public site (allow-scripts
+# WITHOUT allow-same-origin → opaque origin, no access to the visitor's session
+# or this app), so we don't need to scrub the body. Two safety nets we DO keep:
+#   - Cap length so the saved schema can't bloat the DB.
+#   - Escape literal </script so the embedded code can't break out of the
+#     <script>…</script> tag it's wrapped in at render time.
+def sanitize_custom_js(value):
+    js = _str(value)[:50000]
+    js = re.sub(r'</\s*script', '<\\/script', js, flags=re.IGNORECASE)
+    return js
+
+
 def validate_and_clean_schema(schema):
     """Validate the overall structure and return a fully sanitized copy."""
     if not isinstance(schema, dict):
@@ -329,5 +438,6 @@ def validate_and_clean_schema(schema):
     return {
         'theme': sanitize_theme(schema.get('theme')),
         'customCss': sanitize_custom_css(schema.get('customCss')),
+        'customJs': sanitize_custom_js(schema.get('customJs')),
         'pages': clean_pages,
     }

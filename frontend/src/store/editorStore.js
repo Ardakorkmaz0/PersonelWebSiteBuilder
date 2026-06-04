@@ -41,6 +41,7 @@ function emptySchema() {
   return {
     theme: normalizeTheme(DEFAULT_THEME),
     customCss: '',
+    customJs: '',
     pages: [blankPage('Home', '', 'page_home')],
   }
 }
@@ -57,10 +58,12 @@ function mapPage(schema, id, updater) {
 }
 
 // ---- Recursive component-tree helpers ------------------------------------
-// Components form a tree: a `container` holds nested `children`. These walk the
-// tree so a component can be found / edited / removed anywhere, not just at the
-// top level. Top-level mobile auto-layout still only runs on the page's roots.
-const hasKids = (c) => c.type === 'container' && Array.isArray(c.children)
+// Components form a tree: `container` and `tabs` hold nested `children`. These
+// walk the tree so a component can be found / edited / removed anywhere, not
+// just at the top level. Top-level mobile auto-layout still only runs on the
+// page's roots.
+const PARENT_TYPES = new Set(['container', 'tabs'])
+const hasKids = (c) => PARENT_TYPES.has(c.type) && Array.isArray(c.children)
 
 function mapTree(components, id, fn) {
   return components.map((c) => {
@@ -90,12 +93,46 @@ function findInTree(components, id) {
   return null
 }
 
-function addChildToTree(components, containerId, child) {
+// Walk the tree to find the PARENT component that holds `id` in its children.
+// Returns null for top-level (and unknown) ids. Used so nested children can be
+// clamped against the parent's box, not the page artboard.
+function findParentInTree(components, id) {
+  for (const c of components) {
+    if (!hasKids(c)) continue
+    if (c.children.some((ch) => ch.id === id)) return c
+    const deep = findParentInTree(c.children, id)
+    if (deep) return deep
+  }
+  return null
+}
+
+function addChildToTree(components, parentId, child) {
   return components.map((c) => {
-    if (c.id === containerId && c.type === 'container') {
-      return { ...c, children: [...(c.children || []), child] }
+    if (c.id === parentId && PARENT_TYPES.has(c.type)) {
+      // Tabs assign their new child to the currently-active design tab so the
+      // drop visually lands in the panel the user is looking at.
+      let tagged = child
+      if (c.type === 'tabs') {
+        const tabId = c.props?.activeId || (c.props?.tabs?.[0]?.id ?? '')
+        const firstTabId = c.props?.tabs?.[0]?.id ?? tabId
+        const sameTab = (c.children || []).filter((kid) => (kid.tabId || firstTabId) === tabId)
+        const bottom = sameTab.reduce((max, kid) => {
+          const l = kid.layout || {}
+          return Math.max(max, (l.y || 0) + (l.h || 0))
+        }, 0)
+        const l = child.layout || {}
+        const hasDropPoint = (l.x || 0) > 0 || (l.y || 0) > 0
+        tagged = {
+          ...child,
+          tabId,
+          layout: hasDropPoint
+            ? l
+            : { ...l, x: 12, y: bottom ? bottom + 12 : 12 },
+        }
+      }
+      return { ...c, children: [...(c.children || []), tagged] }
     }
-    if (hasKids(c)) return { ...c, children: addChildToTree(c.children, containerId, child) }
+    if (hasKids(c)) return { ...c, children: addChildToTree(c.children, parentId, child) }
     return c
   })
 }
@@ -414,21 +451,58 @@ function normalize(components, mobileWidth = MOBILE_CANVAS_WIDTH) {
           : fallback,
       hidden: !!c.hidden,
       hiddenMobile: !!c.hiddenMobile,
-      // Containers: normalize their nested children too (they flow inside).
-      ...(c.type === 'container'
-        ? { children: normalize(Array.isArray(c.children) ? c.children : [], mobileWidth) }
+      // Containers / tabs: normalize their nested children too (they flow inside).
+      ...(PARENT_TYPES.has(c.type)
+        ? {
+            children: normalizeAbsoluteChildren(
+              c,
+              normalize(Array.isArray(c.children) ? c.children : [], mobileWidth),
+            ),
+          }
         : {}),
     }
   })
 }
 
-function clampLayout(l) {
-  return {
-    x: Math.max(0, Math.round(l.x)),
-    y: Math.max(0, Math.round(l.y)),
-    w: Math.max(8, Math.round(l.w)),
-    h: Math.max(4, Math.round(l.h)),
+function normalizeAbsoluteChildren(parent, children) {
+  if (parent.type !== 'container' || children.length <= 1) return children
+  const hasPositionedChild = children.some((child) => {
+    const l = child.layout || {}
+    return (l.x || 0) !== 0 || (l.y || 0) !== 0
+  })
+  if (hasPositionedChild) return children
+  let y = 12
+  return children.map((child) => {
+    const l = child.layout || {}
+    const next = { ...child, layout: { ...l, x: 12, y } }
+    y += Math.max(4, Math.round(l.h || 80)) + 12
+    return next
+  })
+}
+
+// Clamp a free-canvas {x,y,w,h} rectangle. With optional `bounds.maxX` /
+// `bounds.maxY` (the parent box's width/height), the box can never extend past
+// the right/bottom edge:
+// - if a resize would push x+w over the edge, shrink w to fit;
+// - if a drag would push x past the right, slide x back so x+w == maxX.
+// Same logic on the Y axis when maxY is supplied. Width/height keep a small
+// minimum so the box stays interactable.
+function clampLayout(l, bounds = {}) {
+  let x = Math.max(0, Math.round(l.x))
+  let y = Math.max(0, Math.round(l.y))
+  let w = Math.max(8, Math.round(l.w))
+  let h = Math.max(4, Math.round(l.h))
+  if (bounds.maxX) {
+    const maxX = Math.max(8, Math.round(bounds.maxX))
+    w = Math.min(w, maxX)
+    if (x + w > maxX) x = Math.max(0, maxX - w)
   }
+  if (bounds.maxY) {
+    const maxY = Math.max(4, Math.round(bounds.maxY))
+    h = Math.min(h, maxY)
+    if (y + h > maxY) y = Math.max(0, maxY - h)
+  }
+  return { x, y, w, h }
 }
 
 // Clamp an artboard width / fold value to sane bounds (mirrors the backend).
@@ -445,6 +519,19 @@ function normalizePage(page) {
   const flowMode = !!page.flowMode
   const mobileManual = flowMode ? false : !!page.mobileManual
   let components = normalize(page.components || [], mobileWidth)
+  // Re-clamp any saved free-canvas layouts to the current artboard width so
+  // designs that were authored before this clamp (or imported from elsewhere)
+  // no longer poke past the right edge.
+  if (!flowMode) {
+    components = components.map((c) => ({
+      ...c,
+      layout: clampLayout(c.layout || { x: 0, y: 0, w: 200, h: 80 }, { maxX: canvasWidth }),
+      mobileLayout: clampLayout(
+        c.mobileLayout || c.layout || { x: 0, y: 0, w: 200, h: 80 },
+        { maxX: mobileWidth },
+      ),
+    }))
+  }
   // Auto mode: re-derive the phone layout from the desktop design on load too, so
   // existing sites pick up reading-order fixes without a manual re-arrange.
   if (!mobileManual) {
@@ -490,6 +577,7 @@ function normalizeSchema(schema, options = {}) {
     ...base,
     theme: normalizeTheme(base.theme),
     customCss: typeof base.customCss === 'string' ? base.customCss : '',
+    customJs: typeof base.customJs === 'string' ? base.customJs : '',
     pages,
   }
 }
@@ -646,10 +734,7 @@ export const useEditorStore = create((set, get) => ({
         id: genId('page'),
         name: `${src.name} copy`,
         // Fresh component ids so classes/anchors stay unique across pages.
-        components: (src.components || []).map((c) => ({
-          ...structuredClone(c),
-          id: genId(c.type),
-        })),
+        components: (src.components || []).map(cloneTree),
       }
       const idx = state.schema.pages.findIndex((p) => p.id === id)
       const pages = [...state.schema.pages]
@@ -692,21 +777,27 @@ export const useEditorStore = create((set, get) => ({
       const id = genId(type)
       const fullWidth = FULL_WIDTH_TYPES.has(type)
       const styles = themedStyles(type, def.defaultStyles, state.schema.theme)
-      const kids = type === 'container' ? { children: [] } : {}
+      const kids = PARENT_TYPES.has(type) ? { children: [] } : {}
 
       // Dropping a palette item INTO a container: it becomes a flowing child.
       if (parentId) {
+        const parentNode = findInTree(comps, parentId)
+        const parentW = Math.round(parentNode?.layout?.w || 0) || undefined
+        const parentH = Math.round(parentNode?.layout?.h || 0) || undefined
         const child = {
           id,
           type,
           props: structuredClone(def.defaultProps),
           styles,
-          layout: {
-            x: 0,
-            y: 0,
-            w: fullWidth ? page.canvasWidth || CANVAS_WIDTH : size.w,
-            h: size.h,
-          },
+          layout: clampLayout(
+            {
+              x: Math.max(0, Math.round(x)),
+              y: Math.max(0, Math.round(y)),
+              w: fullWidth ? page.canvasWidth || CANVAS_WIDTH : size.w,
+              h: size.h,
+            },
+            { maxX: parentW, maxY: parentH },
+          ),
           mobileLayout: {
             x: 0,
             y: 0,
@@ -757,39 +848,52 @@ export const useEditorStore = create((set, get) => ({
         }
       }
 
+      const pcW = page.canvasWidth || CANVAS_WIDTH
       let layout, mobileLayout
       if (state.viewport === 'mobile') {
         // Drop lands on the mobile canvas; give the desktop a stacked default.
         const mw = fullWidth
           ? mobileWidth
           : Math.min(size.w, mobileWidth - MOBILE_PAD * 2)
-        mobileLayout = clampLayout({
-          x: fullWidth ? 0 : Math.round(x),
-          y: Math.round(y),
-          w: mw,
-          h: size.h,
-        })
+        mobileLayout = clampLayout(
+          {
+            x: fullWidth ? 0 : Math.round(x),
+            y: Math.round(y),
+            w: mw,
+            h: size.h,
+          },
+          { maxX: mobileWidth },
+        )
         const dy =
           comps.reduce(
             (m, c) => Math.max(m, (c.layout?.y || 0) + (c.layout?.h || 0)),
             24,
           ) + 16
-        layout = { x: 24, y: dy, w: size.w, h: size.h }
+        layout = clampLayout(
+          { x: 24, y: dy, w: size.w, h: size.h },
+          { maxX: pcW },
+        )
       } else {
         // Drop lands on the desktop canvas; stack a mobile default below.
-        layout = clampLayout({ x: Math.round(x), y: Math.round(y), w: size.w, h: size.h })
+        layout = clampLayout(
+          { x: Math.round(x), y: Math.round(y), w: size.w, h: size.h },
+          { maxX: pcW },
+        )
         const my =
           comps.reduce(
             (m, c) =>
               Math.max(m, (c.mobileLayout?.y || 0) + (c.mobileLayout?.h || 0)),
             MOBILE_PAD,
           ) + MOBILE_GAP
-        mobileLayout = {
-          x: fullWidth ? 0 : MOBILE_PAD,
-          y: my,
-          w: fullWidth ? mobileWidth : mobileWidth - MOBILE_PAD * 2,
-          h: size.h,
-        }
+        mobileLayout = clampLayout(
+          {
+            x: fullWidth ? 0 : MOBILE_PAD,
+            y: my,
+            w: fullWidth ? mobileWidth : mobileWidth - MOBILE_PAD * 2,
+            h: size.h,
+          },
+          { maxX: mobileWidth },
+        )
       }
 
       const component = {
@@ -815,6 +919,35 @@ export const useEditorStore = create((set, get) => ({
   },
 
   selectComponent: (id) => set({ selectedId: id }),
+
+  // Replace a Tabs component's children array (used when removing a tab also
+  // reassigns its orphaned children to another tab).
+  setTabsChildren: (id, children) => {
+    get().record('tabs-children-' + id)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const next = mapTree(page.components, id, (c) =>
+        c.type === 'tabs' ? { ...c, children } : c,
+      )
+      return { schema: withComponents(state.schema, page.id, next), dirty: true }
+    })
+  },
+
+  // Switch which tab's panel is shown in the editor for a `tabs` component.
+  // Uses the same recursive updateProps path but with its own history key so
+  // rapid tab switching doesn't pollute the undo stack with style edits.
+  setActiveTab: (id, tabId) => {
+    get().record('tab-active-' + id)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const components = mapTree(page.components, id, (c) =>
+        c.type === 'tabs'
+          ? { ...c, props: { ...c.props, activeId: tabId } }
+          : c,
+      )
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
+    })
+  },
 
   updateProps: (id, patch) => {
     get().record('props-' + id)
@@ -848,9 +981,26 @@ export const useEditorStore = create((set, get) => ({
     get().record('layout-' + key + '-' + id)
     set((state) => {
       const page = selectCurrentPage(state)
+      // Clamp so a drag/resize can never push the box past its container's
+      // right/bottom edge. Top-level free-canvas items clamp to the active
+      // artboard; nested children clamp to their parent's box.
+      const isTop = isTopLevel(page.components, id)
+      let maxX, maxY
+      if (isTop && !page.flowMode) {
+        maxX =
+          key === 'mobileLayout'
+            ? page.mobileWidth || MOBILE_CANVAS_WIDTH
+            : page.canvasWidth || CANVAS_WIDTH
+      } else if (!isTop) {
+        const parent = findParentInTree(page.components, id)
+        if (parent) {
+          maxX = Math.round(parent.layout?.w || 0) || undefined
+          maxY = Math.round(parent.layout?.h || 0) || undefined
+        }
+      }
       const components = mapTree(page.components, id, (c) => {
         const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
-        return { ...c, [key]: clampLayout({ ...base, ...patch }) }
+        return { ...c, [key]: clampLayout({ ...base, ...patch }, { maxX, maxY }) }
       })
       // Editing the mobile layout directly switches that page to manual mode (it
       // stops auto-following PC); PC edits keep mobile in auto sync.
@@ -905,17 +1055,29 @@ export const useEditorStore = create((set, get) => ({
     }))
   },
 
+  setCustomJs: (js) => {
+    get().record('custom-js')
+    set((state) => ({
+      schema: {
+        ...state.schema,
+        customJs: typeof js === 'string' ? js : '',
+      },
+      dirty: true,
+    }))
+  },
+
   applyComponentPreset: (id, presetId) => {
     get().record('preset-' + id)
     set((state) => {
+      const page = selectCurrentPage(state)
+      const src = findInTree(page.components, id)
       const styles = componentPresetStyles(
-        selectCurrentPage(state).components.find((c) => c.id === id)?.type,
+        src?.type,
         presetId,
         state.schema.theme,
       )
       if (!styles) return {}
-      const page = selectCurrentPage(state)
-      const components = page.components.map((c) =>
+      const components = mapTree(page.components, id, (c) =>
         c.id === id ? { ...c, styles: { ...c.styles, ...styles } } : c,
       )
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
@@ -961,7 +1123,7 @@ export const useEditorStore = create((set, get) => ({
     get().record('vis-' + id)
     set((state) => {
       const page = selectCurrentPage(state)
-      const components = page.components.map((c) =>
+      const components = mapTree(page.components, id, (c) =>
         c.id === id ? { ...c, ...patch } : c,
       )
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
@@ -1110,3 +1272,8 @@ export const useEditorStore = create((set, get) => ({
 
   markSaved: () => set({ dirty: false }),
 }))
+
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+  // eslint-disable-next-line no-underscore-dangle
+  window.__editorStore = useEditorStore
+}

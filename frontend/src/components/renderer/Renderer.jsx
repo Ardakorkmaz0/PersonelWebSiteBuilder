@@ -5,9 +5,12 @@
 // `viewport` selects which breakpoint to render: 'pc' uses each component's
 // `layout`, 'mobile' uses its independently-designed `mobileLayout`. Components
 // hidden on the active breakpoint are skipped.
+import { useState } from 'react'
 import { registry, CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import { sanitizeStyles, sanitizeUrl } from '../../utils/sanitize.js'
+import { FULL_BLEED_TYPES, LINKABLE_TYPES, TAB_STYLES } from './constants.js'
 import {
+  absoluteChildrenHeight,
   canvasHeight,
   flowCanvasHeight,
   flowGap,
@@ -17,11 +20,125 @@ import {
   layoutFor,
 } from './layout.js'
 
-const FULL_BLEED_TYPES = ['navbar', 'section', 'divider']
-// Components that can optionally be wrapped in a link (like you can in plain HTML).
-export const LINKABLE_TYPES = new Set([
-  'heading', 'text', 'image', 'card', 'badge', 'icon',
-])
+function TabsRender({ component, style, viewport }) {
+  const p = component.props || {}
+  const tabs = Array.isArray(p.tabs) && p.tabs.length
+    ? p.tabs.filter((t) => t && t.id)
+    : [{ id: 't1', label: 'Tab' }]
+  // The editor passes a controlled activeId via props (so PropertiesPanel can
+  // drive it). The public renderer falls back to local state so visitors can
+  // click between tabs without any JS shim.
+  const initial = tabs.some((t) => t.id === p.activeId) ? p.activeId : tabs[0].id
+  const [localActive, setLocalActive] = useState(null)
+  const activeId =
+    component._designTabId ||
+    (tabs.some((t) => t.id === localActive) ? localActive : initial)
+  const kids = Array.isArray(component.children) ? component.children : []
+  const tablistStyle = {
+    ...TAB_STYLES.tablist,
+    gap: p.tabGap || TAB_STYLES.tablist.gap,
+    background: p.tablistBackgroundColor || 'transparent',
+    borderBottom: `1px solid ${p.tablistBorderColor || '#e5e7eb'}`,
+    padding: p.tablistPadding || TAB_STYLES.tablist.padding,
+  }
+  const tabBaseStyle = {
+    ...TAB_STYLES.tab,
+    background: p.tabBackgroundColor || 'transparent',
+    color: p.tabTextColor || TAB_STYLES.tab.color,
+    borderRadius: p.tabBorderRadius || 0,
+    padding: p.tabPadding || TAB_STYLES.tab.padding,
+  }
+  const tabActiveStyle = {
+    ...TAB_STYLES.tabActive,
+    background: p.activeTabBackgroundColor || p.tabBackgroundColor || 'transparent',
+    color: p.activeTabColor || TAB_STYLES.tabActive.color,
+    borderBottomColor: p.activeTabBorderColor || TAB_STYLES.tabActive.borderBottomColor,
+  }
+  const panelStyle = {
+    ...TAB_STYLES.panel,
+    background: p.panelBackgroundColor || 'transparent',
+    border: `1px solid ${p.panelBorderColor || 'transparent'}`,
+    borderRadius: p.panelBorderRadius || 0,
+    padding: p.panelPadding || 0,
+    boxSizing: 'border-box',
+  }
+
+  return (
+    <div
+      data-builder-tabs={component.id}
+      style={{ ...style, display: 'flex', flexDirection: 'column', overflow: 'visible' }}
+    >
+      <div role="tablist" style={tablistStyle}>
+        {tabs.map((t) => {
+          const sel = t.id === activeId
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={sel ? 'true' : 'false'}
+              data-builder-tab={t.id}
+              data-target={component.id}
+              onClick={(e) => {
+                e.preventDefault()
+                if (!component._designTabId) setLocalActive(t.id)
+                if (component._onSelectTab) component._onSelectTab(t.id)
+              }}
+              style={{
+                ...tabBaseStyle,
+                ...(sel ? tabActiveStyle : null),
+              }}
+            >
+              {t.label || 'Tab'}
+            </button>
+          )
+        })}
+      </div>
+      {tabs.map((t) => {
+        const sel = t.id === activeId
+        const panelKids = kids.filter((c) => {
+          const id = c.props?.tabId || c.tabId || tabs[0].id
+          return id === t.id
+        })
+        const panelHeight = absoluteChildrenHeight(panelKids, 120)
+        return (
+          <div
+            key={t.id}
+            role="tabpanel"
+            data-builder-panel={t.id}
+            hidden={!sel}
+            style={{
+              ...panelStyle,
+              display: sel ? 'block' : 'none',
+              position: 'relative',
+              minHeight: panelHeight,
+            }}
+          >
+            {panelKids.map((c) =>
+              isHidden(c, viewport) ? null : (() => {
+                const l = c.layout || {}
+                return (
+                <div
+                  key={c.id}
+                  style={{
+                    position: 'absolute',
+                    left: l.x || 0,
+                    top: l.y || 0,
+                    width: l.w || 200,
+                    height: l.h || 80,
+                  }}
+                >
+                  <RenderComponent component={c} viewport={viewport} />
+                </div>
+                )
+              })(),
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export function RenderComponent({ component, flowMode = false, viewport = 'pc' }) {
   const def = registry[component.type]
@@ -36,33 +153,47 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
     ...sanitizeStyles(component.styles),
   }
 
-  // A container lays its nested children out in a flex box (children always flow,
-  // so they stay responsive). Rendering recurses through RenderComponent.
+  // Tabs: header strip + one panel per tab. In the public renderer (no
+  // designActiveId override), the first tab is shown and the rest carry `hidden`
+  // so the static JS shim can toggle them. The editor passes `designActiveId`
+  // to drive selection from React state.
+  if (component.type === 'tabs') {
+    return <TabsRender component={component} style={style} viewport={viewport} />
+  }
+
+  // A container is a nested mini-canvas: children keep their own x/y/w/h inside
+  // the container, matching the editor and exported HTML.
   if (component.type === 'container') {
-    const p = component.props || {}
     const kids = Array.isArray(component.children) ? component.children : []
-    const gap = Number(p.gap)
-    const cw = Math.round(component.layout?.w || 600)
+    const minHeight = absoluteChildrenHeight(kids, Math.round(component.layout?.h || 160))
     return (
       <div
         style={{
           ...style,
           overflow: sanitizeStyles(component.styles).overflow || 'visible',
-          display: 'flex',
-          flexDirection: p.direction === 'row' ? 'row' : 'column',
-          flexWrap: p.wrap ? 'wrap' : 'nowrap',
-          alignItems: p.align || 'stretch',
-          justifyContent: p.justify || 'flex-start',
-          gap: Number.isFinite(gap) ? gap : 16,
+          display: 'block',
+          position: 'relative',
+          minHeight,
         }}
       >
-        {kids.map((c) =>
-          isHidden(c, viewport) ? null : (
-            <div key={c.id} style={flowItemStyle(c, viewport, cw)}>
-              <RenderComponent component={c} flowMode viewport={viewport} />
+        {kids.map((c) => {
+          if (isHidden(c, viewport)) return null
+          const l = c.layout || {}
+          return (
+            <div
+              key={c.id}
+              style={{
+                position: 'absolute',
+                left: l.x || 0,
+                top: l.y || 0,
+                width: l.w || 200,
+                height: l.h || 80,
+              }}
+            >
+              <RenderComponent component={c} viewport={viewport} />
             </div>
-          ),
-        )}
+          )
+        })}
       </div>
     )
   }

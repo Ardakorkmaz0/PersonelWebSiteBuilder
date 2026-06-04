@@ -1,6 +1,6 @@
 import { useEditorStore } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
-import { ContainerEditor } from './FlowCanvasItem.jsx'
+import { ContainerEditor, TabsEditor } from './FlowCanvasItem.jsx'
 
 const MIN = 20
 const ACCENT = '#2b579a'
@@ -106,7 +106,11 @@ export default function FreeCanvasItem({ component }) {
     >
       {component.type === 'container' ? (
         <div className="h-full w-full overflow-hidden">
-          <ContainerEditor component={component} viewport={viewport} />
+          <ContainerEditor component={component} />
+        </div>
+      ) : component.type === 'tabs' ? (
+        <div className="h-full w-full overflow-hidden">
+          <TabsEditor component={component} />
         </div>
       ) : (
         <div className="pointer-events-none h-full w-full select-none overflow-hidden">

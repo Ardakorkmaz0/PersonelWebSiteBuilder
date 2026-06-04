@@ -62,6 +62,10 @@ desktop.ini
 # Logs
 *.log
 
+# Project handoff / scratch notes (local only)
+summary.md
+summary
+
 # Misc
 *.iml
 npm-debug.log*

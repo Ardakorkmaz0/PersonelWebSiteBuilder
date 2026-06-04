@@ -6,7 +6,8 @@ const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
 const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
 const FLOW_MOBILE_BLOCK_TYPES = new Set([
   'navbar', 'heading', 'text', 'image', 'section', 'card', 'divider',
-  'list', 'quote', 'input', 'container', 'select', 'alert', 'accordion',
+  'list', 'quote', 'input', 'container', 'tabs', 'select', 'alert', 'accordion',
+  'html',
 ])
 const FLOW_MAX_HEIGHT = {
   navbar: 88,
@@ -37,6 +38,15 @@ export function canvasHeight(components, viewport = 'pc') {
   return Math.max(viewport === 'mobile' ? 400 : 600, bottom + 40)
 }
 
+export function absoluteChildrenHeight(components, minHeight = 120) {
+  const list = Array.isArray(components) ? components : []
+  const bottom = list.reduce((max, c) => {
+    const l = c.layout || {}
+    return Math.max(max, (l.y || 0) + (l.h || 0))
+  }, 0)
+  return Math.max(minHeight, bottom + 16)
+}
+
 export function isFlowFullWidth(component) {
   return FLOW_FULL_WIDTH_TYPES.has(component?.type)
 }
@@ -50,8 +60,13 @@ export function flowSidePad(viewport = 'pc') {
 }
 
 const FLOW_INLINE_TYPES = new Set(['button', 'linkbutton', 'badge', 'icon'])
+// Components whose children live inside an absolute mini-canvas at PC design
+// pixels — these MUST keep their layout.w as the rendered width on PC (no
+// flex-grow stretching), so the inner mini-canvas matches the visible box and
+// the editor's mobile auto-scale has a sane reference.
+const FLOW_FIXED_DESIGN_WIDTH_TYPES = new Set(['container', 'tabs'])
 
-export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
+export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000, options = {}) {
   // Flow is a single design that adapts to both breakpoints, so the box metrics
   // come from `layout` on PC and mobile alike (editable from either viewport).
   const l = component.layout || {}
@@ -62,7 +77,9 @@ export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
   const isImage = component?.type === 'image'
   const boxW = Math.max(8, Math.round(l.w || (full ? canvasWidth : 240)))
   const boxH = flowBoxHeight(component, viewport)
+  const parentDirection = options.parentDirection || 'row'
 
+  const fixedDesign = FLOW_FIXED_DESIGN_WIDTH_TYPES.has(component?.type)
   let flex
   let width
   if (full) {
@@ -74,6 +91,13 @@ export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
   } else if (mobileBlock) {
     flex = '0 0 100%'
     width = '100%'
+  } else if (fixedDesign) {
+    // Container/tabs hold an absolute mini-canvas at PC design pixels. The
+    // outer wrapper sticks to `layout.w` so the visible box matches the design
+    // (no flex-grow stretching to fill the row). `min()` caps it to 100% so
+    // narrow artboards still clip + the inner scale fits.
+    flex = '0 0 auto'
+    width = `min(${boxW}px, 100%)`
   } else if (inline) {
     // Buttons keep the designed width, but do not grow to fill leftover row
     // space like text/card blocks.
@@ -87,7 +111,7 @@ export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
     width = 'auto'
   }
 
-  return {
+  const style = {
     position: 'relative',
     width,
     minWidth: full || mobileBlock || inline ? undefined : Math.min(boxW, 160),
@@ -103,6 +127,20 @@ export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000) {
     marginRight: full ? -sidePad : undefined,
     flex,
   }
+
+  if (parentDirection === 'column') {
+    return {
+      ...style,
+      flex: '0 0 auto',
+      width: inline || isImage ? `min(${boxW}px, 100%)` : '100%',
+      minWidth: 0,
+      maxWidth: '100%',
+      marginLeft: undefined,
+      marginRight: undefined,
+    }
+  }
+
+  return style
 }
 
 function flowBoxHeight(component, viewport = 'pc') {

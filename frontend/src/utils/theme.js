@@ -80,6 +80,22 @@ export function customCssBlock(customCss) {
   return css ? `\n/* Custom CSS */\n${css}` : ''
 }
 
+// Mirrors safeCustomCss. The published page wraps user JS in a sandboxed
+// iframe, so the only literal we must escape is `</script` — otherwise a stray
+// occurrence would close the script tag and break the rest of the document.
+// Length-capped at 50KB to match the backend.
+export function safeCustomJs(js) {
+  if (typeof js !== 'string') return ''
+  return js.replace(/<\/\s*script/gi, '<\\/script').slice(0, 50000)
+}
+
+export function customJsBlock(customJs) {
+  const js = safeCustomJs(customJs)
+  if (!js) return ''
+  // Single-backslash escape evaluates to a literal `</script>` end tag.
+  return `<script data-builder-custom-js>\n${js}\n<\/script>`
+}
+
 export function themeCss(theme, customCss = '') {
   return `${themeVariablesCss(theme)}${customCssBlock(customCss)}`
 }

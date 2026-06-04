@@ -22,13 +22,14 @@ export function LabeledText({ label, value, onChange, placeholder }) {
   )
 }
 
-export function LabeledTextarea({ label, value, onChange, placeholder, rows = 3 }) {
+export function LabeledTextarea({ label, value, onChange, placeholder, rows = 3, mono = false }) {
   return (
     <label className="block">
       <span className={labelCls}>{label}</span>
       <textarea
         rows={rows}
-        className={inputCls + ' resize-y'}
+        className={inputCls + ' resize-y' + (mono ? ' font-mono text-xs leading-snug' : '')}
+        spellCheck={!mono}
         value={value ?? ''}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
@@ -228,6 +229,126 @@ export function LabeledCheckbox({ label, checked, onChange, hint }) {
       <span className="text-sm text-[#323130]">{label}</span>
       {hint && <span className="text-xs text-[#605e5c]">{hint}</span>}
     </label>
+  )
+}
+
+// Edit the `tabs` array on a Tabs component: each item is { id, label }. IDs are
+// auto-generated and kept stable when labels are renamed, so already-placed
+// children stay associated with their tab. Removing the active tab moves its
+// children onto the first remaining tab.
+export function TabsEditorControl({ label, value, onChange, activeId, onActiveChange, children, onChildrenChange }) {
+  const tabs = Array.isArray(value) ? value.filter((t) => t && t.id) : []
+
+  const genId = () => {
+    let n = 1
+    const taken = new Set(tabs.map((t) => t.id))
+    while (taken.has(`t${n}`)) n += 1
+    return `t${n}`
+  }
+
+  const rename = (id, label) =>
+    onChange(tabs.map((t) => (t.id === id ? { ...t, label } : t)))
+
+  const add = () => {
+    const id = genId()
+    onChange([...tabs, { id, label: `Tab ${tabs.length + 1}` }])
+    if (onActiveChange) onActiveChange(id)
+  }
+
+  const remove = (id) => {
+    if (tabs.length <= 1) return
+    const next = tabs.filter((t) => t.id !== id)
+    onChange(next)
+    // Reassign any children that pointed at the removed tab.
+    if (children && onChildrenChange) {
+      onChildrenChange(
+        children.map((c) => (c.tabId === id ? { ...c, tabId: next[0].id } : c)),
+      )
+    }
+    if (activeId === id && onActiveChange) onActiveChange(next[0].id)
+  }
+
+  const move = (id, dir) => {
+    const i = tabs.findIndex((t) => t.id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= tabs.length) return
+    const next = [...tabs]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onChange(next)
+  }
+
+  return (
+    <div>
+      <span className={labelCls}>{label}</span>
+      <div className="space-y-2">
+        {tabs.map((t, i) => {
+          const sel = activeId === t.id
+          return (
+            <div
+              key={t.id}
+              className={`rounded-[2px] border p-2 ${
+                sel ? 'border-[#2b579a] bg-[#eff3fb]' : 'border-[#e1dfdd]'
+              }`}
+            >
+              <div className="mb-1 flex items-center justify-between gap-1">
+                <button
+                  type="button"
+                  onClick={() => onActiveChange && onActiveChange(t.id)}
+                  className={`text-xs font-semibold ${
+                    sel ? 'text-[#2b579a]' : 'text-[#605e5c] hover:text-[#2b579a]'
+                  }`}
+                  title="Show this tab on the canvas"
+                >
+                  {sel ? '● ' : ''}Tab {i + 1}
+                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => move(t.id, -1)}
+                    disabled={i === 0}
+                    className="rounded-[2px] px-1 text-xs text-[#605e5c] hover:bg-[#f3f2f1] disabled:opacity-30"
+                    title="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(t.id, 1)}
+                    disabled={i === tabs.length - 1}
+                    className="rounded-[2px] px-1 text-xs text-[#605e5c] hover:bg-[#f3f2f1] disabled:opacity-30"
+                    title="Move down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(t.id)}
+                    disabled={tabs.length <= 1}
+                    className="text-xs text-[#a4262c] hover:underline disabled:text-[#a19f9d] disabled:no-underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                className={inputCls}
+                value={t.label ?? ''}
+                placeholder="Tab label"
+                onChange={(e) => rename(t.id, e.target.value)}
+              />
+            </div>
+          )
+        })}
+        <button
+          type="button"
+          onClick={add}
+          className="w-full rounded-[2px] border border-dashed border-[#8a8886] py-1 text-xs text-[#605e5c] hover:border-[#2b579a] hover:text-[#2b579a]"
+        >
+          + Add tab
+        </button>
+      </div>
+    </div>
   )
 }
 

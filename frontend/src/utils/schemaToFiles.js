@@ -7,9 +7,12 @@
 // value can't break out of its rule.
 import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
 import { iconSvg } from './icons.js'
-import { ALERT_VARIANTS } from '../components/renderer/components.jsx'
-import { customCssBlock, themeVariablesCss } from './theme.js'
+import { ALERT_VARIANTS } from '../components/renderer/constants.js'
+import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
+import { builderInteractiveTags } from './htmlRuntime.js'
+import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
 import {
+  absoluteChildrenHeight,
   flowCanvasHeight,
   flowGap,
   flowItemStyle,
@@ -59,6 +62,54 @@ function styleObjectBlock(styles) {
     .join(' ')
 }
 
+function safeCssProp(value, fallback = '') {
+  const raw = value === undefined || value === null || value === '' ? fallback : value
+  const out = cssValue(raw)
+  const low = out.toLowerCase()
+  if (low.includes('javascript:') || low.includes('expression(') || low.includes('url(')) {
+    return cssValue(fallback)
+  }
+  return out
+}
+
+function controlFieldCss(props = {}) {
+  return [
+    'width:100%',
+    `height:${safeCssProp(props.fieldHeight, '44px')}`,
+    `padding:${safeCssProp(props.fieldPadding, '10px 12px')}`,
+    `border-width:${safeCssProp(props.fieldBorderWidth, '1px')}`,
+    'border-style:solid',
+    `border-color:${safeCssProp(props.fieldBorderColor, '#cbd5e1')}`,
+    `border-radius:${safeCssProp(props.fieldBorderRadius, '8px')}`,
+    'font:inherit',
+    `color:${safeCssProp(props.fieldColor, 'inherit')}`,
+    `background:${safeCssProp(props.fieldBackgroundColor, '#fff')}`,
+    `box-shadow:${safeCssProp(props.fieldBoxShadow, 'none')}`,
+    'box-sizing:border-box',
+    'min-width:0',
+  ].join(';')
+}
+
+function tabsCssVars(props = {}) {
+  return [
+    `--builder-tab-bg:${safeCssProp(props.tabBackgroundColor, 'transparent')}`,
+    `--builder-tab-color:${safeCssProp(props.tabTextColor, '#6b7280')}`,
+    `--builder-tab-active-bg:${safeCssProp(props.activeTabBackgroundColor, 'transparent')}`,
+    `--builder-tab-active-color:${safeCssProp(props.activeTabColor, '#1d1d1f')}`,
+    `--builder-tab-active-border:${safeCssProp(props.activeTabBorderColor, '#2563eb')}`,
+    `--builder-tab-radius:${safeCssProp(props.tabBorderRadius, '0')}`,
+    `--builder-tab-padding:${safeCssProp(props.tabPadding, '8px 14px')}`,
+    `--builder-tab-gap:${safeCssProp(props.tabGap, '4px')}`,
+    `--builder-tablist-bg:${safeCssProp(props.tablistBackgroundColor, 'transparent')}`,
+    `--builder-tablist-border:${safeCssProp(props.tablistBorderColor, '#e5e7eb')}`,
+    `--builder-tablist-padding:${safeCssProp(props.tablistPadding, '0')}`,
+    `--builder-panel-bg:${safeCssProp(props.panelBackgroundColor, 'transparent')}`,
+    `--builder-panel-border:${safeCssProp(props.panelBorderColor, 'transparent')}`,
+    `--builder-panel-radius:${safeCssProp(props.panelBorderRadius, '0')}`,
+    `--builder-panel-padding:${safeCssProp(props.panelPadding, '0')}`,
+  ].join(';')
+}
+
 // Flex/layout behaviour each component's wrapper has in the live renderer.
 function baseRules(type) {
   switch (type) {
@@ -82,7 +133,7 @@ function baseRules(type) {
     case 'icon':
       return 'display:inline-flex; align-items:center; line-height:0;'
     case 'input':
-      return 'display:flex; flex-direction:column; gap:6px;'
+      return 'display:flex; flex-direction:column; gap:6px; min-width:0;'
     default:
       return ''
   }
@@ -105,22 +156,62 @@ function inlineNode(c) {
   const styleStr = styleBlock(c.styles)
   if (c.type === 'container') {
     const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
-    const row = p.direction === 'row'
-    const gap = Number(p.gap)
-    const flex = `display:flex; flex-direction:${row ? 'row' : 'column'}; flex-wrap:wrap; align-items:${p.align || 'stretch'}; justify-content:${p.justify || 'flex-start'}; gap:${Number.isFinite(gap) ? gap : 16}px;`
+    const h = absoluteChildrenHeight(kids, Math.round(c.layout?.h || 160))
     const inner = kids
       .map((ch) => {
-        const cw = row ? `flex:${Math.round(ch.layout?.w || 240)} 1 0; min-width:120px;` : 'flex:0 0 auto; width:100%;'
-        return `<div style="${cw}">${linkWrap(ch, inlineNode(ch))}</div>`
+        const l = ch.layout || {}
+        // Interactive types (accordion/select/tabs) and nested containers need
+        // to grow when used — forcing height:100% would clip the open state or
+        // pinch nested content. Static types still fill the wrapper exactly.
+        const grows = ['accordion', 'select', 'tabs', 'html', 'container'].includes(ch.type)
+        const filled = grows
+          ? { ...ch, styles: { ...(ch.styles || {}), width: '100%' } }
+          : { ...ch, styles: { ...(ch.styles || {}), width: '100%', height: '100%' } }
+        const wrapH = grows ? '' : `;height:${Math.round(l.h || 80)}px`
+        const wrapMinH = grows ? `;min-height:${Math.round(l.h || 80)}px` : ''
+        return `<div style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px${wrapH}${wrapMinH}">${linkWrap(filled, inlineNode(filled))}</div>`
       })
       .join('')
-    return `<div style="${flex} ${styleStr}">${inner}</div>`
+    return `<div style="display:block;position:relative;min-height:${h}px;${styleStr}">${inner}</div>`
+  }
+  if (c.type === 'tabs') {
+    const tabs = (Array.isArray(p.tabs) ? p.tabs : []).filter((t) => t && t.id)
+    const safeTabs = tabs.length ? tabs : [{ id: 't1', label: 'Tab' }]
+    const activeId = safeTabs.some((t) => t.id === p.activeId) ? p.activeId : safeTabs[0].id
+    const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+    const strip = safeTabs
+      .map(
+        (t) =>
+          `<button type="button" role="tab" data-builder-tab="${esc(t.id)}" aria-selected="${
+            t.id === activeId ? 'true' : 'false'
+          }">${esc(t.label || 'Tab')}</button>`,
+      )
+      .join('')
+    const panels = safeTabs
+      .map((t) => {
+        const panelKids = kids.filter((ch) => (ch.tabId || safeTabs[0].id) === t.id)
+        const panelH = absoluteChildrenHeight(panelKids, 120)
+        const inner = panelKids
+          .map((ch) => {
+            const l = ch.layout || {}
+            const filled = {
+              ...ch,
+              styles: { ...(ch.styles || {}), width: '100%', height: '100%' },
+            }
+            return `<div style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px">${linkWrap(filled, inlineNode(filled))}</div>`
+          })
+          .join('')
+        const hidden = t.id === activeId ? '' : ' hidden'
+        return `<div role="tabpanel" data-builder-panel="${esc(t.id)}"${hidden} style="display:block;position:relative;min-height:${panelH}px">${inner}</div>`
+      })
+      .join('')
+    return `<div data-builder-tabs="${esc(c.id)}" style="display:flex;flex-direction:column;${tabsCssVars(p)};${styleStr}"><div role="tablist">${strip}</div>${panels}</div>`
   }
   if (c.type === 'select') {
     const opts = String(p.options || '').split('\n').map((s) => s.trim()).filter(Boolean)
-    return `<label style="display:flex;flex-direction:column;gap:6px;${styleStr}">${
+    return `<label style="display:flex;flex-direction:column;gap:6px;min-width:0;${styleStr}">${
       p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
-    }<select style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff">${
+    }<select style="${controlFieldCss(p)}">${
       p.placeholder ? `<option value="" disabled selected>${esc(p.placeholder)}</option>` : ''
     }${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`
   }
@@ -130,6 +221,16 @@ function inlineNode(c) {
   }
   if (c.type === 'accordion') {
     return `<details style="border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px;${styleStr}"><summary style="cursor:pointer;font-weight:600;padding:12px 0">${esc(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${esc(p.text)}</div></details>`
+  }
+  if (c.type === 'html') {
+    const code = typeof p.code === 'string' ? p.code : ''
+    const looksFull = /^\s*<!DOCTYPE|<html[\s>]/i.test(code)
+    const doc = looksFull
+      ? code
+      : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
+    const h = Math.max(40, Math.round(c.layout?.h || 240))
+    const safe = doc.replace(/"/g, '&quot;')
+    return `<iframe srcdoc="${safe}" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy" style="display:block;width:100%;height:${h}px;border:0;background:transparent;${styleStr}"></iframe>`
   }
   const tag = tagFor(c.type)
   const base = baseRules(c.type)
@@ -203,7 +304,7 @@ function innerHtml(c) {
       const t = ['text', 'email', 'number', 'tel', 'url'].includes(p.inputType) ? p.inputType : 'text'
       return `${
         p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
-      }<input type="${t}" placeholder="${esc(p.placeholder)}" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" />`
+      }<input type="${t}" placeholder="${esc(p.placeholder)}" style="${controlFieldCss(p)}" />`
     }
     default:
       return ''
@@ -227,7 +328,7 @@ function openTag(c) {
   return `<${tag} class="${cls}">`
 }
 
-function pageHtml(page, fileTitle, cssHref = 'styles.css') {
+function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '') {
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -240,16 +341,30 @@ function pageHtml(page, fileTitle, cssHref = 'styles.css') {
     <div class="page p-${page.id}">
 ${pageBody(page)}
     </div>
+    ${builderInteractiveTags()}
+    ${customJsBlock(customJs)}
   </body>
 </html>`
 }
 
 function pageBody(page) {
   const comps = Array.isArray(page.components) ? page.components : []
+  const canvasW = page.canvasWidth || CANVAS_WIDTH
   return comps
     .map((c) => {
-      if (['container', 'select', 'alert', 'accordion'].includes(c.type)) {
-        return `      ${linkWrap(c, inlineNode(c))}`
+      if (['container', 'tabs', 'select', 'alert', 'accordion', 'html'].includes(c.type)) {
+        // Wrap inlineNode types in an outer that mirrors the React Renderer
+        // layout: flow mode → flowItemStyle (flex); non-flow → absolute. Without
+        // this, top-level container/tabs floated at intrinsic size and the
+        // iframe preview looked broken next to the non-Custom-JS path.
+        let wrap
+        if (page.flowMode) {
+          wrap = styleObjectBlock(flowItemStyle(c, 'pc', canvasW))
+        } else {
+          const l = c.layout || {}
+          wrap = `position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px`
+        }
+        return `      <div style="${wrap}">${linkWrap(c, inlineNode(c))}</div>`
       }
       const tag = tagFor(c.type)
       const el =
@@ -360,7 +475,7 @@ export function schemaToSingleHtml(schema, title = 'My Site') {
     },
     { includeCustomCss: false },
   )
-  const html = pageHtml(page, title)
+  const html = pageHtml(page, title, 'styles.css', schema?.customJs)
   return html.replace(
     '<link rel="stylesheet" href="styles.css" />',
     `<style>\n${css}${customCssBlock(schema?.customCss)}\n    </style>`,
@@ -434,6 +549,8 @@ ${pageBody(page)}
         applyLayout();
       })();
     </script>
+    ${builderInteractiveTags()}
+    ${customJsBlock(schema?.customJs)}
   </body>
 </html>`
 }

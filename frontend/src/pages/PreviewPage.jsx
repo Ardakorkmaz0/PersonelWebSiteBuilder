@@ -1,11 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { getPublicSite } from '../api/sites.js'
 import { Renderer } from '../components/renderer/Renderer.jsx'
 import { canvasHeight } from '../components/renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
-import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../utils/htmlRuntime.js'
-import { customCssBlock, themeVariablesCss } from '../utils/theme.js'
+import {
+  HTML_ALLOW,
+  PUBLIC_HTML_SANDBOX,
+  STATIC_HTML_SANDBOX,
+  withoutExecutableScripts,
+} from '../utils/htmlRuntime.js'
+import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
+import { customCssBlock, safeCustomJs, themeVariablesCss } from '../utils/theme.js'
 
 const MOBILE_BREAKPOINT = 768
 
@@ -92,6 +98,7 @@ function ResponsiveSite({ page }) {
 
 export default function PreviewPage() {
   const { slug } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [site, setSite] = useState(null)
   const [status, setStatus] = useState('loading') // loading | ok | notfound | error
   const [activeId, setActiveId] = useState(null)
@@ -127,6 +134,43 @@ export default function PreviewPage() {
     return () => window.removeEventListener('hashchange', pick)
   }, [site])
 
+  // All hooks MUST be called on every render in the same order — keep these
+  // memos above the early returns below so React doesn't see the hook count
+  // change between "loading" and "ok" renders.
+  const pages = site?.schema?.pages || []
+  const current = pages.find((p) => p.id === activeId) || pages[0] || {}
+  const hasCustomJs = !!safeCustomJs(site?.schema?.customJs)
+  const hasHtmlEmbed = useMemo(() => {
+    const walk = (arr) => {
+      for (const c of arr || []) {
+        if (c?.type === 'html') return true
+        if (Array.isArray(c?.children) && walk(c.children)) return true
+      }
+      return false
+    }
+    return (site?.schema?.pages || []).some((p) => walk(p?.components))
+  }, [site?.schema?.pages])
+  const useIframe = hasCustomJs || hasHtmlEmbed
+  const staticMode = searchParams.get('mode') === 'static'
+  const iframeHtml = useMemo(() => {
+    if (!useIframe || !current?.id) return ''
+    const pageSchema = {
+      theme: site?.schema?.theme,
+      customCss: site?.schema?.customCss,
+      customJs: staticMode ? '' : site?.schema?.customJs,
+      pages: [current],
+    }
+    return schemaToSingleHtml(pageSchema, site?.title || current.name || 'My Site')
+  }, [
+    useIframe,
+    staticMode,
+    current,
+    site?.schema?.theme,
+    site?.schema?.customCss,
+    site?.schema?.customJs,
+    site?.title,
+  ])
+
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center text-gray-400">
@@ -157,16 +201,44 @@ export default function PreviewPage() {
   // runs (isolated — allow-scripts WITHOUT allow-same-origin, so it cannot touch
   // this app or the visitor's session). Native, full-viewport, responsive.
   if (site?.html) {
+    const staticMode = searchParams.get('mode') === 'static'
+    const iframeHtml = staticMode ? withoutExecutableScripts(site.html) : site.html
+    const setHtmlPreviewMode = (nextMode) => {
+      const next = new URLSearchParams(searchParams)
+      if (nextMode === 'static') next.set('mode', 'static')
+      else next.delete('mode')
+      setSearchParams(next, { replace: true })
+    }
     return (
       <>
         <iframe
           title={site.title || 'site'}
-          srcDoc={site.html}
-          sandbox={PUBLIC_HTML_SANDBOX}
+          srcDoc={iframeHtml}
+          sandbox={staticMode ? STATIC_HTML_SANDBOX : PUBLIC_HTML_SANDBOX}
           allow={HTML_ALLOW}
           allowFullScreen
           style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', border: 'none' }}
         />
+        <div className="fixed right-4 top-4 z-[100] flex overflow-hidden rounded-[2px] border border-[#8a8886] bg-white text-xs font-semibold shadow-lg">
+          <button
+            type="button"
+            onClick={() => setHtmlPreviewMode('static')}
+            className={`px-3 py-2 ${
+              staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+            }`}
+          >
+            Static preview
+          </button>
+          <button
+            type="button"
+            onClick={() => setHtmlPreviewMode('live')}
+            className={`px-3 py-2 ${
+              !staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+            }`}
+          >
+            Run JavaScript
+          </button>
+        </div>
         {site.published === false && (
           <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-[2px] border border-[#8a8886] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
             Draft preview — this site is not published yet, only you can see it.
@@ -176,8 +248,6 @@ export default function PreviewPage() {
     )
   }
 
-  const pages = site?.schema?.pages || []
-  const current = pages.find((p) => p.id === activeId) || pages[0] || {}
   const siteCss = `${themeVariablesCss(site?.schema?.theme)}
 body { font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, sans-serif); color: var(--site-text, #1d1d1f); background: var(--site-bg, #ffffff); }
 ${customCssBlock(site?.schema?.customCss)}`
@@ -185,6 +255,80 @@ ${customCssBlock(site?.schema?.customCss)}`
   const go = (id) => {
     setActiveId(id)
     window.history.pushState(null, '', `#${encodeURIComponent(id)}`)
+  }
+
+  if (useIframe) {
+    const setComponentPreviewMode = (nextMode) => {
+      const next = new URLSearchParams(searchParams)
+      if (nextMode === 'static') next.set('mode', 'static')
+      else next.delete('mode')
+      setSearchParams(next, { replace: true })
+    }
+    return (
+      <>
+        {pages.length > 1 && (
+          <nav className="fixed inset-x-0 top-0 z-[110] flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/80 px-3 py-2 backdrop-blur">
+            {pages.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => go(p.id)}
+                className={`rounded-full px-3 py-1 text-sm transition ${
+                  p.id === current.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+          </nav>
+        )}
+        <iframe
+          key={`${current.id}-${staticMode ? 'static' : 'live'}`}
+          title={site.title || current.name || 'site'}
+          srcDoc={iframeHtml}
+          // Component sites keep allow-scripts on in BOTH modes so the internal
+          // runtime (responsive scale for non-flow pages, tabs handler, anchor
+          // smooth-scroll) always works. Static mode just strips the user's
+          // customJs from the emitted HTML (handled in the useMemo above), so
+          // layout/clicks stay sane and only user effects disappear.
+          sandbox={PUBLIC_HTML_SANDBOX}
+          allow={HTML_ALLOW}
+          allowFullScreen
+          style={{
+            position: 'fixed',
+            inset: pages.length > 1 ? '44px 0 0 0' : 0,
+            width: '100%',
+            height: pages.length > 1 ? 'calc(100% - 44px)' : '100%',
+            border: 'none',
+          }}
+        />
+        <div className="fixed right-4 top-4 z-[120] flex overflow-hidden rounded-[2px] border border-[#8a8886] bg-white text-xs font-semibold shadow-lg">
+          <button
+            type="button"
+            onClick={() => setComponentPreviewMode('static')}
+            className={`px-3 py-2 ${
+              staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+            }`}
+          >
+            Static preview
+          </button>
+          <button
+            type="button"
+            onClick={() => setComponentPreviewMode('live')}
+            className={`px-3 py-2 ${
+              !staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+            }`}
+          >
+            Run JavaScript
+          </button>
+        </div>
+        {site.published === false && (
+          <div className="fixed bottom-4 left-1/2 z-[120] -translate-x-1/2 rounded-[2px] border border-[#8a8886] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
+            Draft preview — this site is not published yet, only you can see it.
+          </div>
+        )}
+      </>
+    )
   }
 
   return (

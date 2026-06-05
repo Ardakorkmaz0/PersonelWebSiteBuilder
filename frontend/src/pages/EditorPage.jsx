@@ -458,7 +458,17 @@ export default function EditorPage() {
               HTML Flow
             </button>
           )}
-          <AiBar />
+          <AiBar
+            currentHtml={siteHtml}
+            onApplyHtml={(html) => {
+              // HTML mode in the AI chat just shipped a fresh document — push
+              // it into site.html so HtmlWorkspace renders it. Mark dirty so
+              // the toolbar's "Unsaved changes" hint kicks in; the user still
+              // has to press Save to commit it server-side.
+              setSiteHtml(html)
+              setHtmlDirty(true)
+            }}
+          />
           <div className="flex items-center rounded-[2px] border border-[#8a8886] p-0.5 text-xs font-medium">
             <button
               onClick={() => setViewport('pc')}

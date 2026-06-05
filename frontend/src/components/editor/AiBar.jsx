@@ -13,7 +13,7 @@ import AiChatPanel from './AiChatPanel.jsx'
 // Compact toolbar button that opens the AI chat panel.
 // Replaces the earlier single-line prompt input — the chat panel itself
 // holds the input, history, and per-turn tool calls.
-export default function AiBar() {
+export default function AiBar({ currentHtml = '', onApplyHtml }) {
   const [open, setOpen] = useState(false)
   const [hasKey, setHasKey] = useState(() => !!getApiKey())
 
@@ -73,7 +73,12 @@ export default function AiBar() {
         <span>AI</span>
         {!hasKey && <span className="ml-0.5 rounded bg-white/20 px-1 text-[9px]">setup</span>}
       </button>
-      <AiChatPanel open={open} onClose={() => setOpen(false)} />
+      <AiChatPanel
+        open={open}
+        onClose={() => setOpen(false)}
+        currentHtml={currentHtml}
+        onApplyHtml={onApplyHtml}
+      />
     </>
   )
 }

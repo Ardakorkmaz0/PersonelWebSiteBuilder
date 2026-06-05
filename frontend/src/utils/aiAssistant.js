@@ -1297,6 +1297,152 @@ function isFailoverWorthy(err) {
   )
 }
 
+// Generation mode: ask the model for a complete HTML document instead of
+// structured tool calls. Llama 3.1 8B / gemma / phi can't reliably tool-call
+// but write decent HTML, so this turns their weakness into a path that works.
+// Returns { html, providerUsed } — caller writes the html to site.html and
+// the editor switches to HtmlWorkspace automatically (isHtmlSite truthy).
+export async function runAiHtmlPrompt(prompt, { history = [], currentHtml = '' } = {}) {
+  const candidates = readyProviders()
+  if (!candidates.length) {
+    throw new Error('No AI provider is set up yet. Open Settings (Properties → AI Assistant) and paste any free key, or pick Local AI if you have Ollama running.')
+  }
+  // Try the active provider first, then failover on quota / unreachable.
+  let lastErr = null
+  for (const p of candidates) {
+    const original = getProvider()
+    if (original !== p.id) {
+      setProvider(p.id)
+      try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+    }
+    try {
+      const html = await callHtmlModeOnce(prompt, { history, currentHtml })
+      return { html, providerUsed: p.id }
+    } catch (e) {
+      lastErr = e
+      if (!isFailoverWorthy(e)) {
+        if (original !== p.id) setProvider(original)
+        throw e
+      }
+    }
+  }
+  throw lastErr || new Error('All providers failed to generate HTML.')
+}
+
+const HTML_SYSTEM_PROMPT = `You are a website-builder backend that emits ONE complete, self-contained HTML5 document per request. Output the document text directly — no code fences, no commentary, no explanation. Start with <!DOCTYPE html> and end with </html>.
+
+Rules:
+- All visible copy must be in English even if the user writes in another language. Translate user-provided text to English before placing it.
+- One file: inline ALL CSS in a single <style> in <head>. Inline any small JS in a <script> at the end of <body>. Do NOT link external stylesheets/scripts except for fonts.googleapis.com.
+- Visually polished and modern: clean typography, sensible spacing, a coherent colour palette, responsive layout via CSS flex / grid + a single @media (max-width: 768px) breakpoint.
+- Use semantic tags: <header>, <nav>, <main>, <section>, <article>, <footer>.
+- Use Google Fonts when the user names a font ("Inter", "Poppins", "Playfair Display", "JetBrains Mono", etc.) — add the <link rel="stylesheet" href="https://fonts.googleapis.com/css2?..."> in <head>.
+- Include placeholder copy that matches the topic the user named (so a "youtube site" gets video-platform copy, not lorem ipsum).
+- If the user asks for a change to an EXISTING document, return the FULL updated document — never a diff, never just the new fragment.
+
+THE LATEST USER MESSAGE IS THE PRIMARY INTENT. Older turns are reference only. If the user previously asked for X and now asks for Y, return a Y-focused document. Do not blend two unrelated requests.`
+
+// One-shot HTML generation against the active provider, reusing the existing
+// transport plumbing. Unlike runAiPromptOnce there are no tools and no rounds
+// — the model's first text response IS the answer.
+async function callHtmlModeOnce(prompt, { history = [], currentHtml = '' }) {
+  const provider = getProvider()
+  const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
+  const apiKey = getApiKey(provider)
+  if (!apiKey && providerInfo?.needsKey !== false) {
+    throw new Error(`Set your ${providerInfo?.label || provider} API key in the editor settings.`)
+  }
+  // Build a flat user message: prior chat history (cap 10), current HTML
+  // snapshot (if any), and the latest request. Cheaper than per-turn role
+  // ping-pong for a single-shot generation.
+  const HIST = (history || [])
+    .filter((m) => m && m.text)
+    .slice(-10)
+    .map((m) => `${m.role === 'model' || m.role === 'assistant' ? 'Assistant' : 'User'}: ${m.text}`)
+    .join('\n')
+  const seed = currentHtml && currentHtml.trim()
+    ? `\n\nCurrent HTML (rewrite this):\n${currentHtml.slice(0, 30_000)}\n`
+    : ''
+  const fullPrompt = `${HIST ? `Recent chat:\n${HIST}\n` : ''}${seed}\nUser request: ${prompt}\n\nReturn the full HTML document now.`
+
+  // For Gemini we hit the same generateContent endpoint without tools.
+  if (provider === 'gemini') {
+    const modelId = getModel('gemini')
+    const url = `${buildGeminiEndpoint(modelId)}?key=${encodeURIComponent(apiKey)}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { role: 'user', parts: [{ text: HTML_SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
+      }),
+    })
+    if (!res.ok) throw new Error(describeApiError(res.status, await res.text(), 'gemini'))
+    const data = await res.json()
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    return cleanHtmlResponse(text)
+  }
+  // Groq / OpenRouter / Local all speak OpenAI-compatible chat-completions.
+  let url = ''
+  let extraHeaders = {}
+  let extraBody = {}
+  let modelId = ''
+  if (provider === 'groq') {
+    url = GROQ_ENDPOINT
+    modelId = getModel('groq')
+  } else if (provider === 'openrouter') {
+    url = OPENROUTER_ENDPOINT
+    modelId = getModel('openrouter')
+    extraHeaders = {
+      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
+      'X-Title': 'PersonelWebSiteBuilder',
+    }
+  } else {
+    // local
+    const base = getEndpoint('local') || 'http://localhost:11434/v1'
+    url = `${resolveBackendBase()}${LOCAL_PROXY_PATH}/proxy/`
+    modelId = getModel('local')
+    extraBody = { _localBase: base }
+  }
+  const headers = { 'Content-Type': 'application/json', ...extraHeaders }
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: modelId,
+      messages: [
+        { role: 'system', content: HTML_SYSTEM_PROMPT },
+        { role: 'user', content: fullPrompt },
+      ],
+      temperature: 0.4,
+      max_tokens: 8192,
+      ...extraBody,
+    }),
+  })
+  if (!res.ok) throw new Error(describeApiError(res.status, await res.text(), provider))
+  const data = await res.json()
+  const text = data?.choices?.[0]?.message?.content || ''
+  return cleanHtmlResponse(text)
+}
+
+// Models often wrap the document in a ```html ... ``` fence even when told
+// not to. Strip the wrapper; if no fence, return as-is. Guarantees the
+// caller never has to pattern-match the model's chrome. Exported so the
+// test suite can pin every shape of response we've seen in the wild.
+export function cleanHtmlResponse(raw) {
+  if (typeof raw !== 'string') return ''
+  let s = raw.trim()
+  // ``` or ```html ... ```
+  const fence = s.match(/```(?:html)?\s*\n?([\s\S]*?)\n?```/i)
+  if (fence) s = fence[1].trim()
+  // Some models prefix prose; drop everything before <!DOCTYPE or <html.
+  const docStart = s.search(/<!DOCTYPE\s+html|<html[\s>]/i)
+  if (docStart > 0) s = s.slice(docStart)
+  return s
+}
+
 export async function runAiPrompt(prompt, { maxRounds = 3, history = [] } = {}) {
   const candidates = readyProviders()
   if (!candidates.length) {

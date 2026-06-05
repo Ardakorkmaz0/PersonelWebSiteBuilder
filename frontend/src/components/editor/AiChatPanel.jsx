@@ -8,6 +8,7 @@ import {
   getModelsFor,
   getProvider,
   recoverIntentFromPrompt,
+  runAiHtmlPrompt,
   runAiPrompt,
   setProvider,
 } from '../../utils/aiAssistant.js'
@@ -47,7 +48,7 @@ function writeHistory(messages) {
 // reply (left-aligned), or a tool-calls strip (rendered between the user turn
 // and the assistant reply). The store still records every tool call, so
 // Ctrl+Z walks the canvas back exactly like a manual edit would.
-export default function AiChatPanel({ open, onClose }) {
+export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHtml }) {
   const [messages, setMessages] = useState(() => readHistory())
   const lastSendAt = useRef(0)
   const THROTTLE_MS = 2500
@@ -56,6 +57,17 @@ export default function AiChatPanel({ open, onClose }) {
   const [error, setError] = useState('')
   const scrollerRef = useRef(null)
   const textareaRef = useRef(null)
+  // 'components' uses the schema tool calls; 'html' asks the model for a full
+  // HTML document and ships it to site.html. The HTML path is what the user
+  // actually wants for "make me a youtube site" with weak local models —
+  // those write HTML reliably even though they can't tool-call.
+  const [aiMode, setAiMode] = useState(() => {
+    try { return localStorage.getItem('pwb_ai_mode') === 'html' ? 'html' : 'components' }
+    catch { return 'components' }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('pwb_ai_mode', aiMode) } catch { /* ignore */ }
+  }, [aiMode])
 
   // The header rebuilds whenever a storage event fires so that if the toolbar
   // (AiBar) auto-corrected the model on boot, the badge here updates too.
@@ -230,6 +242,39 @@ export default function AiChatPanel({ open, onClose }) {
     setDraft('')
     setBusy(true)
     try {
+      // ----- HTML mode: ask the model for a full HTML document --------------
+      if (aiMode === 'html') {
+        if (!onApplyHtml) {
+          setError('HTML mode is not wired into this editor session.')
+          return
+        }
+        const lastDivider = messages.findLastIndex((m) => m.role === 'divider')
+        const since = lastDivider >= 0 ? messages.slice(lastDivider + 1) : messages
+        const history = [...since, userMsg]
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', text: m.text || '' }))
+          .slice(0, -1)
+        const { html: generated } = await runAiHtmlPrompt(trimmed, { history, currentHtml })
+        if (!generated || !/<html[\s>]/i.test(generated)) {
+          setMessages((m) => [
+            ...m,
+            { id: rand(), role: 'assistant', text:
+              "The model didn't return a usable HTML document. Try rephrasing (e.g. \"build me a single-page personal portfolio site\") or switch to Components mode.",
+              allFailed: true,
+            },
+          ])
+          return
+        }
+        onApplyHtml(generated)
+        setMessages((m) => [
+          ...m,
+          { id: rand(), role: 'assistant', text:
+            `Generated ~${Math.round(generated.length / 1024)} KB of HTML and loaded it into the editor. Iterate by saying things like "make the header sticky" or "use Inter font" — I'll rewrite the document.`,
+          },
+        ])
+        return
+      }
+      // ----- Components mode (default tool-calling path) --------------------
       // Pass prior text-only turns so the model has conversation context —
       // but only AFTER the most recent "Fresh chat" divider so older topics
       // can't bleed into the current request.
@@ -316,13 +361,34 @@ export default function AiChatPanel({ open, onClose }) {
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-[#e1dfdd] bg-gradient-to-r from-[#4f46e5] to-[#2563eb] px-3 py-2 text-white">
-        <span className="text-xs font-bold uppercase tracking-wide opacity-90">AI Assistant</span>
+        <span className="text-xs font-bold uppercase tracking-wide opacity-90">AI</span>
         <span
-          className="ml-1 truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px]"
+          className="truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px]"
           title={`Active model: ${modelLabel}`}
         >
           {modelLabel}
         </span>
+        {/* Mode toggle — Components uses the schema tool calls; HTML asks the
+            model for a full document and ships it to site.html (the strong
+            path on weak local models that can't tool-call). */}
+        <div className="ml-1 flex overflow-hidden rounded-full bg-white/15 text-[10px] font-medium">
+          <button
+            type="button"
+            onClick={() => setAiMode('components')}
+            title="Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B"
+            className={`px-2 py-0.5 transition ${aiMode === 'components' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
+          >
+            🧱 Components
+          </button>
+          <button
+            type="button"
+            onClick={() => setAiMode('html')}
+            title="Ask the model for a full HTML document — best on Llama 3.1 8B / gemma / phi"
+            className={`px-2 py-0.5 transition ${aiMode === 'html' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
+          >
+            📄 HTML
+          </button>
+        </div>
         <button
           type="button"
           onClick={freshChat}

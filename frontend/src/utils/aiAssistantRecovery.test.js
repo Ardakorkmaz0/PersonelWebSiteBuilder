@@ -4,10 +4,44 @@
 // patterns A..D so a future refactor can't silently undo it.
 import { describe, expect, it } from 'vitest'
 import {
+  cleanHtmlResponse,
   extractTextCalls,
   mapTopicToTemplate,
   recoverIntentFromPrompt,
 } from './aiAssistant.js'
+
+describe('cleanHtmlResponse — AI HTML-mode output parser', () => {
+  it('passes a bare doctype document through unchanged', () => {
+    const doc = '<!DOCTYPE html><html><head></head><body><h1>Hi</h1></body></html>'
+    expect(cleanHtmlResponse(doc)).toBe(doc)
+  })
+
+  it('strips ```html ... ``` code fences (the most common model wrapper)', () => {
+    const wrapped = '```html\n<!DOCTYPE html><html><body>x</body></html>\n```'
+    expect(cleanHtmlResponse(wrapped)).toBe('<!DOCTYPE html><html><body>x</body></html>')
+  })
+
+  it('strips a bare ``` ... ``` fence (no language tag)', () => {
+    const wrapped = '```\n<!DOCTYPE html><html></html>\n```'
+    expect(cleanHtmlResponse(wrapped)).toBe('<!DOCTYPE html><html></html>')
+  })
+
+  it('drops chat prose before the document so only the HTML lands', () => {
+    const noisy = "Sure, here you go:\n\n<!DOCTYPE html><html><body>Hi</body></html>"
+    expect(cleanHtmlResponse(noisy)).toBe('<!DOCTYPE html><html><body>Hi</body></html>')
+  })
+
+  it('handles <html> with no DOCTYPE', () => {
+    const noisy = 'Here is the markup:\n<html><body>Hi</body></html>'
+    expect(cleanHtmlResponse(noisy)).toBe('<html><body>Hi</body></html>')
+  })
+
+  it('returns empty string for non-string / null input', () => {
+    expect(cleanHtmlResponse(null)).toBe('')
+    expect(cleanHtmlResponse(undefined)).toBe('')
+    expect(cleanHtmlResponse(123)).toBe('')
+  })
+})
 
 describe('recoverIntentFromPrompt — when the model emits zero usable calls', () => {
   it('reads "do me a youtube site" → applyTemplate(portfolio) (creator)', () => {

@@ -47,6 +47,8 @@ build/
 # Environment files
 .env
 .env.*
+!.env.example
+!backend/.env.example
 
 # IDEs and editors
 .vscode/

@@ -3,6 +3,15 @@ djangorestframework==3.17.1
 django-cors-headers==4.9.0
 Pillow==12.2.0
 
+# Configuration / production
+python-dotenv==1.2.2          # loads backend/.env
+dj-database-url==3.1.2        # parses DATABASE_URL for Postgres / SQLite
+whitenoise==6.12.0            # serves /static/ in prod, no nginx required
+django-csp==4.0               # Content-Security-Policy header
+psycopg[binary]==3.3.4        # Postgres driver — picks up via DATABASE_URL
+sentry-sdk==2.61.1            # only initialised when SENTRY_DSN is set
+gunicorn==23.0.0              # prod WSGI server (Dockerfile CMD)
+
 # Dev / test
 pytest==9.0.3
 pytest-django==4.12.0

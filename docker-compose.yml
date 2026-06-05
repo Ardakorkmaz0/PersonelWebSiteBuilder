@@ -1,0 +1,61 @@
+# Local stand-in for the production stack: Django behind gunicorn, Postgres
+# as the DB, an optional Nginx in front for HTTPS termination + the frontend.
+#
+# Usage (from repo root):
+#   docker compose up --build
+# then visit http://localhost:8000 (no frontend) or http://localhost:80
+# (with frontend behind nginx — uncomment the nginx service).
+#
+# Real production should set DJANGO_DEBUG=False, supply DJANGO_SECRET_KEY,
+# DJANGO_ALLOWED_HOSTS, and DATABASE_URL via the orchestrator's secret store
+# instead of an .env file.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: builder
+      POSTGRES_PASSWORD: builder_dev_password
+      POSTGRES_DB: builder
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U builder']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build: ./backend
+    environment:
+      DJANGO_DEBUG: 'False'
+      # ⚠ Replace before exposing on the internet — generate via:
+      #   python -c "import secrets; print(secrets.token_urlsafe(60))"
+      DJANGO_SECRET_KEY: 'change-me-before-going-live-pls'
+      DJANGO_ALLOWED_HOSTS: 'localhost,127.0.0.1'
+      DATABASE_URL: 'postgres://builder:builder_dev_password@db:5432/builder'
+      DJANGO_CORS_ORIGINS: 'http://localhost:5173'
+      # Toggle these on once real TLS terminates in front:
+      DJANGO_SSL_REDIRECT: 'False'
+    volumes:
+      # Persist uploaded images and the SQLite fallback across rebuilds.
+      - media:/app/media
+    ports:
+      - '8000:8000'
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        python manage.py migrate --noinput
+        gunicorn config.wsgi:application \
+          --bind 0.0.0.0:8000 \
+          --workers 3 --timeout 120 --access-logfile -
+    restart: unless-stopped
+
+volumes:
+  postgres_data: {}
+  media: {}

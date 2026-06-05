@@ -1,0 +1,17 @@
+# Keep the image lean — these are dev-only / regenerable.
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+*.sqlite3
+media/
+staticfiles/
+.git/
+.github/
+.gitignore
+.DS_Store

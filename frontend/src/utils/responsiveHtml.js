@@ -6,7 +6,7 @@ import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
 import { iconSvg } from './icons.js'
 import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
-import { builderInteractiveTags } from './htmlRuntime.js'
+import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
 // Visual styles we keep on elements; layout/box metrics come from the flow.
@@ -235,6 +235,9 @@ function itemEl(c, multi, colOverride) {
 // Render an HTML Embed as a sandboxed iframe; pass the user's code via srcdoc
 // so it can never read the surrounding document. Defaults to a fixed pixel
 // height (boxH) since iframe content can't size itself from outside.
+// withBuilderInteractiveHtml is layered on top so `<a href="#">` inside the
+// embed scrolls to top instead of navigating the sandboxed iframe to
+// `about:srcdoc#` (which whites it out under `allow-scripts` only).
 function htmlEmbed(c, cls, col) {
   const p = c.props || {}
   const code = typeof p.code === 'string' ? p.code : ''
@@ -243,7 +246,7 @@ function htmlEmbed(c, cls, col) {
     ? code
     : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
   const h = Math.max(40, Math.round(c.layout?.h || 240))
-  const safeDoc = doc.replace(/"/g, '&quot;')
+  const safeDoc = withBuilderInteractiveHtml(doc).replace(/"/g, '&quot;')
   return `<iframe class="${cls}" srcdoc="${safeDoc}" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy"${styleAttr(c, `${col};width:100%;height:${h}px;border:0;background:transparent`)}></iframe>`
 }
 

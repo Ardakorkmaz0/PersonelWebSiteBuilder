@@ -10,7 +10,20 @@ import {
   groupSnippets,
   jsSnippets,
 } from '../../utils/snippets.js'
-import { AI_MODELS, getApiKey, getModel, setApiKey, setModel } from '../../utils/aiAssistant.js'
+import {
+  AI_PROVIDERS,
+  fetchLocalStatus,
+  getApiKey,
+  getEndpoint,
+  getModel,
+  getModelsFor,
+  getProvider,
+  pickBestLocalModel,
+  setApiKey,
+  setEndpoint,
+  setModel,
+  setProvider,
+} from '../../utils/aiAssistant.js'
 import {
   LabeledText,
   LabeledTextarea,
@@ -28,62 +41,231 @@ import {
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
 
+// Compact connection-status pill for the local provider: green when Ollama
+// is reachable and reports installed models, amber while we ping, red when
+// it can't be reached. Doubles as a refresh button.
+function LocalStatusRow({ status, refreshing, onRefresh }) {
+  let tone = 'amber'
+  let label = 'Checking…'
+  let detail = ''
+  if (!refreshing && status) {
+    if (status.ok) {
+      tone = 'emerald'
+      const count = (status.models || []).length
+      label = count
+        ? `Ready · ${count} model${count === 1 ? '' : 's'} found`
+        : 'Reachable but no models installed'
+      detail = count
+        ? `Runtime: ${status.runtime || 'ollama'}`
+        : 'Pull one with `ollama pull qwen2.5`.'
+    } else {
+      tone = 'red'
+      label = 'Cannot reach the local runtime'
+      detail = status.reason
+        ? `Make sure Ollama is running. (${status.reason})`
+        : 'Make sure Ollama (or LM Studio) is running.'
+    }
+  }
+  const toneClasses = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    red: 'border-red-200 bg-red-50 text-red-900',
+  }[tone]
+  return (
+    <div className={`flex items-start justify-between gap-2 rounded-[2px] border p-2 text-[11px] ${toneClasses}`}>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{label}</p>
+        {detail && <p className="mt-0.5 leading-relaxed opacity-80">{detail}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={refreshing}
+        className="rounded-[2px] border border-current bg-white px-2 py-0.5 text-[10px] font-semibold opacity-90 hover:opacity-100 disabled:cursor-wait"
+      >
+        {refreshing ? '…' : 'Refresh'}
+      </button>
+    </div>
+  )
+}
+
 // Read/write the saved Gemini API key. The key is stored in localStorage and
 // sent directly from the browser to Google's API — the Django backend never
 // sees it. Saved per browser, not per site.
 function AiAssistantSection() {
-  const [value, setValue] = useState(() => getApiKey())
+  const [provider, setProviderState] = useState(() => getProvider())
+  const [value, setValue] = useState(() => getApiKey(provider))
   const [reveal, setReveal] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
-  const [model, setModelState] = useState(() => getModel())
+  const [model, setModelState] = useState(() => getModel(provider))
+  const [endpoint, setEndpointState] = useState(() => getEndpoint(provider))
+  const [localStatus, setLocalStatus] = useState(null) // { ok, runtime, models, reason }
+  const [localRefreshing, setLocalRefreshing] = useState(false)
+  const knownModels = getModelsFor(provider)
+  const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
+  const needsKey = providerInfo?.needsKey !== false
+  // For the local provider we merge the auto-discovered model list (whatever
+  // the user has actually pulled with `ollama pull`) with our suggestions.
+  // For other providers `models` stays the curated dropdown.
+  const discoveredModels = (provider === 'local' && localStatus?.ok && Array.isArray(localStatus.models))
+    ? localStatus.models.map((id) => ({ id, label: id, note: '' }))
+    : []
+  const models = provider === 'local' && discoveredModels.length
+    ? discoveredModels
+    : knownModels
+
+  // Ping the backend proxy each time the user opens the panel on the local
+  // provider — that's how we know which models they have pulled AND whether
+  // Ollama is actually running.
   useEffect(() => {
-    setApiKey(value || '')
+    if (provider !== 'local') {
+      setLocalStatus(null)
+      return undefined
+    }
+    let cancelled = false
+    setLocalRefreshing(true)
+    fetchLocalStatus(endpoint || undefined).then((s) => {
+      if (!cancelled) {
+        setLocalStatus(s)
+        setLocalRefreshing(false)
+        // Auto-pick: if the saved model isn't installed, or even if it is but
+        // is a weak-tool-calling model (e.g. gemma) when a stronger one is
+        // available (llama3.1 / qwen2.5 / mistral-nemo), switch automatically.
+        if (s?.ok && Array.isArray(s.models) && s.models.length) {
+          const best = pickBestLocalModel(s.models, model)
+          if (best && best !== model) setModelState(best)
+        }
+      }
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, endpoint])
+
+  function refreshLocalStatus() {
+    setLocalRefreshing(true)
+    fetchLocalStatus(endpoint || undefined).then((s) => {
+      setLocalStatus(s)
+      setLocalRefreshing(false)
+      if (s?.ok && Array.isArray(s.models) && s.models.length) {
+        const best = pickBestLocalModel(s.models, model)
+        if (best && best !== model) setModelState(best)
+      }
+    })
+  }
+  // When the user picks a different provider, persist it and load the saved
+  // key + model + endpoint for that provider so they don't bleed across each
+  // other.
+  useEffect(() => {
+    setProvider(provider)
+    setValue(getApiKey(provider))
+    setModelState(getModel(provider))
+    setEndpointState(getEndpoint(provider))
+  }, [provider])
+  useEffect(() => {
+    setApiKey(value || '', provider)
     if (value) {
       setSavedFlash(true)
       const t = setTimeout(() => setSavedFlash(false), 1200)
       return () => clearTimeout(t)
     }
     return undefined
-  }, [value])
+  }, [value, provider])
   useEffect(() => {
-    setModel(model)
-  }, [model])
+    setModel(model, provider)
+  }, [model, provider])
+  useEffect(() => {
+    if (providerInfo?.configurableEndpoint) setEndpoint(endpoint, provider)
+  }, [endpoint, provider, providerInfo?.configurableEndpoint])
   return (
     <section className="space-y-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">AI Assistant</h3>
-      <p className="text-xs leading-relaxed text-[#605e5c]">
-        Paste a free Gemini API key from{' '}
-        <a
-          href="https://aistudio.google.com/app/apikey"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[#2b579a] underline"
-        >
-          aistudio.google.com
-        </a>
-        . The key stays in your browser and is sent directly to Google — never to our server.
-      </p>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Gemini API key</span>
-        <div className="flex gap-2">
+        <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Provider</span>
+        <select
+          value={provider}
+          onChange={(e) => setProviderState(e.target.value)}
+          className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+        >
+          {AI_PROVIDERS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-[11px] text-[#605e5c]">{providerInfo?.keyHint}</span>
+      </label>
+      {needsKey ? (
+        <>
+          <p className="text-xs leading-relaxed text-[#605e5c]">
+            Paste a free API key from{' '}
+            <a
+              href={providerInfo?.keyUrl || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#2b579a] underline"
+            >
+              {(providerInfo?.keyUrl || '').replace(/^https?:\/\//, '').replace(/\/.*/, '')}
+            </a>
+            . The key stays in your browser and is sent directly to the provider — never to our server.
+          </p>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-[#605e5c]">
+              {providerInfo?.label || 'API'} key
+            </span>
+            <div className="flex gap-2">
+              <input
+                type={reveal ? 'text' : 'password'}
+                value={value}
+                onChange={(e) => setValue(e.target.value.trim())}
+                placeholder="AIza... / gsk_... / sk-..."
+                className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                onClick={() => setReveal((r) => !r)}
+                className="rounded-[2px] border border-[#8a8886] px-2 text-xs text-[#323130] hover:bg-[#f3f2f1]"
+              >
+                {reveal ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </label>
+        </>
+      ) : (
+        <div className="space-y-2">
+          <p className="rounded-[2px] border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-relaxed text-emerald-900">
+            No API key needed — this provider runs on your computer. All you
+            need is Ollama installed and at least one model pulled (e.g.
+            <code className="mx-1 rounded bg-white px-1 py-0.5 text-[10px]">ollama pull qwen2.5</code>
+            ). Requests are routed through this app&apos;s backend, so you
+            don&apos;t have to deal with CORS or OLLAMA_ORIGINS.
+          </p>
+          <LocalStatusRow
+            status={localStatus}
+            refreshing={localRefreshing}
+            onRefresh={refreshLocalStatus}
+          />
+        </div>
+      )}
+      {providerInfo?.configurableEndpoint && (
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Base URL (advanced)</span>
           <input
-            type={reveal ? 'text' : 'password'}
-            value={value}
-            onChange={(e) => setValue(e.target.value.trim())}
-            placeholder="AIza..."
+            type="text"
+            value={endpoint}
+            onChange={(e) => setEndpointState(e.target.value)}
+            placeholder="http://localhost:11434/v1"
             className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
             autoComplete="off"
             spellCheck={false}
           />
-          <button
-            type="button"
-            onClick={() => setReveal((r) => !r)}
-            className="rounded-[2px] border border-[#8a8886] px-2 text-xs text-[#323130] hover:bg-[#f3f2f1]"
-          >
-            {reveal ? 'Hide' : 'Show'}
-          </button>
-        </div>
-      </label>
+          <span className="mt-1 block text-[11px] text-[#605e5c]">
+            Ollama: http://localhost:11434/v1 — LM Studio: http://localhost:1234/v1.
+            Leave as-is unless you changed Ollama&apos;s default port.
+          </span>
+        </label>
+      )}
       <p className="text-xs text-[#605e5c]">
         {value
           ? savedFlash
@@ -93,20 +275,48 @@ function AiAssistantSection() {
       </p>
       <label className="block">
         <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Model</span>
-        <select
-          value={model}
-          onChange={(e) => setModelState(e.target.value)}
-          className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
-        >
-          {AI_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <span className="mt-1 block text-[11px] text-[#605e5c]">
-          {AI_MODELS.find((m) => m.id === model)?.note}
-        </span>
+        {providerInfo?.customModel ? (
+          <>
+            <input
+              type="text"
+              list="ai-model-suggestions"
+              value={model}
+              onChange={(e) => setModelState(e.target.value)}
+              placeholder="llama3.1 / qwen2.5 / your-pulled-model"
+              className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <datalist id="ai-model-suggestions">
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </datalist>
+            <span className="mt-1 block text-[11px] text-[#605e5c]">
+              {models.find((m) => m.id === model)?.note ||
+                'Type any model you have pulled with Ollama or loaded in LM Studio.'}
+            </span>
+          </>
+        ) : (
+          <>
+            <select
+              value={model}
+              onChange={(e) => setModelState(e.target.value)}
+              className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+            >
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] text-[#605e5c]">
+              {models.find((m) => m.id === model)?.note}
+            </span>
+          </>
+        )}
       </label>
     </section>
   )

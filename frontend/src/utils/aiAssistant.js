@@ -14,69 +14,373 @@
 import { useEditorStore } from '../store/editorStore.js'
 import { registry } from '../components/registry.jsx'
 
-// Available Gemini models exposed to the user. Free-tier RPD / RPM differ
-// significantly; Flash Lite variants leave the most headroom. Ordered by
-// the recommended default first.
-export const AI_MODELS = [
+// Providers are kept side by side so the user picks whichever has free quota
+// left. Groq is the default because its free tier (≈14 400 requests / day on
+// Llama 3.3 70B) absorbs the editor's traffic without rate-limit pain that
+// Gemini's free tier hits within minutes.
+export const AI_PROVIDERS = [
   {
-    id: 'gemini-2.5-flash-lite',
-    label: 'Gemini 2.5 Flash Lite (recommended)',
-    note: 'Up to 1000 requests/day free. Fast, reliable for tool calls.',
+    id: 'openrouter',
+    label: 'OpenRouter · Qwen3 80B (recommended)',
+    keyUrl: 'https://openrouter.ai/keys',
+    keyHint:
+      'One key, many free models (Qwen3 80B, Hermes 3 405B, Llama 3.3 70B). Separate quota pool from Groq/Gemini — use when those run out. The free lineup changes — paste any current id from openrouter.ai/models if the dropdown picks one that has been retired.',
+    customModel: true,
   },
   {
-    id: 'gemini-2.0-flash-lite',
-    label: 'Gemini 2.0 Flash Lite',
-    note: 'Up to 1500 requests/day free. The most generous quota.',
+    id: 'groq',
+    label: 'Groq · Llama',
+    keyUrl: 'https://console.groq.com/keys',
+    keyHint: 'Free tier: ~14 400 requests/day, 30/min. Sign up at console.groq.com.',
   },
   {
-    id: 'gemini-2.5-flash',
-    label: 'Gemini 2.5 Flash (smarter, lower quota)',
-    note: 'Higher quality answers but only 250 requests/day free.',
+    id: 'local',
+    label: 'Local AI (Ollama / LM Studio)',
+    keyUrl: 'https://ollama.com',
+    keyHint:
+      'Run llama3.1 / qwen2.5 / mistral on your own machine. No key, no quota, no internet. Routed through this app’s backend — no CORS setup needed.',
+    needsKey: false,
+    configurableEndpoint: true,
+    customModel: true,
+  },
+  {
+    id: 'gemini',
+    label: 'Google Gemini',
+    keyUrl: 'https://aistudio.google.com/app/apikey',
+    keyHint: 'Free tier: 1 000-1 500 requests/day. Sign up at aistudio.google.com.',
   },
 ]
 
-const DEFAULT_MODEL = AI_MODELS[0].id
-const KEY_STORAGE = 'pwb_gemini_key'
-const MODEL_STORAGE = 'pwb_gemini_model'
-
-function buildEndpoint(modelId) {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
+const PROVIDER_MODELS = {
+  openrouter: [
+    {
+      id: 'qwen/qwen3-next-80b-a3b-instruct:free',
+      label: 'Qwen3 Next 80B (recommended)',
+      note: 'Top free tool-calling model in 2026. Smarter than Llama 70B for editor work.',
+    },
+    {
+      id: 'nousresearch/hermes-3-llama-3.1-405b:free',
+      label: 'Hermes 3 · Llama 3.1 405B',
+      note: 'Fine-tuned for function calling. Heavier, very reliable on tools.',
+    },
+    {
+      id: 'meta-llama/llama-3.3-70b-instruct:free',
+      label: 'Llama 3.3 70B',
+      note: 'Reliable workhorse, similar to Groq but a separate quota pool.',
+    },
+    {
+      id: 'openai/gpt-oss-120b:free',
+      label: 'GPT-OSS 120B',
+      note: 'OpenAI’s open-source release. Strong overall quality.',
+    },
+    {
+      id: 'moonshotai/kimi-k2.6:free',
+      label: 'Kimi K2.6',
+      note: 'Moonshot’s long-context reasoning model.',
+    },
+    {
+      id: 'qwen/qwen3-coder:free',
+      label: 'Qwen3 Coder',
+      note: 'Coding-focused; great when you also want Custom JS / CSS edits.',
+    },
+  ],
+  groq: [
+    {
+      id: 'llama-3.3-70b-versatile',
+      label: 'Llama 3.3 70B (recommended)',
+      note: '~14 400 req/day free, 30/min. Best balance for tool calling.',
+    },
+    {
+      id: 'llama-3.1-8b-instant',
+      label: 'Llama 3.1 8B Instant',
+      note: 'Fastest, even larger quota. Slightly less accurate on tool args.',
+    },
+  ],
+  local: [
+    {
+      id: 'llama3.1',
+      label: 'llama3.1 (default Ollama)',
+      note: 'Run: `ollama run llama3.1`. Solid tool calling, ~7 GB RAM.',
+    },
+    {
+      id: 'qwen2.5',
+      label: 'qwen2.5',
+      note: 'Strong on tool calling. Run: `ollama run qwen2.5`.',
+    },
+    {
+      id: 'llama3.2',
+      label: 'llama3.2',
+      note: 'Smaller, faster. Tool calling OK.',
+    },
+    {
+      id: 'mistral-nemo',
+      label: 'mistral-nemo',
+      note: 'Mistral 12B with tool calling.',
+    },
+  ],
+  gemini: [
+    {
+      id: 'gemini-2.0-flash-lite',
+      label: 'Gemini 2.0 Flash Lite',
+      note: '1 500 req/day, 30/min — Gemini’s largest free quota.',
+    },
+    {
+      id: 'gemini-2.5-flash-lite',
+      label: 'Gemini 2.5 Flash Lite',
+      note: '1 000 req/day, 15/min. A bit smarter than 2.0.',
+    },
+    {
+      id: 'gemini-2.5-flash',
+      label: 'Gemini 2.5 Flash (low quota)',
+      note: 'Highest quality, but only 250 req/day free.',
+    },
+  ],
 }
 
-export function getApiKey() {
+const DEFAULT_PROVIDER = AI_PROVIDERS[0].id
+const PROVIDER_STORAGE = 'pwb_ai_provider'
+const KEY_STORAGE_BY_PROVIDER = {
+  gemini: 'pwb_gemini_key',
+  groq: 'pwb_groq_key',
+  local: 'pwb_local_key', // optional — some local proxies still want one
+  openrouter: 'pwb_openrouter_key',
+}
+const MODEL_STORAGE_BY_PROVIDER = {
+  gemini: 'pwb_gemini_model',
+  groq: 'pwb_groq_model',
+  local: 'pwb_local_model',
+  openrouter: 'pwb_openrouter_model',
+}
+const ENDPOINT_STORAGE_BY_PROVIDER = {
+  local: 'pwb_local_endpoint',
+}
+const DEFAULT_ENDPOINT_BY_PROVIDER = {
+  // Ollama default. LM Studio users override to http://localhost:1234/v1.
+  local: 'http://localhost:11434/v1',
+}
+
+// Django proxy path — the frontend hits this same-origin instead of talking
+// to Ollama directly, so CORS / OLLAMA_ORIGINS pain goes away. The base URL
+// the user wants to forward to is passed as an X-Local-Base-Url header.
+const LOCAL_PROXY_PATH = '/api/ai/local'
+
+function resolveBackendBase() {
+  const envBase = import.meta.env?.VITE_API_URL
+  if (envBase) return envBase.replace(/\/api\/?$/, '')
+  return 'http://127.0.0.1:8000'
+}
+
+// Score how well-suited a model name is to function-calling. Higher is
+// better. Used to auto-pick from whatever the user has installed: a llama3.1
+// or qwen2.5 beats a gemma every time. Falls back to anything if nothing
+// scores positive.
+const TOOL_FRIENDLY_PREFIXES = [
+  { match: /(?:^|[/-])(?:qwen2\.5|qwen3)/i, score: 110 },
+  { match: /(?:^|[/-])llama-?3\.[123]/i, score: 100 },
+  { match: /(?:^|[/-])mistral-?nemo/i, score: 95 },
+  { match: /(?:^|[/-])hermes-?3/i, score: 90 },
+  { match: /(?:^|[/-])firefunction/i, score: 85 },
+  { match: /(?:^|[/-])mistral-?large/i, score: 80 },
+  { match: /(?:^|[/-])command-?r/i, score: 75 },
+  { match: /(?:^|[/-])llama/i, score: 60 },
+  { match: /(?:^|[/-])qwen/i, score: 55 },
+  { match: /(?:^|[/-])mistral/i, score: 50 },
+]
+
+function scoreModel(id) {
+  let best = 0
+  for (const { match, score } of TOOL_FRIENDLY_PREFIXES) {
+    if (match.test(id) && score > best) best = score
+  }
+  return best
+}
+
+export function pickBestLocalModel(models, preferred) {
+  if (!Array.isArray(models) || !models.length) return preferred || ''
+  const scored = models
+    .map((id) => ({ id, score: scoreModel(id) }))
+    .sort((a, b) => b.score - a.score)
+  const top = scored[0]
+  // If the saved choice isn't even on the user's machine, switch to whatever
+  // is on top.
+  if (!preferred || !models.includes(preferred)) return top.id
+  // If the saved choice IS installed but is unknown/weak for tool calling
+  // (score 0 — e.g. gemma, phi) AND a tool-friendly alternative exists,
+  // upgrade. Otherwise honour the user's pick.
+  const prefScore = scoreModel(preferred)
+  if (prefScore === 0 && top.score > 0) return top.id
+  return preferred
+}
+
+const LOCAL_MODELS_CACHE_KEY = 'pwb_local_models_cache'
+
+// Fetch the list of locally-installed models from the Django proxy. Returns
+// { ok, runtime, models, base } or { ok: false, reason }. Successful results
+// are cached in localStorage so the chat call path can self-heal even when
+// the Settings panel has never been opened in this session.
+export async function fetchLocalStatus(baseOverride) {
+  const url = new URL(`${resolveBackendBase()}${LOCAL_PROXY_PATH}/status/`)
+  const base = baseOverride || getEndpoint('local')
+  if (base) url.searchParams.set('base', base)
   try {
-    return localStorage.getItem(KEY_STORAGE) || ''
+    const res = await fetch(url.toString(), { method: 'GET' })
+    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` }
+    const data = await res.json()
+    if (data?.ok && Array.isArray(data.models)) {
+      try {
+        localStorage.setItem(
+          LOCAL_MODELS_CACHE_KEY,
+          JSON.stringify({ at: Date.now(), models: data.models }),
+        )
+      } catch { /* storage unavailable */ }
+    }
+    return data
+  } catch (e) {
+    return { ok: false, reason: e?.message || 'fetch failed' }
+  }
+}
+
+function readCachedLocalModels() {
+  try {
+    const raw = localStorage.getItem(LOCAL_MODELS_CACHE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed?.models) ? parsed.models : []
+  } catch { return [] }
+}
+
+export function getProvider() {
+  try {
+    const saved = localStorage.getItem(PROVIDER_STORAGE)
+    if (saved && AI_PROVIDERS.some((p) => p.id === saved)) return saved
+  } catch { /* ignore */ }
+  return DEFAULT_PROVIDER
+}
+
+export function setProvider(providerId) {
+  try {
+    if (providerId && AI_PROVIDERS.some((p) => p.id === providerId)) {
+      localStorage.setItem(PROVIDER_STORAGE, providerId)
+    }
+  } catch { /* ignore */ }
+}
+
+// Read the models exposed for a given provider. Defaults to the active
+// provider when no argument is supplied.
+export function getModelsFor(providerId = getProvider()) {
+  return PROVIDER_MODELS[providerId] || []
+}
+
+// Active-provider exports — back-compat for code paths that still call the
+// single-provider functions from earlier iterations.
+export const AI_MODELS = PROVIDER_MODELS.gemini
+
+export function getApiKey(providerId = getProvider()) {
+  try {
+    const key = KEY_STORAGE_BY_PROVIDER[providerId]
+    return (key && localStorage.getItem(key)) || ''
   } catch {
     return ''
   }
 }
 
-export function setApiKey(key) {
+export function setApiKey(key, providerId = getProvider()) {
   try {
-    if (key) localStorage.setItem(KEY_STORAGE, key)
-    else localStorage.removeItem(KEY_STORAGE)
+    const storageKey = KEY_STORAGE_BY_PROVIDER[providerId]
+    if (!storageKey) return
+    if (key) localStorage.setItem(storageKey, key)
+    else localStorage.removeItem(storageKey)
   } catch {
     /* localStorage unavailable */
   }
 }
 
-export function getModel() {
-  try {
-    const saved = localStorage.getItem(MODEL_STORAGE)
-    if (saved && AI_MODELS.some((m) => m.id === saved)) return saved
-  } catch { /* ignore */ }
-  return DEFAULT_MODEL
+// OpenRouter's free model lineup rotates often — when a model id we used to
+// recommend gets retired, map saved values to a sensible replacement so the
+// user doesn't see "No endpoints found" the moment they reload.
+const RETIRED_MODEL_MIGRATIONS = {
+  openrouter: {
+    // DeepSeek dropped off the OpenRouter free tier in 2026 — bounce stuck
+    // users onto Qwen3 80B which is currently the strongest free option.
+    'deepseek/deepseek-chat-v3.1:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
+    'deepseek/deepseek-chat-v3-0324:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
+    'deepseek/deepseek-chat:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
+    'deepseek/deepseek-r1:free': 'nousresearch/hermes-3-llama-3.1-405b:free',
+    'qwen/qwen-2.5-72b-instruct:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
+    'mistralai/mistral-small-3.1-24b-instruct:free': 'meta-llama/llama-3.3-70b-instruct:free',
+    'google/gemini-2.0-flash-exp:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
+  },
 }
 
-export function setModel(modelId) {
+export function getModel(providerId = getProvider()) {
   try {
-    if (modelId && AI_MODELS.some((m) => m.id === modelId)) {
-      localStorage.setItem(MODEL_STORAGE, modelId)
+    const storageKey = MODEL_STORAGE_BY_PROVIDER[providerId]
+    let saved = storageKey ? localStorage.getItem(storageKey) : ''
+    const migration = RETIRED_MODEL_MIGRATIONS[providerId]
+    if (saved && migration && migration[saved]) {
+      const replacement = migration[saved]
+      try { localStorage.setItem(storageKey, replacement) } catch { /* ignore */ }
+      saved = replacement
     }
-  } catch {
-    /* ignore */
-  }
+    if (saved) {
+      const provider = AI_PROVIDERS.find((p) => p.id === providerId)
+      // customModel providers (local, openrouter) accept any string — the
+      // dropdown is suggestions, not validation.
+      if (provider?.customModel) return saved
+      if (getModelsFor(providerId).some((m) => m.id === saved)) return saved
+    }
+  } catch { /* ignore */ }
+  return getModelsFor(providerId)[0]?.id || ''
 }
+
+export function setModel(modelId, providerId = getProvider()) {
+  try {
+    const storageKey = MODEL_STORAGE_BY_PROVIDER[providerId]
+    if (!storageKey) return
+    // For providers that allow a custom model (e.g. local Ollama with any
+    // model the user has pulled), accept any non-empty string. Otherwise
+    // validate against the known list.
+    const provider = AI_PROVIDERS.find((p) => p.id === providerId)
+    if (provider?.customModel && typeof modelId === 'string' && modelId.trim()) {
+      localStorage.setItem(storageKey, modelId.trim())
+      return
+    }
+    if (modelId && getModelsFor(providerId).some((m) => m.id === modelId)) {
+      localStorage.setItem(storageKey, modelId)
+    }
+  } catch { /* ignore */ }
+}
+
+// Optional per-provider endpoint override (used by the local provider so the
+// user can point it at Ollama, LM Studio, or any other OpenAI-compatible
+// service that runs on a different port).
+export function getEndpoint(providerId = getProvider()) {
+  try {
+    const storageKey = ENDPOINT_STORAGE_BY_PROVIDER[providerId]
+    if (storageKey) {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) return saved
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_ENDPOINT_BY_PROVIDER[providerId] || ''
+}
+
+export function setEndpoint(url, providerId = getProvider()) {
+  try {
+    const storageKey = ENDPOINT_STORAGE_BY_PROVIDER[providerId]
+    if (!storageKey) return
+    const cleaned = typeof url === 'string' ? url.trim().replace(/\/$/, '') : ''
+    if (cleaned) localStorage.setItem(storageKey, cleaned)
+    else localStorage.removeItem(storageKey)
+  } catch { /* ignore */ }
+}
+
+function buildGeminiEndpoint(modelId) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
+}
+
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 
 // Compact snapshot of the schema the model can reason about without burning
 // thousands of tokens on full style maps. Keeps ids stable so subsequent
@@ -998,7 +1302,12 @@ function firstNewId(after, before) {
   return null
 }
 
-const SYSTEM_PROMPT = `You are an editing assistant inside a no-code website builder. Each turn the user describes a change in natural language; you MUST use the provided tools to apply that change to the builder's schema. Do not reply with prose-only answers — always call at least one tool when the user is asking for a change.
+const SYSTEM_PROMPT = `You are an editing assistant inside a no-code website builder. Each turn the user either (a) describes a change they want to the design, or (b) asks a conversational / meta question about what you can do. Detect which one this is BEFORE acting.
+
+If (a) — a request for change — you MUST use the provided tools by emitting a real tool call. Do NOT paste the call as JSON text inside your reply (the runtime ignores text-mode calls). Output the call through the proper function-calling channel, not as a code block or paragraph.
+If (b) — a conversational question like "what can you do?", "what templates are there?", "which model is this?" — answer with one short paragraph of plain text, DO NOT call any tools, DO NOT clear the page, DO NOT apply a template. List a few example things the user could ask next.
+
+Examples of (b) phrasings to watch for: "neler yapabilirsin", "ne yapabilirsin", "what can you do", "help", "list templates", "show me templates", "options".
 
 Rules:
 - All user-facing UI text and content you generate must be in English, even if the user writes in another language. Translate user-provided text into English before placing it.
@@ -1015,11 +1324,30 @@ Rules:
 - dark → "dark mode", "studio dark"
 - apple → "Apple", "iPhone product page"
 - minimal-landing → "minimal", "saas landing"
-- portfolio → "portfolio", "personal site"
+- portfolio → "portfolio", "personal site", fan/topic pages (Star Wars, Marvel, a band, a hobby)
 - blog → "blog", "blog site" ("blog sitesi"), "writer", "personal blog", "newsletter"
 - dashboard → "admin dashboard", "internal tool", "analytics console"
 - marketing → "marketing site", "product launch", "landing page with CTA"
 Pick the closest one to the user's intent and call applyTemplate({name:'...'}).
+
+**CRITICAL: applyTemplate MUST be the only tool call in its response.** applyTemplate clears the page and creates brand-new components with brand-new IDs. If you emit applyTemplate together with replaceComponentText / setLinks / updateProps in the same parallel batch, those follow-up calls will target the OLD component IDs from the current snapshot — IDs that no longer exist after applyTemplate runs — and they will silently fail. The runtime will detect this and force you to redo them, wasting a round.
+
+The right pattern is two responses:
+- Response 1 (this turn): exactly one tool call, applyTemplate({name:'...'}). Nothing else. No text, no other tools.
+- Response 2 (next turn): you will receive a fresh schema snapshot listing the real new component IDs. THEN emit your customisation tool calls (setLinks for the navbar, replaceComponentText / updateProps for each heading / text / button / card title) so every visible default placeholder is replaced with topic-relevant copy. Do not stop until every default string has been customised.
+
+Worked example — user asks "make a Star Wars fan page":
+Response 1: applyTemplate({name:"portfolio"})   ← single tool call, nothing else
+Response 2 (after seeing the new schema):
+   - setLinks({id: navbar_id, links:[{label:"Galaxy", href:"#galaxy"},{label:"Heroes", href:"#heroes"},{label:"Villains", href:"#villains"},{label:"Episodes", href:"#episodes"}]})
+   - replaceComponentText({id: heading_id, text: "A galaxy far, far away."})
+   - replaceComponentText({id: text_id, text: "A fan-built tribute to the Skywalker saga and the worlds beyond."})
+   - replaceComponentText({id: button_id, text: "Explore the galaxy"})
+   - replaceComponentText({id: card1_id, text: "Episode IV — A New Hope · The original 1977 film that started it all."})
+   - …and so on for every component.
+Response 3: one short sentence summarising what you did.
+
+Apply the same pattern for ANY topic the user names (Marvel, food blog, gym, vintage cars, indie band, etc.). The user almost never wants the default template copy.
 
 How to apply WIDE / GLOBAL changes:
 - When the user says "all", "every", "everything", or "site-wide" — DO NOT call a single tool and stop. Iterate: for a colour theme change call updateTheme(...) (e.g. {"primaryColor":"#2563eb","headerColor":"#1d4ed8"}); the editor automatically applies the theme to already-placed components, so you don't need to touch every id by hand UNLESS the user asked for something theme-vars don't cover.
@@ -1075,35 +1403,65 @@ function parseRetryDelayMs(parsed, defaultMs) {
   return defaultMs
 }
 
-// Map a raw Google API error blob to a one-line, human-friendly message that
-// fits the chat panel without overwhelming the user with JSON.
-function describeApiError(status, rawText) {
+// Map a raw provider error blob to a one-line, human-friendly message that
+// fits the chat panel without overwhelming the user with JSON. `providerId`
+// drives the wording (so a Groq 429 doesn't say "Gemini quota hit").
+function describeApiError(status, rawText, providerId = getProvider()) {
   let parsed
   try { parsed = JSON.parse(rawText) } catch { parsed = null }
-  const apiMessage = parsed?.error?.message || ''
+  const apiMessage = parsed?.error?.message || parsed?.error?.error || ''
+  const me = AI_PROVIDERS.find((p) => p.id === providerId)
+  const meLabel = me?.label?.replace(/ \(.*\)$/, '') || 'AI provider'
+  const other = AI_PROVIDERS.find((p) => p.id !== providerId)
+  const otherLabel = other?.label?.replace(/ \(.*\)$/, '') || 'the other provider'
+  // OpenRouter retires free models from time to time. When that happens the
+  // message is "No endpoints found for <model>" — point the user at Settings
+  // instead of leaving them puzzled.
+  if (/no endpoints found/i.test(apiMessage)) {
+    return `${meLabel} retired the selected model. Open Settings → Model dropdown and pick a fresh one (DeepSeek V3 0324 free is the safe default), or paste any current id from openrouter.ai/models.`
+  }
   if (status === 429) {
     const waitMs = parseRetryDelayMs(parsed, 30_000)
     const waitSec = Math.ceil(waitMs / 1000)
-    return `Gemini quota hit. Wait ${waitSec}s and try again, or switch to Gemini 2.0 Flash Lite (Settings → Model) for a larger free quota (1500/day, 30/min).`
+    return `${meLabel} quota hit (per-minute or per-day). Wait ~${waitSec}s and try again, or switch to ${otherLabel} in Settings (Properties → AI Assistant).`
   }
-  if (status === 400 && /api key/i.test(apiMessage)) {
-    return 'Your Gemini API key is invalid or missing the right permissions. Re-paste it in the AI Assistant settings.'
+  if (status === 400 && /api key|invalid/i.test(apiMessage)) {
+    return `Your ${meLabel} API key is invalid or missing the right permissions. Re-paste it in Settings.`
+  }
+  if (status === 401) {
+    return `Your ${meLabel} API key was rejected (401). Open Settings → AI Assistant and paste a fresh key.`
   }
   if (status === 403) {
-    return 'Your Gemini API key was rejected (403). Check that the key is active and has the Generative Language API enabled.'
+    return `Your ${meLabel} API key was rejected (403). Check that the key is active and has the Generative Language / Chat Completions API enabled.`
   }
   if (status >= 500) {
-    return 'Gemini is having trouble right now (server error). Try again in a moment.'
+    return `${meLabel} is having trouble right now (${status}). Try again in a moment or switch to ${otherLabel}.`
   }
-  return apiMessage || `Gemini ${status}: ${rawText.slice(0, 200)}`
+  return apiMessage || `${meLabel} ${status}: ${rawText.slice(0, 200)}`
 }
 
-// One round-trip to Gemini with a single retry on 429. The retry sleeps for
-// the duration the API hands back in RetryInfo (typically a few seconds for
-// per-minute bursts) so transient quota spikes don't surface as a hard error.
-async function callGemini(apiKey, contents) {
-  const modelId = getModel()
-  const url = `${buildEndpoint(modelId)}?key=${encodeURIComponent(apiKey)}`
+// Universal turn shape we hand around so the rest of the file doesn't have to
+// care which provider it talks to. Each "turn" is either:
+//   { role: 'user'|'model', text }                       (text turn)
+//   { role: 'model', functionCalls: [{name, args}] }     (model tool calls)
+//   { role: 'tool', toolResults: [{name, response}] }    (our tool outputs)
+// callProvider() translates this into the right wire shape and translates the
+// response back into a list of `parts` shaped like Gemini's (so the calling
+// loop is unchanged).
+
+async function callProvider(apiKey, history, currentTurnText) {
+  const provider = getProvider()
+  if (provider === 'groq') return callGroq(apiKey, history, currentTurnText)
+  if (provider === 'openrouter') return callOpenRouter(apiKey, history, currentTurnText)
+  if (provider === 'local') return callLocal(apiKey, history, currentTurnText)
+  return callGemini(apiKey, history, currentTurnText)
+}
+
+// ---- Gemini transport --------------------------------------------------
+async function callGemini(apiKey, history, currentTurnText) {
+  const modelId = getModel('gemini')
+  const url = `${buildGeminiEndpoint(modelId)}?key=${encodeURIComponent(apiKey)}`
+  const contents = historyToGeminiContents(history, currentTurnText)
   const body = JSON.stringify({
     systemInstruction: { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
     contents,
@@ -1123,9 +1481,6 @@ async function callGemini(apiKey, contents) {
       return candidate?.content?.parts || []
     }
     const text = await res.text()
-    // On the first 429 we sleep for the API-suggested duration (capped at 8s
-    // so users still get feedback quickly) and retry once. After that, or for
-    // non-429 failures, we throw the friendly message.
     if (res.status === 429 && attempt === 0) {
       let parsed
       try { parsed = JSON.parse(text) } catch { parsed = null }
@@ -1133,9 +1488,252 @@ async function callGemini(apiKey, contents) {
       await new Promise((r) => setTimeout(r, waitMs))
       continue
     }
-    throw new Error(describeApiError(res.status, text))
+    throw new Error(describeApiError(res.status, text, 'gemini'))
   }
   throw new Error('Gemini did not respond after the retry. Please try again.')
+}
+
+function historyToGeminiContents(history, currentTurnText) {
+  const out = []
+  for (const turn of history) {
+    if (turn.role === 'user' && typeof turn.text === 'string') {
+      out.push({ role: 'user', parts: [{ text: turn.text }] })
+    } else if (turn.role === 'model' && Array.isArray(turn.functionCalls)) {
+      out.push({
+        role: 'model',
+        parts: turn.functionCalls.map((c) => ({ functionCall: { name: c.name, args: c.args || {} } })),
+      })
+    } else if (turn.role === 'model' && typeof turn.text === 'string') {
+      out.push({ role: 'model', parts: [{ text: turn.text }] })
+    } else if (turn.role === 'tool' && Array.isArray(turn.toolResults)) {
+      out.push({
+        role: 'user',
+        parts: turn.toolResults.map((r) => ({ functionResponse: { name: r.name, response: r.response } })),
+      })
+    }
+  }
+  if (currentTurnText) {
+    out.push({ role: 'user', parts: [{ text: currentTurnText }] })
+  }
+  return out
+}
+
+// ---- Generic OpenAI-compatible transport -------------------------------
+// Shared by Groq and the local Ollama / LM Studio path. `opts.url` is the
+// chat-completions endpoint, `opts.apiKey` is optional (local providers may
+// not need one), `opts.providerId` is just used for friendly error wording.
+async function callOpenAICompatible(history, currentTurnText, opts) {
+  const messages = historyToOpenAiMessages(history, currentTurnText)
+  const body = JSON.stringify({
+    model: opts.modelId,
+    messages,
+    tools: toolDeclarations().map((t) => ({
+      type: 'function',
+      function: { name: t.name, description: t.description, parameters: t.parameters },
+    })),
+    tool_choice: 'auto',
+    temperature: 0.2,
+    ...(opts.extraBody || {}),
+  })
+  const headers = { 'Content-Type': 'application/json', ...(opts.extraHeaders || {}) }
+  if (opts.apiKey) headers.Authorization = `Bearer ${opts.apiKey}`
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let res
+    try {
+      res = await fetch(opts.url, { method: 'POST', headers, body })
+    } catch (e) {
+      // Network-level failure (typical for unreachable local servers /
+      // missing CORS headers). Give the user a hint they can actually act on.
+      if (opts.providerId === 'local') {
+        throw new Error(
+          `Could not reach the local AI at ${opts.url}. Make sure Ollama (or LM Studio) is running and started with OLLAMA_ORIGINS="*" so the browser can call it.`,
+        )
+      }
+      throw new Error(e?.message || 'Network error')
+    }
+    if (res.ok) {
+      const data = await res.json()
+      const choice = data?.choices?.[0]?.message
+      if (!choice) return []
+      const parts = []
+      if (Array.isArray(choice.tool_calls)) {
+        for (const tc of choice.tool_calls) {
+          let args = {}
+          try { args = tc.function?.arguments ? JSON.parse(tc.function.arguments) : {} } catch { args = {} }
+          parts.push({ functionCall: { name: tc.function?.name || '', args } })
+        }
+      }
+      // Some local models (Llama 3.1 8B in particular) "think aloud" and
+      // print the intended call as JSON inside the assistant text instead of
+      // using the tool_calls field. Recover those so the canvas still
+      // updates. If we extract any call from the text we DROP the original
+      // text so the chat doesn't show both the JSON and the action.
+      if (parts.length === 0 && typeof choice.content === 'string' && choice.content.trim()) {
+        const recovered = extractTextCalls(choice.content)
+        if (recovered.length) {
+          for (const r of recovered) parts.push({ functionCall: r })
+        } else {
+          parts.push({ text: choice.content })
+        }
+      } else if (typeof choice.content === 'string' && choice.content.trim()) {
+        parts.push({ text: choice.content })
+      }
+      return parts
+    }
+    const text = await res.text()
+    if (res.status === 429 && attempt === 0) {
+      await new Promise((r) => setTimeout(r, 4000))
+      continue
+    }
+    throw new Error(describeApiError(res.status, text, opts.providerId))
+  }
+  throw new Error(`${opts.providerId} did not respond after the retry. Please try again.`)
+}
+
+async function callGroq(apiKey, history, currentTurnText) {
+  return callOpenAICompatible(history, currentTurnText, {
+    url: GROQ_ENDPOINT,
+    apiKey,
+    providerId: 'groq',
+    modelId: getModel('groq'),
+  })
+}
+
+async function callOpenRouter(apiKey, history, currentTurnText) {
+  return callOpenAICompatible(history, currentTurnText, {
+    url: OPENROUTER_ENDPOINT,
+    apiKey,
+    providerId: 'openrouter',
+    modelId: getModel('openrouter'),
+    // OpenRouter asks for these so traffic from this app appears in its
+    // analytics correctly; both are optional but it's polite to send them.
+    extraHeaders: {
+      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
+      'X-Title': 'PersonelWebSiteBuilder',
+    },
+  })
+}
+
+async function callLocal(apiKey, history, currentTurnText) {
+  const base = getEndpoint('local') || DEFAULT_ENDPOINT_BY_PROVIDER.local
+  // Last-mile model validation: if Settings ever ran a status fetch this
+  // session, the installed models are cached. If the saved id isn't in that
+  // cache, silently swap to the best installed alternative — prevents
+  // Ollama 404s from a stale localStorage default (e.g. "llama3.1" when the
+  // user actually pulled "llama3.1:8b").
+  let savedModel = getModel('local')
+  const cached = readCachedLocalModels()
+  if (cached.length && !cached.includes(savedModel)) {
+    const corrected = pickBestLocalModel(cached, savedModel)
+    if (corrected && corrected !== savedModel) {
+      savedModel = corrected
+      setModel(corrected, 'local')
+      try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+    }
+  }
+  // Route through Django: browser → /api/ai/local/proxy/ → Ollama. The base
+  // URL travels inside the body (key `_localBase`) so we don't trigger a CORS
+  // preflight with a custom header.
+  const url = `${resolveBackendBase()}${LOCAL_PROXY_PATH}/proxy/`
+  return callOpenAICompatible(history, currentTurnText, {
+    url,
+    apiKey,
+    providerId: 'local',
+    modelId: savedModel,
+    extraBody: { _localBase: base },
+  })
+}
+
+// Scan a piece of assistant text for inline tool-call JSON and recover it.
+// Matches loose patterns like:
+//   {"name":"applyTemplate","parameters":{"name":"blog"}}
+//   {"name":"addComponent","arguments":{"type":"navbar"}}
+//   `applyTemplate({"name":"blog"})`  (some models use this syntax)
+// Returns an array of { name, args } entries (empty if none found).
+// Scan an assistant text reply for tool-call intent and recover it as a real
+// function call. Weak local models (e.g. Llama 3.1 8B) frequently write the
+// call as JSON, as a JS-like function call, or in prose with the function
+// name mentioned. We try several patterns in order of specificity.
+function extractTextCalls(text) {
+  const out = []
+  if (typeof text !== 'string') return out
+  const declared = toolDeclarations()
+  const isReal = (n) => declared.some((t) => t.name === n)
+  const norm = (n) => (isReal(n) ? n : normaliseToolName(n))
+
+  // Pattern A — JSON object with name + parameters/arguments.
+  const jsonRe = /\{\s*"name"\s*:\s*"([a-zA-Z_][\w]*)"\s*,\s*"(?:parameters|arguments|args)"\s*:\s*(\{[\s\S]*?\})\s*\}/g
+  let m
+  while ((m = jsonRe.exec(text)) !== null) {
+    let args = {}
+    try { args = JSON.parse(m[2]) } catch { /* skip malformed */ }
+    const n = norm(m[1])
+    if (isReal(n)) out.push({ name: n, args })
+  }
+  if (out.length) return out
+
+  // Pattern B — JS-like call: applyTemplate({...}) / addComponent({...})
+  const callRe = /\b([a-zA-Z_][\w]*)\s*\(\s*(\{[\s\S]*?\})\s*\)/g
+  while ((m = callRe.exec(text)) !== null) {
+    let args = {}
+    try { args = JSON.parse(m[2]) } catch { /* skip malformed */ }
+    const n = norm(m[1])
+    if (isReal(n)) out.push({ name: n, args })
+  }
+  if (out.length) return out
+
+  // Pattern C — prose mentions a tool name verbatim with quoted args nearby.
+  // "I'll call applyTemplate with name='blog'" or "apply the github template".
+  // Special-case applyTemplate because it's the most common high-impact call.
+  const templateNames = ['github', 'dark', 'apple', 'minimal-landing', 'portfolio', 'blog', 'dashboard', 'marketing']
+  const lower = text.toLowerCase()
+  if (/apply\s*template|applytemplate|use\s+the\s+\w+\s+template|hazır\s*şablon|template\s+(?:name|adı)/i.test(text)) {
+    const found = templateNames.find((t) => new RegExp(`\\b${t}\\b`, 'i').test(lower))
+    if (found) out.push({ name: 'applyTemplate', args: { name: found } })
+  }
+  if (out.length) return out
+
+  return out
+}
+
+function historyToOpenAiMessages(history, currentTurnText) {
+  const out = [{ role: 'system', content: SYSTEM_PROMPT }]
+  // OpenAI-compatible APIs require a tool_call_id to thread tool results back
+  // to the assistant turn that requested them.
+  let pendingCallIds = []
+  for (const turn of history) {
+    if (turn.role === 'user' && typeof turn.text === 'string') {
+      out.push({ role: 'user', content: turn.text })
+    } else if (turn.role === 'model' && typeof turn.text === 'string') {
+      out.push({ role: 'assistant', content: turn.text })
+    } else if (turn.role === 'model' && Array.isArray(turn.functionCalls)) {
+      const calls = turn.functionCalls.map((c, i) => {
+        const id = `c_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`
+        return {
+          id,
+          type: 'function',
+          function: { name: c.name, arguments: JSON.stringify(c.args || {}) },
+        }
+      })
+      pendingCallIds = calls.map((c) => c.id)
+      out.push({ role: 'assistant', content: '', tool_calls: calls })
+    } else if (turn.role === 'tool' && Array.isArray(turn.toolResults)) {
+      turn.toolResults.forEach((r, i) => {
+        const tcid = pendingCallIds[i] || `c_${Date.now()}_${i}`
+        out.push({
+          role: 'tool',
+          tool_call_id: tcid,
+          name: r.name,
+          content: JSON.stringify(r.response || {}),
+        })
+      })
+      pendingCallIds = []
+    }
+  }
+  if (currentTurnText) {
+    out.push({ role: 'user', content: currentTurnText })
+  }
+  return out
 }
 
 // Main entry point: take a user prompt, run the function-calling loop until
@@ -1145,50 +1743,159 @@ async function callGemini(apiKey, contents) {
 //   [{ role: 'user' | 'model', text }]
 // the chat panel keeps so the model remembers what we already discussed —
 // without re-shipping the (large) schema snapshot for every previous turn.
-export async function runAiPrompt(prompt, { maxRounds = 4, history = [] } = {}) {
-  const apiKey = getApiKey()
-  if (!apiKey) throw new Error('Set your Gemini API key in the editor settings.')
+// Walk the configured providers in display order and return the ones that are
+// ready to take a request (have a key, or are key-less like the local
+// runtime). The currently-active provider is moved to the front so it's
+// tried first when runAiPrompt is called.
+function readyProviders() {
+  const active = getProvider()
+  const ready = AI_PROVIDERS.filter((p) => p.needsKey === false || !!getApiKey(p.id))
+  ready.sort((a, b) => (a.id === active ? -1 : b.id === active ? 1 : 0))
+  return ready
+}
+
+function isFailoverWorthy(err) {
+  const m = String(err?.message || err || '').toLowerCase()
+  return (
+    m.includes('quota') ||
+    m.includes('429') ||
+    m.includes('rate') ||
+    m.includes('could not reach the local') ||
+    m.includes('did not respond after the retry')
+  )
+}
+
+export async function runAiPrompt(prompt, { maxRounds = 3, history = [] } = {}) {
+  const candidates = readyProviders()
+  if (!candidates.length) {
+    throw new Error('No AI provider is set up yet. Open Settings (Properties → AI Assistant) and paste any free key, or pick Local AI if you have Ollama running.')
+  }
+  // Try each ready provider in turn; bail out on the first one that succeeds.
+  // Non-quota errors bubble up immediately so we don't mask real bugs.
+  const tried = []
+  let lastErr = null
+  let switchedFrom = null
+  for (const p of candidates) {
+    if (getProvider() !== p.id) {
+      switchedFrom = switchedFrom || getProvider()
+      setProvider(p.id)
+      // Let the toolbar + chat header refresh their provider/model badges
+      // without waiting for a focus event.
+      try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+    }
+    try {
+      const result = await runAiPromptOnce(prompt, { maxRounds, history })
+      if (switchedFrom && switchedFrom !== p.id) {
+        const fromLabel = AI_PROVIDERS.find((x) => x.id === switchedFrom)?.label || switchedFrom
+        const toLabel = p.label
+        const cleanFrom = fromLabel.replace(/ \(.*\)$/, '')
+        const cleanTo = toLabel.replace(/ \(.*\)$/, '')
+        result.text = `(Switched from ${cleanFrom} to ${cleanTo} — first one’s quota was full.) ${result.text || ''}`
+      }
+      return result
+    } catch (e) {
+      tried.push({ id: p.id, label: p.label, err: e })
+      lastErr = e
+      if (!isFailoverWorthy(e)) {
+        // Real bug, not a quota/availability hiccup — surface it as-is.
+        if (switchedFrom) {
+          setProvider(switchedFrom)
+          try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+        }
+        throw e
+      }
+      if (tried.length >= candidates.length) {
+        // Every configured provider hit its quota or was unreachable. Build
+        // a compact summary so the user knows what's happening and what to
+        // set up to break the deadlock next time.
+        if (switchedFrom) {
+          setProvider(switchedFrom)
+          try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+        }
+        const tail = tried
+          .map((t) => t.label.replace(/ \(.*\)$/, ''))
+          .join(', ')
+        const missing = AI_PROVIDERS
+          .filter((x) => x.needsKey !== false && !getApiKey(x.id))
+          .map((x) => x.label.replace(/ \(.*\)$/, ''))
+        const hint = missing.length
+          ? ` Add a free ${missing[0]} key in Settings (Properties → AI Assistant) so auto-failover has somewhere to fall back to.`
+          : ' Wait ~60s and try again.'
+        throw new Error(`All ready providers are out of quota or unreachable (tried: ${tail}).${hint}`)
+      }
+    }
+  }
+  if (switchedFrom) {
+    setProvider(switchedFrom)
+    try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+  }
+  throw lastErr
+}
+
+async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
+  const provider = getProvider()
+  const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
+  const apiKey = getApiKey(provider)
+  if (!apiKey && providerInfo?.needsKey !== false) {
+    const providerLabel = providerInfo?.label || provider
+    throw new Error(`Set your ${providerLabel} API key in the editor settings.`)
+  }
 
   const snapshot = schemaSnapshot()
-  // Cap history at the last 12 text turns so the prompt doesn't bloat after a
-  // long conversation. Gemini sees the most recent context (where the user is
-  // most likely to reference earlier requests like "undo that") but older
-  // history is dropped to save tokens / RPM.
   const HISTORY_TURNS = 12
-  const recentHistory = (history || [])
+  // Strong cloud providers handle multi-step customization in the first
+  // function-calling response; only weak local models (Llama 3.1 8B and
+  // friends) actually need a second-round nudge after applyTemplate.
+  const NEEDS_TEMPLATE_NUDGE = provider === 'local'
+  // Provider-neutral conversation log. We feed it to callProvider() each
+  // round and it gets translated into the right wire shape (Gemini parts /
+  // OpenAI messages). Each entry is one of:
+  //   { role: 'user', text }
+  //   { role: 'model', text }                          (assistant text)
+  //   { role: 'model', functionCalls: [{name, args}] } (assistant tool call)
+  //   { role: 'tool', toolResults: [{name, response}] }
+  const turns = (history || [])
     .filter((m) => m && m.text)
     .slice(-HISTORY_TURNS)
-  const contents = [
-    ...recentHistory.map((m) => ({
-      role: m.role === 'model' ? 'model' : 'user',
-      parts: [{ text: m.text }],
-    })),
-    // Current turn: fresh schema snapshot + user prompt.
-    {
-      role: 'user',
-      parts: [
-        { text: `Current schema snapshot:\n${JSON.stringify(snapshot, null, 2)}` },
-        { text: `User request: ${prompt}` },
-      ],
-    },
-  ]
+    .map((m) => ({ role: m.role === 'model' ? 'model' : 'user', text: m.text }))
+
+  // We ship the snapshot in turn 1 only. Subsequent rounds reuse the model's
+  // memory of it — the function-call tool results we feed back already tell
+  // it what changed, so reshipping the full schema is pure token waste.
+  const initialPromptText = `Current schema snapshot:\n${JSON.stringify(snapshot, null, 2)}\n\nUser request: ${prompt}`
 
   let finalText = ''
-  const calls = [] // { name, args, result } per tool call — for status + debug
+  const calls = []
   for (let round = 0; round < maxRounds; round += 1) {
-    const parts = await callGemini(apiKey, contents)
+    const isFirst = round === 0
+    const parts = await callProvider(
+      apiKey,
+      turns,
+      isFirst ? initialPromptText : '',
+    )
     const functionCalls = parts.filter((p) => p.functionCall)
     const textParts = parts.filter((p) => typeof p.text === 'string' && p.text.length > 0)
 
-    // Record the model's turn before adding any tool responses.
-    contents.push({ role: 'model', parts })
+    // On the first round our turns array did not yet contain the prompt; add
+    // it now so subsequent rounds (which use turns directly) carry it.
+    if (isFirst) turns.push({ role: 'user', text: initialPromptText })
 
     if (functionCalls.length === 0) {
       finalText = textParts.map((p) => p.text).join('\n').trim() || 'Done.'
+      if (finalText) turns.push({ role: 'model', text: finalText })
       break
     }
 
-    const toolResponses = functionCalls.map(({ functionCall }) => {
+    // Record the model's tool-calling turn.
+    turns.push({
+      role: 'model',
+      functionCalls: functionCalls.map(({ functionCall }) => ({
+        name: functionCall.name,
+        args: functionCall.args || {},
+      })),
+    })
+
+    const toolResults = functionCalls.map(({ functionCall }) => {
       const args = functionCall.args || {}
       let result
       try {
@@ -1198,18 +1905,49 @@ export async function runAiPrompt(prompt, { maxRounds = 4, history = [] } = {}) 
       }
       const entry = { name: functionCall.name, args, result }
       calls.push(entry)
-      // Dev console log so the user (and us) can see what the AI actually did
-      // — invaluable when the canvas looks unchanged.
       // eslint-disable-next-line no-console
       console.debug('[AI tool]', entry)
-      return {
-        functionResponse: {
-          name: functionCall.name,
-          response: result,
-        },
-      }
+      return { name: functionCall.name, response: result }
     })
-    contents.push({ role: 'user', parts: toolResponses })
+    turns.push({ role: 'tool', toolResults })
+
+    // Two failure modes after applyTemplate, both fixed by force-feeding a
+    // fresh snapshot into the next round:
+    //
+    // (1) Weak local models (Llama 3.1 8B, etc.) stop after applyTemplate
+    //     and never emit the customisation calls at all.
+    // (2) Strong cloud models (Gemini, Groq, OpenRouter) emit applyTemplate
+    //     and customisation calls in the SAME parallel batch — the
+    //     customisations target component IDs from the pre-template snapshot
+    //     and silently fail with "Component not found" because applyTemplate
+    //     wiped them. The user then sees the chat claim "all done" while the
+    //     canvas still shows the old template (or empty).
+    //
+    // Whenever applyTemplate succeeded this round, hand the model the new
+    // schema and tell it to redo the customisation against real IDs. This
+    // costs at most one extra round (still within maxRounds=2) but fixes
+    // both classes of failure in one shot.
+    const appliedTemplate = toolResults.find((r) => r.name === 'applyTemplate' && r.response?.ok)
+    const staleCalls = toolResults.filter(
+      (r) => r.name !== 'applyTemplate' && r.response && r.response.ok === false && /not found/i.test(r.response.error || ''),
+    )
+    if (appliedTemplate && (NEEDS_TEMPLATE_NUDGE || staleCalls.length > 0)) {
+      const freshSnapshot = schemaSnapshot()
+      const reason = staleCalls.length > 0
+        ? `${staleCalls.length} of your tool calls in this batch targeted component IDs from the BEFORE-template snapshot and were silently dropped because applyTemplate wiped those components. `
+        : 'Template applied — now you must customise it. '
+      turns.push({
+        role: 'user',
+        text:
+          reason
+          + 'Here is the FRESH schema with the real new IDs. Re-emit your customisation tool calls '
+          + '(setLinks for the navbar, replaceComponentText for EVERY heading / text / button / card '
+          + 'title) using the NEW IDs from this snapshot so the page actually reflects the user\'s topic. '
+          + 'Do not stop until every default placeholder string has been replaced.\n\n'
+          + 'New schema:\n'
+          + JSON.stringify(freshSnapshot, null, 2),
+      })
+    }
   }
 
   return { text: finalText || 'Done.', toolCallCount: calls.length, calls }

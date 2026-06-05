@@ -128,9 +128,27 @@ export default function Canvas() {
     </div>
   )
 
+  // Canvas anchor clicks would navigate the EDITOR away (e.g. # adds a hash to
+  // /editor/:id, an absolute href like "/login" routes the SPA to a login
+  // page, and an external http link replaces the editor) — leaving the user
+  // staring at a white or broken screen. `pointer-events-none` on the
+  // FlowCanvasItem wrapper blocks real mouse clicks for top-level items, but
+  // synthetic clicks, anchors inside containers/tabs, and any element with
+  // its own pointer-events override all bypass that guard. Intercept anchor
+  // clicks here as a fail-safe so design mode never leaves the editor.
+  function preventCanvasAnchorClicks(e) {
+    const a = e.target && e.target.closest && e.target.closest('a[href]')
+    if (!a) return
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
   if (isMobile) {
     return (
-      <main className="flex-1 overflow-auto bg-gray-100 p-8">
+      <main
+        className="flex-1 overflow-auto bg-gray-100 p-8"
+        onClickCapture={preventCanvasAnchorClicks}
+      >
         <div className="mx-auto w-fit">
           <div
             className="overflow-hidden rounded-[44px] border-[12px] border-gray-900 bg-white shadow-2xl"
@@ -152,7 +170,10 @@ export default function Canvas() {
   }
 
   return (
-    <main className="flex-1 overflow-auto bg-gray-100 p-8">
+    <main
+      className="flex-1 overflow-auto bg-gray-100 p-8"
+      onClickCapture={preventCanvasAnchorClicks}
+    >
       <div className="mx-auto w-fit">{canvas}</div>
     </main>
   )

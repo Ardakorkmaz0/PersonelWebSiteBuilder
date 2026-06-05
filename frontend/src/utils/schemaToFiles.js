@@ -9,7 +9,7 @@ import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
 import { iconSvg } from './icons.js'
 import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
-import { builderInteractiveTags } from './htmlRuntime.js'
+import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
 import {
   absoluteChildrenHeight,
@@ -229,7 +229,10 @@ function inlineNode(c) {
       ? code
       : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
     const h = Math.max(40, Math.round(c.layout?.h || 240))
-    const safe = doc.replace(/"/g, '&quot;')
+    // withBuilderInteractiveHtml layers on the anchor-interceptor so `<a href="#">`
+    // inside the user's snippet scrolls instead of navigating the sandboxed
+    // iframe to `about:srcdoc#` (which whites it out without allow-same-origin).
+    const safe = withBuilderInteractiveHtml(doc).replace(/"/g, '&quot;')
     return `<iframe srcdoc="${safe}" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy" style="display:block;width:100%;height:${h}px;border:0;background:transparent;${styleStr}"></iframe>`
   }
   const tag = tagFor(c.type)

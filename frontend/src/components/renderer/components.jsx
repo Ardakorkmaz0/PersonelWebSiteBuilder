@@ -5,6 +5,7 @@
 import { sanitizeUrl, sanitizeImageSrc } from '../../utils/sanitize.js'
 import { ICONS } from '../../utils/icons.js'
 import { ALERT_VARIANTS } from './constants.js'
+import { withBuilderInteractiveHtml } from '../../utils/htmlRuntime.js'
 
 function linkAttrs(href) {
   return /^https?:\/\//i.test(href)
@@ -377,9 +378,15 @@ export function HtmlEmbed({ props, style }) {
   const code = typeof props.code === 'string' ? props.code : ''
   // Wrap fragments in a minimal document so users can paste a body snippet.
   const looksFull = /^\s*<!DOCTYPE|<html[\s>]/i.test(code)
-  const srcDoc = looksFull
+  const baseHtml = looksFull
     ? code
     : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
+  // Inject the same anchor-interceptor / tabs handler the rest of the site
+  // uses. Without it, an `<a href="#">` inside the user's snippet navigates the
+  // sandboxed iframe to `about:srcdoc#` — which, in an iframe sandboxed without
+  // `allow-same-origin`, can blank the iframe out and leave the user staring
+  // at a white box.
+  const srcDoc = withBuilderInteractiveHtml(baseHtml)
   return (
     <iframe
       title="Embedded HTML"

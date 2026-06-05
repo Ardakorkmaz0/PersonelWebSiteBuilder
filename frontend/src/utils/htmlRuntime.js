@@ -105,8 +105,25 @@ const INTERACTIVE_SCRIPT = `
       // blanking the srcdoc iframe.
       event.preventDefault();
     }
+    // Forms inside a sandboxed iframe (allow-scripts WITHOUT allow-same-origin)
+    // try to navigate to their action URL on submit. Empty / hash / relative
+    // actions resolve to about:srcdoc and blank the iframe out — same failure
+    // mode the anchor handler defends against. External http(s) actions still
+    // submit normally (sandbox blocks the response but the click is intentional).
+    function onSubmit(event) {
+      var form = event.target;
+      if (!form || form.tagName !== 'FORM') return;
+      var action = String(form.getAttribute('action') || '').trim();
+      if (!action || action === '#' || action.charAt(0) === '#') {
+        event.preventDefault();
+        return;
+      }
+      if (/^https?:\\/\\//i.test(action) || /^mailto:|^tel:/i.test(action)) return;
+      event.preventDefault();
+    }
     function init() {
       document.addEventListener('click', onClick);
+      document.addEventListener('submit', onSubmit);
       // Ensure each tabs widget has exactly one panel visible on load (the one
       // whose tab is marked aria-selected, falling back to the first tab).
       var roots = document.querySelectorAll('[data-builder-tabs]');

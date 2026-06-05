@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { getApiKey } from '../../utils/aiAssistant.js'
+import {
+  AI_PROVIDERS,
+  fetchLocalStatus,
+  getApiKey,
+  getModel,
+  getProvider,
+  pickBestLocalModel,
+  setModel,
+} from '../../utils/aiAssistant.js'
 import AiChatPanel from './AiChatPanel.jsx'
 
 // Compact toolbar button that opens the AI chat panel.
@@ -19,6 +27,28 @@ export default function AiBar() {
       window.removeEventListener('focus', refresh)
       window.removeEventListener('storage', refresh)
     }
+  }, [])
+
+  // On app boot, if the user is on the local provider, validate the saved
+  // model against whatever Ollama actually has installed and upgrade if a
+  // stronger tool-calling model is available. The Settings panel does the
+  // same dance, but it only runs after the user opens that section — too late
+  // to stop them from sending a chat with a stale default model.
+  useEffect(() => {
+    if (getProvider() !== 'local') return undefined
+    let cancelled = false
+    fetchLocalStatus().then((s) => {
+      if (cancelled || !s?.ok || !Array.isArray(s.models) || !s.models.length) return
+      const saved = getModel('local')
+      const best = pickBestLocalModel(s.models, saved)
+      if (best && best !== saved) {
+        setModel(best, 'local')
+        // Notify other listeners (the chat panel uses storage events to
+        // refresh the header badge) that the model changed.
+        try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+      }
+    })
+    return () => { cancelled = true }
   }, [])
 
   return (

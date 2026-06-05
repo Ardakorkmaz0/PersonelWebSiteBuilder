@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { AI_MODELS, getApiKey, getModel, runAiPrompt } from '../../utils/aiAssistant.js'
+import {
+  AI_PROVIDERS,
+  getApiKey,
+  getModel,
+  getModelsFor,
+  getProvider,
+  runAiPrompt,
+} from '../../utils/aiAssistant.js'
 
 // Per-tab chat history persistence. Kept in localStorage so a refresh while
 // iterating with the assistant doesn't lose the back-and-forth — handy when
@@ -45,10 +52,29 @@ export default function AiChatPanel({ open, onClose }) {
   const scrollerRef = useRef(null)
   const textareaRef = useRef(null)
 
-  const hasKey = !!getApiKey()
+  // The header rebuilds whenever a storage event fires so that if the toolbar
+  // (AiBar) auto-corrected the model on boot, the badge here updates too.
+  const [, setRefreshTick] = useState(0)
+  useEffect(() => {
+    const bump = () => setRefreshTick((n) => n + 1)
+    window.addEventListener('storage', bump)
+    window.addEventListener('focus', bump)
+    return () => {
+      window.removeEventListener('storage', bump)
+      window.removeEventListener('focus', bump)
+    }
+  }, [])
+  const provider = getProvider()
+  const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
+  const hasKey =
+    providerInfo?.needsKey === false ? true : !!getApiKey(provider)
   const modelLabel =
-    AI_MODELS.find((m) => m.id === getModel())?.label.replace(' (recommended)', '') ||
-    'Gemini'
+    getModelsFor(provider)
+      .find((m) => m.id === getModel(provider))
+      ?.label.replace(' (recommended)', '') ||
+    getModel(provider) ||
+    providerInfo?.label ||
+    'AI'
 
   // Auto-scroll to bottom on new message.
   useEffect(() => {
@@ -168,7 +194,7 @@ export default function AiChatPanel({ open, onClose }) {
       {/* Empty state / no API key */}
       {!hasKey && (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Paste a free Gemini API key in the right panel (Properties → AI Assistant) to enable the chat.
+          Paste a free key for {providerInfo?.label || 'this provider'} (or any other provider) in the right panel — Properties → AI Assistant. Set up more than one and the chat auto-switches when one hits its quota.
         </div>
       )}
 
@@ -231,7 +257,7 @@ export default function AiChatPanel({ open, onClose }) {
           placeholder={
             hasKey
               ? 'Tell AI what to build (Enter to send, Shift+Enter for newline)…'
-              : 'Set a Gemini API key first.'
+              : 'Set an API key in the right panel first.'
           }
           className="block w-full resize-none rounded-[4px] border border-[#8a8886] bg-white px-2 py-1.5 text-sm text-[#201f1e] placeholder:text-[#a19f9d] focus:border-[#2b579a] focus:outline-none disabled:bg-[#f3f2f1] disabled:text-[#a19f9d]"
         />
@@ -280,15 +306,24 @@ function ToolsStrip({ calls }) {
   return (
     <div className="flex flex-col items-start gap-1">
       <div className="flex max-w-full flex-wrap gap-1">
-        {(calls || []).map((c, i) => (
-          <span
-            key={i}
-            title={JSON.stringify(c.args, null, 2)}
-            className="rounded-full border border-[#c5d4ef] bg-[#eff3fb] px-2 py-0.5 text-[10px] font-medium text-[#2b579a]"
-          >
-            {c.name}
-          </span>
-        ))}
+        {(calls || []).map((c, i) => {
+          // Tool calls that returned ok:false (stale IDs, validation errors,
+          // etc.) get painted red with a strike so the user can tell at a
+          // glance that the AI's claim of "done" didn't fully land. Tooltip
+          // surfaces the error reason on hover.
+          const failed = c.result && c.result.ok === false
+          const tooltip = failed
+            ? `Failed: ${c.result?.error || 'unknown'}\n\nArgs:\n${JSON.stringify(c.args, null, 2)}`
+            : JSON.stringify(c.args, null, 2)
+          const cls = failed
+            ? 'rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 line-through decoration-red-400'
+            : 'rounded-full border border-[#c5d4ef] bg-[#eff3fb] px-2 py-0.5 text-[10px] font-medium text-[#2b579a]'
+          return (
+            <span key={i} title={tooltip} className={cls}>
+              {c.name}
+            </span>
+          )
+        })}
       </div>
     </div>
   )

@@ -1,3 +1,7 @@
+import json
+import urllib.error
+import urllib.request
+
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
@@ -13,6 +17,11 @@ from .serializers import (
     SiteSerializer,
     UserSerializer,
 )
+
+# Default Ollama base URL. Users with LM Studio / a custom port pass their
+# own via the X-Local-Base-Url request header; we still default to Ollama
+# because that's the most common local runtime on Windows.
+DEFAULT_LOCAL_BASE = 'http://localhost:11434/v1'
 
 
 class RegisterView(APIView):
@@ -61,6 +70,125 @@ class SiteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+
+def _normalise_base(base_url):
+    base = (base_url or DEFAULT_LOCAL_BASE).rstrip('/')
+    # Accept both "http://host:port" and "http://host:port/v1"; the rest of
+    # the code assumes /v1 is implied when missing so the model can stick to
+    # the standard OpenAI-compatible path.
+    if not base.endswith('/v1'):
+        base = base + '/v1'
+    return base
+
+
+class LocalAiStatusView(APIView):
+    """Tell the frontend whether Ollama / LM Studio is reachable and which
+    models are installed. The frontend uses this to auto-fill the Model
+    dropdown and to badge the AI button as 'ready' without the user having to
+    type anything. CORS is irrelevant because the call is browser → Django →
+    Ollama, all same-origin from the browser's perspective.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        base = _normalise_base(request.GET.get('base'))
+        # Ollama's native /api/tags returns installed models. LM Studio's
+        # /v1/models is OpenAI-compatible; we try both so either runtime
+        # advertises its model list. /api/tags wins where both reply because
+        # it carries richer metadata (size, modified_at).
+        native_url = base.rsplit('/v1', 1)[0] + '/api/tags'
+        try:
+            with urllib.request.urlopen(native_url, timeout=2) as resp:
+                payload = json.loads(resp.read().decode('utf-8'))
+                models = [m.get('name') for m in payload.get('models', []) if m.get('name')]
+                return Response({'ok': True, 'runtime': 'ollama', 'models': models, 'base': base})
+        except Exception:  # pragma: no cover - falls through to /v1/models
+            pass
+        try:
+            with urllib.request.urlopen(base + '/models', timeout=2) as resp:
+                payload = json.loads(resp.read().decode('utf-8'))
+                models = [m.get('id') for m in payload.get('data', []) if m.get('id')]
+                return Response({'ok': True, 'runtime': 'openai-compatible', 'models': models, 'base': base})
+        except urllib.error.URLError as e:
+            return Response(
+                {'ok': False, 'reason': str(e.reason if hasattr(e, 'reason') else e), 'base': base},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:  # noqa: BLE001 - surface raw error to the UI
+            return Response(
+                {'ok': False, 'reason': str(e), 'base': base},
+                status=status.HTTP_200_OK,
+            )
+
+
+class LocalAiProxyView(APIView):
+    """Forward an OpenAI-shaped chat-completions request to the user's local
+    runtime (Ollama / LM Studio / anything OpenAI-compatible). Browser hits
+    Django (same origin → no CORS), Django hits localhost:11434.
+
+    Body is forwarded verbatim. Header X-Local-Base-Url overrides the default
+    base. Response status + body are passed straight through so the frontend
+    sees exactly what the runtime returned.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Pop the per-request base URL out of the body so the rest of the
+        # payload stays a clean OpenAI chat-completions request. Using the
+        # body (instead of a custom header) keeps us out of CORS preflight
+        # headache territory.
+        body_in = request.data if isinstance(request.data, dict) else {}
+        custom_base = body_in.pop('_localBase', None)
+        base = _normalise_base(custom_base)
+        url = base + '/chat/completions'
+        try:
+            data = json.dumps(body_in).encode('utf-8')
+            req = urllib.request.Request(
+                url,
+                data=data,
+                method='POST',
+                headers={'Content-Type': 'application/json'},
+            )
+            # Local models do CPU/GPU inference — give them headroom; the
+            # browser-side throttle keeps this honest.
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                text = resp.read().decode('utf-8')
+                try:
+                    parsed = json.loads(text)
+                except ValueError:
+                    parsed = {'raw': text}
+                return Response(parsed, status=resp.status)
+        except urllib.error.HTTPError as e:
+            text = ''
+            try:
+                text = e.read().decode('utf-8')
+            except Exception:  # noqa: BLE001
+                pass
+            return Response(
+                {'error': {'message': text or e.reason, 'code': e.code}},
+                status=e.code,
+            )
+        except urllib.error.URLError as e:
+            return Response(
+                {
+                    'error': {
+                        'message': (
+                            'Could not reach the local AI runtime at '
+                            f"{base}. Start Ollama (or LM Studio) and try again. "
+                            f'Details: {e.reason}'
+                        ),
+                    }
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except Exception as e:  # noqa: BLE001
+            return Response(
+                {'error': {'message': str(e)}},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class PublicSiteView(APIView):

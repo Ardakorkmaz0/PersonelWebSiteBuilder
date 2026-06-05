@@ -4,6 +4,7 @@ import { canvasHeight, flowCanvasHeight, flowGap, flowSidePad } from '../rendere
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import FreeCanvasItem from './FreeCanvasItem.jsx'
 import FlowCanvasItem from './FlowCanvasItem.jsx'
+import { DEFAULT_THEME } from '../../utils/theme.js'
 
 // One editable free canvas, rendered at the active breakpoint's chosen artboard
 // width. PC edits each component's `layout`; Mobile edits its `mobileLayout` on a
@@ -21,6 +22,13 @@ export default function Canvas() {
   const mobileFold = page.mobileFold || 0
   const select = useEditorStore((s) => s.selectComponent)
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' })
+  // The theme's font is what the published page paints in; reflect it on the
+  // canvas root so brand-new components inherit it immediately AND the empty
+  // canvas already previews the right typography. Inline inheritance only
+  // affects descendants that don't override fontFamily themselves — the
+  // existing per-component baked-in fonts still win, which is the contract
+  // the "Apply to design" button operates on.
+  const themeFontFamily = useEditorStore((s) => s.schema?.theme?.fontFamily) || DEFAULT_THEME.fontFamily
 
   const isMobile = viewport === 'mobile'
   const flowMode = !!page.flowMode
@@ -42,6 +50,7 @@ export default function Canvas() {
         width: canvasW,
         minHeight,
         background,
+        fontFamily: themeFontFamily,
         // Clip selection chrome (resize handles, outline) and any off-artboard
         // content at the canvas edge so you can't scroll into empty space beside
         // the page. Vertical content is unaffected (clip is X-only).

@@ -988,7 +988,8 @@ async function callLocal(apiKey, history, currentTurnText) {
 // function call. Weak local models (e.g. Llama 3.1 8B) frequently write the
 // call as JSON, as a JS-like function call, or in prose with the function
 // name mentioned. We try several patterns in order of specificity.
-function extractTextCalls(text) {
+// Exported so tests can pin the regression set for each pattern.
+export function extractTextCalls(text) {
   const out = []
   if (typeof text !== 'string') return out
   const declared = toolDeclarations()
@@ -1021,13 +1022,90 @@ function extractTextCalls(text) {
   // Special-case applyTemplate because it's the most common high-impact call.
   const templateNames = ['github', 'dark', 'apple', 'minimal-landing', 'portfolio', 'blog', 'dashboard', 'marketing']
   const lower = text.toLowerCase()
-  if (/apply\s*template|applytemplate|use\s+the\s+\w+\s+template|hazır\s*şablon|template\s+(?:name|adı)/i.test(text)) {
+  if (/apply\s*template|applytemplate|(?:apply|use)\s+the\s+\w+\s+template|hazır\s*şablon|template\s+(?:name|adı)/i.test(text)) {
     const found = templateNames.find((t) => new RegExp(`\\b${t}\\b`, 'i').test(lower))
     if (found) out.push({ name: 'applyTemplate', args: { name: found } })
   }
   if (out.length) return out
 
+  // Pattern D — bare argument JSON, no tool name. Llama 3.1 8B emits this all
+  // the time: `{"patch":{"primaryColor":"#007bff"}}` for "change the primary
+  // colour to blue", `{"id":"...","mode":"centerH"}` for "centre the heading",
+  // and so on. Infer the intended tool from the shape of the args alone, then
+  // fall back to keyword hints from the surrounding prose when shape isn't
+  // decisive. The candidate is only accepted if it matches a declared tool.
+  const bareJson = text.match(/\{[\s\S]*\}/)
+  if (bareJson) {
+    let args
+    try { args = JSON.parse(bareJson[0]) } catch { args = null }
+    if (args && typeof args === 'object') {
+      const inferred = inferToolFromArgs(args, lower)
+      if (inferred && isReal(inferred)) out.push({ name: inferred, args })
+    }
+  }
+  if (out.length) return out
+
   return out
+}
+
+// Theme-shape vs component-shape: theme keys live on the site-wide theme dict.
+// If patch contains any of these, the caller almost certainly meant updateTheme.
+const THEME_PATCH_KEYS = new Set([
+  'primaryColor', 'textColor', 'mutedColor', 'backgroundColor', 'surfaceColor',
+  'softColor', 'headerColor', 'headerTextColor', 'fontFamily', 'radius',
+  'buttonRadius', 'shadow',
+])
+
+// Pure args-shape → tool-name inference. Falls back to the user/assistant
+// prose for the ambiguous cases. Returns '' when nothing fits.
+function inferToolFromArgs(args, lowerProse = '') {
+  const keys = Object.keys(args || {})
+  const hasId = typeof args.id === 'string' && args.id
+  // --- updateTheme: {patch: {primaryColor|fontFamily|...}}
+  if (args.patch && typeof args.patch === 'object') {
+    const patchKeys = Object.keys(args.patch)
+    const themeKeyHits = patchKeys.filter((k) => THEME_PATCH_KEYS.has(k)).length
+    if (themeKeyHits > 0 && !hasId) return 'updateTheme'
+    // --- setLayout / updateStyles / updateProps: keyed by patch shape
+    if (hasId) {
+      const layoutKeys = ['x', 'y', 'w', 'h']
+      if (patchKeys.length && patchKeys.every((k) => layoutKeys.includes(k))) return 'setLayout'
+      // CSS-shaped values (kebab/camel case property name + colour or length) →
+      // updateStyles. Heuristic: keys are lowercase + values are strings.
+      const looksCssy = patchKeys.length && patchKeys.every(
+        (k) => /^[a-z]+[A-Z]?[a-zA-Z]*$/.test(k) && typeof args.patch[k] !== 'object',
+      )
+      if (looksCssy) return 'updateStyles'
+      return 'updateProps'
+    }
+  }
+  // --- applyTemplate: {name: 'github'|'dark'|...}
+  if (typeof args.name === 'string' && !hasId) {
+    const templates = ['github', 'dark', 'apple', 'minimal-landing', 'portfolio', 'blog', 'dashboard', 'marketing']
+    if (templates.includes(args.name)) return 'applyTemplate'
+  }
+  // --- addComponent: {type: 'navbar'|'heading'|...}
+  if (typeof args.type === 'string' && !hasId) return 'addComponent'
+  if (hasId) {
+    // --- specialised content tools — match by collection key.
+    if (Array.isArray(args.links)) return 'setLinks'
+    if (Array.isArray(args.options)) return 'setSelectOptions'
+    if (Array.isArray(args.tabs)) return 'setTabs'
+    if (typeof args.text === 'string') return 'replaceComponentText'
+    if (typeof args.mode === 'string') return 'alignComponent'
+    if (typeof args.tabId === 'string') return 'setActiveTab'
+    if (typeof args.hidden === 'boolean' || typeof args.hiddenMobile === 'boolean') return 'setHidden'
+  }
+  // --- distributeSiblings: {axis, parentId?}
+  if (typeof args.axis === 'string' && !hasId) return 'distributeSiblings'
+  // --- setCustomCss / setCustomJs: {code} — needs prose to disambiguate.
+  if (typeof args.code === 'string' && keys.length === 1) {
+    if (/\bcss|stylesheet|style\b/i.test(lowerProse)) return 'setCustomCss'
+    if (/\bjs|javascript|script\b/i.test(lowerProse)) return 'setCustomJs'
+    // Default to CSS — far more common for the "add some styles" request.
+    return 'setCustomCss'
+  }
+  return ''
 }
 
 function historyToOpenAiMessages(history, currentTurnText) {

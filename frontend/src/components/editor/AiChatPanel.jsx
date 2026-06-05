@@ -121,6 +121,7 @@ export default function AiChatPanel({ open, onClose }) {
         { id: rand(), role: 'user', text: trimmed },
         { id: rand(), role: 'assistant', text:
           'Slash commands:\n'
+          + '/fresh — start a new conversation (keeps scrollback, resets AI memory)\n'
           + '/clear — wipe this chat\n'
           + '/undo — undo the last canvas change\n'
           + '/redo — redo the last undo\n'
@@ -133,6 +134,10 @@ export default function AiChatPanel({ open, onClose }) {
     }
     if (cmd === 'clear') {
       clearChat()
+      return true
+    }
+    if (cmd === 'fresh' || cmd === 'new') {
+      freshChat()
       return true
     }
     if (cmd === 'undo') {
@@ -187,6 +192,16 @@ export default function AiChatPanel({ open, onClose }) {
     return true
   }
 
+  // Insert a "Fresh chat" divider — the user keeps their visible scrollback
+  // but every prompt after this line builds history only from the divider
+  // forward. The big win is on weaker models (gemma4, Llama 3.1 8B) that get
+  // confused when an older topic ("github site") and a newer one ("dark
+  // mode blog") blur together in the same context window.
+  function freshChat() {
+    setMessages((m) => [...m, { id: rand(), role: 'divider', label: 'New conversation starting here' }])
+    setError('')
+  }
+
   async function send(textOverride) {
     const raw = (textOverride ?? draft).trim()
     if (!raw || busy) return
@@ -213,8 +228,12 @@ export default function AiChatPanel({ open, onClose }) {
     setDraft('')
     setBusy(true)
     try {
-      // Pass prior text-only turns so the model has conversation context.
-      const history = [...messages, userMsg]
+      // Pass prior text-only turns so the model has conversation context —
+      // but only AFTER the most recent "Fresh chat" divider so older topics
+      // can't bleed into the current request.
+      const lastDivider = messages.findLastIndex((m) => m.role === 'divider')
+      const since = lastDivider >= 0 ? messages.slice(lastDivider + 1) : messages
+      const history = [...since, userMsg]
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', text: m.text || '' }))
         // Drop the just-added user turn since runAiPrompt re-adds it with the
@@ -264,10 +283,19 @@ export default function AiChatPanel({ open, onClose }) {
         </span>
         <button
           type="button"
+          onClick={freshChat}
+          disabled={messages.length === 0 || messages[messages.length - 1]?.role === 'divider'}
+          title="Start a new conversation — AI forgets older topics, your scrollback stays"
+          className="ml-auto rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
+        >
+          New
+        </button>
+        <button
+          type="button"
           onClick={clearChat}
           disabled={messages.length === 0}
-          title="Clear chat history"
-          className="ml-auto rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
+          title="Clear chat history entirely"
+          className="rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
         >
           Clear
         </button>
@@ -320,6 +348,8 @@ export default function AiChatPanel({ open, onClose }) {
             <UserBubble key={m.id} text={m.text} />
           ) : m.role === 'tools' ? (
             <ToolsStrip key={m.id} calls={m.calls} />
+          ) : m.role === 'divider' ? (
+            <DividerRow key={m.id} label={m.label} />
           ) : (
             <AssistantBubble key={m.id} text={m.text} toolCallCount={m.toolCallCount} />
           ),
@@ -381,6 +411,19 @@ export default function AiChatPanel({ open, onClose }) {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Subtle horizontal rule with a centred label. Marks where the AI's memory
+// is intentionally reset — everything above is reference scrollback the
+// model will NOT see in the next prompt.
+function DividerRow({ label }) {
+  return (
+    <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[#a19f9d]">
+      <span className="h-px flex-1 bg-[#e1dfdd]" />
+      <span>{label || 'New conversation'}</span>
+      <span className="h-px flex-1 bg-[#e1dfdd]" />
     </div>
   )
 }

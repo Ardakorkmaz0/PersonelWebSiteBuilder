@@ -607,7 +607,17 @@ function executeTool(rawName, args) {
       return { ok: true, removed: ids.length }
     }
     case 'applyTemplate': {
-      const tpl = TEMPLATES[a.name]
+      // Weak local models often invent a template name from the user's topic
+      // (e.g. "youtube", "restaurant", "saas"). Instead of failing the whole
+      // chain, fall back to the closest curated template — the customisation
+      // round downstream will rewrite the placeholder copy for the topic.
+      const wanted = String(a?.name || '').toLowerCase()
+      let tpl = TEMPLATES[wanted]
+      let resolvedName = wanted
+      if (!tpl) {
+        resolvedName = mapTopicToTemplate(wanted)
+        tpl = TEMPLATES[resolvedName]
+      }
       if (!tpl) return { ok: false, error: `Unknown template "${a.name}". Choose one of: ${Object.keys(TEMPLATES).join(', ')}` }
       // 1) wipe the page first so existing components don't leak.
       const before0 = useEditorStore.getState()
@@ -642,11 +652,55 @@ function executeTool(rawName, args) {
           if (step.layout) store.setLayout(newId, step.layout)
         }
       }
-      return { ok: true, template: a.name, componentsCreated: Object.keys(created).length }
+      return {
+        ok: true,
+        template: resolvedName,
+        requestedName: wanted,
+        topicFallback: resolvedName !== wanted ? resolvedName : undefined,
+        componentsCreated: Object.keys(created).length,
+      }
     }
     default:
       return { ok: false, error: `Unknown tool "${rawName}" (normalised to "${name}"). Use one of the declared tool names exactly.` }
   }
+}
+
+// Map a free-form topic word the model emitted (e.g. "youtube", "restaurant",
+// "saas", "fitness") to the closest curated template. Designed so weak models
+// that invent template names from the user's prompt still get a coherent
+// starting point, and the subsequent customisation round can localise the
+// placeholder copy to the actual topic. Returns one of the keys of TEMPLATES
+// or '' (caller treats '' as truly-unknown). Exported so tests can pin the
+// mapping table without needing the full store.
+export function mapTopicToTemplate(rawName) {
+  const n = String(rawName || '').toLowerCase().trim()
+  if (!n) return ''
+  // Direct hits first — covers exact + common typos via includes.
+  if (TEMPLATES[n]) return n
+  for (const key of Object.keys(TEMPLATES)) {
+    if (n.includes(key) || key.includes(n)) return key
+  }
+  // Topic → closest template mapping. Order matters when a phrase matches
+  // multiple — most specific first.
+  const topicMap = [
+    [/blog|news|writer|article|essay|magazine|substack|newsletter|notes/, 'blog'],
+    [/dashboard|admin|console|analytics|metric|kpi|crm|erp/, 'dashboard'],
+    [/portfolio|personal|cv|résumé|resume|freelanc|designer|developer|engineer|illustrator/, 'portfolio'],
+    [/youtube|twitch|tiktok|channel|podcast|streamer|vlog|video|creator|fan|tribute|star wars|marvel|harry potter|anime|game|band/, 'portfolio'],
+    [/restaurant|cafe|coffee|food|menu|bar|bakery/, 'marketing'],
+    [/gym|fitness|yoga|workout|coach|trainer|sport/, 'marketing'],
+    [/shop|store|ecommerce|product|brand|launch|landing|signup|subscribe|trial/, 'marketing'],
+    [/saas|app|software|tool|platform|service/, 'marketing'],
+    [/agency|consult|studio|firm/, 'minimal-landing'],
+    [/dark|night|black|studio/, 'dark'],
+    [/apple|iphone|ipad|mac/, 'apple'],
+    [/github|repo|open\s*source|code/, 'github'],
+  ]
+  for (const [re, key] of topicMap) {
+    if (re.test(n)) return key
+  }
+  // Generic "X için site / site for X" → portfolio is the most flexible.
+  return 'portfolio'
 }
 
 // snake_case / kebab-case / PascalCase / spaces → camelCase.

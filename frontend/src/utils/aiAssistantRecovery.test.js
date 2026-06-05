@@ -3,7 +3,50 @@
 // their intent in the assistant text. Each test pins one of the recovery
 // patterns A..D so a future refactor can't silently undo it.
 import { describe, expect, it } from 'vitest'
-import { extractTextCalls } from './aiAssistant.js'
+import { extractTextCalls, mapTopicToTemplate } from './aiAssistant.js'
+
+describe('mapTopicToTemplate — topic → curated-template fallback', () => {
+  it('keeps a name that is already a curated key (exact match)', () => {
+    expect(mapTopicToTemplate('blog')).toBe('blog')
+    expect(mapTopicToTemplate('marketing')).toBe('marketing')
+  })
+
+  it('maps the screenshot scenario — youtube → portfolio (creator)', () => {
+    // "bana youtube sitesi yap" → Llama 3.1 8B invented {name:"youtube"}.
+    // Now we route to the closest creator-style template instead of erroring.
+    expect(mapTopicToTemplate('youtube')).toBe('portfolio')
+  })
+
+  it('maps fan / topic pages to portfolio (existing #50 contract)', () => {
+    expect(mapTopicToTemplate('star wars')).toBe('portfolio')
+    expect(mapTopicToTemplate('marvel')).toBe('portfolio')
+  })
+
+  it('routes commerce / product / SaaS topics to marketing', () => {
+    expect(mapTopicToTemplate('restaurant')).toBe('marketing')
+    expect(mapTopicToTemplate('saas')).toBe('marketing')
+    expect(mapTopicToTemplate('gym')).toBe('marketing')
+  })
+
+  it('routes content / writing topics to blog', () => {
+    expect(mapTopicToTemplate('newsletter')).toBe('blog')
+    expect(mapTopicToTemplate('writer')).toBe('blog')
+  })
+
+  it('routes admin / analytics topics to dashboard', () => {
+    expect(mapTopicToTemplate('admin')).toBe('dashboard')
+    expect(mapTopicToTemplate('analytics')).toBe('dashboard')
+  })
+
+  it('falls back to portfolio for anything else (most flexible)', () => {
+    expect(mapTopicToTemplate('asdfqwerty')).toBe('portfolio')
+  })
+
+  it('returns "" for empty / nullish input', () => {
+    expect(mapTopicToTemplate('')).toBe('')
+    expect(mapTopicToTemplate(null)).toBe('')
+  })
+})
 
 describe('extractTextCalls — Pattern A: {"name", "parameters"|"arguments"|"args"}', () => {
   it('recovers a full tool-call JSON', () => {

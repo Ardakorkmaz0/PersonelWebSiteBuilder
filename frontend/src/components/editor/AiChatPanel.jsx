@@ -241,10 +241,19 @@ export default function AiChatPanel({ open, onClose }) {
         .slice(0, -1)
       const { text, toolCallCount, calls } = await runAiPrompt(trimmed, { history })
       if ((calls || []).length > 0) {
+        // If the model emitted tool calls but EVERY one failed, suppress its
+        // upbeat "Done."/"Updated the X" reply — it almost always describes
+        // an action that did not happen (a recurring Llama 3.1 8B failure
+        // mode). Replace with a clear failure-aware notice that lists the
+        // actual error reasons so the user knows what to retry.
+        const allFailed = calls.every((c) => c?.result?.ok === false)
+        const summary = allFailed
+          ? buildFailureSummary(calls)
+          : text
         setMessages((m) => [
           ...m,
           { id: rand(), role: 'tools', calls },
-          { id: rand(), role: 'assistant', text },
+          { id: rand(), role: 'assistant', text: summary, allFailed },
         ])
       } else {
         setMessages((m) => [
@@ -351,7 +360,12 @@ export default function AiChatPanel({ open, onClose }) {
           ) : m.role === 'divider' ? (
             <DividerRow key={m.id} label={m.label} />
           ) : (
-            <AssistantBubble key={m.id} text={m.text} toolCallCount={m.toolCallCount} />
+            <AssistantBubble
+              key={m.id}
+              text={m.text}
+              toolCallCount={m.toolCallCount}
+              allFailed={m.allFailed}
+            />
           ),
         )}
         {busy && (
@@ -428,6 +442,23 @@ function DividerRow({ label }) {
   )
 }
 
+// Dedupe + cap the per-call error reasons into a one-paragraph message the
+// user can act on. Beats showing the model's hallucinated "Updated the X"
+// reply when none of the changes actually landed.
+function buildFailureSummary(calls) {
+  const reasons = new Set()
+  for (const c of calls || []) {
+    const e = c?.result?.error
+    if (e) reasons.add(`${c.name}: ${e}`)
+  }
+  const list = Array.from(reasons).slice(0, 4).join('\n• ')
+  return (
+    `I tried ${calls.length} action${calls.length === 1 ? '' : 's'} but none of them landed. `
+    + `Common causes: the canvas was empty before I started, or I used component IDs that don’t exist yet.\n\n`
+    + `Errors:\n• ${list}\n\nTry rephrasing the request, or hit /undo if anything DID slip through.`
+  )
+}
+
 function UserBubble({ text }) {
   return (
     <div className="flex justify-end">
@@ -438,10 +469,15 @@ function UserBubble({ text }) {
   )
 }
 
-function AssistantBubble({ text, toolCallCount }) {
+function AssistantBubble({ text, toolCallCount, allFailed }) {
+  // Failure-aware tinting: red border + light pink background so a wall of
+  // ✗ pills above this bubble can't be mistaken for a successful change.
+  const bubbleCls = allFailed
+    ? 'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-red-200 bg-red-50 px-3 py-2 text-sm leading-snug text-red-900 shadow-sm'
+    : 'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-[#e1dfdd] bg-white px-3 py-2 text-sm leading-snug text-[#201f1e] shadow-sm'
   return (
     <div className="flex flex-col items-start gap-1">
-      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-[#e1dfdd] bg-white px-3 py-2 text-sm leading-snug text-[#201f1e] shadow-sm">
+      <div className={bubbleCls}>
         {text || 'Done.'}
       </div>
       {toolCallCount === 0 && (

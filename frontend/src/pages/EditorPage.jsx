@@ -34,6 +34,7 @@ import { apiError } from '../utils/errors.js'
 const CodePanel = lazy(() => import('../components/editor/CodePanel.jsx'))
 const HtmlWorkspace = lazy(() => import('../components/editor/HtmlWorkspace.jsx'))
 const TemplatePicker = lazy(() => import('../components/editor/TemplatePicker.jsx'))
+const HistoryPanel = lazy(() => import('../components/editor/HistoryPanel.jsx'))
 
 function PanelFallback() {
   return (
@@ -98,6 +99,7 @@ export default function EditorPage() {
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
   const [importOpen, setImportOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const jsonInputRef = useRef(null)
   const htmlInputRef = useRef(null)
@@ -616,6 +618,17 @@ export default function EditorPage() {
           )}
           <button
             type="button"
+            onClick={() => setHistoryOpen((o) => !o)}
+            disabled={saving}
+            title="See and restore older saves of this site"
+            className={`rounded-[2px] px-3 py-1.5 text-sm hover:bg-[#f3f2f1] disabled:opacity-60 ${
+              historyOpen ? 'bg-[#eff3fb] text-[#2b579a]' : 'text-[#323130]'
+            }`}
+          >
+            History
+          </button>
+          <button
+            type="button"
             onClick={previewCurrentSite}
             disabled={saving}
             className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-60"
@@ -758,6 +771,29 @@ export default function EditorPage() {
             theme={theme}
             onPick={pickTemplate}
             onClose={() => setTemplateOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {historyOpen && (
+        <Suspense fallback={null}>
+          <HistoryPanel
+            open={historyOpen}
+            siteId={id}
+            onClose={() => setHistoryOpen(false)}
+            onRestored={(fresh) => {
+              // The restore endpoint returns the full site after the
+              // rollback — push the schema + html back into the editor
+              // store + local state so the canvas reflects it immediately
+              // (no manual reload needed).
+              if (fresh?.schema) loadSchema(fresh.schema)
+              if (typeof fresh?.html === 'string') {
+                setSiteHtml(fresh.html)
+                setHtmlDirty(false)
+              }
+              if (fresh?.published !== undefined) setPublished(fresh.published)
+              markSaved()
+            }}
           />
         </Suspense>
       )}

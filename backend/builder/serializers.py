@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import Site, UploadedImage
+from .models import Site, SiteVersion, UploadedImage
 from .validators import validate_and_clean_schema
 
 # Mirror sanitize.js / validators.py for image MIME types accepted in <img src>.
@@ -73,6 +73,22 @@ class PublicSiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('title', 'slug', 'schema', 'html', 'published', 'updated_at')
+
+
+class SiteVersionSerializer(serializers.ModelSerializer):
+    """Lightweight representation for the History panel.
+
+    The list endpoint omits the full schema blob — it's ~10-30 KB per row and
+    the panel only needs the timestamp + label + source + a thumbnail hint.
+    The restore endpoint returns the live Site after applying, not the
+    version row itself, so this serializer never needs to expose the bytes
+    directly.
+    """
+
+    class Meta:
+        model = SiteVersion
+        fields = ('id', 'label', 'source', 'created_at')
+        read_only_fields = fields
 
 
 class UploadedImageSerializer(serializers.ModelSerializer):

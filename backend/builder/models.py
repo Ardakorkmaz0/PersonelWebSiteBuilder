@@ -74,6 +74,77 @@ class Site(models.Model):
         return slug
 
 
+class SiteVersion(models.Model):
+    """Point-in-time snapshot of a Site's schema + html.
+
+    A new row is created on every Site save AND every time the user clicks
+    "Restore" (so the pre-restore state is itself recoverable). The list is
+    capped at MAX_VERSIONS_PER_SITE per site — when the cap is hit the
+    oldest row is pruned so the cap survives forever without bloat.
+
+    Why a separate model instead of stuffing history into the Site row: the
+    schema can be tens of KB, and 30 of them per site times tens of sites is
+    ~MB of free history — fine in a separate table, painful in one big JSON
+    column.
+    """
+
+    MAX_VERSIONS_PER_SITE = 30
+    SOURCE_CHOICES = (
+        ('save', 'Save'),
+        ('restore', 'Restore'),
+        ('manual', 'Manual'),
+    )
+
+    site = models.ForeignKey(
+        Site,
+        on_delete=models.CASCADE,
+        related_name='versions',
+    )
+    schema = models.JSONField()
+    html = models.TextField(blank=True, default='')
+    label = models.CharField(max_length=120, blank=True, default='')
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='save')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['site', '-created_at'])]
+
+    def __str__(self):
+        return f'version#{self.pk} ({self.site_id} @ {self.created_at:%Y-%m-%d %H:%M})'
+
+    @classmethod
+    def snapshot(cls, site, source='save', label=''):
+        """Create a fresh snapshot of `site` and prune over-cap rows.
+
+        Identical to the previous snapshot's schema+html → skipped (no
+        point keeping duplicates). Returns the created row or None when
+        skipped.
+        """
+        latest = cls.objects.filter(site=site).first()
+        if (
+            latest is not None
+            and latest.schema == site.schema
+            and latest.html == site.html
+        ):
+            return None
+        row = cls.objects.create(
+            site=site,
+            schema=site.schema,
+            html=site.html,
+            source=source,
+            label=label,
+        )
+        # FIFO prune: keep only the newest MAX_VERSIONS_PER_SITE rows per site.
+        keep_ids = list(
+            cls.objects.filter(site=site)
+            .order_by('-created_at')
+            .values_list('id', flat=True)[: cls.MAX_VERSIONS_PER_SITE]
+        )
+        cls.objects.filter(site=site).exclude(id__in=keep_ids).delete()
+        return row
+
+
 class UploadedImage(models.Model):
     """User-uploaded image used by Image components in the builder.
 

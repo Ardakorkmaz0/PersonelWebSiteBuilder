@@ -5,17 +5,21 @@ import urllib.request
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Site, UploadedImage
+from django.db import transaction
+
+from .models import Site, SiteVersion, UploadedImage
 from .serializers import (
     PublicSiteSerializer,
     RegisterSerializer,
     SiteListSerializer,
     SiteSerializer,
+    SiteVersionSerializer,
     UploadedImageSerializer,
     UserSerializer,
 )
@@ -72,6 +76,46 @@ class SiteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        site = serializer.save()
+        # Capture the post-save state so the user can roll back to it later.
+        # snapshot() de-dupes identical-schema saves so a no-op PUT (e.g. the
+        # editor auto-saves after a tiny ephemeral change) doesn't burn a
+        # slot. SiteVersion FIFO-prunes anything past MAX_VERSIONS_PER_SITE.
+        SiteVersion.snapshot(site, source='save')
+
+    # --- /api/sites/:id/versions/ -------------------------------------------
+    # Nested route via @action: the list view shows recent snapshots, the
+    # detail view restores one. Keeping it under the site URL means DRF's
+    # router-level get_queryset filter already enforces ownership.
+
+    @action(detail=True, methods=['get'], url_path='versions')
+    def list_versions(self, request, pk=None):
+        site = self.get_object()
+        rows = SiteVersion.objects.filter(site=site)
+        data = SiteVersionSerializer(rows, many=True, context={'request': request}).data
+        return Response(data)
+
+    @action(detail=True, methods=['post'], url_path=r'versions/(?P<version_id>[0-9]+)/restore')
+    def restore_version(self, request, pk=None, version_id=None):
+        site = self.get_object()
+        try:
+            version = SiteVersion.objects.get(pk=version_id, site=site)
+        except SiteVersion.DoesNotExist:
+            return Response(
+                {'detail': 'Version not found for this site.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        # Wrap the snapshot-of-current + restore in a transaction so a crash
+        # mid-way can never leave the site in a half-restored state.
+        with transaction.atomic():
+            SiteVersion.snapshot(site, source='save', label='before restore')
+            site.schema = version.schema
+            site.html = version.html
+            site.save()
+            SiteVersion.snapshot(site, source='restore', label=f'restored from v{version.pk}')
+        return Response(SiteSerializer(site).data)
 
 
 class UploadedImageViewSet(viewsets.ModelViewSet):

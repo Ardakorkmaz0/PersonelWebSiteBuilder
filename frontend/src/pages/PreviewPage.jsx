@@ -12,6 +12,7 @@ import {
 } from '../utils/htmlRuntime.js'
 import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
 import { customCssBlock, safeCustomJs, themeVariablesCss } from '../utils/theme.js'
+import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 
 const MOBILE_BREAKPOINT = 768
 
@@ -331,8 +332,20 @@ ${customCssBlock(site?.schema?.customCss)}`
     )
   }
 
+  // Auto-attach Google Fonts when the theme references a curated family —
+  // React's `<link>` tag still goes through the document head even in the
+  // body since React 19 hoists it. `key` forces a remount when the font
+  // changes so stale URLs don't linger.
+  const fontHref = googleFontHrefForTheme(site?.schema?.theme)
   return (
     <div>
+      {fontHref && (
+        <>
+          <link rel="preconnect" href="https://fonts.googleapis.com" crossOrigin="anonymous" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link key={fontHref} rel="stylesheet" href={fontHref} />
+        </>
+      )}
       <style>{siteCss}</style>
       {pages.length > 1 && (
         <nav className="sticky top-0 z-50 flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/80 px-3 py-2 backdrop-blur">

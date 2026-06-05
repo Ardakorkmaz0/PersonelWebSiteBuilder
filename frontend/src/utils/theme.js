@@ -13,7 +13,11 @@ export const DEFAULT_THEME = {
   shadow: '0 4px 20px rgba(0,0,0,0.08)',
 }
 
-export const FONT_OPTIONS = [
+// Auto-imported so we don't have to keep two lists in sync. Google fonts are
+// added below in the same [stack, label] shape FONT_OPTIONS already uses.
+import { GOOGLE_FONTS } from './googleFonts.js'
+
+const SYSTEM_FONT_OPTIONS = [
   [DEFAULT_THEME.fontFamily, 'System'],
   ['Arial, Helvetica, sans-serif', 'Arial'],
   ['Georgia, serif', 'Georgia'],
@@ -22,6 +26,14 @@ export const FONT_OPTIONS = [
   ['Verdana, Geneva, sans-serif', 'Verdana'],
   ['"Trebuchet MS", Helvetica, sans-serif', 'Trebuchet'],
 ]
+
+const GOOGLE_FONT_OPTIONS = GOOGLE_FONTS.map((f) => [f.stack, `${f.name} · Google`])
+
+// Every font the theme dropdown lists. System fonts first (zero network),
+// curated Google Fonts after. Selecting a Google entry trips the
+// auto-injection in EditorPage / PreviewPage / the HTML emitters so the
+// preview matches the published page without any extra plumbing.
+export const FONT_OPTIONS = [...SYSTEM_FONT_OPTIONS, ...GOOGLE_FONT_OPTIONS]
 
 const THEME_KEYS = Object.keys(DEFAULT_THEME)
 

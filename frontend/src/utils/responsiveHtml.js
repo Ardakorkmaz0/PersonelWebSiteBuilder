@@ -7,6 +7,7 @@ import { iconSvg } from './icons.js'
 import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
+import { googleFontLinkTag } from './googleFonts.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
 // Visual styles we keep on elements; layout/box metrics come from the flow.
@@ -343,6 +344,7 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(title)}</title>
+    ${googleFontLinkTag(schema?.theme)}
     <style>
       ${themeVariablesCss(schema?.theme)}
       *{ box-sizing: border-box; }

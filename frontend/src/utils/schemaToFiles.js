@@ -10,6 +10,7 @@ import { iconSvg } from './icons.js'
 import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
+import { googleFontLinkTag } from './googleFonts.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
 import {
   absoluteChildrenHeight,
@@ -331,7 +332,7 @@ function openTag(c) {
   return `<${tag} class="${cls}">`
 }
 
-function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '') {
+function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '', theme = null) {
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -339,6 +340,7 @@ function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(fileTitle)}</title>
     <link rel="stylesheet" href="${cssHref}" />
+    ${googleFontLinkTag(theme)}
   </head>
   <body>
     <div class="page p-${page.id}">
@@ -478,7 +480,7 @@ export function schemaToSingleHtml(schema, title = 'My Site') {
     },
     { includeCustomCss: false },
   )
-  const html = pageHtml(page, title, 'styles.css', schema?.customJs)
+  const html = pageHtml(page, title, 'styles.css', schema?.customJs, schema?.theme)
   return html.replace(
     '<link rel="stylesheet" href="styles.css" />',
     `<style>\n${css}${customCssBlock(schema?.customCss)}\n    </style>`,
@@ -513,6 +515,7 @@ function schemaToScaledHtml(page, title = 'My Site', schema = {}) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(title)}</title>
+    ${googleFontLinkTag(schema?.theme)}
     <style>
 ${css}
       html, body { width: 100%; min-height: 100%; overflow-x: hidden; }

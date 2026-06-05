@@ -24,6 +24,7 @@ import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
+import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 
 // The three panels below all sit behind a toggle / file-mode switch and most
 // editor sessions never open them. Lazy-loading them keeps the initial
@@ -107,6 +108,27 @@ export default function EditorPage() {
   const workspaceRef = useRef(null)
   const [siteHtml, setSiteHtml] = useState('')
   const [htmlDirty, setHtmlDirty] = useState(false)
+
+  // When the theme picks a Google Font (e.g. "Inter", "Playfair Display"),
+  // attach the stylesheet to the editor's <head> so the canvas preview
+  // renders the same font the published page will. Cached by URL — the
+  // effect swaps the href only when the family actually changes, so a
+  // colour-only theme tweak doesn't re-request the file.
+  useEffect(() => {
+    const href = googleFontHrefForTheme(theme)
+    let link = document.getElementById('pwb-google-font')
+    if (!href) {
+      if (link) link.remove()
+      return
+    }
+    if (!link) {
+      link = document.createElement('link')
+      link.id = 'pwb-google-font'
+      link.rel = 'stylesheet'
+      document.head.appendChild(link)
+    }
+    if (link.href !== href) link.href = href
+  }, [theme?.fontFamily])
 
   // Enable folder selection on the folder input (non-standard attribute).
   useEffect(() => {

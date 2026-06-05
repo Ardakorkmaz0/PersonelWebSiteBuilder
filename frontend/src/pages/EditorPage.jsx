@@ -25,6 +25,7 @@ import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
+import { appendComponentToHtml } from '../utils/componentToHtml.js'
 
 // The three panels below all sit behind a toggle / file-mode switch and most
 // editor sessions never open them. Lazy-loading them keeps the initial
@@ -718,16 +719,38 @@ export default function EditorPage() {
           onDrop={onDropFiles}
         >
           {isHtmlSite ? (
-            <Suspense fallback={<PanelFallback />}>
-              <HtmlWorkspace
-                ref={workspaceRef}
-                html={siteHtml}
-                onCommit={(h) => {
-                  setSiteHtml(h)
+            <>
+              {/* Component palette stays available in HTML mode — clicking an
+                  item appends a default snippet to the document instead of
+                  drag-and-drop onto a canvas. Lets the user iterate manually
+                  on top of an AI-generated HTML site. */}
+              <Sidebar
+                onAppendComponent={(type) => {
+                  setSiteHtml((prev) => appendComponentToHtml(prev, type))
                   setHtmlDirty(true)
                 }}
               />
-            </Suspense>
+              <Suspense fallback={<PanelFallback />}>
+                <HtmlWorkspace
+                  ref={workspaceRef}
+                  html={siteHtml}
+                  onCommit={(h) => {
+                    setSiteHtml(h)
+                    setHtmlDirty(true)
+                  }}
+                />
+              </Suspense>
+              {/* Right rail in HTML mode: theme + Custom CSS/JS sections still
+                  affect the published page even in HTML mode, so keep them. */}
+              <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
+                <div className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
+                  Site settings
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <PropertiesPanel />
+                </div>
+              </div>
+            </>
           ) : (
             <>
               <Sidebar />

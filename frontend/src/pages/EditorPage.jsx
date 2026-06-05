@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   DndContext,
@@ -20,13 +20,28 @@ import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
-import CodePanel from '../components/editor/CodePanel.jsx'
-import HtmlWorkspace from '../components/editor/HtmlWorkspace.jsx'
-import TemplatePicker from '../components/editor/TemplatePicker.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
+
+// The three panels below all sit behind a toggle / file-mode switch and most
+// editor sessions never open them. Lazy-loading them keeps the initial
+// editor chunk smaller — the code streams in only after the user explicitly
+// opens that surface. Suspense fallback is a tiny spinner box, never the
+// whole screen, so the rest of the editor stays interactive while the panel
+// chunk arrives.
+const CodePanel = lazy(() => import('../components/editor/CodePanel.jsx'))
+const HtmlWorkspace = lazy(() => import('../components/editor/HtmlWorkspace.jsx'))
+const TemplatePicker = lazy(() => import('../components/editor/TemplatePicker.jsx'))
+
+function PanelFallback() {
+  return (
+    <div className="flex h-full items-center justify-center text-xs text-gray-400">
+      Loading panel…
+    </div>
+  )
+}
 
 function nestedFirstCollision(args) {
   const pointerHits = pointerWithin(args)
@@ -658,14 +673,16 @@ export default function EditorPage() {
           onDrop={onDropFiles}
         >
           {isHtmlSite ? (
-            <HtmlWorkspace
-              ref={workspaceRef}
-              html={siteHtml}
-              onCommit={(h) => {
-                setSiteHtml(h)
-                setHtmlDirty(true)
-              }}
-            />
+            <Suspense fallback={<PanelFallback />}>
+              <HtmlWorkspace
+                ref={workspaceRef}
+                html={siteHtml}
+                onCommit={(h) => {
+                  setSiteHtml(h)
+                  setHtmlDirty(true)
+                }}
+              />
+            </Suspense>
           ) : (
             <>
               <Sidebar />
@@ -700,7 +717,13 @@ export default function EditorPage() {
                   </button>
                 </div>
                 <div className="min-h-0 flex-1">
-                  {rightTab === 'code' ? <CodePanel /> : <PropertiesPanel />}
+                  {rightTab === 'code' ? (
+                    <Suspense fallback={<PanelFallback />}>
+                      <CodePanel />
+                    </Suspense>
+                  ) : (
+                    <PropertiesPanel />
+                  )}
                 </div>
               </div>
             </>
@@ -727,13 +750,17 @@ export default function EditorPage() {
         </DragOverlay>
       </DndContext>
 
-      <TemplatePicker
-        open={templateOpen}
-        title={title}
-        theme={theme}
-        onPick={pickTemplate}
-        onClose={() => setTemplateOpen(false)}
-      />
+      {templateOpen && (
+        <Suspense fallback={null}>
+          <TemplatePicker
+            open={templateOpen}
+            title={title}
+            theme={theme}
+            onPick={pickTemplate}
+            onClose={() => setTemplateOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

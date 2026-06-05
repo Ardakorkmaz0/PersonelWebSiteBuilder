@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AI_PROVIDERS,
+  SUGGESTION_CHIPS,
   getApiKey,
   getModel,
   getModelsFor,
   getProvider,
   runAiPrompt,
+  setProvider,
 } from '../../utils/aiAssistant.js'
+import { useEditorStore } from '../../store/editorStore.js'
 
 // Per-tab chat history persistence. Kept in localStorage so a refresh while
 // iterating with the assistant doesn't lose the back-and-forth — handy when
@@ -103,9 +106,97 @@ export default function AiChatPanel({ open, onClose }) {
     }
   }, [open])
 
-  async function send() {
-    const trimmed = draft.trim()
-    if (!trimmed || busy) return
+  // Local slash-command dispatcher — handled before runAiPrompt so power
+  // users can clear chat, undo the last AI change, or hop providers
+  // without burning a model call. Returns true when a command was handled.
+  function handleSlashCommand(raw) {
+    const trimmed = raw.trim()
+    if (!trimmed.startsWith('/')) return false
+    const [head, ...rest] = trimmed.slice(1).split(/\s+/)
+    const cmd = head.toLowerCase()
+    const arg = rest.join(' ').trim()
+    if (cmd === 'help' || cmd === '?') {
+      setMessages((m) => [
+        ...m,
+        { id: rand(), role: 'user', text: trimmed },
+        { id: rand(), role: 'assistant', text:
+          'Slash commands:\n'
+          + '/clear — wipe this chat\n'
+          + '/undo — undo the last canvas change\n'
+          + '/redo — redo the last undo\n'
+          + '/provider <openrouter|groq|local|gemini> — switch AI provider\n'
+          + '/template <github|dark|apple|minimal-landing|portfolio|blog|dashboard|marketing> — apply preset\n'
+          + '/help — show this list',
+        },
+      ])
+      return true
+    }
+    if (cmd === 'clear') {
+      clearChat()
+      return true
+    }
+    if (cmd === 'undo') {
+      try { useEditorStore.getState().undo() } catch { /* no-op if nothing to undo */ }
+      setMessages((m) => [
+        ...m,
+        { id: rand(), role: 'user', text: trimmed },
+        { id: rand(), role: 'assistant', text: 'Undone — the previous canvas state is back.' },
+      ])
+      return true
+    }
+    if (cmd === 'redo') {
+      try { useEditorStore.getState().redo() } catch { /* no-op */ }
+      setMessages((m) => [
+        ...m,
+        { id: rand(), role: 'user', text: trimmed },
+        { id: rand(), role: 'assistant', text: 'Redone.' },
+      ])
+      return true
+    }
+    if (cmd === 'provider') {
+      const next = arg.toLowerCase()
+      const valid = AI_PROVIDERS.some((p) => p.id === next)
+      if (!valid) {
+        setError(`Unknown provider "${arg}". Use one of: ${AI_PROVIDERS.map((p) => p.id).join(', ')}`)
+        return true
+      }
+      setProvider(next)
+      try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
+      setMessages((m) => [
+        ...m,
+        { id: rand(), role: 'user', text: trimmed },
+        { id: rand(), role: 'assistant', text: `Active provider switched to ${next}.` },
+      ])
+      return true
+    }
+    if (cmd === 'template') {
+      // Tee up an applyTemplate prompt for the model — it still goes through
+      // the standard runAiPrompt path so the post-template customisation +
+      // failover all still kick in. We just shape the request.
+      const wanted = arg || 'portfolio'
+      const prompt = `Apply the "${wanted}" template, then customise every default placeholder so the result reflects a generic example for that style.`
+      setDraft(prompt)
+      // Don't auto-send — give the user a chance to edit the topic in first.
+      setMessages((m) => [
+        ...m,
+        { id: rand(), role: 'assistant', text: `Drafted: ${prompt}\nTap Send to run it (or edit it first).` },
+      ])
+      return true
+    }
+    setError(`Unknown command /${cmd}. Try /help.`)
+    return true
+  }
+
+  async function send(textOverride) {
+    const raw = (textOverride ?? draft).trim()
+    if (!raw || busy) return
+    if (handleSlashCommand(raw)) {
+      // For commands that already wrote to the chat, just clear the composer.
+      // /template fills draft for the user, so don't wipe it in that case.
+      if (!raw.startsWith('/template')) setDraft('')
+      return
+    }
+    const trimmed = raw
     // Soft throttle: rapid back-to-back sends burn through the Gemini
     // per-minute quota fast. Hold the user back a couple of seconds and
     // surface a hint instead of silently failing.
@@ -201,14 +292,27 @@ export default function AiChatPanel({ open, onClose }) {
       {/* Message list */}
       <div ref={scrollerRef} className="flex-1 space-y-3 overflow-y-auto bg-[#faf9f8] p-3">
         {messages.length === 0 && (
-          <div className="rounded-md border border-dashed border-[#c8c6c4] bg-white p-3 text-xs leading-relaxed text-[#605e5c]">
-            <p className="mb-1 font-semibold text-[#323130]">Try one of these:</p>
-            <ul className="list-disc space-y-1 pl-4">
-              <li>Add a navbar at top with Home, About, Contact links.</li>
-              <li>Create a hero section with a heading and a blue CTA button.</li>
-              <li>Make the site theme primary color blue.</li>
-              <li>Add Custom JS that logs &quot;hello&quot; on load.</li>
-            </ul>
+          <div className="space-y-2">
+            <div className="rounded-md border border-dashed border-[#c8c6c4] bg-white p-3 text-xs leading-relaxed text-[#605e5c]">
+              <p className="mb-2 font-semibold text-[#323130]">Try a starter:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {SUGGESTION_CHIPS.map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => send(chip.prompt)}
+                    disabled={!hasKey || busy}
+                    title={chip.prompt}
+                    className="rounded-full border border-[#c5d4ef] bg-[#eff3fb] px-2.5 py-1 text-[11px] font-medium text-[#2b579a] hover:bg-[#dde7f7] disabled:opacity-50"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] text-[#a19f9d]">
+                Or type a free-form request. Type <code className="rounded bg-[#f3f2f1] px-1">/help</code> for slash commands.
+              </p>
+            </div>
           </div>
         )}
         {messages.map((m) =>
@@ -223,7 +327,11 @@ export default function AiChatPanel({ open, onClose }) {
         {busy && (
           <div className="flex items-center gap-2 text-xs text-[#605e5c]">
             <span className="h-2 w-2 animate-pulse rounded-full bg-[#2563eb]" />
-            <span>Thinking…</span>
+            <span>
+              {messages[messages.length - 1]?.role === 'user'
+                ? `Thinking with ${modelLabel}…`
+                : 'Applying changes to the canvas…'}
+            </span>
           </div>
         )}
         {error && (

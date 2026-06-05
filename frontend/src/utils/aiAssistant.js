@@ -1,386 +1,72 @@
-// Browser-side Gemini integration.
+// AI assistant — tool dispatch + prompt loop + multi-provider transport.
 //
-// Bring-your-own-key model: the user pastes a Gemini API key into the editor
-// Settings panel; it's persisted in localStorage and sent directly to
-// generativelanguage.googleapis.com — the Django backend never sees it.
+// This module owns the moving parts that vary per turn: the tool catalogue,
+// the snapshot, the per-provider call layer, the failover loop, and the
+// post-applyTemplate stale-IDs recovery. Stable data (provider configs,
+// templates, system prompt) lives in sibling modules:
+//   - aiProviders.js     provider/key/model/endpoint storage + helpers
+//   - aiTemplates.js     applyTemplate presets + chat suggestion chips
+//   - aiSystemPrompt.js  the SYSTEM_PROMPT string used every turn
+//
+// Public API: every named export users / panels touch is re-exported below
+// so import sites like `import { runAiPrompt, getProvider } from
+// '../../utils/aiAssistant.js'` keep working unchanged.
 //
 // Security: every tool call still flows through the store and through the
 // existing client/server sanitizers (sanitize_styles, sanitize_url,
-// sanitize_custom_js, ALLOWED_COMPONENT_TYPES). Worst-case the model proposes
-// a javascript: href — sanitize_url drops it before save. Even if user JS were
-// emitted, the public site runs it inside the same sandboxed iframe the
-// hand-written Custom JS uses (allow-scripts, no allow-same-origin).
+// sanitize_custom_js, ALLOWED_COMPONENT_TYPES). Worst case the model
+// proposes a javascript: href — sanitize_url drops it before save.
 
 import { useEditorStore } from '../store/editorStore.js'
 import { registry } from '../components/registry.jsx'
+import {
+  AI_PROVIDERS,
+  GROQ_ENDPOINT,
+  LOCAL_PROXY_PATH,
+  OPENROUTER_ENDPOINT,
+  buildGeminiEndpoint,
+  fetchLocalStatus,
+  getApiKey,
+  getEndpoint,
+  getModel,
+  getProvider,
+  pickBestLocalModel,
+  readCachedLocalModels,
+  resolveBackendBase,
+  setModel,
+  setProvider,
+} from './aiProviders.js'
+import { TEMPLATES } from './aiTemplates.js'
+import { SYSTEM_PROMPT } from './aiSystemPrompt.js'
 
-// Providers are kept side by side so the user picks whichever has free quota
-// left. Groq is the default because its free tier (≈14 400 requests / day on
-// Llama 3.3 70B) absorbs the editor's traffic without rate-limit pain that
-// Gemini's free tier hits within minutes.
-export const AI_PROVIDERS = [
-  {
-    id: 'openrouter',
-    label: 'OpenRouter · Qwen3 80B (recommended)',
-    keyUrl: 'https://openrouter.ai/keys',
-    keyHint:
-      'One key, many free models (Qwen3 80B, Hermes 3 405B, Llama 3.3 70B). Separate quota pool from Groq/Gemini — use when those run out. The free lineup changes — paste any current id from openrouter.ai/models if the dropdown picks one that has been retired.',
-    customModel: true,
-  },
-  {
-    id: 'groq',
-    label: 'Groq · Llama',
-    keyUrl: 'https://console.groq.com/keys',
-    keyHint: 'Free tier: ~14 400 requests/day, 30/min. Sign up at console.groq.com.',
-  },
-  {
-    id: 'local',
-    label: 'Local AI (Ollama / LM Studio)',
-    keyUrl: 'https://ollama.com',
-    keyHint:
-      'Run llama3.1 / qwen2.5 / mistral on your own machine. No key, no quota, no internet. Routed through this app’s backend — no CORS setup needed.',
-    needsKey: false,
-    configurableEndpoint: true,
-    customModel: true,
-  },
-  {
-    id: 'gemini',
-    label: 'Google Gemini',
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    keyHint: 'Free tier: 1 000-1 500 requests/day. Sign up at aistudio.google.com.',
-  },
-]
+// ---------------------------------------------------------------------------
+// Re-exports: stable public surface for AiBar / AiChatPanel / PropertiesPanel
+// ---------------------------------------------------------------------------
 
-const PROVIDER_MODELS = {
-  openrouter: [
-    {
-      id: 'qwen/qwen3-next-80b-a3b-instruct:free',
-      label: 'Qwen3 Next 80B (recommended)',
-      note: 'Top free tool-calling model in 2026. Smarter than Llama 70B for editor work.',
-    },
-    {
-      id: 'nousresearch/hermes-3-llama-3.1-405b:free',
-      label: 'Hermes 3 · Llama 3.1 405B',
-      note: 'Fine-tuned for function calling. Heavier, very reliable on tools.',
-    },
-    {
-      id: 'meta-llama/llama-3.3-70b-instruct:free',
-      label: 'Llama 3.3 70B',
-      note: 'Reliable workhorse, similar to Groq but a separate quota pool.',
-    },
-    {
-      id: 'openai/gpt-oss-120b:free',
-      label: 'GPT-OSS 120B',
-      note: 'OpenAI’s open-source release. Strong overall quality.',
-    },
-    {
-      id: 'moonshotai/kimi-k2.6:free',
-      label: 'Kimi K2.6',
-      note: 'Moonshot’s long-context reasoning model.',
-    },
-    {
-      id: 'qwen/qwen3-coder:free',
-      label: 'Qwen3 Coder',
-      note: 'Coding-focused; great when you also want Custom JS / CSS edits.',
-    },
-  ],
-  groq: [
-    {
-      id: 'llama-3.3-70b-versatile',
-      label: 'Llama 3.3 70B (recommended)',
-      note: '~14 400 req/day free, 30/min. Best balance for tool calling.',
-    },
-    {
-      id: 'llama-3.1-8b-instant',
-      label: 'Llama 3.1 8B Instant',
-      note: 'Fastest, even larger quota. Slightly less accurate on tool args.',
-    },
-  ],
-  local: [
-    {
-      id: 'llama3.1',
-      label: 'llama3.1 (default Ollama)',
-      note: 'Run: `ollama run llama3.1`. Solid tool calling, ~7 GB RAM.',
-    },
-    {
-      id: 'qwen2.5',
-      label: 'qwen2.5',
-      note: 'Strong on tool calling. Run: `ollama run qwen2.5`.',
-    },
-    {
-      id: 'llama3.2',
-      label: 'llama3.2',
-      note: 'Smaller, faster. Tool calling OK.',
-    },
-    {
-      id: 'mistral-nemo',
-      label: 'mistral-nemo',
-      note: 'Mistral 12B with tool calling.',
-    },
-  ],
-  gemini: [
-    {
-      id: 'gemini-2.0-flash-lite',
-      label: 'Gemini 2.0 Flash Lite',
-      note: '1 500 req/day, 30/min — Gemini’s largest free quota.',
-    },
-    {
-      id: 'gemini-2.5-flash-lite',
-      label: 'Gemini 2.5 Flash Lite',
-      note: '1 000 req/day, 15/min. A bit smarter than 2.0.',
-    },
-    {
-      id: 'gemini-2.5-flash',
-      label: 'Gemini 2.5 Flash (low quota)',
-      note: 'Highest quality, but only 250 req/day free.',
-    },
-  ],
-}
+export {
+  AI_PROVIDERS,
+  fetchLocalStatus,
+  getApiKey,
+  getEndpoint,
+  getModel,
+  getProvider,
+  pickBestLocalModel,
+  setProvider,
+  setModel,
+} from './aiProviders.js'
+// Setters used by the Settings panel.
+export {
+  AI_MODELS,
+  getModelsFor,
+  setApiKey,
+  setEndpoint,
+} from './aiProviders.js'
+// Suggestion chips for the empty chat state.
+export { SUGGESTION_CHIPS } from './aiTemplates.js'
 
-const DEFAULT_PROVIDER = AI_PROVIDERS[0].id
-const PROVIDER_STORAGE = 'pwb_ai_provider'
-const KEY_STORAGE_BY_PROVIDER = {
-  gemini: 'pwb_gemini_key',
-  groq: 'pwb_groq_key',
-  local: 'pwb_local_key', // optional — some local proxies still want one
-  openrouter: 'pwb_openrouter_key',
-}
-const MODEL_STORAGE_BY_PROVIDER = {
-  gemini: 'pwb_gemini_model',
-  groq: 'pwb_groq_model',
-  local: 'pwb_local_model',
-  openrouter: 'pwb_openrouter_model',
-}
-const ENDPOINT_STORAGE_BY_PROVIDER = {
-  local: 'pwb_local_endpoint',
-}
-const DEFAULT_ENDPOINT_BY_PROVIDER = {
-  // Ollama default. LM Studio users override to http://localhost:1234/v1.
-  local: 'http://localhost:11434/v1',
-}
-
-// Django proxy path — the frontend hits this same-origin instead of talking
-// to Ollama directly, so CORS / OLLAMA_ORIGINS pain goes away. The base URL
-// the user wants to forward to is passed as an X-Local-Base-Url header.
-const LOCAL_PROXY_PATH = '/api/ai/local'
-
-function resolveBackendBase() {
-  const envBase = import.meta.env?.VITE_API_URL
-  if (envBase) return envBase.replace(/\/api\/?$/, '')
-  return 'http://127.0.0.1:8000'
-}
-
-// Score how well-suited a model name is to function-calling. Higher is
-// better. Used to auto-pick from whatever the user has installed: a llama3.1
-// or qwen2.5 beats a gemma every time. Falls back to anything if nothing
-// scores positive.
-const TOOL_FRIENDLY_PREFIXES = [
-  { match: /(?:^|[/-])(?:qwen2\.5|qwen3)/i, score: 110 },
-  { match: /(?:^|[/-])llama-?3\.[123]/i, score: 100 },
-  { match: /(?:^|[/-])mistral-?nemo/i, score: 95 },
-  { match: /(?:^|[/-])hermes-?3/i, score: 90 },
-  { match: /(?:^|[/-])firefunction/i, score: 85 },
-  { match: /(?:^|[/-])mistral-?large/i, score: 80 },
-  { match: /(?:^|[/-])command-?r/i, score: 75 },
-  { match: /(?:^|[/-])llama/i, score: 60 },
-  { match: /(?:^|[/-])qwen/i, score: 55 },
-  { match: /(?:^|[/-])mistral/i, score: 50 },
-]
-
-function scoreModel(id) {
-  let best = 0
-  for (const { match, score } of TOOL_FRIENDLY_PREFIXES) {
-    if (match.test(id) && score > best) best = score
-  }
-  return best
-}
-
-export function pickBestLocalModel(models, preferred) {
-  if (!Array.isArray(models) || !models.length) return preferred || ''
-  const scored = models
-    .map((id) => ({ id, score: scoreModel(id) }))
-    .sort((a, b) => b.score - a.score)
-  const top = scored[0]
-  // If the saved choice isn't even on the user's machine, switch to whatever
-  // is on top.
-  if (!preferred || !models.includes(preferred)) return top.id
-  // If the saved choice IS installed but is unknown/weak for tool calling
-  // (score 0 — e.g. gemma, phi) AND a tool-friendly alternative exists,
-  // upgrade. Otherwise honour the user's pick.
-  const prefScore = scoreModel(preferred)
-  if (prefScore === 0 && top.score > 0) return top.id
-  return preferred
-}
-
-const LOCAL_MODELS_CACHE_KEY = 'pwb_local_models_cache'
-
-// Fetch the list of locally-installed models from the Django proxy. Returns
-// { ok, runtime, models, base } or { ok: false, reason }. Successful results
-// are cached in localStorage so the chat call path can self-heal even when
-// the Settings panel has never been opened in this session.
-export async function fetchLocalStatus(baseOverride) {
-  const url = new URL(`${resolveBackendBase()}${LOCAL_PROXY_PATH}/status/`)
-  const base = baseOverride || getEndpoint('local')
-  if (base) url.searchParams.set('base', base)
-  try {
-    const res = await fetch(url.toString(), { method: 'GET' })
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` }
-    const data = await res.json()
-    if (data?.ok && Array.isArray(data.models)) {
-      try {
-        localStorage.setItem(
-          LOCAL_MODELS_CACHE_KEY,
-          JSON.stringify({ at: Date.now(), models: data.models }),
-        )
-      } catch { /* storage unavailable */ }
-    }
-    return data
-  } catch (e) {
-    return { ok: false, reason: e?.message || 'fetch failed' }
-  }
-}
-
-function readCachedLocalModels() {
-  try {
-    const raw = localStorage.getItem(LOCAL_MODELS_CACHE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed?.models) ? parsed.models : []
-  } catch { return [] }
-}
-
-export function getProvider() {
-  try {
-    const saved = localStorage.getItem(PROVIDER_STORAGE)
-    if (saved && AI_PROVIDERS.some((p) => p.id === saved)) return saved
-  } catch { /* ignore */ }
-  return DEFAULT_PROVIDER
-}
-
-export function setProvider(providerId) {
-  try {
-    if (providerId && AI_PROVIDERS.some((p) => p.id === providerId)) {
-      localStorage.setItem(PROVIDER_STORAGE, providerId)
-    }
-  } catch { /* ignore */ }
-}
-
-// Read the models exposed for a given provider. Defaults to the active
-// provider when no argument is supplied.
-export function getModelsFor(providerId = getProvider()) {
-  return PROVIDER_MODELS[providerId] || []
-}
-
-// Active-provider exports — back-compat for code paths that still call the
-// single-provider functions from earlier iterations.
-export const AI_MODELS = PROVIDER_MODELS.gemini
-
-export function getApiKey(providerId = getProvider()) {
-  try {
-    const key = KEY_STORAGE_BY_PROVIDER[providerId]
-    return (key && localStorage.getItem(key)) || ''
-  } catch {
-    return ''
-  }
-}
-
-export function setApiKey(key, providerId = getProvider()) {
-  try {
-    const storageKey = KEY_STORAGE_BY_PROVIDER[providerId]
-    if (!storageKey) return
-    if (key) localStorage.setItem(storageKey, key)
-    else localStorage.removeItem(storageKey)
-  } catch {
-    /* localStorage unavailable */
-  }
-}
-
-// OpenRouter's free model lineup rotates often — when a model id we used to
-// recommend gets retired, map saved values to a sensible replacement so the
-// user doesn't see "No endpoints found" the moment they reload.
-const RETIRED_MODEL_MIGRATIONS = {
-  openrouter: {
-    // DeepSeek dropped off the OpenRouter free tier in 2026 — bounce stuck
-    // users onto Qwen3 80B which is currently the strongest free option.
-    'deepseek/deepseek-chat-v3.1:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
-    'deepseek/deepseek-chat-v3-0324:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
-    'deepseek/deepseek-chat:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
-    'deepseek/deepseek-r1:free': 'nousresearch/hermes-3-llama-3.1-405b:free',
-    'qwen/qwen-2.5-72b-instruct:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
-    'mistralai/mistral-small-3.1-24b-instruct:free': 'meta-llama/llama-3.3-70b-instruct:free',
-    'google/gemini-2.0-flash-exp:free': 'qwen/qwen3-next-80b-a3b-instruct:free',
-  },
-}
-
-export function getModel(providerId = getProvider()) {
-  try {
-    const storageKey = MODEL_STORAGE_BY_PROVIDER[providerId]
-    let saved = storageKey ? localStorage.getItem(storageKey) : ''
-    const migration = RETIRED_MODEL_MIGRATIONS[providerId]
-    if (saved && migration && migration[saved]) {
-      const replacement = migration[saved]
-      try { localStorage.setItem(storageKey, replacement) } catch { /* ignore */ }
-      saved = replacement
-    }
-    if (saved) {
-      const provider = AI_PROVIDERS.find((p) => p.id === providerId)
-      // customModel providers (local, openrouter) accept any string — the
-      // dropdown is suggestions, not validation.
-      if (provider?.customModel) return saved
-      if (getModelsFor(providerId).some((m) => m.id === saved)) return saved
-    }
-  } catch { /* ignore */ }
-  return getModelsFor(providerId)[0]?.id || ''
-}
-
-export function setModel(modelId, providerId = getProvider()) {
-  try {
-    const storageKey = MODEL_STORAGE_BY_PROVIDER[providerId]
-    if (!storageKey) return
-    // For providers that allow a custom model (e.g. local Ollama with any
-    // model the user has pulled), accept any non-empty string. Otherwise
-    // validate against the known list.
-    const provider = AI_PROVIDERS.find((p) => p.id === providerId)
-    if (provider?.customModel && typeof modelId === 'string' && modelId.trim()) {
-      localStorage.setItem(storageKey, modelId.trim())
-      return
-    }
-    if (modelId && getModelsFor(providerId).some((m) => m.id === modelId)) {
-      localStorage.setItem(storageKey, modelId)
-    }
-  } catch { /* ignore */ }
-}
-
-// Optional per-provider endpoint override (used by the local provider so the
-// user can point it at Ollama, LM Studio, or any other OpenAI-compatible
-// service that runs on a different port).
-export function getEndpoint(providerId = getProvider()) {
-  try {
-    const storageKey = ENDPOINT_STORAGE_BY_PROVIDER[providerId]
-    if (storageKey) {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) return saved
-    }
-  } catch { /* ignore */ }
-  return DEFAULT_ENDPOINT_BY_PROVIDER[providerId] || ''
-}
-
-export function setEndpoint(url, providerId = getProvider()) {
-  try {
-    const storageKey = ENDPOINT_STORAGE_BY_PROVIDER[providerId]
-    if (!storageKey) return
-    const cleaned = typeof url === 'string' ? url.trim().replace(/\/$/, '') : ''
-    if (cleaned) localStorage.setItem(storageKey, cleaned)
-    else localStorage.removeItem(storageKey)
-  } catch { /* ignore */ }
-}
-
-function buildGeminiEndpoint(modelId) {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
-}
-
-const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
-const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
+// ---------------------------------------------------------------------------
+// Schema snapshot the model reasons over
+// ---------------------------------------------------------------------------
 
 // Compact snapshot of the schema the model can reason about without burning
 // thousands of tokens on full style maps. Keeps ids stable so subsequent
@@ -436,9 +122,13 @@ function schemaSnapshot() {
   }
 }
 
-// Tool declarations passed to Gemini. Each maps 1:1 onto a store action.
-// We expose enough surface for layout-level edits + content + styles +
-// custom code, but stop short of destructive bulk ops the model might abuse.
+// ---------------------------------------------------------------------------
+// Tool declarations + dispatcher
+// ---------------------------------------------------------------------------
+
+// Each declaration maps 1:1 onto a store action. We expose enough surface for
+// layout-level edits + content + styles + custom code, but stop short of
+// destructive bulk ops the model might abuse.
 function toolDeclarations() {
   const types = Object.keys(registry)
   return [
@@ -776,12 +466,14 @@ function toolDeclarations() {
 }
 
 // Dispatch a single tool call to the store. Each branch returns the value
-// fed back to Gemini in the next round (used so the model can chain "add → set
-// styles on the new id" without us having to teach it the new id beforehand).
+// fed back to the model in the next round (used so the model can chain
+// "add → set styles on the new id" without us having to teach it the new id
+// beforehand). Validation errors come back as { ok:false, error } so the
+// stale-IDs detector downstream can spot them.
 function executeTool(rawName, args) {
   const store = useEditorStore.getState()
   const a = args || {}
-  // Gemini occasionally hallucinates snake_case (add_component) or PascalCase
+  // Models occasionally hallucinate snake_case (add_component) or PascalCase
   // tool names. Normalise to camelCase, then sanity-check against our known
   // list; fall back to a helpful error if still unknown.
   const name = normaliseToolName(rawName)
@@ -957,278 +649,6 @@ function executeTool(rawName, args) {
   }
 }
 
-// Named look presets. Each is { theme, customCss, steps[] } where steps are
-// applied to a freshly-cleared page. The model can call applyTemplate('github')
-// for a coherent result in one tool call instead of orchestrating many.
-const TEMPLATES = {
-  github: {
-    theme: {
-      primaryColor: '#2da44e',
-      textColor: '#1f2328',
-      mutedColor: '#656d76',
-      backgroundColor: '#ffffff',
-      surfaceColor: '#ffffff',
-      softColor: '#f6f8fa',
-      headerColor: '#24292f',
-      headerTextColor: '#ffffff',
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
-      radius: '6px',
-      buttonRadius: '6px',
-      shadow: '0 1px 0 rgba(31,35,40,.04), 0 1px 3px rgba(140,149,159,.15)',
-    },
-    customCss: `body { background: #ffffff; }
-.rh-card, .card { border: 1px solid #d0d7de !important; box-shadow: none !important; }
-.rh-btn { font-weight: 500 !important; }
-code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }`,
-    steps: [
-      { type: 'navbar', alias: 'nav', props: { brand: 'My Project', links: [
-        { label: 'Code', href: '#code' },
-        { label: 'Issues', href: '#issues' },
-        { label: 'Pull requests', href: '#pulls' },
-        { label: 'Actions', href: '#actions' },
-      ] } },
-      { type: 'section', alias: 'hero', props: { heading: 'Build better software, together.' }, styles: { backgroundColor: '#f6f8fa', padding: '64px 40px', textAlign: 'left' } },
-      { type: 'heading', props: { text: 'Your one-stop platform for code, collaboration, and shipping.', level: 'h2' }, styles: { fontSize: '36px', fontWeight: '600', color: '#1f2328' } },
-      { type: 'text', props: { text: 'Plan, build, and ship with the tools your team already knows. Free for individuals and small teams.' }, styles: { color: '#656d76', fontSize: '18px', maxWidth: '640px' } },
-      { type: 'button', props: { text: 'Sign up for free', href: '#signup' }, styles: { backgroundColor: '#2da44e', color: '#ffffff', borderRadius: '6px', padding: '12px 24px' } },
-      { type: 'section', props: { heading: 'Why teams choose us' }, styles: { padding: '48px 40px', backgroundColor: '#ffffff' } },
-      { type: 'card', props: { title: 'Code review', text: 'Pull requests make collaboration on changes simple.' }, styles: { borderWidth: '1px', borderStyle: 'solid', borderColor: '#d0d7de', borderRadius: '6px', boxShadow: 'none' } },
-      { type: 'card', props: { title: 'Project planning', text: 'Track work with issues and boards your team will actually use.' }, styles: { borderWidth: '1px', borderStyle: 'solid', borderColor: '#d0d7de', borderRadius: '6px', boxShadow: 'none' } },
-      { type: 'card', props: { title: 'CI / CD', text: 'Automate testing and deployment with workflows.' }, styles: { borderWidth: '1px', borderStyle: 'solid', borderColor: '#d0d7de', borderRadius: '6px', boxShadow: 'none' } },
-    ],
-  },
-  dark: {
-    theme: {
-      primaryColor: '#3b82f6',
-      textColor: '#e6edf3',
-      mutedColor: '#7d8590',
-      backgroundColor: '#0d1117',
-      surfaceColor: '#161b22',
-      softColor: '#21262d',
-      headerColor: '#010409',
-      headerTextColor: '#e6edf3',
-      fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-      radius: '8px',
-      buttonRadius: '8px',
-      shadow: '0 8px 24px rgba(0,0,0,.5)',
-    },
-    customCss: `body { background: #0d1117; color: #e6edf3; }
-.rh-card, .card { background: #161b22 !important; border: 1px solid #30363d !important; color: #e6edf3 !important; }
-a { color: #58a6ff; }`,
-    steps: [
-      { type: 'navbar', props: { brand: 'Studio', links: [
-        { label: 'Home', href: '#home' },
-        { label: 'Work', href: '#work' },
-        { label: 'About', href: '#about' },
-        { label: 'Contact', href: '#contact' },
-      ] } },
-      { type: 'section', props: { heading: 'Beautiful things, built in the dark.' }, styles: { backgroundColor: '#0d1117', padding: '96px 40px', textAlign: 'center' } },
-      { type: 'heading', props: { text: 'Design that disappears, work that stands out.', level: 'h1' }, styles: { color: '#e6edf3', fontSize: '52px', fontWeight: '600', textAlign: 'center' } },
-      { type: 'text', props: { text: 'A studio practice focused on calm, considered software.' }, styles: { color: '#7d8590', fontSize: '18px', textAlign: 'center' } },
-      { type: 'button', props: { text: 'See our work', href: '#work' }, styles: { backgroundColor: '#3b82f6', color: '#ffffff', borderRadius: '8px', padding: '12px 28px' } },
-    ],
-  },
-  apple: {
-    theme: {
-      primaryColor: '#0071e3',
-      textColor: '#1d1d1f',
-      mutedColor: '#86868b',
-      backgroundColor: '#ffffff',
-      surfaceColor: '#ffffff',
-      softColor: '#f5f5f7',
-      headerColor: '#000000',
-      headerTextColor: '#f5f5f7',
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif",
-      radius: '18px',
-      buttonRadius: '980px',
-      shadow: '0 4px 20px rgba(0,0,0,0.08)',
-    },
-    customCss: `body { background: #ffffff; }
-.rh-card, .card { border: 0 !important; }`,
-    steps: [
-      { type: 'navbar', props: { brand: '', links: [
-        { label: 'Store', href: '#store' },
-        { label: 'Mac', href: '#mac' },
-        { label: 'iPhone', href: '#iphone' },
-        { label: 'Watch', href: '#watch' },
-        { label: 'Support', href: '#support' },
-      ] }, styles: { backgroundColor: '#000000', color: '#f5f5f7', padding: '12px 28px', fontSize: '14px' } },
-      { type: 'section', props: { heading: 'iPhone' }, styles: { backgroundColor: '#000000', color: '#f5f5f7', padding: '80px 40px', textAlign: 'center' } },
-      { type: 'heading', props: { text: 'Pro. Beyond.', level: 'h1' }, styles: { color: '#f5f5f7', fontSize: '72px', fontWeight: '600', textAlign: 'center', letterSpacing: '-0.03em' } },
-      { type: 'text', props: { text: 'A magical new way to do everything.' }, styles: { color: '#a1a1a6', fontSize: '24px', textAlign: 'center' } },
-      { type: 'button', props: { text: 'Learn more', href: '#learn' }, styles: { backgroundColor: '#0071e3', color: '#ffffff', borderRadius: '980px', padding: '12px 22px', fontSize: '17px' } },
-    ],
-  },
-  'minimal-landing': {
-    theme: {
-      primaryColor: '#111111',
-      textColor: '#1a1a1a',
-      mutedColor: '#737373',
-      backgroundColor: '#fafafa',
-      surfaceColor: '#ffffff',
-      softColor: '#f4f4f5',
-      headerColor: '#fafafa',
-      headerTextColor: '#111111',
-      fontFamily: "system-ui, -apple-system, 'Inter', sans-serif",
-      radius: '2px',
-      buttonRadius: '2px',
-      shadow: 'none',
-    },
-    customCss: `body { background: #fafafa; letter-spacing: -0.01em; }`,
-    steps: [
-      { type: 'navbar', props: { brand: 'Acme', links: [
-        { label: 'Product', href: '#product' },
-        { label: 'Pricing', href: '#pricing' },
-        { label: 'Login', href: '#login' },
-      ] }, styles: { backgroundColor: '#fafafa', color: '#111111', padding: '20px 40px' } },
-      { type: 'section', styles: { backgroundColor: '#fafafa', padding: '120px 40px', textAlign: 'center' } },
-      { type: 'heading', props: { text: 'Ship faster. Iterate calmer.', level: 'h1' }, styles: { color: '#111111', fontSize: '60px', fontWeight: '600', textAlign: 'center' } },
-      { type: 'text', props: { text: 'A no-nonsense way to build the next iteration of your product.' }, styles: { color: '#737373', fontSize: '20px', textAlign: 'center' } },
-      { type: 'button', props: { text: 'Get started', href: '#start' }, styles: { backgroundColor: '#111111', color: '#ffffff', borderRadius: '2px', padding: '14px 28px' } },
-    ],
-  },
-  portfolio: {
-    theme: {
-      primaryColor: '#2563eb',
-      textColor: '#1d1d1f',
-      mutedColor: '#6e6e73',
-      backgroundColor: '#ffffff',
-      surfaceColor: '#ffffff',
-      softColor: '#f5f5f7',
-      headerColor: '#1d1d1f',
-      headerTextColor: '#f5f5f7',
-      fontFamily: "system-ui, -apple-system, 'Inter', sans-serif",
-      radius: '12px',
-      buttonRadius: '999px',
-      shadow: '0 4px 20px rgba(0,0,0,0.08)',
-    },
-    customCss: '',
-    steps: [
-      { type: 'navbar', props: { brand: 'Jane Doe', links: [
-        { label: 'Work', href: '#work' },
-        { label: 'About', href: '#about' },
-        { label: 'Contact', href: '#contact' },
-      ] } },
-      { type: 'section', props: { heading: '' }, styles: { backgroundColor: '#f5f5f7', padding: '96px 40px', textAlign: 'left' } },
-      { type: 'heading', props: { text: 'Hi, I’m Jane — a product designer based in Istanbul.', level: 'h1' }, styles: { fontSize: '48px', fontWeight: '600' } },
-      { type: 'text', props: { text: 'I help teams turn complex problems into calm, usable interfaces.' }, styles: { color: '#6e6e73', fontSize: '20px', maxWidth: '600px' } },
-      { type: 'button', props: { text: 'See my work', href: '#work' }, styles: { backgroundColor: '#2563eb', color: '#ffffff' } },
-      { type: 'card', props: { title: 'Project Alpha', text: 'A dashboard for analytics teams. Reduced time-to-insight by 40%.' } },
-      { type: 'card', props: { title: 'Project Beta', text: 'A consumer mobile app for habit tracking. 5⭐ in App Store.' } },
-      { type: 'card', props: { title: 'Project Gamma', text: 'Brand and website refresh for a Series A startup.' } },
-    ],
-  },
-  blog: {
-    theme: {
-      primaryColor: '#9333ea',
-      textColor: '#1a1a1a',
-      mutedColor: '#737373',
-      backgroundColor: '#fafafa',
-      surfaceColor: '#ffffff',
-      softColor: '#f4f4f5',
-      headerColor: '#1a1a1a',
-      headerTextColor: '#fafafa',
-      fontFamily: "Georgia, 'Times New Roman', serif",
-      radius: '4px',
-      buttonRadius: '4px',
-      shadow: '0 1px 3px rgba(0,0,0,.05)',
-    },
-    customCss: `body { font-family: Georgia, 'Times New Roman', serif; line-height: 1.7; }
-.rh-card, .card { border: 0 !important; box-shadow: none !important; border-bottom: 1px solid #e5e5e5 !important; border-radius: 0 !important; }
-h1, h2, h3 { font-family: Georgia, 'Times New Roman', serif; letter-spacing: -0.01em; }`,
-    steps: [
-      { type: 'navbar', props: { brand: 'Daily Notes', links: [
-        { label: 'Latest', href: '#latest' },
-        { label: 'Archive', href: '#archive' },
-        { label: 'About', href: '#about' },
-        { label: 'Subscribe', href: '#subscribe' },
-      ] } },
-      { type: 'section', styles: { backgroundColor: '#fafafa', padding: '72px 40px', textAlign: 'center' } },
-      { type: 'heading', props: { text: 'Daily Notes', level: 'h1' }, styles: { fontSize: '56px', fontWeight: '700', textAlign: 'center', letterSpacing: '-0.02em' } },
-      { type: 'text', props: { text: 'Writing on design, software, and the quiet craft of building things.' }, styles: { color: '#737373', fontSize: '20px', textAlign: 'center', fontStyle: 'italic' } },
-      { type: 'heading', props: { text: 'Latest posts', level: 'h2' }, styles: { fontSize: '28px', fontWeight: '700', padding: '24px 40px 8px' } },
-      { type: 'card', props: { title: 'On naming things', text: 'A short essay on why naming is the hardest problem in software — and what to do about it.  ·  June 4, 2026' }, styles: { padding: '24px 40px', borderRadius: '0' } },
-      { type: 'card', props: { title: 'Design without designers', text: 'How small engineering teams can ship beautiful products without a dedicated design team.  ·  May 28, 2026' }, styles: { padding: '24px 40px', borderRadius: '0' } },
-      { type: 'card', props: { title: 'The case for boring stacks', text: 'Why the most exciting engineering decision you can make is to pick the boring tool everyone already knows.  ·  May 19, 2026' }, styles: { padding: '24px 40px', borderRadius: '0' } },
-      { type: 'card', props: { title: 'Slow software', text: 'Notes on building software that respects the user’s attention — and the team’s sanity.  ·  May 7, 2026' }, styles: { padding: '24px 40px', borderRadius: '0' } },
-      { type: 'section', styles: { backgroundColor: '#f4f4f5', padding: '40px', textAlign: 'center' } },
-      { type: 'text', props: { text: 'Get new posts in your inbox — once a week, no spam.' }, styles: { color: '#1a1a1a', fontSize: '18px', textAlign: 'center' } },
-      { type: 'button', props: { text: 'Subscribe', href: '#subscribe' }, styles: { backgroundColor: '#9333ea', color: '#ffffff' } },
-    ],
-  },
-  dashboard: {
-    theme: {
-      primaryColor: '#2563eb',
-      textColor: '#0f172a',
-      mutedColor: '#64748b',
-      backgroundColor: '#f8fafc',
-      surfaceColor: '#ffffff',
-      softColor: '#f1f5f9',
-      headerColor: '#0f172a',
-      headerTextColor: '#f8fafc',
-      fontFamily: "system-ui, -apple-system, 'Inter', sans-serif",
-      radius: '8px',
-      buttonRadius: '8px',
-      shadow: '0 1px 2px rgba(15,23,42,.05), 0 2px 8px rgba(15,23,42,.05)',
-    },
-    customCss: `.rh-card, .card { border: 1px solid #e2e8f0 !important; }`,
-    steps: [
-      { type: 'navbar', props: { brand: 'Acme Console', links: [
-        { label: 'Dashboard', href: '#dashboard' },
-        { label: 'Customers', href: '#customers' },
-        { label: 'Reports', href: '#reports' },
-        { label: 'Settings', href: '#settings' },
-      ] } },
-      { type: 'section', props: { heading: 'Dashboard' }, styles: { backgroundColor: '#f8fafc', padding: '40px 40px 16px' } },
-      { type: 'text', props: { text: 'A quick summary of how the business is doing this week.' }, styles: { color: '#64748b', padding: '0 40px 24px' } },
-      { type: 'card', props: { title: 'Revenue', text: '$84,920  ·  +12.4% vs last week' }, styles: { padding: '20px 24px' } },
-      { type: 'card', props: { title: 'New signups', text: '1,284  ·  +6.1% vs last week' }, styles: { padding: '20px 24px' } },
-      { type: 'card', props: { title: 'Active users', text: '23,402  ·  +2.8% vs last week' }, styles: { padding: '20px 24px' } },
-      { type: 'card', props: { title: 'Churn', text: '2.1%  ·  −0.3pp vs last week' }, styles: { padding: '20px 24px' } },
-      { type: 'heading', props: { text: 'Recent activity', level: 'h3' }, styles: { fontSize: '20px', fontWeight: '600', padding: '24px 40px 8px' } },
-      { type: 'card', props: { title: 'New customer: Northwind Ltd', text: 'Signed up on the Pro plan — $2,400 ARR.' } },
-      { type: 'card', props: { title: 'Plan upgrade: Foo Inc', text: 'Moved from Pro to Enterprise — +$36,000 ARR.' } },
-      { type: 'card', props: { title: 'Cancellation: Acme Co', text: 'Cancelled after 14 months — $4,800 ARR churn.' } },
-    ],
-  },
-  marketing: {
-    theme: {
-      primaryColor: '#ea580c',
-      textColor: '#1c1917',
-      mutedColor: '#78716c',
-      backgroundColor: '#fef7ed',
-      surfaceColor: '#ffffff',
-      softColor: '#fed7aa',
-      headerColor: '#1c1917',
-      headerTextColor: '#fef7ed',
-      fontFamily: "system-ui, -apple-system, 'Inter', sans-serif",
-      radius: '12px',
-      buttonRadius: '12px',
-      shadow: '0 12px 24px rgba(234,88,12,.15)',
-    },
-    customCss: `.rh-btn { font-weight: 700 !important; padding: 14px 32px !important; }`,
-    steps: [
-      { type: 'navbar', props: { brand: 'Sunlight', links: [
-        { label: 'Features', href: '#features' },
-        { label: 'Pricing', href: '#pricing' },
-        { label: 'Customers', href: '#customers' },
-        { label: 'Sign in', href: '#signin' },
-      ] } },
-      { type: 'section', styles: { backgroundColor: '#fef7ed', padding: '120px 40px', textAlign: 'center' } },
-      { type: 'heading', props: { text: 'Sunlight makes your team radiant.', level: 'h1' }, styles: { color: '#1c1917', fontSize: '60px', fontWeight: '700', textAlign: 'center' } },
-      { type: 'text', props: { text: 'The simplest way to plan, ship, and celebrate the work your team is doing — together.' }, styles: { color: '#78716c', fontSize: '22px', textAlign: 'center', maxWidth: '640px' } },
-      { type: 'button', props: { text: 'Start free trial', href: '#trial' }, styles: { backgroundColor: '#ea580c', color: '#ffffff', borderRadius: '12px' } },
-      { type: 'section', props: { heading: 'Built for teams that ship.' }, styles: { backgroundColor: '#ffffff', padding: '64px 40px' } },
-      { type: 'card', props: { title: 'Faster planning', text: 'Roadmaps, sprints, and pivots — all in one place.' } },
-      { type: 'card', props: { title: 'Effortless reporting', text: 'Auto-generated status updates so you never write another spreadsheet.' } },
-      { type: 'card', props: { title: 'Calmer launches', text: 'Coordinate launches across product, marketing, and support without the chaos.' } },
-      { type: 'section', styles: { backgroundColor: '#1c1917', padding: '80px 40px', textAlign: 'center' } },
-      { type: 'heading', props: { text: 'Ready to make this week your best one yet?', level: 'h2' }, styles: { color: '#fef7ed', fontSize: '36px', fontWeight: '700', textAlign: 'center' } },
-      { type: 'button', props: { text: 'Try Sunlight free', href: '#trial' }, styles: { backgroundColor: '#ea580c', color: '#ffffff' } },
-    ],
-  },
-}
-
 // snake_case / kebab-case / PascalCase / spaces → camelCase.
 function normaliseToolName(raw) {
   if (typeof raw !== 'string') return ''
@@ -1302,89 +722,9 @@ function firstNewId(after, before) {
   return null
 }
 
-const SYSTEM_PROMPT = `You are an editing assistant inside a no-code website builder. Each turn the user either (a) describes a change they want to the design, or (b) asks a conversational / meta question about what you can do. Detect which one this is BEFORE acting.
-
-If (a) — a request for change — you MUST use the provided tools by emitting a real tool call. Do NOT paste the call as JSON text inside your reply (the runtime ignores text-mode calls). Output the call through the proper function-calling channel, not as a code block or paragraph.
-If (b) — a conversational question like "what can you do?", "what templates are there?", "which model is this?" — answer with one short paragraph of plain text, DO NOT call any tools, DO NOT clear the page, DO NOT apply a template. List a few example things the user could ask next.
-
-Examples of (b) phrasings to watch for: "neler yapabilirsin", "ne yapabilirsin", "what can you do", "help", "list templates", "show me templates", "options".
-
-Rules:
-- All user-facing UI text and content you generate must be in English, even if the user writes in another language. Translate user-provided text into English before placing it.
-- Use the available tools — never reply with code blocks or markdown describing what to do. Either call tools, or, after you have already applied the change, send one short sentence confirming what you did.
-- Read the schema snapshot for the current state. Reference existing components by their id when modifying them.
-- **NO DUPLICATES.** Before calling addComponent, scan the snapshot for an existing component of the same role (only one navbar per page, one hero section, one footer, etc.). If one exists, MODIFY it via updateProps / replaceComponentText / setLinks instead of adding a new one. The user almost never wants two navbars stacked.
-- Tool names are camelCase exactly as declared — addComponent, updateProps, setLinks — NEVER add_component or add-component or AddComponent.
-- Components that hold children (container, tabs) require parentId when adding INTO them.
-- CSS keys are camelCase (backgroundColor, fontSize). Hrefs starting with javascript: will be dropped by the server; use http(s):// or #anchor.
-- For Custom JS code, keep it self-contained and small; the public site runs it inside a sandboxed iframe so there is no editor app access.
-
-**For named looks or kinds of site, ALWAYS prefer applyTemplate over manually adding components.** It clears the page, switches to HTML Flow mode, applies a tuned theme + CSS + 5-12 polished components in one call. Available names and the user phrases they cover:
-- github → "GitHub", "open source repo style"
-- dark → "dark mode", "studio dark"
-- apple → "Apple", "iPhone product page"
-- minimal-landing → "minimal", "saas landing"
-- portfolio → "portfolio", "personal site", fan/topic pages (Star Wars, Marvel, a band, a hobby)
-- blog → "blog", "blog site" ("blog sitesi"), "writer", "personal blog", "newsletter"
-- dashboard → "admin dashboard", "internal tool", "analytics console"
-- marketing → "marketing site", "product launch", "landing page with CTA"
-Pick the closest one to the user's intent and call applyTemplate({name:'...'}).
-
-**CRITICAL: applyTemplate MUST be the only tool call in its response.** applyTemplate clears the page and creates brand-new components with brand-new IDs. If you emit applyTemplate together with replaceComponentText / setLinks / updateProps in the same parallel batch, those follow-up calls will target the OLD component IDs from the current snapshot — IDs that no longer exist after applyTemplate runs — and they will silently fail. The runtime will detect this and force you to redo them, wasting a round.
-
-The right pattern is two responses:
-- Response 1 (this turn): exactly one tool call, applyTemplate({name:'...'}). Nothing else. No text, no other tools.
-- Response 2 (next turn): you will receive a fresh schema snapshot listing the real new component IDs. THEN emit your customisation tool calls (setLinks for the navbar, replaceComponentText / updateProps for each heading / text / button / card title) so every visible default placeholder is replaced with topic-relevant copy. Do not stop until every default string has been customised.
-
-Worked example — user asks "make a Star Wars fan page":
-Response 1: applyTemplate({name:"portfolio"})   ← single tool call, nothing else
-Response 2 (after seeing the new schema):
-   - setLinks({id: navbar_id, links:[{label:"Galaxy", href:"#galaxy"},{label:"Heroes", href:"#heroes"},{label:"Villains", href:"#villains"},{label:"Episodes", href:"#episodes"}]})
-   - replaceComponentText({id: heading_id, text: "A galaxy far, far away."})
-   - replaceComponentText({id: text_id, text: "A fan-built tribute to the Skywalker saga and the worlds beyond."})
-   - replaceComponentText({id: button_id, text: "Explore the galaxy"})
-   - replaceComponentText({id: card1_id, text: "Episode IV — A New Hope · The original 1977 film that started it all."})
-   - …and so on for every component.
-Response 3: one short sentence summarising what you did.
-
-Apply the same pattern for ANY topic the user names (Marvel, food blog, gym, vintage cars, indie band, etc.). The user almost never wants the default template copy.
-
-How to apply WIDE / GLOBAL changes:
-- When the user says "all", "every", "everything", or "site-wide" — DO NOT call a single tool and stop. Iterate: for a colour theme change call updateTheme(...) (e.g. {"primaryColor":"#2563eb","headerColor":"#1d4ed8"}); the editor automatically applies the theme to already-placed components, so you don't need to touch every id by hand UNLESS the user asked for something theme-vars don't cover.
-- For named looks ("GitHub style", "dark mode", "Apple-like", "neon") — set the theme to a matching palette via updateTheme AND tweak the most visible blocks (navbar, cards, buttons) via updateStyles AND optionally finish with setCustomCss for fonts, scrollbars, hover states.
-- When the user asks to colour a single visible component (e.g. "make the button red"), use updateStyles(id, {backgroundColor:"#ef4444", color:"#fff"}) on that component's id from the schema snapshot.
-- If multiple components need to change individually (e.g. "make all card backgrounds dark"), emit one updateStyles call per matching id from the snapshot.
-
-How to REORDER components (flow / HTML Flow mode):
-- "Move X to the bottom / end" → moveToEnd(id). NEVER use setLayout for reorder — y coordinates do not control flow order.
-- "Move X to the top / start" → moveToStart(id).
-- "Send X one row up / down" → moveBackward(id) / moveForward(id).
-- The navbar usually sits at the top because it is the first component in the array. Reordering it via moveToEnd puts it visually at the bottom.
-
-How to use the SPECIALISED content tools (preferred over updateProps for these):
-- Navbar links: setLinks(navbarId, [{label, href}, ...])
-- Select / dropdown options: setSelectOptions(id, ['Option A','Option B',...], placeholder?)
-- Tabs widget tabs: setTabs(tabsId, [{id,label},...], activeId?)
-- "Change the heading to X" / "rename the button to Y": replaceComponentText(id, "...") — picks the right prop automatically.
-- "Hide X on mobile" / "show X again": setHidden(id, { hidden?, hiddenMobile? }).
-
-LAYOUT reasoning:
-- The schema snapshot includes layout = {x,y,w,h} in design pixels for every component. canvasWidth (default 1000) is on each page.
-- "Center the heading horizontally" → alignComponent(id, 'centerH') or centerHorizontally(id) (both work).
-- "Right-align the button" / "snap X to the right edge" → alignComponent(id, 'right').
-- "Vertically center inside the container" → alignComponent(id, 'middleV') (use the parent container's id space).
-- "Make the buttons the same width" → setLayout on each id with the same w.
-- "Move X 40 pixels to the right" → setLayout(id, { x: currentX + 40 }) using the snapshot's current x.
-- "Distribute the cards evenly" → distributeSiblings(parentId, 'y') for a column, 'x' for a row. Needs 3+ siblings.
-
-Worked examples for common requests:
-- "Make a GitHub-style design" → updateTheme({"primaryColor":"#2da44e","textColor":"#1f2328","backgroundColor":"#ffffff","headerColor":"#24292f","headerTextColor":"#ffffff","fontFamily":"-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif","radius":"6px","buttonRadius":"6px"}) then optionally setCustomCss with monospace overrides.
-- "Make the site dark" → updateTheme({"backgroundColor":"#0d1117","textColor":"#e6edf3","headerColor":"#161b22","headerTextColor":"#e6edf3","surfaceColor":"#161b22","softColor":"#21262d","mutedColor":"#7d8590"}).
-- "Add a hero" → addComponent('section') → updateProps(id, {heading:'Welcome'}) → addComponent('heading') → addComponent('button') (using the section's id as parentId where applicable).
-
-Behavioural rules:
-- If the user request is ambiguous, pick reasonable defaults (English copy, common sizes, named CSS colours converted to hex like blue=#2563eb, red=#ef4444, green=#22c55e) and proceed — never stop to ask a question; the user will iterate.
-- After applying the changes, end with ONE concise sentence summarising what you did (e.g. "Updated the site theme to a blue palette.").`
+// ---------------------------------------------------------------------------
+// Transport: error formatting + per-provider call layer
+// ---------------------------------------------------------------------------
 
 // Parse Google's RetryInfo block (RFC-style "30s") into milliseconds, falling
 // back to a reasonable default. Used so the auto-retry sleeps exactly the
@@ -1418,7 +758,7 @@ function describeApiError(status, rawText, providerId = getProvider()) {
   // message is "No endpoints found for <model>" — point the user at Settings
   // instead of leaving them puzzled.
   if (/no endpoints found/i.test(apiMessage)) {
-    return `${meLabel} retired the selected model. Open Settings → Model dropdown and pick a fresh one (DeepSeek V3 0324 free is the safe default), or paste any current id from openrouter.ai/models.`
+    return `${meLabel} retired the selected model. Open Settings → Model dropdown and pick a fresh one (Qwen3 80B is the safe default), or paste any current id from openrouter.ai/models.`
   }
   if (status === 429) {
     const waitMs = parseRetryDelayMs(parsed, 30_000)
@@ -1615,7 +955,7 @@ async function callOpenRouter(apiKey, history, currentTurnText) {
 }
 
 async function callLocal(apiKey, history, currentTurnText) {
-  const base = getEndpoint('local') || DEFAULT_ENDPOINT_BY_PROVIDER.local
+  const base = getEndpoint('local') || 'http://localhost:11434/v1'
   // Last-mile model validation: if Settings ever ran a status fetch this
   // session, the installed models are cached. If the saved id isn't in that
   // cache, silently swap to the best installed alternative — prevents
@@ -1644,12 +984,6 @@ async function callLocal(apiKey, history, currentTurnText) {
   })
 }
 
-// Scan a piece of assistant text for inline tool-call JSON and recover it.
-// Matches loose patterns like:
-//   {"name":"applyTemplate","parameters":{"name":"blog"}}
-//   {"name":"addComponent","arguments":{"type":"navbar"}}
-//   `applyTemplate({"name":"blog"})`  (some models use this syntax)
-// Returns an array of { name, args } entries (empty if none found).
 // Scan an assistant text reply for tool-call intent and recover it as a real
 // function call. Weak local models (e.g. Llama 3.1 8B) frequently write the
 // call as JSON, as a JS-like function call, or in prose with the function
@@ -1736,13 +1070,10 @@ function historyToOpenAiMessages(history, currentTurnText) {
   return out
 }
 
-// Main entry point: take a user prompt, run the function-calling loop until
-// Gemini stops calling tools, return the final text the model emits.
-//
-// `history` (optional) is an array of prior text-only turns
-//   [{ role: 'user' | 'model', text }]
-// the chat panel keeps so the model remembers what we already discussed —
-// without re-shipping the (large) schema snapshot for every previous turn.
+// ---------------------------------------------------------------------------
+// runAiPrompt — failover loop + the per-provider round loop
+// ---------------------------------------------------------------------------
+
 // Walk the configured providers in display order and return the ones that are
 // ready to take a request (have a key, or are key-less like the local
 // runtime). The currently-active provider is moved to the front so it's
@@ -1925,7 +1256,7 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
     //
     // Whenever applyTemplate succeeded this round, hand the model the new
     // schema and tell it to redo the customisation against real IDs. This
-    // costs at most one extra round (still within maxRounds=2) but fixes
+    // costs at most one extra round (still within maxRounds=3) but fixes
     // both classes of failure in one shot.
     const appliedTemplate = toolResults.find((r) => r.name === 'applyTemplate' && r.response?.ok)
     const staleCalls = toolResults.filter(

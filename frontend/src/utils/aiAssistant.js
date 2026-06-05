@@ -470,7 +470,10 @@ function toolDeclarations() {
 // "add → set styles on the new id" without us having to teach it the new id
 // beforehand). Validation errors come back as { ok:false, error } so the
 // stale-IDs detector downstream can spot them.
-function executeTool(rawName, args) {
+// Exported so AiChatPanel's prompt-intent rescue can execute a recovered
+// tool call directly (bypassing the model) when the model emits nothing
+// usable. Returns the same {ok, ...} shape the in-loop dispatch returns.
+export function executeTool(rawName, args) {
   const store = useEditorStore.getState()
   const a = args || {}
   // Models occasionally hallucinate snake_case (add_component) or PascalCase
@@ -663,6 +666,72 @@ function executeTool(rawName, args) {
     default:
       return { ok: false, error: `Unknown tool "${rawName}" (normalised to "${name}"). Use one of the declared tool names exactly.` }
   }
+}
+
+// Last-ditch recovery for models that don't tool-call at all (gemma-family is
+// the usual culprit — base Gemma was never tuned for function calling, so it
+// invents tool names like "google:search" and "function_response"). When the
+// model returned nothing usable, look at the user's prompt alone and emit the
+// most plausible tool intent. Returns { name, args, reason } or null.
+//
+// Exported so AiChatPanel can call it directly after detecting a total tool
+// failure, and tests can pin the regex behaviour.
+export function recoverIntentFromPrompt(prompt) {
+  const raw = String(prompt || '').toLowerCase().trim()
+  if (!raw) return null
+  // Topic-style site requests — "make me a youtube site", "X sitesi yap",
+  // "bana Y olsun", "build a Z portfolio". Cover EN + TR phrasings.
+  const sitePatterns = [
+    /(?:make|build|create|do|design)\s+(?:me\s+)?(?:a|an|the)?\s*([a-zA-ZçğıöşüÇĞİÖŞÜ-]+)\s*(?:site|page|website)/i,
+    /([a-zA-ZçğıöşüÇĞİÖŞÜ-]+)\s+(?:site|sitesi|sayfa|websitesi)\s*(?:yap|olsun|kur|build)?/i,
+    /(?:bana|benim)\s+(?:bir)?\s*([a-zA-ZçğıöşüÇĞİÖŞÜ-]+)\s*(?:sitesi|site|sayfası)?\s*yap/i,
+  ]
+  for (const re of sitePatterns) {
+    const m = raw.match(re)
+    if (m && m[1]) {
+      const topic = m[1].toLowerCase()
+      // Drop conjunctions / generic words that aren't a real topic.
+      if (['a', 'an', 'the', 'bir', 'me', 'us', 'one'].includes(topic)) continue
+      const tplName = mapTopicToTemplate(topic) || 'portfolio'
+      return {
+        name: 'applyTemplate',
+        args: { name: tplName },
+        reason: `Recovered from your prompt — "${topic}" maps to the ${tplName} template.`,
+      }
+    }
+  }
+  // "Make it dark" / "switch to dark mode" → applyTemplate dark.
+  if (/\b(?:dark\s*mode|night\s*mode|karanlık)\b/i.test(raw)) {
+    return { name: 'applyTemplate', args: { name: 'dark' }, reason: 'Recovered from "dark mode" intent.' }
+  }
+  // "Github style" / "github tarzı" → applyTemplate github.
+  if (/\bgithub\b/i.test(raw)) {
+    return { name: 'applyTemplate', args: { name: 'github' }, reason: 'Recovered from "github" intent.' }
+  }
+  // "Apple style" / "iphone page" → applyTemplate apple.
+  if (/\bapple|iphone|ipad\b/i.test(raw)) {
+    return { name: 'applyTemplate', args: { name: 'apple' }, reason: 'Recovered from "apple" intent.' }
+  }
+  // "Primary X" / "make primary X" → updateTheme primary colour. Map basic
+  // colour words to hexes that match the existing system-prompt examples.
+  const colorWords = {
+    blue: '#2563eb', red: '#ef4444', green: '#22c55e', purple: '#9333ea',
+    pink: '#ec4899', orange: '#ea580c', yellow: '#facc15', black: '#0f172a',
+    white: '#ffffff', grey: '#6b7280', gray: '#6b7280',
+  }
+  const primaryMatch = raw.match(/\bprimary\s+(?:colou?r\s+(?:to\s+)?)?(\w+)/i)
+                    || raw.match(/(?:change|make)\s+(?:the\s+)?(?:site|primary)?\s*(?:colou?r)?\s*(?:to)?\s*(\w+)/i)
+  if (primaryMatch) {
+    const w = primaryMatch[1].toLowerCase()
+    if (colorWords[w]) {
+      return {
+        name: 'updateTheme',
+        args: { patch: { primaryColor: colorWords[w] } },
+        reason: `Recovered "${w}" primary colour.`,
+      }
+    }
+  }
+  return null
 }
 
 // Map a free-form topic word the model emitted (e.g. "youtube", "restaurant",

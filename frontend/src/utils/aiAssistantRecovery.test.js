@@ -3,7 +3,53 @@
 // their intent in the assistant text. Each test pins one of the recovery
 // patterns A..D so a future refactor can't silently undo it.
 import { describe, expect, it } from 'vitest'
-import { extractTextCalls, mapTopicToTemplate } from './aiAssistant.js'
+import {
+  extractTextCalls,
+  mapTopicToTemplate,
+  recoverIntentFromPrompt,
+} from './aiAssistant.js'
+
+describe('recoverIntentFromPrompt — when the model emits zero usable calls', () => {
+  it('reads "do me a youtube site" → applyTemplate(portfolio) (creator)', () => {
+    const r = recoverIntentFromPrompt('do it a youtube site')
+    expect(r?.name).toBe('applyTemplate')
+    expect(r?.args).toEqual({ name: 'portfolio' })
+  })
+
+  it('reads Turkish "bana youtube sitesi yap" → applyTemplate(portfolio)', () => {
+    const r = recoverIntentFromPrompt('bana youtube sitesi yap')
+    expect(r?.name).toBe('applyTemplate')
+    expect(r?.args).toEqual({ name: 'portfolio' })
+  })
+
+  it('reads "make me a restaurant page" → applyTemplate(marketing)', () => {
+    const r = recoverIntentFromPrompt('make me a restaurant page')
+    expect(r?.name).toBe('applyTemplate')
+    expect(r?.args).toEqual({ name: 'marketing' })
+  })
+
+  it('reads "switch to dark mode" → applyTemplate(dark)', () => {
+    const r = recoverIntentFromPrompt('switch to dark mode')
+    expect(r?.name).toBe('applyTemplate')
+    expect(r?.args).toEqual({ name: 'dark' })
+  })
+
+  it('reads "github style" → applyTemplate(github)', () => {
+    const r = recoverIntentFromPrompt('make it a github style site')
+    expect(r?.name).toBe('applyTemplate')
+  })
+
+  it('reads "make primary blue" → updateTheme primary hex', () => {
+    const r = recoverIntentFromPrompt('change primary colour to blue')
+    expect(r?.name).toBe('updateTheme')
+    expect(r?.args?.patch?.primaryColor).toBe('#2563eb')
+  })
+
+  it('returns null for unrelated prose', () => {
+    expect(recoverIntentFromPrompt('hello how are you')).toBe(null)
+    expect(recoverIntentFromPrompt('')).toBe(null)
+  })
+})
 
 describe('mapTopicToTemplate — topic → curated-template fallback', () => {
   it('keeps a name that is already a curated key (exact match)', () => {

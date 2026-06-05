@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import {
   AI_PROVIDERS,
   SUGGESTION_CHIPS,
+  executeTool,
   getApiKey,
   getModel,
   getModelsFor,
   getProvider,
+  recoverIntentFromPrompt,
   runAiPrompt,
   setProvider,
 } from '../../utils/aiAssistant.js'
@@ -240,20 +242,51 @@ export default function AiChatPanel({ open, onClose }) {
         // schema snapshot.
         .slice(0, -1)
       const { text, toolCallCount, calls } = await runAiPrompt(trimmed, { history })
-      if ((calls || []).length > 0) {
-        // If the model emitted tool calls but EVERY one failed, suppress its
-        // upbeat "Done."/"Updated the X" reply — it almost always describes
-        // an action that did not happen (a recurring Llama 3.1 8B failure
-        // mode). Replace with a clear failure-aware notice that lists the
-        // actual error reasons so the user knows what to retry.
-        const allFailed = calls.every((c) => c?.result?.ok === false)
-        const summary = allFailed
-          ? buildFailureSummary(calls)
-          : text
+      const callsArr = calls || []
+      const allFailed = callsArr.length > 0 && callsArr.every((c) => c?.result?.ok === false)
+      // Last-ditch rescue: the model produced zero usable tool calls (gemma4
+      // and other non-tool-tuned models invent fake names like
+      // "google:search" or just print prose). Read the user's prompt and
+      // apply the most plausible intent directly via the store — bypassing
+      // the model entirely. Better than handing the user a wall of red
+      // failures with no path forward.
+      const needsRescue = callsArr.length === 0 || allFailed
+      let rescued = null
+      if (needsRescue) {
+        const intent = recoverIntentFromPrompt(trimmed)
+        if (intent) {
+          let result
+          try { result = executeTool(intent.name, intent.args) }
+          catch (e) { result = { ok: false, error: String(e?.message || e) } }
+          if (result?.ok) {
+            rescued = {
+              call: { name: intent.name, args: intent.args, result },
+              reason: intent.reason,
+            }
+          }
+        }
+      }
+      if (callsArr.length > 0 && !rescued) {
+        const summary = allFailed ? buildFailureSummary(callsArr) : text
         setMessages((m) => [
           ...m,
-          { id: rand(), role: 'tools', calls },
+          { id: rand(), role: 'tools', calls: callsArr },
           { id: rand(), role: 'assistant', text: summary, allFailed },
+        ])
+      } else if (rescued) {
+        // Rescue won — show the recovered call + a friendly note explaining
+        // the bypass so the user understands why their model didn't drive it.
+        const original = callsArr.length > 0 ? callsArr : []
+        setMessages((m) => [
+          ...m,
+          ...(original.length ? [{ id: rand(), role: 'tools', calls: original }] : []),
+          { id: rand(), role: 'tools', calls: [rescued.call] },
+          { id: rand(), role: 'assistant', text:
+            `${rescued.reason} Your model didn't emit a usable tool call, so I read your prompt and ran the action directly. `
+            + (getProvider() === 'local'
+              ? 'Tip: switch to a tool-tuned model (qwen2.5 or llama3.1) for better results — Settings → Model.'
+              : ''),
+          },
         ])
       } else {
         setMessages((m) => [
@@ -323,6 +356,14 @@ export default function AiChatPanel({ open, onClose }) {
       {!hasKey && (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           Paste a free key for {providerInfo?.label || 'this provider'} (or any other provider) in the right panel — Properties → AI Assistant. Set up more than one and the chat auto-switches when one hits its quota.
+        </div>
+      )}
+      {/* Weak-model heads-up: gemma / phi base models weren't tuned for
+          tool calling and routinely invent fake function names. Save the
+          user a confused round-trip by suggesting a stronger swap up front. */}
+      {hasKey && /\b(?:gemma|phi)\b/i.test(modelLabel) && (
+        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <span className="font-semibold">Heads-up:</span> {modelLabel} wasn't trained for tool calling and often invents fake tool names. For the editor's chat, switch to <code className="rounded bg-amber-100 px-1">qwen2.5</code> or <code className="rounded bg-amber-100 px-1">llama3.1</code> via Settings → Model. I'll try to rescue intent from your prompt either way.
         </div>
       )}
 

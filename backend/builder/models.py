@@ -1,6 +1,16 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
+
+
+def _image_upload_path(instance, filename):
+    """Spread uploads under media/images/<year>/<month>/<filename> so a single
+    directory never ends up with tens of thousands of entries. The filename
+    keeps the original extension but Django will auto-disambiguate collisions
+    with a random suffix."""
+    now = timezone.now()
+    return f'images/{now.year:04d}/{now.month:02d}/{filename}'
 
 
 def default_schema():
@@ -62,3 +72,35 @@ class Site(models.Model):
             slug = f'{base}-{counter}'
             counter += 1
         return slug
+
+
+class UploadedImage(models.Model):
+    """User-uploaded image used by Image components in the builder.
+
+    Each row stores the file on disk + cheap metadata so the editor can show a
+    library browser without re-fetching the bytes. The schema persists the
+    PUBLIC URL (file.url) — never the row id — so a static export still works
+    after the storage backend changes.
+
+    Filesize and MIME are validated at the serializer layer; the model only
+    enforces ownership and a max alt-text length here. Deletion cascades from
+    the owner so a User wipe removes all their bytes.
+    """
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='uploaded_images',
+    )
+    file = models.ImageField(upload_to=_image_upload_path)
+    alt = models.CharField(max_length=200, blank=True, default='')
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    size = models.PositiveIntegerField(null=True, blank=True, help_text='Bytes')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f'image#{self.pk} ({self.owner_id}, {self.file.name})'

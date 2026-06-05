@@ -5,16 +5,18 @@ import urllib.request
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Site
+from .models import Site, UploadedImage
 from .serializers import (
     PublicSiteSerializer,
     RegisterSerializer,
     SiteListSerializer,
     SiteSerializer,
+    UploadedImageSerializer,
     UserSerializer,
 )
 
@@ -70,6 +72,34 @@ class SiteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+
+class UploadedImageViewSet(viewsets.ModelViewSet):
+    """List / upload / delete the current user's images.
+
+    The Image component editor uses this for both the drop-zone uploader and
+    the "your library" picker. Scoped to the current user — a token from one
+    account can never enumerate or delete another account's images.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = UploadedImageSerializer
+    # Default DRF parsers reject multipart; opt in here so file= comes through.
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        return UploadedImage.objects.filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+    def perform_destroy(self, instance):
+        # Best-effort blob delete on row removal so the disk doesn't leak.
+        try:
+            instance.file.delete(save=False)
+        except Exception:  # noqa: BLE001 - storage backend may be remote
+            pass
+        instance.delete()
 
 
 def _normalise_base(base_url):

@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PRESET_IMAGES } from '../../utils/presetImages.js'
+import { deleteImage, listImages, uploadImage } from '../../api/images.js'
 
 // Small, reusable form controls used by the PropertiesPanel:
 // square 2px corners, neutral borders, blue focus.
@@ -38,53 +39,74 @@ export function LabeledTextarea({ label, value, onChange, placeholder, rows = 3,
   )
 }
 
-// Image source: paste a URL, upload your own (embedded as a data URL so it travels
-// with the site), or pick a built-in preset. The value is a plain string (src).
+// Image source. Three ways to set it:
+//   1. Drop a file on the panel (or click → file picker) → uploaded to the
+//      backend, schema stores the public URL.
+//   2. "Library" → pick from past uploads.
+//   3. Built-in presets (still here for quick prototyping without an upload).
+//   4. Paste a URL (advanced — collapsed by default).
+// The value is always a plain string (URL or data: URL for legacy schemas).
 export function LabeledImage({ label, value, onChange }) {
   const fileRef = useRef(null)
   const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [showUrl, setShowUrl] = useState(false)
+
+  async function uploadOne(file) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setErr('Please choose an image file.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErr('Image is too large (max 5 MB).')
+      return
+    }
+    setBusy(true)
+    setErr('')
+    try {
+      const result = await uploadImage(file)
+      onChange(result.url)
+    } catch (e) {
+      const detail = e?.response?.data
+      setErr(
+        typeof detail === 'string'
+          ? detail
+          : detail?.file?.[0] || detail?.detail || 'Upload failed.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
 
   function onFile(e) {
     const f = e.target.files && e.target.files[0]
     e.target.value = ''
-    if (!f) return
-    if (!f.type.startsWith('image/')) {
-      setErr('Please choose an image file.')
-      return
-    }
-    if (f.size > 3 * 1024 * 1024) {
-      setErr('Image is too large (max 3 MB). Try a smaller one.')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      setErr('')
-      onChange(String(reader.result))
-    }
-    reader.onerror = () => setErr('Could not read the file.')
-    reader.readAsDataURL(f)
+    uploadOne(f)
+  }
+
+  function onDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    const f = e.dataTransfer?.files?.[0]
+    if (f) uploadOne(f)
   }
 
   return (
     <div className="block">
       <span className={labelCls}>{label}</span>
-      <input
-        type="text"
-        className={inputCls}
-        value={value ?? ''}
-        placeholder="Paste an image URL…"
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <div className="mt-1.5 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current && fileRef.current.click()}
-          className="rounded-[2px] border border-[#8a8886] px-2 py-1 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
-        >
-          Upload image
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
-        {value ? (
+
+      {/* Current value preview (or empty placeholder) */}
+      {value ? (
+        <div className="mb-1.5 flex items-start gap-2">
+          <img
+            src={value}
+            alt=""
+            style={{ aspectRatio: '4 / 3' }}
+            className="h-16 w-24 rounded-[2px] border border-[#e1dfdd] object-cover"
+          />
           <button
             type="button"
             onClick={() => onChange('')}
@@ -92,27 +114,163 @@ export function LabeledImage({ label, value, onChange }) {
           >
             Clear
           </button>
-        ) : null}
+        </div>
+      ) : null}
+
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) setDragOver(false)
+        }}
+        onDrop={onDrop}
+        onClick={() => !busy && fileRef.current?.click()}
+        className={`flex cursor-pointer flex-col items-center justify-center rounded-[4px] border-2 border-dashed px-3 py-4 text-center text-xs transition ${
+          dragOver
+            ? 'border-[#2b579a] bg-[#eff3fb] text-[#2b579a]'
+            : 'border-[#c8c6c4] bg-[#faf9f8] text-[#605e5c] hover:border-[#8a8886]'
+        }`}
+      >
+        {busy
+          ? 'Uploading…'
+          : dragOver
+            ? 'Drop to upload'
+            : 'Drop an image here or click to upload (max 5 MB)'}
       </div>
+      <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setLibraryOpen((o) => !o)}
+          className="rounded-[2px] border border-[#8a8886] px-2 py-1 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
+        >
+          {libraryOpen ? 'Hide library' : 'My library'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowUrl((s) => !s)}
+          className="rounded-[2px] px-2 py-1 text-xs font-medium text-[#605e5c] hover:bg-[#f3f2f1]"
+        >
+          {showUrl ? 'Hide URL' : 'Paste URL'}
+        </button>
+      </div>
+
+      {showUrl ? (
+        <input
+          type="text"
+          className={inputCls + ' mt-1.5'}
+          value={value ?? ''}
+          placeholder="https://…"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : null}
+
+      {libraryOpen ? <ImageLibrary value={value} onPick={onChange} /> : null}
+
       {err ? <p className="mt-1 text-xs text-[#a4262c]">{err}</p> : null}
-      <div className="mt-2 grid grid-cols-4 gap-1.5">
-        {PRESET_IMAGES.map((p) => (
-          <button
-            key={p.name}
-            type="button"
-            title={p.name}
-            onClick={() => onChange(p.src)}
-            style={{ aspectRatio: '4 / 3' }}
-            className={`overflow-hidden rounded-[2px] border ${
-              value === p.src
-                ? 'border-[#2b579a] ring-1 ring-[#2b579a]'
-                : 'border-[#e1dfdd] hover:border-[#8a8886]'
-            }`}
-          >
-            <img src={p.src} alt={p.name} className="h-full w-full object-cover" />
-          </button>
+
+      {/* Built-in presets */}
+      <div className="mt-2">
+        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#605e5c]">
+          Quick presets
+        </span>
+        <div className="grid grid-cols-4 gap-1.5">
+          {PRESET_IMAGES.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              title={p.name}
+              onClick={() => onChange(p.src)}
+              style={{ aspectRatio: '4 / 3' }}
+              className={`overflow-hidden rounded-[2px] border ${
+                value === p.src
+                  ? 'border-[#2b579a] ring-1 ring-[#2b579a]'
+                  : 'border-[#e1dfdd] hover:border-[#8a8886]'
+              }`}
+            >
+              <img src={p.src} alt={p.name} className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Lazy-fetched gallery of the current user's uploads. Mounted only when the
+// user opens the library panel, so the editor doesn't fire an extra request
+// for sessions that just use presets or a manual URL.
+function ImageLibrary({ value, onPick }) {
+  const [images, setImages] = useState(null) // null = loading, [] = empty
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    listImages()
+      .then((rows) => {
+        if (!cancelled) setImages(Array.isArray(rows) ? rows : [])
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setErr(e?.response?.data?.detail || 'Could not load library.')
+        setImages([])
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  async function remove(id) {
+    if (!window.confirm('Delete this image from your library?')) return
+    try {
+      await deleteImage(id)
+      setImages((prev) => (prev || []).filter((r) => r.id !== id))
+    } catch (e) {
+      setErr(e?.response?.data?.detail || 'Delete failed.')
+    }
+  }
+
+  if (images === null) {
+    return <p className="mt-1.5 text-xs text-[#605e5c]">Loading library…</p>
+  }
+  if (images.length === 0) {
+    return (
+      <p className="mt-1.5 text-xs text-[#605e5c]">
+        {err || 'No uploads yet — drop an image above to start your library.'}
+      </p>
+    )
+  }
+  return (
+    <div className="mt-1.5">
+      <div className="grid grid-cols-4 gap-1.5">
+        {images.map((img) => (
+          <div key={img.id} className="group relative">
+            <button
+              type="button"
+              onClick={() => onPick(img.url)}
+              style={{ aspectRatio: '4 / 3' }}
+              className={`block w-full overflow-hidden rounded-[2px] border ${
+                value === img.url
+                  ? 'border-[#2b579a] ring-1 ring-[#2b579a]'
+                  : 'border-[#e1dfdd] hover:border-[#8a8886]'
+              }`}
+            >
+              <img src={img.url} alt={img.alt || ''} className="h-full w-full object-cover" />
+            </button>
+            <button
+              type="button"
+              onClick={() => remove(img.id)}
+              title="Delete from library"
+              className="absolute right-0.5 top-0.5 rounded-full bg-white/90 px-1 text-[10px] text-[#a4262c] opacity-0 shadow group-hover:opacity-100"
+            >
+              ×
+            </button>
+          </div>
         ))}
       </div>
+      {err ? <p className="mt-1 text-xs text-[#a4262c]">{err}</p> : null}
     </div>
   )
 }

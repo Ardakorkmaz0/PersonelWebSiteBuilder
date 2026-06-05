@@ -9,10 +9,12 @@ from .views import (
     PublicSiteView,
     RegisterView,
     SiteViewSet,
+    UploadedImageViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'sites', SiteViewSet, basename='site')
+router.register(r'images', UploadedImageViewSet, basename='image')
 
 urlpatterns = [
     path('auth/register/', RegisterView.as_view(), name='register'),

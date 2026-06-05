@@ -123,6 +123,20 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# User-uploaded images. MEDIA_ROOT is the filesystem dir, MEDIA_URL is the
+# public path Django serves them under in DEBUG mode (production should use
+# WhiteNoise / S3 / CDN — see settings task #62). Each image is stored as
+# media/images/<yyyy>/<mm>/<random>.<ext> so collisions and listings stay
+# manageable. The frontend persists the FULL public URL into the schema so
+# exports stay portable when the backing storage changes.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Cap a single upload at ~6 MB so a 5 MB image (the validator's limit) plus
+# multipart overhead still fits without 413.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Django REST Framework

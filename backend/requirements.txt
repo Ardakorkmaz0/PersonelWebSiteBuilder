@@ -1,6 +1,7 @@
 Django==6.0.5
 djangorestframework==3.17.1
 django-cors-headers==4.9.0
+Pillow==12.2.0
 
 # Dev / test
 pytest==9.0.3

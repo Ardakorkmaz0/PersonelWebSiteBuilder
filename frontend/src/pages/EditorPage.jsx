@@ -442,9 +442,11 @@ export default function EditorPage() {
       previewWindow?.close()
       return
     }
-    const mode = siteHtml && siteHtml.trim() ? '?mode=static' : ''
-    if (previewWindow) previewWindow.location.href = `/site/${nextSlug}${mode}`
-    else window.open(`/site/${nextSlug}${mode}`, '_blank')
+    // Open the live page (JavaScript running) — same behaviour as the
+    // editor's View mode. The preview page still has a "Static preview"
+    // toggle for inspecting the page with scripts disabled.
+    if (previewWindow) previewWindow.location.href = `/site/${nextSlug}`
+    else window.open(`/site/${nextSlug}`, '_blank')
   }
 
   // Download the current design as a portable project file (.json).

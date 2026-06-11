@@ -8,6 +8,7 @@ import {
   HTML_ALLOW,
   PUBLIC_HTML_SANDBOX,
   STATIC_HTML_SANDBOX,
+  withBuilderInteractiveHtml,
   withViewportMeta,
   withoutExecutableScripts,
 } from '../utils/htmlRuntime.js'
@@ -224,9 +225,13 @@ export default function PreviewPage() {
   if (site?.html) {
     const staticMode = searchParams.get('mode') === 'static'
     // Inject a viewport meta when the document lacks one so phones render
-    // the responsive layout instead of a zoomed-out desktop page.
+    // the responsive layout instead of a zoomed-out desktop page. Live mode
+    // also gets the interactive shim (tabs + '#' anchor interception) — the
+    // same behaviours the editor's View mode injects, minus the editor-only
+    // readonly guard. Without it, in-page anchor links would navigate the
+    // about:srcdoc iframe and blank the site out.
     const iframeHtml = withViewportMeta(
-      staticMode ? withoutExecutableScripts(site.html) : site.html,
+      staticMode ? withoutExecutableScripts(site.html) : withBuilderInteractiveHtml(site.html),
     )
     const setHtmlPreviewMode = (nextMode) => {
       const next = new URLSearchParams(searchParams)

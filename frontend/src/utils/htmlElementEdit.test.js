@@ -1,0 +1,157 @@
+// The element panel edits live DOM nodes through these helpers — a bug here
+// means clicking "Move up" reorders the wrong node or a colour patch wipes
+// the element's text. Pure DOM in/out, so jsdom covers them directly.
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  applyElementPatch,
+  cssColorToHex,
+  describeElement,
+  duplicateElement,
+  moveElement,
+  resolveSelectableElement,
+} from './htmlElementEdit.js'
+
+beforeEach(() => {
+  document.body.innerHTML = `
+    <section id="hero">
+      <h1 id="title">Hello <strong id="bold">world</strong></h1>
+      <p id="para">Some text</p>
+      <a id="link" href="#contact">Contact</a>
+      <img id="pic" src="a.png" alt="A picture" />
+    </section>
+    <section id="second"><p>2nd</p></section>
+  `
+})
+
+describe('resolveSelectableElement', () => {
+  it('returns the clicked element itself for normal elements', () => {
+    const p = document.getElementById('para')
+    expect(resolveSelectableElement(p, document.body)).toBe(p)
+  })
+
+  it('climbs out of inline formatting wrappers to the content element', () => {
+    const bold = document.getElementById('bold')
+    expect(resolveSelectableElement(bold, document.body)).toBe(document.getElementById('title'))
+  })
+
+  it('returns null for body / html / null', () => {
+    expect(resolveSelectableElement(document.body, document.body)).toBeNull()
+    expect(resolveSelectableElement(document.documentElement, document.body)).toBeNull()
+    expect(resolveSelectableElement(null, document.body)).toBeNull()
+  })
+})
+
+describe('cssColorToHex', () => {
+  it('converts rgb() to hex', () => {
+    expect(cssColorToHex('rgb(37, 99, 235)')).toBe('#2563eb')
+    expect(cssColorToHex('rgb(0, 0, 0)')).toBe('#000000')
+  })
+
+  it('treats transparent values as empty', () => {
+    expect(cssColorToHex('rgba(0, 0, 0, 0)')).toBe('')
+    expect(cssColorToHex('transparent')).toBe('')
+    expect(cssColorToHex('')).toBe('')
+  })
+
+  it('passes hex values through', () => {
+    expect(cssColorToHex('#ff0000')).toBe('#ff0000')
+  })
+})
+
+describe('describeElement', () => {
+  it('describes a link with href and editable text', () => {
+    const info = describeElement(document.getElementById('link'))
+    expect(info.tag).toBe('a')
+    expect(info.href).toBe('#contact')
+    expect(info.canEditText).toBe(true)
+    expect(info.text).toBe('Contact')
+  })
+
+  it('describes an image with src/alt and no text editing', () => {
+    const info = describeElement(document.getElementById('pic'))
+    expect(info.tag).toBe('img')
+    expect(info.src).toBe('a.png')
+    expect(info.alt).toBe('A picture')
+    expect(info.canEditText).toBe(false)
+  })
+
+  it('treats inline-formatting-only children as text-editable', () => {
+    // <h1>Hello <strong>world</strong></h1> → editing flattens the strong,
+    // which beats hiding the text field for the most common heading shape.
+    const info = describeElement(document.getElementById('title'))
+    expect(info.canEditText).toBe(true)
+    expect(info.text).toBe('Hello world')
+  })
+
+  it('marks elements with block children as not text-editable', () => {
+    const info = describeElement(document.getElementById('hero'))
+    expect(info.canEditText).toBe(false)
+  })
+})
+
+describe('applyElementPatch', () => {
+  it('updates text for leaf and inline-formatted elements, never blocks', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { text: 'New text' })
+    expect(p.textContent).toBe('New text')
+    const h1 = document.getElementById('title')
+    applyElementPatch(h1, { text: 'Flat headline' })
+    expect(h1.textContent).toBe('Flat headline')
+    const hero = document.getElementById('hero')
+    applyElementPatch(hero, { text: 'nope' })
+    expect(hero.querySelector('p')).not.toBeNull() // block children survived
+  })
+
+  it('updates href / src / alt on the right tags only', () => {
+    const a = document.getElementById('link')
+    applyElementPatch(a, { href: '/about' })
+    expect(a.getAttribute('href')).toBe('/about')
+    const img = document.getElementById('pic')
+    applyElementPatch(img, { src: 'b.png', alt: 'B' })
+    expect(img.getAttribute('src')).toBe('b.png')
+    expect(img.getAttribute('alt')).toBe('B')
+  })
+
+  it('sets and clears inline styles', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { fontSize: 24, color: '#ff0000', textAlign: 'center', fontWeight: '700' })
+    expect(p.style.fontSize).toBe('24px')
+    expect(p.style.textAlign).toBe('center')
+    expect(p.style.fontWeight).toBe('700')
+    applyElementPatch(p, { fontSize: 0, color: '', textAlign: '' })
+    expect(p.style.fontSize).toBe('')
+    expect(p.style.color).toBe('')
+    expect(p.style.textAlign).toBe('')
+  })
+
+  it('leaves keys that are not in the patch untouched', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { color: '#00ff00' })
+    expect(p.textContent).toBe('Some text')
+    expect(p.style.color).toBeTruthy()
+  })
+})
+
+describe('duplicateElement / moveElement', () => {
+  it('duplicates an element right after itself', () => {
+    const p = document.getElementById('para')
+    const clone = duplicateElement(p)
+    expect(p.nextElementSibling).toBe(clone)
+    expect(clone.textContent).toBe('Some text')
+  })
+
+  it('moves an element up and down among its siblings', () => {
+    const p = document.getElementById('para')
+    expect(moveElement(p, 'up')).toBe(true)
+    expect(p.nextElementSibling?.id).toBe('title')
+    expect(moveElement(p, 'down')).toBe(true)
+    expect(p.previousElementSibling?.id).toBe('title')
+  })
+
+  it('returns false at the edges', () => {
+    const title = document.getElementById('title')
+    expect(moveElement(title, 'up')).toBe(false)
+    const pic = document.getElementById('pic')
+    expect(moveElement(pic, 'down')).toBe(false)
+  })
+})

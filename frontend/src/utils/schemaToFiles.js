@@ -11,7 +11,7 @@ import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
 import { googleFontLinkTag } from './googleFonts.js'
-import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
+import { CANVAS_WIDTH } from '../components/registry.jsx'
 import {
   absoluteChildrenHeight,
   flowCanvasHeight,

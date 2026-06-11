@@ -1408,6 +1408,5 @@ export const useEditorStore = create((set, get) => ({
 }))
 
 if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  // eslint-disable-next-line no-underscore-dangle
   window.__editorStore = useEditorStore
 }

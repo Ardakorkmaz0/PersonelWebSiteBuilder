@@ -221,13 +221,16 @@ const RUNTIME_SCRIPT = `
   })();
 `
 
+// Built by concatenation so this module's source never contains a literal
+// `</script>` sequence (which would terminate the surrounding tag if this
+// file ever gets inlined into HTML). The emitted markup still gets a real,
+// properly-closed end tag — an earlier `<\\/script>` variant emitted a
+// literal `<\/script>` the browser did NOT recognise as a script-end, which
+// collapsed all subsequent tags into the first script's body.
+const SCRIPT_END = '</scr' + 'ipt>'
+
 function runtimeInjection() {
-  // `<\/script>` is a single-backslash escape that JS evaluates to `</script>`
-  // in the emitted HTML so each script tag is properly closed. The earlier
-  // `<\\/script>` produced a literal `<\/script>` text that the browser did
-  // NOT recognise as a script-end — all subsequent tags collapsed into the
-  // first script's body and the whole runtime failed to execute.
-  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}<\/script><script data-builder-interactive>${INTERACTIVE_SCRIPT}<\/script>`
+  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}`
 }
 
 // The interactive shim alone (style + script) for static HTML exports that do
@@ -235,7 +238,7 @@ function runtimeInjection() {
 // make tabs/modals/dropdowns work in the published page.
 export function builderInteractiveTags() {
   const styleBlock = `[data-builder-tabs] [role="tab"]{appearance:none;background:var(--builder-tab-bg,transparent);border:0;border-bottom:2px solid transparent;padding:var(--builder-tab-padding,8px 14px);font:inherit;font-weight:500;color:var(--builder-tab-color,#6b7280);cursor:pointer;margin-bottom:-1px;border-radius:var(--builder-tab-radius,0)}[data-builder-tabs] [role="tab"][aria-selected="true"]{background:var(--builder-tab-active-bg,var(--builder-tab-bg,transparent));color:var(--builder-tab-active-color,#1d1d1f);border-bottom-color:var(--builder-tab-active-border,#2563eb)}[data-builder-tabs] [role="tablist"]{display:flex;gap:var(--builder-tab-gap,4px);flex-wrap:wrap;background:var(--builder-tablist-bg,transparent);border-bottom:1px solid var(--builder-tablist-border,#e5e7eb);padding:var(--builder-tablist-padding,0);margin-bottom:12px}[data-builder-tabs] [role="tabpanel"]{background:var(--builder-panel-bg,transparent);border:1px solid var(--builder-panel-border,transparent);border-radius:var(--builder-panel-radius,0);padding:var(--builder-panel-padding,0);box-sizing:border-box}[data-builder-tabs] [role="tabpanel"][hidden]{display:none !important}`
-  return `<style data-builder-interactive-style>${styleBlock}</style><script data-builder-interactive>${INTERACTIVE_SCRIPT}<\/script>`
+  return `<style data-builder-interactive-style>${styleBlock}</style><script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}`
 }
 
 export function withBuilderInteractiveHtml(html) {
@@ -252,6 +255,19 @@ export function withBuilderRuntimeHtml(html) {
   if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
   if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + inject)
   return inject + out
+}
+
+// Ensure the document declares a mobile viewport. Without one, phones render
+// a 980px legacy layout zoomed out — the top reason a page "looks right in
+// the editor's mobile preview but broken on a real phone". Display-time
+// only: callers inject this into the iframe srcDoc, never into stored HTML.
+export function withViewportMeta(html) {
+  const out = String(html || '')
+  if (/<meta[^>]+name=["']?viewport/i.test(out)) return out
+  const tag = '<meta name="viewport" content="width=device-width, initial-scale=1.0" />'
+  if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + tag)
+  if (/<html[^>]*>/i.test(out)) return out.replace(/<html[^>]*>/i, (m) => m + '<head>' + tag + '</head>')
+  return tag + out
 }
 
 export function withoutExecutableScripts(html) {

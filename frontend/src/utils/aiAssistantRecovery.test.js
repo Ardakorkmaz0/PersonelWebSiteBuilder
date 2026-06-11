@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cleanHtmlResponse,
+  coerceToHtmlDocument,
   extractTextCalls,
   mapTopicToTemplate,
   recoverIntentFromPrompt,
@@ -40,6 +41,43 @@ describe('cleanHtmlResponse — AI HTML-mode output parser', () => {
     expect(cleanHtmlResponse(null)).toBe('')
     expect(cleanHtmlResponse(undefined)).toBe('')
     expect(cleanHtmlResponse(123)).toBe('')
+  })
+})
+
+describe('coerceToHtmlDocument — fragment rescue for HTML mode', () => {
+  const CURRENT = '<!DOCTYPE html><html><head><title>t</title></head><body><header>H</header></body></html>'
+
+  it('passes a full document through untouched', () => {
+    const doc = '<!DOCTYPE html><html><body>x</body></html>'
+    expect(coerceToHtmlDocument(doc, { currentHtml: CURRENT })).toEqual({
+      html: doc,
+      coerced: false,
+      grafted: false,
+    })
+  })
+
+  it('grafts a bare fragment onto the end of the current body', () => {
+    const out = coerceToHtmlDocument('<section id="new">N</section>', { currentHtml: CURRENT })
+    expect(out.grafted).toBe(true)
+    expect(out.html).toContain('<header>H</header>')
+    const iNew = out.html.indexOf('id="new"')
+    expect(iNew).toBeGreaterThan(out.html.indexOf('<header>'))
+    expect(iNew).toBeLessThan(out.html.indexOf('</body>'))
+  })
+
+  it('wraps a fragment into a standalone document when there is no current doc', () => {
+    const out = coerceToHtmlDocument('<section>Solo</section>', { currentHtml: '', title: 'Test & Co' })
+    expect(out.coerced).toBe(true)
+    expect(out.grafted).toBe(false)
+    expect(out.html).toMatch(/^<!DOCTYPE html>/)
+    expect(out.html).toContain('viewport')
+    expect(out.html).toContain('<section>Solo</section>')
+    expect(out.html).toContain('Test &amp; Co') // title is escaped
+  })
+
+  it('returns null for pure prose with no markup', () => {
+    expect(coerceToHtmlDocument('Sorry, I cannot do that.', { currentHtml: CURRENT })).toBeNull()
+    expect(coerceToHtmlDocument('', { currentHtml: CURRENT })).toBeNull()
   })
 })
 

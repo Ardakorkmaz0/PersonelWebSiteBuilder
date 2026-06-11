@@ -8,6 +8,7 @@ import {
   HTML_ALLOW,
   PUBLIC_HTML_SANDBOX,
   STATIC_HTML_SANDBOX,
+  withViewportMeta,
   withoutExecutableScripts,
 } from '../utils/htmlRuntime.js'
 import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
@@ -138,8 +139,12 @@ export default function PreviewPage() {
   // All hooks MUST be called on every render in the same order — keep these
   // memos above the early returns below so React doesn't see the hook count
   // change between "loading" and "ok" renders.
-  const pages = site?.schema?.pages || []
-  const current = pages.find((p) => p.id === activeId) || pages[0] || {}
+  const sitePages = site?.schema?.pages
+  const pages = useMemo(() => sitePages || [], [sitePages])
+  const current = useMemo(
+    () => pages.find((p) => p.id === activeId) || pages[0] || {},
+    [pages, activeId],
+  )
   const hasCustomJs = !!safeCustomJs(site?.schema?.customJs)
   const hasHtmlEmbed = useMemo(() => {
     const walk = (arr) => {
@@ -203,7 +208,11 @@ export default function PreviewPage() {
   // this app or the visitor's session). Native, full-viewport, responsive.
   if (site?.html) {
     const staticMode = searchParams.get('mode') === 'static'
-    const iframeHtml = staticMode ? withoutExecutableScripts(site.html) : site.html
+    // Inject a viewport meta when the document lacks one so phones render
+    // the responsive layout instead of a zoomed-out desktop page.
+    const iframeHtml = withViewportMeta(
+      staticMode ? withoutExecutableScripts(site.html) : site.html,
+    )
     const setHtmlPreviewMode = (nextMode) => {
       const next = new URLSearchParams(searchParams)
       if (nextMode === 'static') next.set('mode', 'static')

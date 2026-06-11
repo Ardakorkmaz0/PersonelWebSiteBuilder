@@ -394,7 +394,7 @@ function TabsCanvasItem({ component }) {
 // the active panel is a droppable target so new components land in the tab the
 // user is looking at. Children carry `tabId` to remember which panel they belong
 // to. Static export emits all panels and a tiny JS shim toggles between them.
-export function TabsEditor({ component, viewport }) {
+export function TabsEditor({ component }) {
   const p = component.props || {}
   const tabsList = Array.isArray(p.tabs) && p.tabs.length
     ? p.tabs.filter((t) => t && t.id)

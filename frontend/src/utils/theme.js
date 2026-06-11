@@ -104,8 +104,9 @@ export function safeCustomJs(js) {
 export function customJsBlock(customJs) {
   const js = safeCustomJs(customJs)
   if (!js) return ''
-  // Single-backslash escape evaluates to a literal `</script>` end tag.
-  return `<script data-builder-custom-js>\n${js}\n<\/script>`
+  // Concatenated so this module's own source never contains a literal
+  // `</script>` end tag (the emitted HTML still gets one).
+  return `<script data-builder-custom-js>\n${js}\n</scr` + 'ipt>'
 }
 
 export function themeCss(theme, customCss = '') {

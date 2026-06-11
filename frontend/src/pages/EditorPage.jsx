@@ -20,12 +20,20 @@ import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
+import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
-import { appendComponentToHtml } from '../utils/componentToHtml.js'
+import {
+  downloadHtmlFile,
+  isPickerCancel,
+  openLocalHtmlFile,
+  saveAsLocalHtmlFile,
+  supportsLocalFiles,
+  writeHtmlToHandle,
+} from '../utils/localFile.js'
 
 // The three panels below all sit behind a toggle / file-mode switch and most
 // editor sessions never open them. Lazy-loading them keeps the initial
@@ -103,22 +111,37 @@ export default function EditorPage() {
   const [templateOpen, setTemplateOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  // HTML-mode component placement: the palette item the user is about to drop
+  // into the HTML document (null when not placing).
+  const [pendingType, setPendingType] = useState(null)
   const jsonInputRef = useRef(null)
   const htmlInputRef = useRef(null)
   const folderInputRef = useRef(null)
   const workspaceRef = useRef(null)
   const [siteHtml, setSiteHtml] = useState('')
   const [htmlDirty, setHtmlDirty] = useState(false)
+  // Element selected inside the HTML edit iframe — drives the right-rail
+  // element properties panel (null → site settings).
+  const [htmlSelection, setHtmlSelection] = useState(null)
+  // Undo/redo for HTML-mode changes. The component editor has the store's
+  // history; HTML edits get their own snapshot stacks here. Every HTML
+  // mutation funnels through commitHtml so template loads, AI applies,
+  // placements, panel edits, and Remove HTML are all undoable.
+  const [htmlPast, setHtmlPast] = useState([])
+  const [htmlFuture, setHtmlFuture] = useState([])
+  // Linked local .html file (File System Access API): every Save also writes
+  // the document back to this file. { handle, name } or null. Session-only —
+  // browsers don't let us persist write handles across reloads.
+  const [localFile, setLocalFile] = useState(null)
 
   // When the theme picks a Google Font (e.g. "Inter", "Playfair Display"),
   // attach the stylesheet to the editor's <head> so the canvas preview
-  // renders the same font the published page will. Cached by URL — the
-  // effect swaps the href only when the family actually changes, so a
-  // colour-only theme tweak doesn't re-request the file.
+  // renders the same font the published page will. Keyed by the resolved
+  // href, so a colour-only theme tweak doesn't re-request the file.
+  const themeFontHref = googleFontHrefForTheme(theme)
   useEffect(() => {
-    const href = googleFontHrefForTheme(theme)
     let link = document.getElementById('pwb-google-font')
-    if (!href) {
+    if (!themeFontHref) {
       if (link) link.remove()
       return
     }
@@ -128,8 +151,8 @@ export default function EditorPage() {
       link.rel = 'stylesheet'
       document.head.appendChild(link)
     }
-    if (link.href !== href) link.href = href
-  }, [theme?.fontFamily])
+    if (link.href !== themeFontHref) link.href = themeFontHref
+  }, [themeFontHref])
 
   // Enable folder selection on the folder input (non-standard attribute).
   useEffect(() => {
@@ -138,6 +161,18 @@ export default function EditorPage() {
       folderInputRef.current.directory = true
     }
   }, [])
+
+  // Warn before closing/refreshing the tab while there are unsaved changes —
+  // losing an edited HTML document or canvas design silently is brutal.
+  useEffect(() => {
+    if (!dirty && !htmlDirty) return undefined
+    const handler = (e) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty, htmlDirty])
 
   useEffect(() => {
     let active = true
@@ -259,6 +294,43 @@ export default function EditorPage() {
     addComponent(data.type, x, y)
   }
 
+  const HTML_HISTORY_CAP = 50
+
+  // Single entry point for changing siteHtml: snapshots the previous value
+  // for Undo and clears the Redo stack. `reseedWorkspace` forces an open
+  // edit/source surface to reload the new document — required when the
+  // change did NOT originate from the workspace itself (templates, imports,
+  // undo/redo), or its stale copy would clobber the change on the next
+  // mode switch.
+  function commitHtml(next, { reseedWorkspace = false } = {}) {
+    if (next === siteHtml) return
+    setHtmlPast((p) => [...p.slice(-(HTML_HISTORY_CAP - 1)), siteHtml])
+    setHtmlFuture([])
+    setSiteHtml(next)
+    setHtmlDirty(true)
+    if (reseedWorkspace) workspaceRef.current?.setDocument?.(next)
+  }
+
+  function undoHtml() {
+    if (!htmlPast.length) return
+    const prev = htmlPast[htmlPast.length - 1]
+    setHtmlPast(htmlPast.slice(0, -1))
+    setHtmlFuture((f) => [...f, siteHtml])
+    setSiteHtml(prev)
+    setHtmlDirty(true)
+    workspaceRef.current?.setDocument?.(prev)
+  }
+
+  function redoHtml() {
+    if (!htmlFuture.length) return
+    const next = htmlFuture[htmlFuture.length - 1]
+    setHtmlFuture(htmlFuture.slice(0, -1))
+    setHtmlPast((p) => [...p.slice(-(HTML_HISTORY_CAP - 1)), siteHtml])
+    setSiteHtml(next)
+    setHtmlDirty(true)
+    workspaceRef.current?.setDocument?.(next)
+  }
+
   async function save(nextPublished = published) {
     setSaving(true)
     setError('')
@@ -266,19 +338,69 @@ export default function EditorPage() {
       const schema = useEditorStore.getState().schema
       const html = siteHtml ? (workspaceRef.current?.getHtml?.() ?? siteHtml) : ''
       if (html !== siteHtml) setSiteHtml(html)
-      const data = await updateSite(id, { title, schema, html, published: nextPublished })
+      // A blank title 400s on the server (required field) and so does one
+      // over 100 chars (model max_length) — save with a safe value instead
+      // of failing the whole request over the title input.
+      const safeTitle = (title.trim() || 'Untitled site').slice(0, 100)
+      const data = await updateSite(id, { title: safeTitle, schema, html, published: nextPublished })
       setPublished(data.published)
       setSlug(data.slug)
       setHtmlDirty(false)
       markSaved()
       setJustSaved(true)
       setTimeout(() => setJustSaved(false), 1500)
+      // Mirror the save into the linked local file, so the file on disk and
+      // the site never drift apart. Server save already succeeded — a file
+      // error is reported but doesn't fail the save.
+      if (localFile?.handle && html) {
+        try {
+          await writeHtmlToHandle(localFile.handle, html)
+        } catch (e) {
+          setError(`Saved to the server, but writing ${localFile.name} failed: ${e?.message || e}`)
+        }
+      }
       return data
     } catch (e) {
       setError(apiError(e))
       return null
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Pick an .html file from disk, load it into the editor, and keep the
+  // handle so every Save writes back to it (Chromium only).
+  async function openAndLinkLocalFile() {
+    setImportOpen(false)
+    try {
+      const picked = await openLocalHtmlFile()
+      if (
+        !window.confirm(
+          `Load "${picked.name}" into the editor and keep it linked? Every Save will also update the file on disk.`,
+        )
+      )
+        return
+      commitHtml(picked.html, { reseedWorkspace: true })
+      setLocalFile({ handle: picked.handle, name: picked.name })
+    } catch (e) {
+      if (!isPickerCancel(e)) setError(`Could not open the file: ${e?.message || e}`)
+    }
+  }
+
+  // Export the current HTML: Chromium gets a real "Save As" whose handle is
+  // kept linked for future saves; other browsers get a plain download.
+  async function exportHtmlToDisk() {
+    const html = workspaceRef.current?.getHtml?.() ?? siteHtml
+    if (!html) return
+    if (!supportsLocalFiles()) {
+      downloadHtmlFile(html, `${slug || 'index'}.html`)
+      return
+    }
+    try {
+      const saved = await saveAsLocalHtmlFile(html, localFile?.name || `${slug || 'index'}.html`)
+      setLocalFile(saved)
+    } catch (e) {
+      if (!isPickerCancel(e)) setError(`Could not write the file: ${e?.message || e}`)
     }
   }
 
@@ -318,8 +440,7 @@ export default function EditorPage() {
       )
     )
       return
-    setSiteHtml(schemaToResponsiveHtml(useEditorStore.getState().schema, title))
-    setHtmlDirty(true)
+    commitHtml(schemaToResponsiveHtml(useEditorStore.getState().schema, title), { reseedWorkspace: true })
   }
 
   // Start a fresh, genuinely responsive HTML site from a clean starter.
@@ -331,8 +452,7 @@ export default function EditorPage() {
       )
     )
       return
-    setSiteHtml(blankResponsiveSite(title || 'My Site', useEditorStore.getState().schema.theme))
-    setHtmlDirty(true)
+    commitHtml(blankResponsiveSite(title || 'My Site', useEditorStore.getState().schema.theme), { reseedWorkspace: true })
   }
 
   // Load a ready-made responsive template as the site's HTML.
@@ -344,8 +464,7 @@ export default function EditorPage() {
       )
     )
       return
-    setSiteHtml(tpl.build(title || 'My Site', useEditorStore.getState().schema.theme))
-    setHtmlDirty(true)
+    commitHtml(tpl.build(title || 'My Site', useEditorStore.getState().schema.theme), { reseedWorkspace: true })
   }
 
   // Unified importer for an HTML file, a project folder (HTML + CSS), or a
@@ -367,32 +486,46 @@ export default function EditorPage() {
       return
     setError('')
     try {
-      let ok = false
       if (htmls.length) {
         // Keep the HTML exactly as-is (with its JavaScript). The site becomes an
         // HTML site: viewed/edited in the embedded workspace and published inside
         // a sandboxed iframe so its JS runs.
-        setSiteHtml(await htmlFilesToDocument(files))
-        setHtmlDirty(true)
-        ok = true
-      } else {
-        const okJson = importSchema(JSON.parse(await jsons[0].text()))
-        if (okJson) {
-          setSiteHtml('') // a component project replaces any HTML
-          setHtmlDirty(true)
-        }
-        ok = okJson
+        commitHtml(await htmlFilesToDocument(files), { reseedWorkspace: true })
+        return 'html'
       }
-      if (!ok) setError('Could not import: no usable design found in those files.')
+      const okJson = importSchema(JSON.parse(await jsons[0].text()))
+      if (okJson) {
+        commitHtml('', { reseedWorkspace: true }) // a component project replaces any HTML
+        return 'json'
+      }
+      setError('Could not import: no usable design found in those files.')
+      return false
     } catch (err) {
       setError('Import failed: ' + err.message)
+      return false
     }
   }
 
-  function onDropFiles(e) {
+  async function onDropFiles(e) {
     e.preventDefault()
     setDragOver(false)
-    if (e.dataTransfer?.files?.length) importFiles(e.dataTransfer.files)
+    const items = [...(e.dataTransfer?.items || [])].filter((i) => i.kind === 'file')
+    const files = e.dataTransfer?.files
+    // Chromium hands out a real file handle on drop — grab it SYNCHRONOUSLY
+    // (items are neutered once the event ends) so a single dropped .html
+    // stays linked and Save writes back to the original file on disk.
+    const handlePromise =
+      items.length === 1 && typeof items[0].getAsFileSystemHandle === 'function'
+        ? items[0].getAsFileSystemHandle().catch(() => null)
+        : null
+    if (!files?.length) return
+    const imported = await importFiles(files)
+    if (imported === 'html' && handlePromise) {
+      const handle = await handlePromise
+      if (handle?.kind === 'file' && /\.html?$/i.test(handle.name)) {
+        setLocalFile({ handle, name: handle.name })
+      }
+    }
   }
 
   if (loading) {
@@ -432,6 +565,22 @@ export default function EditorPage() {
         {justSaved && <span className="text-xs text-[#0b6a0b]">Saved &#10003;</span>}
 
         <div className="ml-auto flex items-center gap-2">
+          {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
+              path iterates on site.html, so hiding it there would orphan the
+              whole flow. */}
+          <AiBar
+            currentHtml={siteHtml}
+            onApplyHtml={(html) => {
+              // The AI chat shipped a fresh document. Let the workspace
+              // post-process it first: it relocates bottom-appended additions
+              // next to whatever the user is looking at and remembers which
+              // block to scroll/flash after the reload. Mark dirty so the
+              // toolbar's "Unsaved changes" hint kicks in; the user still has
+              // to press Save to commit it server-side.
+              const placed = workspaceRef.current?.applyAiHtml?.(html) ?? html
+              commitHtml(placed) // applyAiHtml already reseeded the workspace
+            }}
+          />
           {!isHtmlSite && (
           <>
           {flowMode ? (
@@ -459,17 +608,6 @@ export default function EditorPage() {
               HTML Flow
             </button>
           )}
-          <AiBar
-            currentHtml={siteHtml}
-            onApplyHtml={(html) => {
-              // HTML mode in the AI chat just shipped a fresh document — push
-              // it into site.html so HtmlWorkspace renders it. Mark dirty so
-              // the toolbar's "Unsaved changes" hint kicks in; the user still
-              // has to press Save to commit it server-side.
-              setSiteHtml(html)
-              setHtmlDirty(true)
-            }}
-          />
           <div className="flex items-center rounded-[2px] border border-[#8a8886] p-0.5 text-xs font-medium">
             <button
               onClick={() => setViewport('pc')}
@@ -605,6 +743,15 @@ export default function EditorPage() {
                     </button>
                   )}
                   <div className="my-1 border-t border-[#e1dfdd]" />
+                  {supportsLocalFiles() && (
+                    <button
+                      onClick={openAndLinkLocalFile}
+                      title="Open an HTML file and keep it linked — every Save also updates the file on disk"
+                      className="block w-full px-3 py-1.5 text-left text-sm text-[#323130] hover:bg-[#f3f2f1]"
+                    >
+                      Open &amp; link HTML file...
+                    </button>
+                  )}
                   {[
                     ['HTML file...', htmlInputRef],
                     ['Project folder...', folderInputRef],
@@ -637,17 +784,65 @@ export default function EditorPage() {
           </>
           )}
           {isHtmlSite && (
-            <button
-              onClick={() => {
-                if (window.confirm('Remove the HTML content and return to the component editor?')) {
-                  setSiteHtml('')
-                  setHtmlDirty(true)
-                }
-              }}
-              className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
-            >
-              Remove HTML
-            </button>
+            <>
+              <button
+                onClick={exportHtmlToDisk}
+                title={supportsLocalFiles()
+                  ? 'Save the HTML to a file on your computer (stays linked for future saves)'
+                  : 'Download the HTML file'}
+                className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
+              >
+                Save to file
+              </button>
+              {localFile && (
+                <span
+                  title={`Linked to ${localFile.name} — every Save also updates this file. Click to unlink.`}
+                  onClick={() => {
+                    if (window.confirm(`Stop updating ${localFile.name} on Save?`)) setLocalFile(null)
+                  }}
+                  className="flex cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#0b6a0b] hover:bg-[#e3f3e3]"
+                >
+                  💾 {localFile.name}
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  if (window.confirm('Remove the HTML content and return to the component editor? (Undo brings it back.)')) {
+                    commitHtml('')
+                    setLocalFile(null)
+                    setHtmlSelection(null)
+                  }
+                }}
+                className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
+              >
+                Remove HTML
+              </button>
+            </>
+          )}
+          {/* Visible while in HTML mode OR while the stacks still hold HTML
+              states — undoing past the first HTML snapshot drops back to the
+              component editor, and Redo must stay reachable from there. */}
+          {(isHtmlSite || htmlPast.length > 0 || htmlFuture.length > 0) && (
+            <>
+              <button
+                type="button"
+                onClick={undoHtml}
+                disabled={!htmlPast.length}
+                title="Undo the last change (component placement, AI apply, template load, panel edit...)"
+                className="rounded-[2px] px-2.5 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-40"
+              >
+                ↶ Undo
+              </button>
+              <button
+                type="button"
+                onClick={redoHtml}
+                disabled={!htmlFuture.length}
+                title="Redo"
+                className="rounded-[2px] px-2.5 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-40"
+              >
+                ↷
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -720,34 +915,43 @@ export default function EditorPage() {
         >
           {isHtmlSite ? (
             <>
-              {/* Component palette stays available in HTML mode — clicking an
-                  item appends a default snippet to the document instead of
-                  drag-and-drop onto a canvas. Lets the user iterate manually
-                  on top of an AI-generated HTML site. */}
-              <Sidebar
-                onAppendComponent={(type) => {
-                  setSiteHtml((prev) => appendComponentToHtml(prev, type))
-                  setHtmlDirty(true)
-                }}
-              />
+              {/* Component palette stays available in HTML mode. Picking an item
+                  (click or drag) splices that component's HTML snippet into the
+                  document at the spot the user points at in the workspace. */}
+              <Sidebar onPickComponent={(type) => setPendingType(type)} />
               <Suspense fallback={<PanelFallback />}>
                 <HtmlWorkspace
                   ref={workspaceRef}
                   html={siteHtml}
-                  onCommit={(h) => {
-                    setSiteHtml(h)
-                    setHtmlDirty(true)
-                  }}
+                  fileName={localFile?.name || 'index.html'}
+                  onCommit={(h) => commitHtml(h)}
+                  onRequestSave={() => save()}
+                  onElementSelect={setHtmlSelection}
+                  pendingType={pendingType}
+                  onPlaced={() => setPendingType(null)}
+                  onCancelPlacement={() => setPendingType(null)}
                 />
               </Suspense>
-              {/* Right rail in HTML mode: theme + Custom CSS/JS sections still
-                  affect the published page even in HTML mode, so keep them. */}
+              {/* Right rail in HTML mode: element properties when something
+                  is selected in the edit iframe, site settings otherwise. */}
               <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
                 <div className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
-                  Site settings
+                  {htmlSelection ? 'Element' : 'Site settings'}
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
-                  <PropertiesPanel />
+                  {htmlSelection ? (
+                    <HtmlElementPanel
+                      info={htmlSelection}
+                      onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
+                      onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
+                      onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
+                      onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}
+                      onDelete={() => workspaceRef.current?.deleteSelected?.()}
+                      onClose={() => workspaceRef.current?.clearSelection?.()}
+                    />
+                  ) : (
+                    <PropertiesPanel />
+                  )}
                 </div>
               </div>
             </>

@@ -116,25 +116,22 @@ function AiAssistantSection() {
 
   // Ping the backend proxy each time the user opens the panel on the local
   // provider — that's how we know which models they have pulled AND whether
-  // Ollama is actually running.
+  // Ollama is actually running. All state updates happen in the response
+  // callback (never synchronously in the effect body); "no status yet" is
+  // treated as refreshing by the row below.
   useEffect(() => {
-    if (provider !== 'local') {
-      setLocalStatus(null)
-      return undefined
-    }
+    if (provider !== 'local') return undefined
     let cancelled = false
-    setLocalRefreshing(true)
     fetchLocalStatus(endpoint || undefined).then((s) => {
-      if (!cancelled) {
-        setLocalStatus(s)
-        setLocalRefreshing(false)
-        // Auto-pick: if the saved model isn't installed, or even if it is but
-        // is a weak-tool-calling model (e.g. gemma) when a stronger one is
-        // available (llama3.1 / qwen2.5 / mistral-nemo), switch automatically.
-        if (s?.ok && Array.isArray(s.models) && s.models.length) {
-          const best = pickBestLocalModel(s.models, model)
-          if (best && best !== model) setModelState(best)
-        }
+      if (cancelled) return
+      setLocalStatus(s)
+      setLocalRefreshing(false)
+      // Auto-pick: if the saved model isn't installed, or even if it is but
+      // is a weak-tool-calling model (e.g. gemma) when a stronger one is
+      // available (llama3.1 / qwen2.5 / mistral-nemo), switch automatically.
+      if (s?.ok && Array.isArray(s.models) && s.models.length) {
+        const best = pickBestLocalModel(s.models, model)
+        if (best && best !== model) setModelState(best)
       }
     })
     return () => { cancelled = true }
@@ -154,22 +151,29 @@ function AiAssistantSection() {
   }
   // When the user picks a different provider, persist it and load the saved
   // key + model + endpoint for that provider so they don't bleed across each
-  // other.
+  // other. Lives in the select's event handler (not an effect) so no state
+  // cascades through extra renders.
+  function pickProvider(next) {
+    setProviderState(next)
+    setProvider(next)
+    setValue(getApiKey(next))
+    setModelState(getModel(next))
+    setEndpointState(getEndpoint(next))
+    // The local-status row refetches via the effect above; clearing here
+    // makes it show "checking…" instead of a stale snapshot.
+    setLocalStatus(null)
+  }
+  // Persist the key as the user types; flash "Saved ✓" briefly.
+  function changeApiKey(next) {
+    setValue(next)
+    setApiKey(next || '', provider)
+    setSavedFlash(!!next)
+  }
   useEffect(() => {
-    setProvider(provider)
-    setValue(getApiKey(provider))
-    setModelState(getModel(provider))
-    setEndpointState(getEndpoint(provider))
-  }, [provider])
-  useEffect(() => {
-    setApiKey(value || '', provider)
-    if (value) {
-      setSavedFlash(true)
-      const t = setTimeout(() => setSavedFlash(false), 1200)
-      return () => clearTimeout(t)
-    }
-    return undefined
-  }, [value, provider])
+    if (!savedFlash) return undefined
+    const t = setTimeout(() => setSavedFlash(false), 1200)
+    return () => clearTimeout(t)
+  }, [savedFlash])
   useEffect(() => {
     setModel(model, provider)
   }, [model, provider])
@@ -183,7 +187,7 @@ function AiAssistantSection() {
         <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Provider</span>
         <select
           value={provider}
-          onChange={(e) => setProviderState(e.target.value)}
+          onChange={(e) => pickProvider(e.target.value)}
           className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
         >
           {AI_PROVIDERS.map((p) => (
@@ -216,7 +220,7 @@ function AiAssistantSection() {
               <input
                 type={reveal ? 'text' : 'password'}
                 value={value}
-                onChange={(e) => setValue(e.target.value.trim())}
+                onChange={(e) => changeApiKey(e.target.value.trim())}
                 placeholder="AIza... / gsk_... / sk-..."
                 className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
                 autoComplete="off"
@@ -243,7 +247,7 @@ function AiAssistantSection() {
           </p>
           <LocalStatusRow
             status={localStatus}
-            refreshing={localRefreshing}
+            refreshing={localRefreshing || !localStatus}
             onRefresh={refreshLocalStatus}
           />
         </div>
@@ -532,96 +536,6 @@ function SectionTitle({ children }) {
   )
 }
 
-// 6 alignment buttons in a 2×3 grid (Drive / Word / Canva style), plus two
-// distribute actions that operate on the selected component's siblings. Hidden
-// when alignment doesn't apply (top-level flow → flex layout, not positional).
-function AlignmentSection({ component, page, isFlow, alignComponent, distributeSiblings }) {
-  const isTopLevel = (page.components || []).some((c) => c.id === component.id)
-  const flowTopLevel = isFlow && isTopLevel
-  if (flowTopLevel) return null
-
-  // Distribute targets the parent's children. For a top-level (non-flow)
-  // selection we distribute siblings on the page itself.
-  const parentId = isTopLevel
-    ? null
-    : findParentId(page.components, component.id)
-  const siblingCount = parentId
-    ? (findInPage(page.components, parentId)?.children || []).length
-    : (page.components || []).length
-  const canDistribute = siblingCount >= 3
-
-  const Btn = ({ label, glyph, onClick, title }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="grid h-8 place-items-center rounded-[2px] border border-[#c8c6c4] bg-white text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] hover:text-[#2b579a]"
-    >
-      <span aria-hidden className="text-base leading-none">{glyph}</span>
-      <span className="sr-only">{label}</span>
-    </button>
-  )
-
-  return (
-    <section className="space-y-2">
-      <SectionTitle>Alignment</SectionTitle>
-      <p className="text-[11px] text-[#605e5c]">
-        Align to {isTopLevel ? 'the artboard' : "the parent's box"}.
-      </p>
-      <div className="grid grid-cols-3 gap-1.5">
-        <Btn label="Align left"     glyph="⫷" title="Align left edge"    onClick={() => alignComponent(component.id, 'left')} />
-        <Btn label="Center horizontal" glyph="↔" title="Center horizontally" onClick={() => alignComponent(component.id, 'centerH')} />
-        <Btn label="Align right"    glyph="⫸" title="Align right edge"   onClick={() => alignComponent(component.id, 'right')} />
-        <Btn label="Align top"      glyph="⫶" title="Align top edge"     onClick={() => alignComponent(component.id, 'top')} />
-        <Btn label="Center vertical"   glyph="↕" title="Center vertically"   onClick={() => alignComponent(component.id, 'middleV')} />
-        <Btn label="Align bottom"   glyph="⫯" title="Align bottom edge"  onClick={() => alignComponent(component.id, 'bottom')} />
-      </div>
-      <div className="grid grid-cols-2 gap-1.5 pt-1">
-        <button
-          type="button"
-          onClick={() => distributeSiblings(parentId, 'x')}
-          disabled={!canDistribute}
-          title="Distribute siblings horizontally (equal X gaps)"
-          className="rounded-[2px] border border-[#c8c6c4] bg-white px-2 py-1 text-[11px] font-medium text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] hover:text-[#2b579a] disabled:cursor-not-allowed disabled:bg-[#f3f2f1] disabled:text-[#a19f9d]"
-        >
-          Distribute X
-        </button>
-        <button
-          type="button"
-          onClick={() => distributeSiblings(parentId, 'y')}
-          disabled={!canDistribute}
-          title="Distribute siblings vertically (equal Y gaps)"
-          className="rounded-[2px] border border-[#c8c6c4] bg-white px-2 py-1 text-[11px] font-medium text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] hover:text-[#2b579a] disabled:cursor-not-allowed disabled:bg-[#f3f2f1] disabled:text-[#a19f9d]"
-        >
-          Distribute Y
-        </button>
-      </div>
-    </section>
-  )
-}
-
-function findParentId(components, id) {
-  for (const c of components || []) {
-    if (Array.isArray(c.children)) {
-      if (c.children.some((ch) => ch.id === id)) return c.id
-      const deep = findParentId(c.children, id)
-      if (deep) return deep
-    }
-  }
-  return null
-}
-
-function findInPage(components, id) {
-  for (const c of components || []) {
-    if (c.id === id) return c
-    if (Array.isArray(c.children)) {
-      const f = findInPage(c.children, id)
-      if (f) return f
-    }
-  }
-  return null
-}
-
 function PropControl({ field, value, onChange, extras }) {
   if (field.control === 'textarea') {
     return <LabeledTextarea label={field.label} value={value} onChange={onChange} />
@@ -741,8 +655,6 @@ export default function PropertiesPanel() {
   const setCustomJs = useEditorStore((s) => s.setCustomJs)
   const applyComponentPreset = useEditorStore((s) => s.applyComponentPreset)
   const setLayout = useEditorStore((s) => s.setLayout)
-  const alignComponent = useEditorStore((s) => s.alignComponent)
-  const distributeSiblings = useEditorStore((s) => s.distributeSiblings)
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
   const renamePage = useEditorStore((s) => s.renamePage)
   const setPageFolder = useEditorStore((s) => s.setPageFolder)

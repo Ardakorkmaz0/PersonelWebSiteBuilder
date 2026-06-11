@@ -8,7 +8,32 @@ import { describe, expect, it } from 'vitest'
 import {
   builderInteractiveTags,
   withBuilderInteractiveHtml,
+  withViewportMeta,
 } from './htmlRuntime.js'
+
+describe('withViewportMeta', () => {
+  it('injects a viewport meta into <head> when the document lacks one', () => {
+    const out = withViewportMeta('<html><head><title>t</title></head><body></body></html>')
+    expect(out).toContain('name="viewport"')
+    expect(out.indexOf('viewport')).toBeLessThan(out.indexOf('<title>'))
+  })
+
+  it('leaves documents that already declare a viewport untouched', () => {
+    const doc = '<html><head><meta name="viewport" content="width=device-width" /></head><body></body></html>'
+    expect(withViewportMeta(doc)).toBe(doc)
+    const single = "<html><head><meta name='viewport' content='width=device-width'></head></html>"
+    expect(withViewportMeta(single)).toBe(single)
+  })
+
+  it('creates a head when there is only an <html> tag', () => {
+    const out = withViewportMeta('<html><body>x</body></html>')
+    expect(out).toMatch(/<html><head><meta name="viewport"[^>]*\/><\/head>/)
+  })
+
+  it('prepends to bare fragments', () => {
+    expect(withViewportMeta('<div>x</div>')).toMatch(/^<meta name="viewport"/)
+  })
+})
 
 describe('builderInteractiveTags', () => {
   const tags = builderInteractiveTags()

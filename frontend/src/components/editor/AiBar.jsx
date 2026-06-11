@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  AI_PROVIDERS,
   fetchLocalStatus,
   getApiKey,
   getModel,

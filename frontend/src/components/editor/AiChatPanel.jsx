@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   AI_PROVIDERS,
   SUGGESTION_CHIPS,
+  coerceToHtmlDocument,
   executeTool,
   getApiKey,
   getModel,
@@ -38,6 +39,17 @@ function writeHistory(messages) {
   }
 }
 
+// Throttle gate for sends. Returns 0 when allowed (and stamps the ref), or
+// the number of seconds left to wait. Module-level helper so the clock read
+// stays out of the component body (event handlers only).
+function throttleGate(lastSentRef, ms) {
+  const now = Date.now()
+  const since = now - lastSentRef.current
+  if (since < ms) return Math.ceil((ms - since) / 1000)
+  lastSentRef.current = now
+  return 0
+}
+
 // Floating chat window for the AI assistant. Toggled from the toolbar via
 // AiBar; positioned fixed in the top-right of the viewport, ~480px wide,
 // resizable in height up to the viewport. Holds its own conversation state
@@ -68,6 +80,11 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
   useEffect(() => {
     try { localStorage.setItem('pwb_ai_mode', aiMode) } catch { /* ignore */ }
   }, [aiMode])
+  // An HTML site doesn't render the canvas schema at all, so Components mode
+  // would "succeed" while changing nothing the user can see — the #1 cause of
+  // "the AI did nothing". Force the HTML path whenever the site is HTML.
+  const isHtmlSite = !!(currentHtml && currentHtml.trim())
+  const effectiveAiMode = isHtmlSite ? 'html' : aiMode
 
   // The header rebuilds whenever a storage event fires so that if the toolbar
   // (AiBar) auto-corrected the model on boot, the badge here updates too.
@@ -229,13 +246,11 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
     // Soft throttle: rapid back-to-back sends burn through the Gemini
     // per-minute quota fast. Hold the user back a couple of seconds and
     // surface a hint instead of silently failing.
-    const sinceLast = Date.now() - lastSendAt.current
-    if (sinceLast < THROTTLE_MS) {
-      const waitSec = Math.ceil((THROTTLE_MS - sinceLast) / 1000)
+    const waitSec = throttleGate(lastSendAt, THROTTLE_MS)
+    if (waitSec > 0) {
       setError(`Slow down — wait ${waitSec}s between AI prompts to stay under the free quota.`)
       return
     }
-    lastSendAt.current = Date.now()
     setError('')
     const userMsg = { id: rand(), role: 'user', text: trimmed }
     setMessages((m) => [...m, userMsg])
@@ -243,7 +258,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
     setBusy(true)
     try {
       // ----- HTML mode: ask the model for a full HTML document --------------
-      if (aiMode === 'html') {
+      if (effectiveAiMode === 'html') {
         if (!onApplyHtml) {
           setError('HTML mode is not wired into this editor session.')
           return
@@ -255,21 +270,26 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', text: m.text || '' }))
           .slice(0, -1)
         const { html: generated } = await runAiHtmlPrompt(trimmed, { history, currentHtml })
-        if (!generated || !/<html[\s>]/i.test(generated)) {
+        // Weak models sometimes return a bare fragment instead of the full
+        // document. coerce: graft fragments onto the current page (the apply
+        // step places them at the user's viewport) or wrap them standalone.
+        const doc = coerceToHtmlDocument(generated, { currentHtml })
+        if (!doc) {
           setMessages((m) => [
             ...m,
             { id: rand(), role: 'assistant', text:
-              "The model didn't return a usable HTML document. Try rephrasing (e.g. \"build me a single-page personal portfolio site\") or switch to Components mode.",
+              "The model didn't return usable HTML. Try rephrasing (e.g. \"build me a single-page personal portfolio site\") — being specific about sections and style helps a lot.",
               allFailed: true,
             },
           ])
           return
         }
-        onApplyHtml(generated)
+        onApplyHtml(doc.html)
         setMessages((m) => [
           ...m,
-          { id: rand(), role: 'assistant', text:
-            `Generated ~${Math.round(generated.length / 1024)} KB of HTML and loaded it into the editor. Iterate by saying things like "make the header sticky" or "use Inter font" — I'll rewrite the document.`,
+          { id: rand(), role: 'assistant', text: doc.grafted
+            ? 'The model sent back just the new part, so I added it to your current page — it should be highlighted in the preview. Say "move it above the hero" or similar to reposition it.'
+            : `Generated ~${Math.round(doc.html.length / 1024)} KB of HTML and loaded it into the editor. Iterate by saying things like "make the header sticky" or "use Inter font" — I'll rewrite the document.`,
           },
         ])
         return
@@ -370,13 +390,18 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         </span>
         {/* Mode toggle — Components uses the schema tool calls; HTML asks the
             model for a full document and ships it to site.html (the strong
-            path on weak local models that can't tool-call). */}
+            path on weak local models that can't tool-call). On an HTML site
+            the toggle is locked to HTML: the schema isn't rendered there, so
+            Components-mode edits would be invisible. */}
         <div className="ml-1 flex overflow-hidden rounded-full bg-white/15 text-[10px] font-medium">
           <button
             type="button"
             onClick={() => setAiMode('components')}
-            title="Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B"
-            className={`px-2 py-0.5 transition ${aiMode === 'components' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
+            disabled={isHtmlSite}
+            title={isHtmlSite
+              ? 'This site is an HTML document — the AI edits the HTML directly here.'
+              : 'Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B'}
+            className={`px-2 py-0.5 transition ${effectiveAiMode === 'components' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'} disabled:cursor-not-allowed disabled:opacity-40`}
           >
             🧱 Components
           </button>
@@ -384,7 +409,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             type="button"
             onClick={() => setAiMode('html')}
             title="Ask the model for a full HTML document — best on Llama 3.1 8B / gemma / phi"
-            className={`px-2 py-0.5 transition ${aiMode === 'html' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
+            className={`px-2 py-0.5 transition ${effectiveAiMode === 'html' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
           >
             📄 HTML
           </button>

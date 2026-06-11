@@ -1,28 +1,57 @@
 import { useDraggable } from '@dnd-kit/core'
 import { paletteItems } from '../registry.jsx'
 import PagesPanel from './PagesPanel.jsx'
+import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 
-// When the editor is in HTML-site mode the canvas is an iframe + textarea
-// rather than a dnd droppable, so we can't drag — instead the user CLICKS
-// a palette item and the parent appends a default HTML snippet for that
-// type. The component prop `onAppend(type)` opts into the click path; when
-// it's absent (component mode) the item only drags.
-function PaletteItem({ item, onAppend }) {
+// Palette item with two interaction modes:
+//  - Component mode (default): dnd-kit draggable, dropped onto the canvas.
+//  - HTML mode (onPick set): native HTML5 draggable (so it can drop INTO the
+//    cross-document edit iframe) + click-to-place. Both routes set the same
+//    pendingType so HtmlWorkspace's placement flow handles the actual insert.
+function PaletteItem({ item, onPick }) {
+  // useDraggable is always called (rules of hooks); its listeners are only
+  // applied in component mode.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${item.type}`,
     data: { from: 'palette', type: item.type },
   })
-  const clickable = !!onAppend
+  const htmlMode = !!onPick
+
+  if (htmlMode) {
+    return (
+      <div
+        draggable
+        onDragStart={(e) => {
+          // Native drag payload the edit iframe's drop handler checks for.
+          e.dataTransfer.setData(DRAG_MIME, item.type)
+          e.dataTransfer.setData('text/plain', item.label)
+          e.dataTransfer.effectAllowed = 'copy'
+          // Defer the state update one tick: Chrome cancels a native drag
+          // when React re-renders the dragged node in the same task as
+          // dragstart — which is exactly why dragging from the palette
+          // "did nothing" while clicking worked.
+          window.setTimeout(() => onPick(item.type), 0)
+        }}
+        onClick={() => onPick(item.type)}
+        title={`Click to place, or drag onto the page — ${item.label}`}
+        className="flex cursor-pointer items-center gap-3 rounded-[2px] border border-[#e1dfdd] bg-white px-3 py-2 text-sm select-none hover:border-[#2b579a] hover:bg-[#eff3fb] active:cursor-grabbing"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-[2px] bg-[#f3f2f1] text-base">
+          {item.icon}
+        </span>
+        <span className="font-medium text-[#323130]">{item.label}</span>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      onClick={clickable ? () => onAppend(item.type) : undefined}
-      title={clickable ? `Append ${item.label} to the HTML document` : `Drag ${item.label} onto the canvas`}
-      className={`flex items-center gap-3 rounded-[2px] border border-[#e1dfdd] bg-white px-3 py-2 text-sm select-none hover:border-[#2b579a] hover:bg-[#eff3fb] ${
-        clickable ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex cursor-grab items-center gap-3 rounded-[2px] border border-[#e1dfdd] bg-white px-3 py-2 text-sm select-none hover:border-[#2b579a] hover:bg-[#eff3fb] active:cursor-grabbing ${
+        isDragging ? 'opacity-40' : ''
+      }`}
     >
       <span className="flex h-7 w-7 items-center justify-center rounded-[2px] bg-[#f3f2f1] text-base">
         {item.icon}
@@ -32,7 +61,9 @@ function PaletteItem({ item, onAppend }) {
   )
 }
 
-export default function Sidebar({ onAppendComponent }) {
+// `onPickComponent(type)` opts the sidebar into HTML-placement mode. When
+// omitted the palette behaves as the classic dnd-kit canvas palette.
+export default function Sidebar({ onPickComponent }) {
   return (
     <aside className="w-60 shrink-0 overflow-y-auto border-r border-[#e1dfdd] bg-[#faf9f8] p-4">
       <PagesPanel />
@@ -42,12 +73,12 @@ export default function Sidebar({ onAppendComponent }) {
       </h2>
       <div className="space-y-2">
         {paletteItems.map((item) => (
-          <PaletteItem key={item.type} item={item} onAppend={onAppendComponent} />
+          <PaletteItem key={item.type} item={item} onPick={onPickComponent} />
         ))}
       </div>
       <p className="mt-4 text-xs leading-relaxed text-[#605e5c]">
-        {onAppendComponent
-          ? 'Click a component to append it to the HTML document.'
+        {onPickComponent
+          ? 'Click a component, then click in the page where it should go — or drag it straight onto the spot.'
           : 'Drag a component onto the canvas to add it.'}
       </p>
     </aside>

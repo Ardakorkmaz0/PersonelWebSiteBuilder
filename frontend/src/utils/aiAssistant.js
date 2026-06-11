@@ -25,7 +25,6 @@ import {
   LOCAL_PROXY_PATH,
   OPENROUTER_ENDPOINT,
   buildGeminiEndpoint,
-  fetchLocalStatus,
   getApiKey,
   getEndpoint,
   getModel,
@@ -1010,9 +1009,10 @@ async function callOpenAICompatible(history, currentTurnText, opts) {
       if (opts.providerId === 'local') {
         throw new Error(
           `Could not reach the local AI at ${opts.url}. Make sure Ollama (or LM Studio) is running and started with OLLAMA_ORIGINS="*" so the browser can call it.`,
+          { cause: e },
         )
       }
-      throw new Error(e?.message || 'Network error')
+      throw new Error(e?.message || 'Network error', { cause: e })
     }
     if (res.ok) {
       const data = await res.json()
@@ -1021,7 +1021,7 @@ async function callOpenAICompatible(history, currentTurnText, opts) {
       const parts = []
       if (Array.isArray(choice.tool_calls)) {
         for (const tc of choice.tool_calls) {
-          let args = {}
+          let args
           try { args = tc.function?.arguments ? JSON.parse(tc.function.arguments) : {} } catch { args = {} }
           parts.push({ functionCall: { name: tc.function?.name || '', args } })
         }
@@ -1334,11 +1334,26 @@ const HTML_SYSTEM_PROMPT = `You are a website-builder backend that emits ONE com
 Rules:
 - All visible copy must be in English even if the user writes in another language. Translate user-provided text to English before placing it.
 - One file: inline ALL CSS in a single <style> in <head>. Inline any small JS in a <script> at the end of <body>. Do NOT link external stylesheets/scripts except for fonts.googleapis.com.
-- Visually polished and modern: clean typography, sensible spacing, a coherent colour palette, responsive layout via CSS flex / grid + a single @media (max-width: 768px) breakpoint.
+- ALWAYS include <meta charset="UTF-8"> and <meta name="viewport" content="width=device-width, initial-scale=1.0"> in <head>.
 - Use semantic tags: <header>, <nav>, <main>, <section>, <article>, <footer>.
 - Use Google Fonts when the user names a font ("Inter", "Poppins", "Playfair Display", "JetBrains Mono", etc.) — add the <link rel="stylesheet" href="https://fonts.googleapis.com/css2?..."> in <head>.
 - Include placeholder copy that matches the topic the user named (so a "youtube site" gets video-platform copy, not lorem ipsum).
 - If the user asks for a change to an EXISTING document, return the FULL updated document — never a diff, never just the new fragment.
+- When the user asks to ADD something to an existing document ("add a contact section", "put a newsletter signup at the bottom", "add a video grid"), KEEP the rest of the document intact and insert the new element where it visually belongs — a new section goes among the other sections in document order, a nav link goes inside the existing <nav>, a footer item inside the existing <footer>. Do not drop unrelated existing content.
+- When the user references a position ("at the top", "above the footer", "after the hero", "in the navbar"), honour it precisely.
+
+Design system — every page you produce must look professionally designed:
+- Layout: a .container with max-width 1100-1200px and 24px side padding; sections padded ~96px top/bottom (64px on mobile); content never touches the viewport edge.
+- Typography: clamp() for headings (hero h1 ≈ clamp(36px, 6vw, 60px)), line-height 1.1 on headings / 1.6 on body, letter-spacing -0.02em on large headings, body 16-18px.
+- Colour: ONE accent colour plus neutral grays (#111 ink, #6b7280 muted, #f5f5f7 soft background, white surface). Use the accent sparingly: buttons, links, small highlights. Never more than 2 accent colours.
+- Header: sticky, white/translucent with a subtle bottom border; brand left, 3-5 nav links right; on mobile collapse the links behind a CSS-only hamburger (hidden checkbox + label, no JS).
+- Hero: small badge/eyebrow line, big headline (one phrase in the accent colour), one-sentence subtext, a primary button + a ghost secondary button.
+- Sections: alternate white and soft-gray backgrounds; each starts with a small uppercase eyebrow label in the accent colour, then an h2, then a one-line lead in muted gray.
+- Cards: grid via repeat(auto-fit, minmax(260px, 1fr)); white background, 1px #ececec border, 14-18px radius, soft shadow, slight translateY on hover.
+- Footer: dark (#101015) with 2-3 columns (brand blurb, site links, social links) and a bottom bar with the copyright line.
+- Motion: 0.15s transitions on buttons/cards/links only — no keyframe animation noise.
+- Images: prefer CSS gradient placeholders or https://picsum.photos URLs; always max-width:100%; height:auto.
+- Exactly one @media (max-width: 768px) block: stack grids to one column, shrink section padding, show the hamburger.
 
 THE LATEST USER MESSAGE IS THE PRIMARY INTENT. Older turns are reference only. If the user previously asked for X and now asks for Y, return a Y-focused document. Do not blend two unrelated requests.`
 
@@ -1384,10 +1399,10 @@ async function callHtmlModeOnce(prompt, { history = [], currentHtml = '' }) {
     return cleanHtmlResponse(text)
   }
   // Groq / OpenRouter / Local all speak OpenAI-compatible chat-completions.
-  let url = ''
+  let url
   let extraHeaders = {}
   let extraBody = {}
-  let modelId = ''
+  let modelId
   if (provider === 'groq') {
     url = GROQ_ENDPOINT
     modelId = getModel('groq')
@@ -1441,6 +1456,43 @@ export function cleanHtmlResponse(raw) {
   const docStart = s.search(/<!DOCTYPE\s+html|<html[\s>]/i)
   if (docStart > 0) s = s.slice(docStart)
   return s
+}
+
+// Last line of defence for HTML mode: weak models sometimes answer "add a
+// contact section" with JUST the new <section> despite the full-document
+// instruction. Rather than failing the turn:
+//  - a fragment is grafted onto the end of the current document's <body>
+//    (the editor's apply step then relocates it next to what the user is
+//    looking at and flashes it), or
+//  - wrapped into a minimal standalone document when there's no current doc.
+// Returns { html, coerced, grafted } or null when the text has no markup at
+// all (pure prose — nothing we could render).
+export function coerceToHtmlDocument(generated, { currentHtml = '', title = 'My Site' } = {}) {
+  const s = String(generated || '').trim()
+  if (!s) return null
+  if (/<html[\s>]/i.test(s)) return { html: s, coerced: false, grafted: false }
+  if (!/<([a-z][a-z0-9-]*)(\s[^>]*)?>/i.test(s)) return null
+  const cur = String(currentHtml || '')
+  if (/<\/body>/i.test(cur)) {
+    return { html: cur.replace(/<\/body>/i, `${s}\n</body>`), coerced: true, grafted: true }
+  }
+  const esc = String(title).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${esc}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1d1d1f; line-height: 1.6; }
+    img { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+${s}
+</body></html>`
+  return { html, coerced: true, grafted: false }
 }
 
 export async function runAiPrompt(prompt, { maxRounds = 3, history = [] } = {}) {
@@ -1499,7 +1551,7 @@ export async function runAiPrompt(prompt, { maxRounds = 3, history = [] } = {}) 
         const hint = missing.length
           ? ` Add a free ${missing[0]} key in Settings (Properties → AI Assistant) so auto-failover has somewhere to fall back to.`
           : ' Wait ~60s and try again.'
-        throw new Error(`All ready providers are out of quota or unreachable (tried: ${tail}).${hint}`)
+        throw new Error(`All ready providers are out of quota or unreachable (tried: ${tail}).${hint}`, { cause: e })
       }
     }
   }
@@ -1583,7 +1635,6 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
       }
       const entry = { name: functionCall.name, args, result }
       calls.push(entry)
-      // eslint-disable-next-line no-console
       console.debug('[AI tool]', entry)
       return { name: functionCall.name, response: result }
     })

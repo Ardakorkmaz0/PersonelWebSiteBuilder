@@ -17,9 +17,9 @@ export default function HistoryPanel({ open, siteId, onClose, onRestored }) {
 
   useEffect(() => {
     if (!open || !siteId) return undefined
+    // No state reset here: the panel is mounted fresh each time the History
+    // button opens it, so rows/err already start at their initial values.
     let cancelled = false
-    setRows(null)
-    setErr('')
     listVersions(siteId)
       .then((data) => {
         if (!cancelled) setRows(Array.isArray(data) ? data : [])

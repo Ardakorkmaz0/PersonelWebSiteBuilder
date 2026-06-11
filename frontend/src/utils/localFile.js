@@ -62,3 +62,60 @@ export function downloadHtmlFile(html, name = 'index.html') {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+// ---- handle persistence -----------------------------------------------------
+// File handles are structured-cloneable, so they survive in IndexedDB across
+// page reloads (localStorage can't hold them). The browser still drops the
+// readwrite GRANT between sessions — writeHtmlToHandle re-requests it on the
+// next Save click, which is a user gesture, so the prompt is allowed.
+const DB_NAME = 'pwb-local-files'
+const STORE = 'handles'
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      resolve(null)
+      return
+    }
+    const req = indexedDB.open(DB_NAME, 1)
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function withStore(mode, fn) {
+  const db = await openDb()
+  if (!db) return undefined
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, mode)
+      const req = fn(tx.objectStore(STORE))
+      tx.oncomplete = () => resolve(req?.result)
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+export async function storeLocalFileHandle(siteId, handle) {
+  try {
+    await withStore('readwrite', (s) => s.put(handle, String(siteId)))
+  } catch { /* best effort — linking still works for this session */ }
+}
+
+export async function loadLocalFileHandle(siteId) {
+  try {
+    return (await withStore('readonly', (s) => s.get(String(siteId)))) || null
+  } catch {
+    return null
+  }
+}
+
+export async function clearLocalFileHandle(siteId) {
+  try {
+    await withStore('readwrite', (s) => s.delete(String(siteId)))
+  } catch { /* best effort */ }
+}

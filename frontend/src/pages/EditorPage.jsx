@@ -27,10 +27,13 @@ import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import {
+  clearLocalFileHandle,
   downloadHtmlFile,
   isPickerCancel,
+  loadLocalFileHandle,
   openLocalHtmlFile,
   saveAsLocalHtmlFile,
+  storeLocalFileHandle,
   supportsLocalFiles,
   writeHtmlToHandle,
 } from '../utils/localFile.js'
@@ -130,9 +133,30 @@ export default function EditorPage() {
   const [htmlPast, setHtmlPast] = useState([])
   const [htmlFuture, setHtmlFuture] = useState([])
   // Linked local .html file (File System Access API): every Save also writes
-  // the document back to this file. { handle, name } or null. Session-only —
-  // browsers don't let us persist write handles across reloads.
+  // the document back to this file. { handle, name } or null. Persisted in
+  // IndexedDB per site, so the link survives page reloads; the browser
+  // re-prompts for write permission on the first Save of a new session.
   const [localFile, setLocalFile] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    loadLocalFileHandle(id).then((handle) => {
+      if (active && handle?.name) setLocalFile({ handle, name: handle.name })
+    })
+    return () => {
+      active = false
+    }
+  }, [id])
+
+  function linkLocalFile(handle, name) {
+    setLocalFile({ handle, name })
+    storeLocalFileHandle(id, handle)
+  }
+
+  function unlinkLocalFile() {
+    setLocalFile(null)
+    clearLocalFileHandle(id)
+  }
 
   // When the theme picks a Google Font (e.g. "Inter", "Playfair Display"),
   // attach the stylesheet to the editor's <head> so the canvas preview
@@ -342,6 +366,19 @@ export default function EditorPage() {
       // over 100 chars (model max_length) — save with a safe value instead
       // of failing the whole request over the title input.
       const safeTitle = (title.trim() || 'Untitled site').slice(0, 100)
+      // Write the linked local file BEFORE the network round-trip: the Save
+      // click is a fresh user gesture, so Chrome still allows the readwrite
+      // permission re-prompt. After a slow server request the activation can
+      // expire and the prompt gets auto-denied — the write would fail
+      // silently every time.
+      let fileError = ''
+      if (localFile?.handle && html) {
+        try {
+          await writeHtmlToHandle(localFile.handle, html)
+        } catch (e) {
+          fileError = e?.message || String(e)
+        }
+      }
       const data = await updateSite(id, { title: safeTitle, schema, html, published: nextPublished })
       setPublished(data.published)
       setSlug(data.slug)
@@ -349,15 +386,8 @@ export default function EditorPage() {
       markSaved()
       setJustSaved(true)
       setTimeout(() => setJustSaved(false), 1500)
-      // Mirror the save into the linked local file, so the file on disk and
-      // the site never drift apart. Server save already succeeded — a file
-      // error is reported but doesn't fail the save.
-      if (localFile?.handle && html) {
-        try {
-          await writeHtmlToHandle(localFile.handle, html)
-        } catch (e) {
-          setError(`Saved to the server, but writing ${localFile.name} failed: ${e?.message || e}`)
-        }
+      if (fileError) {
+        setError(`Saved to the server, but writing ${localFile.name} failed: ${fileError}`)
       }
       return data
     } catch (e) {
@@ -381,7 +411,7 @@ export default function EditorPage() {
       )
         return
       commitHtml(picked.html, { reseedWorkspace: true })
-      setLocalFile({ handle: picked.handle, name: picked.name })
+      linkLocalFile(picked.handle, picked.name)
     } catch (e) {
       if (!isPickerCancel(e)) setError(`Could not open the file: ${e?.message || e}`)
     }
@@ -398,7 +428,7 @@ export default function EditorPage() {
     }
     try {
       const saved = await saveAsLocalHtmlFile(html, localFile?.name || `${slug || 'index'}.html`)
-      setLocalFile(saved)
+      linkLocalFile(saved.handle, saved.name)
     } catch (e) {
       if (!isPickerCancel(e)) setError(`Could not write the file: ${e?.message || e}`)
     }
@@ -523,7 +553,7 @@ export default function EditorPage() {
     if (imported === 'html' && handlePromise) {
       const handle = await handlePromise
       if (handle?.kind === 'file' && /\.html?$/i.test(handle.name)) {
-        setLocalFile({ handle, name: handle.name })
+        linkLocalFile(handle, handle.name)
       }
     }
   }
@@ -785,31 +815,35 @@ export default function EditorPage() {
           )}
           {isHtmlSite && (
             <>
-              <button
-                onClick={exportHtmlToDisk}
-                title={supportsLocalFiles()
-                  ? 'Save the HTML to a file on your computer (stays linked for future saves)'
-                  : 'Download the HTML file'}
-                className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
-              >
-                Save to file
-              </button>
-              {localFile && (
+              {/* Linked-file state is always visible: green = Save writes to
+                  this file on disk; gray = not linked, click to pick one.
+                  Hiding it made "Save doesn't change my file" undebuggable. */}
+              {localFile ? (
                 <span
-                  title={`Linked to ${localFile.name} — every Save also updates this file. Click to unlink.`}
+                  title={`Linked to ${localFile.name} — every Save also updates this file on disk. Click to unlink.`}
                   onClick={() => {
-                    if (window.confirm(`Stop updating ${localFile.name} on Save?`)) setLocalFile(null)
+                    if (window.confirm(`Stop updating ${localFile.name} on Save?`)) unlinkLocalFile()
                   }}
                   className="flex cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#0b6a0b] hover:bg-[#e3f3e3]"
                 >
                   💾 {localFile.name}
                 </span>
+              ) : (
+                <button
+                  onClick={exportHtmlToDisk}
+                  title={supportsLocalFiles()
+                    ? 'No file on disk is linked yet. Click to save the HTML to a file — afterwards every Save updates it automatically.'
+                    : 'Download the HTML file'}
+                  className="flex items-center gap-1 rounded-full border border-[#c8c6c4] bg-white px-2 py-0.5 text-xs text-[#605e5c] hover:border-[#8a8886] hover:text-[#323130]"
+                >
+                  💾 {supportsLocalFiles() ? 'Link file' : 'Download'}
+                </button>
               )}
               <button
                 onClick={() => {
                   if (window.confirm('Remove the HTML content and return to the component editor? (Undo brings it back.)')) {
                     commitHtml('')
-                    setLocalFile(null)
+                    unlinkLocalFile()
                     setHtmlSelection(null)
                   }
                 }}

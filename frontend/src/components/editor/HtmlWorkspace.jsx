@@ -600,7 +600,7 @@ function HtmlWorkspace({
                 setNonce((n) => n + 1)
                 onRequestSave?.()
               }}
-              title="Apply the source and save the site"
+              title="Apply the source code and save — to the server AND the linked local file (💾 in the toolbar)"
               className="rounded-[2px] bg-[#2b579a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#1e3f6f]"
             >
               Apply &amp; Save

@@ -107,19 +107,34 @@ export default function PreviewPage() {
 
   useEffect(() => {
     let active = true
-    getPublicSite(slug)
-      .then((data) => {
-        if (!active) return
-        setSite(data)
-        setStatus('ok')
-        if (data?.title) document.title = data.title
-      })
-      .catch((e) => {
-        if (!active) return
-        setStatus(e.response?.status === 404 ? 'notfound' : 'error')
-      })
+    const load = () => {
+      getPublicSite(slug)
+        .then((data) => {
+          if (!active) return
+          setSite(data)
+          setStatus('ok')
+          if (data?.title) document.title = data.title
+        })
+        .catch((e) => {
+          if (!active) return
+          setStatus(e.response?.status === 404 ? 'notfound' : 'error')
+        })
+    }
+    load()
+    // A preview tab usually stays open next to the editor. Refetch when the
+    // user switches back to it, so a fresh Save shows up without a manual
+    // reload — otherwise "Apply & Save did nothing" is the natural (wrong)
+    // conclusion. Identical content produces an identical srcDoc string, so
+    // an unchanged site never reloads the iframe.
+    const onBack = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    document.addEventListener('visibilitychange', onBack)
+    window.addEventListener('focus', onBack)
     return () => {
       active = false
+      document.removeEventListener('visibilitychange', onBack)
+      window.removeEventListener('focus', onBack)
     }
   }, [slug])
 

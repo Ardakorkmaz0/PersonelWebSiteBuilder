@@ -36,8 +36,8 @@ export default function PagesPanel() {
     const editing = editingId === p.id
     return (
       <div
-        className={`group flex items-center gap-1 rounded-[2px] px-1.5 py-1 text-sm ${
-          active ? 'bg-[#eff3fb] text-[#2b579a]' : 'text-[#323130] hover:bg-[#f3f2f1]'
+        className={`group flex items-center gap-1 rounded-lg px-1.5 py-1 text-sm ${
+          active ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151] hover:bg-[#f3f4f6]'
         }`}
         style={{ paddingLeft: indent }}
       >
@@ -47,7 +47,7 @@ export default function PagesPanel() {
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
           title={`${p.name}.html`}
         >
-          <span className="text-xs text-[#2b579a]">&#9632;</span>
+          <span className="text-xs text-[#4f46e5]">&#9632;</span>
           {editing ? (
             <input
               autoFocus
@@ -59,7 +59,7 @@ export default function PagesPanel() {
                 if (e.key === 'Escape') setEditingId(null)
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full rounded-[2px] border border-[#2b579a] px-1 py-0.5 text-xs focus:outline-none"
+              className="w-full rounded-lg border border-[#4f46e5] px-1 py-0.5 text-xs focus:outline-none"
             />
           ) : (
             <span className="truncate">{p.name}</span>
@@ -83,7 +83,7 @@ export default function PagesPanel() {
   return (
     <div className="mb-4">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
           Pages
         </h2>
         <div className="flex items-center gap-1">
@@ -111,14 +111,14 @@ export default function PagesPanel() {
                 onClick={() =>
                   setCollapsed((c) => ({ ...c, [folder]: !c[folder] }))
                 }
-                className="flex w-full items-center gap-1 rounded-[2px] px-1.5 py-1 text-sm font-medium text-[#605e5c] hover:bg-[#f3f2f1]"
+                className="flex w-full items-center gap-1 rounded-lg px-1.5 py-1 text-sm font-medium text-[#6b7280] hover:bg-[#f3f4f6]"
               >
-                <span className="text-[10px] text-[#605e5c]">
+                <span className="text-[10px] text-[#6b7280]">
                   {isCollapsed ? '▶' : '▼'}
                 </span>
                 <span>&#128193;</span>
                 <span className="truncate">{folder}</span>
-                <span className="ml-auto text-[10px] text-[#605e5c]">
+                <span className="ml-auto text-[10px] text-[#6b7280]">
                   {pagesIn.length}
                 </span>
               </button>
@@ -141,8 +141,8 @@ function IconBtn({ children, onClick, title, danger }) {
         e.stopPropagation()
         onClick()
       }}
-      className={`flex h-5 w-5 items-center justify-center rounded-[2px] text-xs hover:bg-[#e1dfdd] ${
-        danger ? 'text-[#a4262c] hover:bg-[#fde7e9]' : 'text-[#605e5c]'
+      className={`flex h-5 w-5 items-center justify-center rounded-lg text-xs hover:bg-[#e5e7eb] ${
+        danger ? 'text-[#a4262c] hover:bg-[#fde7e9]' : 'text-[#6b7280]'
       }`}
     >
       {children}

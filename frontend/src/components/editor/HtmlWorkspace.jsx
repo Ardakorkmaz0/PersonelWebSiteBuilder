@@ -514,35 +514,35 @@ function HtmlWorkspace({
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
   const toggleBtn = (active) =>
-    active ? 'rounded-[2px] bg-[#2b579a] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#323130]'
+    active ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-[#e1dfdd] bg-[#faf9f8]">
-        <div className="border-b border-[#e1dfdd] px-3 py-2 text-xs font-semibold uppercase text-[#605e5c]">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-[#e5e7eb] bg-[#f9fafb]">
+        <div className="border-b border-[#e5e7eb] px-3 py-2 text-xs font-semibold uppercase text-[#6b7280]">
           Files
         </div>
         <button
           type="button"
           onClick={() => switchMode(mode === 'source' ? 'view' : 'source')}
           title={fileName}
-          className={`mx-2 mt-2 flex items-center justify-between gap-2 rounded-[2px] border px-2.5 py-2 text-left text-sm ${
+          className={`mx-2 mt-2 flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-sm ${
             mode === 'source'
-              ? 'border-[#2b579a] bg-[#eff3fb] text-[#201f1e]'
-              : 'border-[#e1dfdd] bg-white text-[#323130] hover:border-[#8a8886]'
+              ? 'border-[#4f46e5] bg-[#eef2ff] text-[#111827]'
+              : 'border-[#e5e7eb] bg-white text-[#374151] hover:border-[#d1d5db]'
           }`}
         >
           <span className="min-w-0 truncate font-medium">{fileName}</span>
-          <span className="shrink-0 text-xs text-[#605e5c]">HTML</span>
+          <span className="shrink-0 text-xs text-[#6b7280]">HTML</span>
         </button>
-        <div className="mt-3 px-3 text-xs leading-relaxed text-[#605e5c]">
+        <div className="mt-3 px-3 text-xs leading-relaxed text-[#6b7280]">
           View runs the site as-is. Use Edit for text changes or Source for the HTML file.
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center gap-2 border-b border-[#e1dfdd] bg-white px-4 py-1.5">
-          <div className="flex items-center rounded-[2px] border border-[#8a8886] p-0.5 text-xs font-medium">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
+          <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
             <button onClick={() => switchMode('view')} className={toggleBtn(mode === 'view')}>
               View
             </button>
@@ -559,7 +559,7 @@ function HtmlWorkspace({
                 value={deviceId}
                 onChange={(e) => setDeviceId(e.target.value)}
                 title="Screen / device width"
-                className="rounded-[2px] border border-[#8a8886] px-2 py-1 text-xs font-medium text-[#323130] focus:border-[#2b579a] focus:outline-none"
+                className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
               >
                 {DEVICES.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -571,14 +571,14 @@ function HtmlWorkspace({
                 onClick={() => setLandscape((v) => !v)}
                 disabled={isFit}
                 title="Landscape / portrait"
-                className="rounded-[2px] px-2 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-40"
+                className="rounded-lg px-2 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
               >
                 {landscape ? '⟲' : '⟳'}
               </button>
-              <label className="flex items-center gap-1.5 text-xs text-[#323130]" title="Compatibility mode: fits overflowing content to the screen (view mode)">
+              <label className="flex items-center gap-1.5 text-xs text-[#374151]" title="Compatibility mode: fits overflowing content to the screen (view mode)">
                 <input
                   type="checkbox"
-                  className="accent-[#2b579a]"
+                  className="accent-[#4f46e5]"
                   checked={compat}
                   onChange={(e) => {
                     setCompat(e.target.checked)
@@ -601,12 +601,12 @@ function HtmlWorkspace({
                 onRequestSave?.()
               }}
               title="Apply the source code and save — to the server AND the linked local file (💾 in the toolbar)"
-              className="rounded-[2px] bg-[#2b579a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#1e3f6f]"
+              className="rounded-lg bg-[#4f46e5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca]"
             >
               Apply &amp; Save
             </button>
           )}
-          <span className="ml-auto text-xs text-[#605e5c]">
+          <span className="ml-auto text-xs text-[#6b7280]">
             {mode === 'view'
               ? 'Live preview: JavaScript, links, forms, and scrolling are enabled'
               : mode === 'source'
@@ -625,7 +625,7 @@ function HtmlWorkspace({
             <button
               type="button"
               onClick={() => onCancelPlacement?.()}
-              className="ml-auto rounded-[2px] border border-[#93c5fd] bg-white px-2 py-0.5 font-medium text-[#1e40af] hover:bg-[#dbeafe]"
+              className="ml-auto rounded-lg border border-[#93c5fd] bg-white px-2 py-0.5 font-medium text-[#1e40af] hover:bg-[#dbeafe]"
             >
               Cancel (Esc)
             </button>
@@ -647,7 +647,7 @@ function HtmlWorkspace({
         ) : (
           <main
             ref={stageRef}
-            className="relative flex flex-1 items-start justify-center overflow-hidden bg-[#f3f2f1] p-3"
+            className="relative flex flex-1 items-start justify-center overflow-hidden bg-[#f3f4f6] p-3"
           >
             <div style={{ width: Math.round(contentW * scale), height: Math.round(contentH * scale) }}>
               <div
@@ -659,7 +659,7 @@ function HtmlWorkspace({
                   transform: `scale(${scale})`,
                   transformOrigin: 'top left',
                   boxShadow: isFit ? 'none' : '0 1px 6px rgba(0,0,0,0.15)',
-                  border: isFit ? 'none' : '1px solid #c8c6c4',
+                  border: isFit ? 'none' : '1px solid #d1d5db',
                   outline: placing ? '2px solid #2563eb' : 'none',
                 }}
               >

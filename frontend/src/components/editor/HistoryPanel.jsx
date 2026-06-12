@@ -60,10 +60,10 @@ export default function HistoryPanel({ open, siteId, onClose, onRestored }) {
 
   return (
     <div
-      className="fixed right-4 top-20 z-[115] flex h-[min(70vh,640px)] w-[min(92vw,420px)] flex-col overflow-hidden rounded-[6px] border border-[#c8c6c4] bg-white shadow-2xl"
+      className="fixed right-4 top-20 z-[115] flex h-[min(70vh,640px)] w-[min(92vw,420px)] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center gap-2 border-b border-[#e1dfdd] bg-[#2b579a] px-3 py-2 text-white">
+      <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-[#4f46e5] px-3 py-2 text-white">
         <span className="text-xs font-bold uppercase tracking-wide opacity-90">History</span>
         <span className="ml-1 truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
           {rows?.length ?? '–'} versions
@@ -79,12 +79,12 @@ export default function HistoryPanel({ open, siteId, onClose, onRestored }) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-[#faf9f8] p-3">
+      <div className="flex-1 overflow-y-auto bg-[#f9fafb] p-3">
         {rows === null && (
-          <p className="text-xs text-[#605e5c]">Loading history…</p>
+          <p className="text-xs text-[#6b7280]">Loading history…</p>
         )}
         {rows && rows.length === 0 && (
-          <p className="rounded-md border border-dashed border-[#c8c6c4] bg-white p-3 text-xs leading-relaxed text-[#605e5c]">
+          <p className="rounded-md border border-dashed border-[#d1d5db] bg-white p-3 text-xs leading-relaxed text-[#6b7280]">
             No history yet. The next Save (or any AI change) will start your
             timeline — the editor keeps the last 30 snapshots automatically.
           </p>
@@ -94,20 +94,20 @@ export default function HistoryPanel({ open, siteId, onClose, onRestored }) {
             {rows.map((v) => (
               <li
                 key={v.id}
-                className="flex items-center gap-2 rounded-[4px] border border-[#e1dfdd] bg-white p-2"
+                className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white p-2"
               >
                 <SourceBadge source={v.source} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-medium text-[#201f1e]">
+                  <p className="truncate text-[12px] font-medium text-[#111827]">
                     {v.label || labelForSource(v.source)}
                   </p>
-                  <p className="text-[10px] text-[#605e5c]">{formatWhen(v.created_at)}</p>
+                  <p className="text-[10px] text-[#6b7280]">{formatWhen(v.created_at)}</p>
                 </div>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => restore(v.id)}
-                  className="rounded-[2px] border border-[#8a8886] bg-white px-2 py-0.5 text-[11px] font-medium text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-50"
+                  className="rounded-lg border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
                 >
                   Restore
                 </button>
@@ -129,7 +129,7 @@ function SourceBadge({ source }) {
   const style =
     source === 'restore'
       ? 'border-[#bdaa07] bg-[#fff4ce] text-[#5d4a06]'
-      : 'border-[#c5d4ef] bg-[#eff3fb] text-[#2b579a]'
+      : 'border-[#c5d4ef] bg-[#eef2ff] text-[#4f46e5]'
   return (
     <span
       title={`Snapshot source: ${source}`}

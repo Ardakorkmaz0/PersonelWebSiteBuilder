@@ -5,8 +5,8 @@ import { deleteImage, listImages, uploadImage } from '../../api/images.js'
 // Small, reusable form controls used by the PropertiesPanel:
 // square 2px corners, neutral borders, blue focus.
 const inputCls =
-  'w-full rounded-[2px] border border-[#8a8886] px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none'
-const labelCls = 'block text-xs font-semibold text-[#605e5c] mb-1'
+  'w-full rounded-lg border border-[#d1d5db] px-2 py-1 text-sm text-[#111827] focus:border-[#4f46e5] focus:outline-none'
+const labelCls = 'block text-xs font-semibold text-[#6b7280] mb-1'
 
 export function LabeledText({ label, value, onChange, placeholder }) {
   return (
@@ -105,12 +105,12 @@ export function LabeledImage({ label, value, onChange }) {
             src={value}
             alt=""
             style={{ aspectRatio: '4 / 3' }}
-            className="h-16 w-24 rounded-[2px] border border-[#e1dfdd] object-cover"
+            className="h-16 w-24 rounded-lg border border-[#e5e7eb] object-cover"
           />
           <button
             type="button"
             onClick={() => onChange('')}
-            className="rounded-[2px] px-2 py-1 text-xs text-[#605e5c] hover:bg-[#f3f2f1]"
+            className="rounded-lg px-2 py-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6]"
           >
             Clear
           </button>
@@ -128,10 +128,10 @@ export function LabeledImage({ label, value, onChange }) {
         }}
         onDrop={onDrop}
         onClick={() => !busy && fileRef.current?.click()}
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-[4px] border-2 border-dashed px-3 py-4 text-center text-xs transition ${
+        className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-3 py-4 text-center text-xs transition ${
           dragOver
-            ? 'border-[#2b579a] bg-[#eff3fb] text-[#2b579a]'
-            : 'border-[#c8c6c4] bg-[#faf9f8] text-[#605e5c] hover:border-[#8a8886]'
+            ? 'border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]'
+            : 'border-[#d1d5db] bg-[#f9fafb] text-[#6b7280] hover:border-[#d1d5db]'
         }`}
       >
         {busy
@@ -146,14 +146,14 @@ export function LabeledImage({ label, value, onChange }) {
         <button
           type="button"
           onClick={() => setLibraryOpen((o) => !o)}
-          className="rounded-[2px] border border-[#8a8886] px-2 py-1 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
+          className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
         >
           {libraryOpen ? 'Hide library' : 'My library'}
         </button>
         <button
           type="button"
           onClick={() => setShowUrl((s) => !s)}
-          className="rounded-[2px] px-2 py-1 text-xs font-medium text-[#605e5c] hover:bg-[#f3f2f1]"
+          className="rounded-lg px-2 py-1 text-xs font-medium text-[#6b7280] hover:bg-[#f3f4f6]"
         >
           {showUrl ? 'Hide URL' : 'Paste URL'}
         </button>
@@ -175,7 +175,7 @@ export function LabeledImage({ label, value, onChange }) {
 
       {/* Built-in presets */}
       <div className="mt-2">
-        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#605e5c]">
+        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
           Quick presets
         </span>
         <div className="grid grid-cols-4 gap-1.5">
@@ -186,10 +186,10 @@ export function LabeledImage({ label, value, onChange }) {
               title={p.name}
               onClick={() => onChange(p.src)}
               style={{ aspectRatio: '4 / 3' }}
-              className={`overflow-hidden rounded-[2px] border ${
+              className={`overflow-hidden rounded-lg border ${
                 value === p.src
-                  ? 'border-[#2b579a] ring-1 ring-[#2b579a]'
-                  : 'border-[#e1dfdd] hover:border-[#8a8886]'
+                  ? 'border-[#4f46e5] ring-1 ring-[#4f46e5]'
+                  : 'border-[#e5e7eb] hover:border-[#d1d5db]'
               }`}
             >
               <img src={p.src} alt={p.name} className="h-full w-full object-cover" />
@@ -233,11 +233,11 @@ function ImageLibrary({ value, onPick }) {
   }
 
   if (images === null) {
-    return <p className="mt-1.5 text-xs text-[#605e5c]">Loading library…</p>
+    return <p className="mt-1.5 text-xs text-[#6b7280]">Loading library…</p>
   }
   if (images.length === 0) {
     return (
-      <p className="mt-1.5 text-xs text-[#605e5c]">
+      <p className="mt-1.5 text-xs text-[#6b7280]">
         {err || 'No uploads yet — drop an image above to start your library.'}
       </p>
     )
@@ -251,10 +251,10 @@ function ImageLibrary({ value, onPick }) {
               type="button"
               onClick={() => onPick(img.url)}
               style={{ aspectRatio: '4 / 3' }}
-              className={`block w-full overflow-hidden rounded-[2px] border ${
+              className={`block w-full overflow-hidden rounded-lg border ${
                 value === img.url
-                  ? 'border-[#2b579a] ring-1 ring-[#2b579a]'
-                  : 'border-[#e1dfdd] hover:border-[#8a8886]'
+                  ? 'border-[#4f46e5] ring-1 ring-[#4f46e5]'
+                  : 'border-[#e5e7eb] hover:border-[#d1d5db]'
               }`}
             >
               <img src={img.url} alt={img.alt || ''} className="h-full w-full object-cover" />
@@ -283,7 +283,7 @@ export function LabeledColor({ label, value, onChange }) {
       <div className="flex items-center gap-2">
         <input
           type="color"
-          className="h-8 w-10 cursor-pointer rounded-[2px] border border-[#8a8886]"
+          className="h-8 w-10 cursor-pointer rounded-lg border border-[#d1d5db]"
           value={hex}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -333,7 +333,7 @@ export function LabeledPx({ label, value, onChange }) {
             onChange(e.target.value === '' ? '' : `${e.target.value}px`)
           }
         />
-        <span className="text-xs text-[#605e5c]">px</span>
+        <span className="text-xs text-[#6b7280]">px</span>
       </div>
     </label>
   )
@@ -367,9 +367,9 @@ export function LabeledRange({ label, value, onChange, min = 0, max = 1, step = 
           step={step}
           value={v}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 accent-[#2b579a]"
+          className="flex-1 accent-[#4f46e5]"
         />
-        <span className="w-8 text-right text-xs text-[#605e5c]">{v}</span>
+        <span className="w-8 text-right text-xs text-[#6b7280]">{v}</span>
       </div>
     </label>
   )
@@ -380,12 +380,12 @@ export function LabeledCheckbox({ label, checked, onChange, hint }) {
     <label className="flex cursor-pointer items-center gap-2 py-0.5">
       <input
         type="checkbox"
-        className="h-4 w-4 cursor-pointer rounded-[2px] border-[#8a8886] accent-[#2b579a]"
+        className="h-4 w-4 cursor-pointer rounded-lg border-[#d1d5db] accent-[#4f46e5]"
         checked={!!checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="text-sm text-[#323130]">{label}</span>
-      {hint && <span className="text-xs text-[#605e5c]">{hint}</span>}
+      <span className="text-sm text-[#374151]">{label}</span>
+      {hint && <span className="text-xs text-[#6b7280]">{hint}</span>}
     </label>
   )
 }
@@ -444,8 +444,8 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
           return (
             <div
               key={t.id}
-              className={`rounded-[2px] border p-2 ${
-                sel ? 'border-[#2b579a] bg-[#eff3fb]' : 'border-[#e1dfdd]'
+              className={`rounded-lg border p-2 ${
+                sel ? 'border-[#4f46e5] bg-[#eef2ff]' : 'border-[#e5e7eb]'
               }`}
             >
               <div className="mb-1 flex items-center justify-between gap-1">
@@ -453,7 +453,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                   type="button"
                   onClick={() => onActiveChange && onActiveChange(t.id)}
                   className={`text-xs font-semibold ${
-                    sel ? 'text-[#2b579a]' : 'text-[#605e5c] hover:text-[#2b579a]'
+                    sel ? 'text-[#4f46e5]' : 'text-[#6b7280] hover:text-[#4f46e5]'
                   }`}
                   title="Show this tab on the canvas"
                 >
@@ -464,7 +464,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                     type="button"
                     onClick={() => move(t.id, -1)}
                     disabled={i === 0}
-                    className="rounded-[2px] px-1 text-xs text-[#605e5c] hover:bg-[#f3f2f1] disabled:opacity-30"
+                    className="rounded-lg px-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-30"
                     title="Move up"
                   >
                     ↑
@@ -473,7 +473,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                     type="button"
                     onClick={() => move(t.id, 1)}
                     disabled={i === tabs.length - 1}
-                    className="rounded-[2px] px-1 text-xs text-[#605e5c] hover:bg-[#f3f2f1] disabled:opacity-30"
+                    className="rounded-lg px-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-30"
                     title="Move down"
                   >
                     ↓
@@ -482,7 +482,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                     type="button"
                     onClick={() => remove(t.id)}
                     disabled={tabs.length <= 1}
-                    className="text-xs text-[#a4262c] hover:underline disabled:text-[#a19f9d] disabled:no-underline"
+                    className="text-xs text-[#a4262c] hover:underline disabled:text-[#9ca3af] disabled:no-underline"
                   >
                     Remove
                   </button>
@@ -501,7 +501,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
         <button
           type="button"
           onClick={add}
-          className="w-full rounded-[2px] border border-dashed border-[#8a8886] py-1 text-xs text-[#605e5c] hover:border-[#2b579a] hover:text-[#2b579a]"
+          className="w-full rounded-lg border border-dashed border-[#d1d5db] py-1 text-xs text-[#6b7280] hover:border-[#4f46e5] hover:text-[#4f46e5]"
         >
           + Add tab
         </button>
@@ -523,9 +523,9 @@ export function LinksEditor({ label, value, onChange }) {
       <span className={labelCls}>{label}</span>
       <div className="space-y-2">
         {links.map((link, i) => (
-          <div key={i} className="rounded-[2px] border border-[#e1dfdd] p-2">
+          <div key={i} className="rounded-lg border border-[#e5e7eb] p-2">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs text-[#605e5c]">Link {i + 1}</span>
+              <span className="text-xs text-[#6b7280]">Link {i + 1}</span>
               <button
                 type="button"
                 onClick={() => remove(i)}
@@ -553,7 +553,7 @@ export function LinksEditor({ label, value, onChange }) {
         <button
           type="button"
           onClick={add}
-          className="w-full rounded-[2px] border border-dashed border-[#8a8886] py-1 text-xs text-[#605e5c] hover:border-[#2b579a] hover:text-[#2b579a]"
+          className="w-full rounded-lg border border-dashed border-[#d1d5db] py-1 text-xs text-[#6b7280] hover:border-[#4f46e5] hover:text-[#4f46e5]"
         >
           + Add link
         </button>

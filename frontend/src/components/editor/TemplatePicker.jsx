@@ -32,7 +32,7 @@ function Thumb({ html }) {
   return (
     <div
       ref={boxRef}
-      className="relative w-full overflow-hidden border-b border-[#e1dfdd] bg-white"
+      className="relative w-full overflow-hidden border-b border-[#e5e7eb] bg-white"
       style={{ aspectRatio: `${DESIGN_W} / ${DESIGN_H}` }}
     >
       <iframe
@@ -68,24 +68,24 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
       onClick={onClose}
     >
       <div
-        className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[6px] border border-[#e1dfdd] bg-white shadow-2xl"
+        className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[#e1dfdd] px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#e5e7eb] px-5 py-3">
           <div>
-            <h2 className="text-base font-semibold text-[#201f1e]">
+            <h2 className="text-base font-semibold text-[#111827]">
               Template gallery
-              <span className="ml-2 rounded-full bg-[#eff3fb] px-2 py-0.5 text-xs font-semibold text-[#2b579a]">
+              <span className="ml-2 rounded-full bg-[#eef2ff] px-2 py-0.5 text-xs font-semibold text-[#4f46e5]">
                 {TEMPLATE_COUNT} templates
               </span>
             </h2>
-            <p className="text-xs text-[#605e5c]">
+            <p className="text-xs text-[#6b7280]">
               Pick a category, then a style — every template is responsive HTML you can fully edit afterwards.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-[2px] px-2 py-1 text-sm text-[#605e5c] hover:bg-[#f3f2f1]"
+            className="rounded-lg px-2 py-1 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
           >
             ✕
           </button>
@@ -93,23 +93,23 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
 
         <div className="flex min-h-0 flex-1">
           {/* Category rail */}
-          <aside className="w-56 shrink-0 overflow-y-auto border-r border-[#e1dfdd] bg-[#faf9f8] p-2">
+          <aside className="w-56 shrink-0 overflow-y-auto border-r border-[#e5e7eb] bg-[#f9fafb] p-2">
             {TEMPLATE_LIBRARY.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
                 onClick={() => setActiveId(cat.id)}
-                className={`mb-1 flex w-full items-center gap-2.5 rounded-[4px] px-3 py-2.5 text-left text-sm transition ${
+                className={`mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition ${
                   cat.id === activeId
-                    ? 'bg-[#2b579a] text-white shadow-sm'
-                    : 'text-[#323130] hover:bg-[#f3f2f1]'
+                    ? 'bg-[#4f46e5] text-white shadow-sm'
+                    : 'text-[#374151] hover:bg-[#f3f4f6]'
                 }`}
               >
                 <span className="text-base">{cat.icon}</span>
                 <span className="min-w-0 flex-1 truncate font-medium">{cat.name}</span>
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                    cat.id === activeId ? 'bg-white/20 text-white' : 'bg-[#edebe9] text-[#605e5c]'
+                    cat.id === activeId ? 'bg-white/20 text-white' : 'bg-[#f3f4f6] text-[#6b7280]'
                   }`}
                 >
                   {cat.variants.length}
@@ -121,24 +121,24 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
           {/* Variant grid for the active category */}
           <div className="min-w-0 flex-1 overflow-y-auto p-5">
             <div className="mb-4">
-              <h3 className="text-sm font-semibold text-[#201f1e]">
+              <h3 className="text-sm font-semibold text-[#111827]">
                 {active.icon} {active.name}
-                <span className="ml-2 text-xs font-normal text-[#605e5c]">{active.desc}</span>
+                <span className="ml-2 text-xs font-normal text-[#6b7280]">{active.desc}</span>
               </h3>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {active.variants.map((tpl) => (
                 <div
                   key={tpl.id}
-                  className="group flex flex-col overflow-hidden rounded-[4px] border border-[#e1dfdd] transition hover:border-[#2b579a] hover:shadow-lg"
+                  className="group flex flex-col overflow-hidden rounded-lg border border-[#e5e7eb] transition hover:border-[#4f46e5] hover:shadow-lg"
                 >
                   <Thumb html={tpl.build(siteTitle)} />
                   <div className="flex flex-1 flex-col p-3">
-                    <div className="text-sm font-semibold text-[#201f1e]">{tpl.name}</div>
-                    <p className="mt-0.5 flex-1 text-xs leading-relaxed text-[#605e5c]">{tpl.desc}</p>
+                    <div className="text-sm font-semibold text-[#111827]">{tpl.name}</div>
+                    <p className="mt-0.5 flex-1 text-xs leading-relaxed text-[#6b7280]">{tpl.desc}</p>
                     <button
                       onClick={() => onPick(tpl)}
-                      className="mt-3 rounded-[2px] bg-[#2b579a] px-3 py-1.5 text-sm font-semibold text-white opacity-90 transition hover:bg-[#1e3f6f] group-hover:opacity-100"
+                      className="mt-3 rounded-lg bg-[#4f46e5] px-3 py-1.5 text-sm font-semibold text-white opacity-90 transition hover:bg-[#4338ca] group-hover:opacity-100"
                     >
                       Use this template
                     </button>

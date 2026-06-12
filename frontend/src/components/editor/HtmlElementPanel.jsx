@@ -34,7 +34,7 @@ const ALIGN_OPTIONS = [
 
 function SectionTitle({ children }) {
   return (
-    <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-[#605e5c] first:mt-0">
+    <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-[#6b7280] first:mt-0">
       {children}
     </h3>
   )
@@ -59,8 +59,8 @@ export default function HtmlElementPanel({
     <div className="p-3">
       <div className="mb-1 flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-[#201f1e]">{label}</div>
-          <div className="max-w-[200px] truncate text-xs text-[#8a8886]" title={info.classes}>
+          <div className="text-sm font-semibold text-[#111827]">{label}</div>
+          <div className="max-w-[200px] truncate text-xs text-[#d1d5db]" title={info.classes}>
             &lt;{info.tag}&gt;{info.classes ? ` .${info.classes.split(' ').join(' .')}` : ''}
           </div>
         </div>
@@ -68,12 +68,12 @@ export default function HtmlElementPanel({
           type="button"
           onClick={onClose}
           title="Deselect (back to site settings)"
-          className="rounded px-2 py-1 text-sm text-[#605e5c] hover:bg-[#f3f2f1]"
+          className="rounded px-2 py-1 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
         >
           ×
         </button>
       </div>
-      <div className="mb-3 rounded-[2px] bg-[#eff3fb] px-2 py-1.5 text-xs text-[#2b579a]">
+      <div className="mb-3 rounded-lg bg-[#eef2ff] px-2 py-1.5 text-xs text-[#4f46e5]">
         Editing the selected page element
       </div>
 
@@ -157,33 +157,33 @@ export default function HtmlElementPanel({
         <button
           type="button"
           onClick={onDuplicate}
-          className="rounded-[2px] border border-[#e1dfdd] bg-[#f3f2f1] px-2 py-1.5 text-sm text-[#323130] hover:bg-[#e1dfdd]"
+          className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-2 py-1.5 text-sm text-[#374151] hover:bg-[#e5e7eb]"
         >
           Duplicate
         </button>
         <button
           type="button"
           onClick={onMoveUp}
-          className="rounded-[2px] border border-[#e1dfdd] bg-[#f3f2f1] px-2 py-1.5 text-sm text-[#323130] hover:bg-[#e1dfdd]"
+          className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-2 py-1.5 text-sm text-[#374151] hover:bg-[#e5e7eb]"
         >
           Move up
         </button>
         <button
           type="button"
           onClick={onMoveDown}
-          className="rounded-[2px] border border-[#e1dfdd] bg-[#f3f2f1] px-2 py-1.5 text-sm text-[#323130] hover:bg-[#e1dfdd]"
+          className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-2 py-1.5 text-sm text-[#374151] hover:bg-[#e5e7eb]"
         >
           Move down
         </button>
         <button
           type="button"
           onClick={onDelete}
-          className="rounded-[2px] border border-red-200 bg-red-50 px-2 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+          className="rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
         >
           Delete
         </button>
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-[#8a8886]">
+      <p className="mt-3 text-xs leading-relaxed text-[#d1d5db]">
         Tip: you can also click into the page and type directly. Style changes
         here are applied to this element only.
       </p>

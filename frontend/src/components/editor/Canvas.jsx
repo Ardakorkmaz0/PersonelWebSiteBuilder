@@ -70,7 +70,7 @@ export default function Canvas() {
           : {}),
       }}
       className={`${isMobile ? '' : 'shadow-sm'} ${
-        isOver ? 'ring-2 ring-[#2b579a]' : ''
+        isOver ? 'ring-2 ring-[#4f46e5]' : ''
       }`}
     >
       {components.length === 0 && (

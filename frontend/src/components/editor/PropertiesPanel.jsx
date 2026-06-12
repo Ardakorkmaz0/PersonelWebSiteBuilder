@@ -72,7 +72,7 @@ function LocalStatusRow({ status, refreshing, onRefresh }) {
     red: 'border-red-200 bg-red-50 text-red-900',
   }[tone]
   return (
-    <div className={`flex items-start justify-between gap-2 rounded-[2px] border p-2 text-[11px] ${toneClasses}`}>
+    <div className={`flex items-start justify-between gap-2 rounded-lg border p-2 text-[11px] ${toneClasses}`}>
       <div className="min-w-0 flex-1">
         <p className="font-semibold">{label}</p>
         {detail && <p className="mt-0.5 leading-relaxed opacity-80">{detail}</p>}
@@ -81,7 +81,7 @@ function LocalStatusRow({ status, refreshing, onRefresh }) {
         type="button"
         onClick={onRefresh}
         disabled={refreshing}
-        className="rounded-[2px] border border-current bg-white px-2 py-0.5 text-[10px] font-semibold opacity-90 hover:opacity-100 disabled:cursor-wait"
+        className="rounded-lg border border-current bg-white px-2 py-0.5 text-[10px] font-semibold opacity-90 hover:opacity-100 disabled:cursor-wait"
       >
         {refreshing ? '…' : 'Refresh'}
       </button>
@@ -182,13 +182,13 @@ function AiAssistantSection() {
   }, [endpoint, provider, providerInfo?.configurableEndpoint])
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">AI Assistant</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">AI Assistant</h3>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Provider</span>
+        <span className="mb-1 block text-xs font-semibold text-[#6b7280]">Provider</span>
         <select
           value={provider}
           onChange={(e) => pickProvider(e.target.value)}
-          className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+          className="w-full rounded-lg border border-[#d1d5db] bg-white px-2 py-1 text-sm text-[#111827] focus:border-[#4f46e5] focus:outline-none"
         >
           {AI_PROVIDERS.map((p) => (
             <option key={p.id} value={p.id}>
@@ -196,24 +196,24 @@ function AiAssistantSection() {
             </option>
           ))}
         </select>
-        <span className="mt-1 block text-[11px] text-[#605e5c]">{providerInfo?.keyHint}</span>
+        <span className="mt-1 block text-[11px] text-[#6b7280]">{providerInfo?.keyHint}</span>
       </label>
       {needsKey ? (
         <>
-          <p className="text-xs leading-relaxed text-[#605e5c]">
+          <p className="text-xs leading-relaxed text-[#6b7280]">
             Paste a free API key from{' '}
             <a
               href={providerInfo?.keyUrl || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#2b579a] underline"
+              className="text-[#4f46e5] underline"
             >
               {(providerInfo?.keyUrl || '').replace(/^https?:\/\//, '').replace(/\/.*/, '')}
             </a>
             . The key stays in your browser and is sent directly to the provider — never to our server.
           </p>
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-[#605e5c]">
+            <span className="mb-1 block text-xs font-semibold text-[#6b7280]">
               {providerInfo?.label || 'API'} key
             </span>
             <div className="flex gap-2">
@@ -222,14 +222,14 @@ function AiAssistantSection() {
                 value={value}
                 onChange={(e) => changeApiKey(e.target.value.trim())}
                 placeholder="AIza... / gsk_... / sk-..."
-                className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+                className="w-full rounded-lg border border-[#d1d5db] px-2 py-1 font-mono text-xs text-[#111827] focus:border-[#4f46e5] focus:outline-none"
                 autoComplete="off"
                 spellCheck={false}
               />
               <button
                 type="button"
                 onClick={() => setReveal((r) => !r)}
-                className="rounded-[2px] border border-[#8a8886] px-2 text-xs text-[#323130] hover:bg-[#f3f2f1]"
+                className="rounded-lg border border-[#d1d5db] px-2 text-xs text-[#374151] hover:bg-[#f3f4f6]"
               >
                 {reveal ? 'Hide' : 'Show'}
               </button>
@@ -238,7 +238,7 @@ function AiAssistantSection() {
         </>
       ) : (
         <div className="space-y-2">
-          <p className="rounded-[2px] border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-relaxed text-emerald-900">
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-relaxed text-emerald-900">
             No API key needed — this provider runs on your computer. All you
             need is Ollama installed and at least one model pulled (e.g.
             <code className="mx-1 rounded bg-white px-1 py-0.5 text-[10px]">ollama pull qwen2.5</code>
@@ -254,23 +254,23 @@ function AiAssistantSection() {
       )}
       {providerInfo?.configurableEndpoint && (
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Base URL (advanced)</span>
+          <span className="mb-1 block text-xs font-semibold text-[#6b7280]">Base URL (advanced)</span>
           <input
             type="text"
             value={endpoint}
             onChange={(e) => setEndpointState(e.target.value)}
             placeholder="http://localhost:11434/v1"
-            className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+            className="w-full rounded-lg border border-[#d1d5db] px-2 py-1 font-mono text-xs text-[#111827] focus:border-[#4f46e5] focus:outline-none"
             autoComplete="off"
             spellCheck={false}
           />
-          <span className="mt-1 block text-[11px] text-[#605e5c]">
+          <span className="mt-1 block text-[11px] text-[#6b7280]">
             Ollama: http://localhost:11434/v1 — LM Studio: http://localhost:1234/v1.
             Leave as-is unless you changed Ollama&apos;s default port.
           </span>
         </label>
       )}
-      <p className="text-xs text-[#605e5c]">
+      <p className="text-xs text-[#6b7280]">
         {value
           ? savedFlash
             ? 'Saved ✓'
@@ -278,7 +278,7 @@ function AiAssistantSection() {
           : 'No key set — the AI button in the toolbar is in setup mode.'}
       </p>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold text-[#605e5c]">Model</span>
+        <span className="mb-1 block text-xs font-semibold text-[#6b7280]">Model</span>
         {providerInfo?.customModel ? (
           <>
             <input
@@ -287,7 +287,7 @@ function AiAssistantSection() {
               value={model}
               onChange={(e) => setModelState(e.target.value)}
               placeholder="llama3.1 / qwen2.5 / your-pulled-model"
-              className="w-full rounded-[2px] border border-[#8a8886] px-2 py-1 font-mono text-xs text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+              className="w-full rounded-lg border border-[#d1d5db] px-2 py-1 font-mono text-xs text-[#111827] focus:border-[#4f46e5] focus:outline-none"
               autoComplete="off"
               spellCheck={false}
             />
@@ -298,7 +298,7 @@ function AiAssistantSection() {
                 </option>
               ))}
             </datalist>
-            <span className="mt-1 block text-[11px] text-[#605e5c]">
+            <span className="mt-1 block text-[11px] text-[#6b7280]">
               {models.find((m) => m.id === model)?.note ||
                 'Type any model you have pulled with Ollama or loaded in LM Studio.'}
             </span>
@@ -308,7 +308,7 @@ function AiAssistantSection() {
             <select
               value={model}
               onChange={(e) => setModelState(e.target.value)}
-              className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+              className="w-full rounded-lg border border-[#d1d5db] bg-white px-2 py-1 text-sm text-[#111827] focus:border-[#4f46e5] focus:outline-none"
             >
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -316,7 +316,7 @@ function AiAssistantSection() {
                 </option>
               ))}
             </select>
-            <span className="mt-1 block text-[11px] text-[#605e5c]">
+            <span className="mt-1 block text-[11px] text-[#6b7280]">
               {models.find((m) => m.id === model)?.note}
             </span>
           </>
@@ -331,7 +331,7 @@ function AiAssistantSection() {
 function SnippetPicker({ groups, list, onPick }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-semibold text-[#605e5c]">
+      <span className="mb-1 block text-xs font-semibold text-[#6b7280]">
         Insert snippet (optional)
       </span>
       <select
@@ -343,7 +343,7 @@ function SnippetPicker({ groups, list, onPick }) {
           if (snippet) onPick(snippet)
           e.target.value = ''
         }}
-        className="w-full rounded-[2px] border border-[#8a8886] bg-white px-2 py-1 text-sm text-[#201f1e] focus:border-[#2b579a] focus:outline-none"
+        className="w-full rounded-lg border border-[#d1d5db] bg-white px-2 py-1 text-sm text-[#111827] focus:border-[#4f46e5] focus:outline-none"
       >
         <option value="">— pick a snippet to append —</option>
         {groups.map((g) => (
@@ -530,7 +530,7 @@ function findComponentEntry(components, id, parent = null) {
 
 function SectionTitle({ children }) {
   return (
-    <h3 className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
+    <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
       {children}
     </h3>
   )
@@ -685,9 +685,9 @@ export default function PropertiesPanel() {
   if (!component) {
     return (
       <div className="flex h-full flex-col">
-        <div className="border-b border-[#e1dfdd] px-4 py-3">
-          <h2 className="text-sm font-semibold text-[#201f1e]">Page</h2>
-          <p className="text-xs text-[#605e5c]">
+        <div className="border-b border-[#e5e7eb] px-4 py-3">
+          <h2 className="text-sm font-semibold text-[#111827]">Page</h2>
+          <p className="text-xs text-[#6b7280]">
             {isFlow
               ? 'HTML flow layout - nothing selected'
               : `${isMobile ? 'Mobile layout' : 'PC layout'} - nothing selected`}
@@ -722,7 +722,7 @@ export default function PropertiesPanel() {
               <button
                 type="button"
                 onClick={autoArrangeMobile}
-                className="w-full rounded-[2px] border border-[#8a8886] bg-white py-2 text-sm font-medium text-[#323130] hover:bg-[#f3f2f1]"
+                className="w-full rounded-lg border border-[#d1d5db] bg-white py-2 text-sm font-medium text-[#374151] hover:bg-[#f3f4f6]"
               >
                 Auto-arrange mobile layout
               </button>
@@ -735,7 +735,7 @@ export default function PropertiesPanel() {
               <button
                 type="button"
                 onClick={applyTheme}
-                className="rounded-[2px] border border-[#2b579a] px-2 py-1 text-xs font-semibold text-[#2b579a] hover:bg-[#eff3fb]"
+                className="rounded-lg border border-[#4f46e5] px-2 py-1 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
               >
                 Apply to design
               </button>
@@ -823,7 +823,7 @@ export default function PropertiesPanel() {
 
           <section className="space-y-3">
             <SectionTitle>Custom JavaScript</SectionTitle>
-            <p className="text-xs leading-relaxed text-[#605e5c]">
+            <p className="text-xs leading-relaxed text-[#6b7280]">
               Runs on the published site inside a sandboxed iframe — full DOM,
               fetch, setTimeout, third-party CDNs, etc. Cannot reach this app or
               the visitor&apos;s session.
@@ -846,7 +846,7 @@ export default function PropertiesPanel() {
           <AiAssistantSection />
 
 
-          <p className="text-xs leading-relaxed text-[#605e5c]">
+          <p className="text-xs leading-relaxed text-[#6b7280]">
             {isFlow
               ? 'Flow mode uses one document order that adapts across PC and mobile.'
               : isMobile
@@ -864,21 +864,21 @@ export default function PropertiesPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-[#e1dfdd] px-4 py-3">
-        <h2 className="text-sm font-semibold text-[#201f1e]">{def.label}</h2>
-        <p className="text-xs text-[#605e5c]">{component.id}</p>
+      <div className="border-b border-[#e5e7eb] px-4 py-3">
+        <h2 className="text-sm font-semibold text-[#111827]">{def.label}</h2>
+        <p className="text-xs text-[#6b7280]">{component.id}</p>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
-        <div className="flex items-center justify-between gap-2 rounded-[2px] bg-[#eff3fb] px-3 py-2">
-          <span className="text-xs font-semibold text-[#2b579a]">
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-[#eef2ff] px-3 py-2">
+          <span className="text-xs font-semibold text-[#4f46e5]">
             {isFlow ? 'Editing HTML flow layout' : `Editing ${isMobile ? 'Mobile' : 'PC'} layout`}
           </span>
           {isMobile && !isFlow && (
             <button
               type="button"
               onClick={autoArrangeMobile}
-              className="rounded-[2px] border border-[#2b579a] bg-white px-2 py-0.5 text-xs font-semibold text-[#2b579a] hover:bg-[#eff3fb]"
+              className="rounded-lg border border-[#4f46e5] bg-white px-2 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
             >
               Auto-arrange
             </button>
@@ -900,7 +900,7 @@ export default function PropertiesPanel() {
         <section className="space-y-3">
           <SectionTitle>
             {showPositionControls ? 'Position & Size' : 'Layout Size'}
-            <span className="ml-1 font-normal normal-case text-[#a19f9d]">
+            <span className="ml-1 font-normal normal-case text-[#9ca3af]">
               ({isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC'})
             </span>
           </SectionTitle>
@@ -1014,26 +1014,26 @@ export default function PropertiesPanel() {
         </section>
       </div>
 
-      <div className="space-y-2 border-t border-[#e1dfdd] p-4">
+      <div className="space-y-2 border-t border-[#e5e7eb] p-4">
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => duplicateComponent(component.id)}
-            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
             Duplicate
           </button>
           <button
             type="button"
             onClick={() => bringToFront(component.id)}
-            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
             {isFlow ? 'Move to end' : 'To front'}
           </button>
           <button
             type="button"
             onClick={() => sendToBack(component.id)}
-            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
             {isFlow ? 'Move to start' : 'To back'}
           </button>
@@ -1043,7 +1043,7 @@ export default function PropertiesPanel() {
             type="button"
             onClick={() => moveBackward(component.id)}
             title={isFlow ? 'Move one step earlier in the order' : 'Bring one step backward'}
-            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
             {isFlow ? 'Move before' : 'Backward'}
           </button>
@@ -1051,7 +1051,7 @@ export default function PropertiesPanel() {
             type="button"
             onClick={() => moveForward(component.id)}
             title={isFlow ? 'Move one step later in the order' : 'Bring one step forward'}
-            className="rounded-[2px] bg-[#f3f2f1] py-1.5 text-xs font-medium text-[#323130] hover:bg-[#e1dfdd]"
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
             {isFlow ? 'Move next' : 'Forward'}
           </button>
@@ -1059,7 +1059,7 @@ export default function PropertiesPanel() {
         <button
           type="button"
           onClick={() => removeComponent(component.id)}
-          className="w-full rounded-[2px] border border-[#d69ca5] bg-[#fde7e9] py-2 text-sm font-medium text-[#a4262c] hover:bg-[#f6d5d9]"
+          className="w-full rounded-lg border border-[#d69ca5] bg-[#fde7e9] py-2 text-sm font-medium text-[#a4262c] hover:bg-[#f6d5d9]"
         >
           Delete component
         </button>

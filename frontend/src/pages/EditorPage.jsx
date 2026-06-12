@@ -577,24 +577,25 @@ export default function EditorPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-t-2 border-[#e1dfdd] border-t-[#2b579a] bg-white px-4 py-2">
-        <Link to="/" className="flex items-center gap-2 text-sm text-[#605e5c] hover:text-[#201f1e]">
+      <header className="flex flex-wrap items-center gap-3 border-b border-[#e5e7eb] bg-white px-4 py-2 shadow-sm">
+        <Link to="/" className="flex items-center gap-2 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
+          <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
           <span>&larr; Sites</span>
         </Link>
         <input
-          className="rounded-[2px] border border-transparent px-2 py-1 text-sm font-semibold text-[#201f1e] hover:border-[#8a8886] focus:border-[#2b579a] focus:outline-none"
+          className="rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <span
-          className={`rounded-[2px] px-2 py-0.5 text-xs font-semibold ${
-            published ? 'bg-[#dff6dd] text-[#0b6a0b]' : 'bg-[#edebe9] text-[#605e5c]'
+          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
           }`}
         >
           {published ? 'Published' : 'Draft'}
         </span>
         {(dirty || htmlDirty) && <span className="text-xs text-amber-500">Unsaved changes</span>}
-        {justSaved && <span className="text-xs text-[#0b6a0b]">Saved &#10003;</span>}
+        {justSaved && <span className="text-xs text-[#15803d]">Saved &#10003;</span>}
 
         <div className="ml-auto flex items-center gap-2">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
@@ -618,7 +619,7 @@ export default function EditorPage() {
           {flowMode ? (
             <span
               title="HTML flow mode is always responsive and cannot be turned off for this page."
-              className="rounded-[2px] border border-[#107c10] bg-[#dff6dd] px-3 py-1.5 text-sm font-semibold text-[#0b6a0b]"
+              className="rounded-lg border border-[#16a34a] bg-[#dcfce7] px-3 py-1.5 text-sm font-semibold text-[#15803d]"
             >
               HTML Flow On
             </span>
@@ -635,18 +636,18 @@ export default function EditorPage() {
                 }
               }}
               title="Use normal HTML document flow so the same component order works on PC and mobile"
-              className="rounded-[2px] border border-[#2b579a] px-3 py-1.5 text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+              className="rounded-lg border border-[#4f46e5] px-3 py-1.5 text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
             >
               HTML Flow
             </button>
           )}
-          <div className="flex items-center rounded-[2px] border border-[#8a8886] p-0.5 text-xs font-medium">
+          <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
             <button
               onClick={() => setViewport('pc')}
               className={
                 viewport === 'pc'
-                  ? 'rounded-[2px] bg-[#2b579a] px-2.5 py-1 text-white'
-                  : 'px-2.5 py-1 text-[#323130]'
+                  ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                  : 'px-2.5 py-1 text-[#374151]'
               }
             >
               PC
@@ -655,8 +656,8 @@ export default function EditorPage() {
               onClick={() => setViewport('mobile')}
               className={
                 viewport === 'mobile'
-                  ? 'rounded-[2px] bg-[#2b579a] px-2.5 py-1 text-white'
-                  : 'px-2.5 py-1 text-[#323130]'
+                  ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                  : 'px-2.5 py-1 text-[#374151]'
               }
             >
               Mobile
@@ -673,7 +674,7 @@ export default function EditorPage() {
                 ? 'Phone screen size'
                 : 'Screen ratio / artboard size'
             }
-            className="rounded-[2px] border border-[#8a8886] px-2 py-1 text-xs font-medium text-[#323130] focus:border-[#2b579a] focus:outline-none"
+            className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
           >
             {sizePresets.map((p) => (
               <option key={p.id} value={p.id}>
@@ -688,7 +689,7 @@ export default function EditorPage() {
             onClick={undo}
             disabled={!canUndo}
             title="Undo (Ctrl+Z)"
-            className="rounded-[2px] px-2 py-1.5 text-base text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-40"
+            className="rounded-lg px-2 py-1.5 text-base text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
           >
             &#8634;
           </button>
@@ -696,7 +697,7 @@ export default function EditorPage() {
             onClick={redo}
             disabled={!canRedo}
             title="Redo (Ctrl+Shift+Z)"
-            className="rounded-[2px] px-2 py-1.5 text-base text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-40"
+            className="rounded-lg px-2 py-1.5 text-base text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
           >
             &#8635;
           </button>
@@ -737,7 +738,7 @@ export default function EditorPage() {
             <button
               onClick={() => setImportOpen((o) => !o)}
               title="Open an HTML file, a project folder, or a project .json"
-              className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
+              className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
             >
               Import &#9662;
             </button>
@@ -747,19 +748,19 @@ export default function EditorPage() {
                   className="fixed inset-0 z-40"
                   onClick={() => setImportOpen(false)}
                 />
-                <div className="absolute right-0 z-50 mt-1 w-52 overflow-hidden rounded-[2px] border border-[#e1dfdd] bg-white py-1 shadow-lg">
+                <div className="absolute right-0 z-50 mt-1 w-52 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg">
                   <button
                     onClick={() => {
                       setImportOpen(false)
                       setTemplateOpen(true)
                     }}
-                    className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+                    className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                   >
                     Choose a template...
                   </button>
                   <button
                     onClick={startBlankHtml}
-                    className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+                    className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                   >
                     Start blank HTML
                   </button>
@@ -769,17 +770,17 @@ export default function EditorPage() {
                         setImportOpen(false)
                         convertToResponsiveHtml()
                       }}
-                      className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#2b579a] hover:bg-[#eff3fb]"
+                      className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                     >
                       Convert to responsive HTML
                     </button>
                   )}
-                  <div className="my-1 border-t border-[#e1dfdd]" />
+                  <div className="my-1 border-t border-[#e5e7eb]" />
                   {supportsLocalFiles() && (
                     <button
                       onClick={openAndLinkLocalFile}
                       title="Open an HTML file and keep it linked — every Save also updates the file on disk"
-                      className="block w-full px-3 py-1.5 text-left text-sm text-[#323130] hover:bg-[#f3f2f1]"
+                      className="block w-full px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
                     >
                       Open &amp; link HTML file...
                     </button>
@@ -795,7 +796,7 @@ export default function EditorPage() {
                         setImportOpen(false)
                         ref.current?.click()
                       }}
-                      className="block w-full px-3 py-1.5 text-left text-sm text-[#323130] hover:bg-[#f3f2f1]"
+                      className="block w-full px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
                     >
                       {label}
                     </button>
@@ -809,7 +810,7 @@ export default function EditorPage() {
           <button
             onClick={exportProject}
             title="Download this project (.json)"
-            className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
+            className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
           >
             Export
           </button>
@@ -826,7 +827,7 @@ export default function EditorPage() {
                   onClick={() => {
                     if (window.confirm(`Stop updating ${localFile.name} on Save?`)) unlinkLocalFile()
                   }}
-                  className="flex cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#0b6a0b] hover:bg-[#e3f3e3]"
+                  className="flex cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3]"
                 >
                   💾 {localFile.name}
                 </span>
@@ -836,7 +837,7 @@ export default function EditorPage() {
                   title={supportsLocalFiles()
                     ? 'No file on disk is linked yet. Click to save the HTML to a file — afterwards every Save updates it automatically.'
                     : 'Download the HTML file'}
-                  className="flex items-center gap-1 rounded-full border border-[#c8c6c4] bg-white px-2 py-0.5 text-xs text-[#605e5c] hover:border-[#8a8886] hover:text-[#323130]"
+                  className="flex items-center gap-1 rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-xs text-[#6b7280] hover:border-[#d1d5db] hover:text-[#374151]"
                 >
                   💾 {supportsLocalFiles() ? 'Link file' : 'Download'}
                 </button>
@@ -849,7 +850,7 @@ export default function EditorPage() {
                     setHtmlSelection(null)
                   }
                 }}
-                className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1]"
+                className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
               >
                 Remove HTML
               </button>
@@ -865,7 +866,7 @@ export default function EditorPage() {
                 onClick={undoHtml}
                 disabled={!htmlPast.length}
                 title="Undo the last change (component placement, AI apply, template load, panel edit...)"
-                className="rounded-[2px] px-2.5 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-40"
+                className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
               >
                 ↶ Undo
               </button>
@@ -874,7 +875,7 @@ export default function EditorPage() {
                 onClick={redoHtml}
                 disabled={!htmlFuture.length}
                 title="Redo"
-                className="rounded-[2px] px-2.5 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-40"
+                className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
               >
                 ↷
               </button>
@@ -885,8 +886,8 @@ export default function EditorPage() {
             onClick={() => setHistoryOpen((o) => !o)}
             disabled={saving}
             title="See and restore older saves of this site"
-            className={`rounded-[2px] px-3 py-1.5 text-sm hover:bg-[#f3f2f1] disabled:opacity-60 ${
-              historyOpen ? 'bg-[#eff3fb] text-[#2b579a]' : 'text-[#323130]'
+            className={`rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] disabled:opacity-60 ${
+              historyOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
             }`}
           >
             History
@@ -895,14 +896,14 @@ export default function EditorPage() {
             type="button"
             onClick={previewCurrentSite}
             disabled={saving}
-            className="rounded-[2px] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-60"
+            className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60"
           >
             Preview
           </button>
           <button
             onClick={() => save()}
             disabled={saving}
-            className="rounded-[2px] bg-[#2b579a] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#1e3f6f] disabled:opacity-60"
+            className="rounded-lg bg-[#4f46e5] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca] disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
@@ -910,7 +911,7 @@ export default function EditorPage() {
             <button
               onClick={() => save(false)}
               disabled={saving}
-              className="rounded-[2px] border border-[#8a8886] px-3 py-1.5 text-sm text-[#323130] hover:bg-[#f3f2f1] disabled:opacity-60"
+              className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60"
             >
               Unpublish
             </button>
@@ -918,7 +919,7 @@ export default function EditorPage() {
             <button
               onClick={() => save(true)}
               disabled={saving}
-              className="rounded-[2px] bg-[#107c10] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0b6a0b] disabled:opacity-60"
+              className="rounded-lg bg-[#16a34a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-60"
             >
               Publish
             </button>
@@ -971,7 +972,7 @@ export default function EditorPage() {
               {/* Right rail in HTML mode: element properties when something
                   is selected in the edit iframe, site settings otherwise. */}
               <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
-                <div className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
+                <div className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
                   {htmlSelection ? 'Element' : 'Site settings'}
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
@@ -1006,8 +1007,8 @@ export default function EditorPage() {
                     onClick={() => setRightTab('props')}
                     className={`flex-1 py-2 font-medium ${
                       rightTab === 'props'
-                        ? 'border-b-2 border-[#2b579a] text-[#2b579a]'
-                        : 'text-[#605e5c] hover:text-[#201f1e]'
+                        ? 'border-b-2 border-[#4f46e5] text-[#4f46e5]'
+                        : 'text-[#6b7280] hover:text-[#111827]'
                     }`}
                   >
                     Properties
@@ -1017,8 +1018,8 @@ export default function EditorPage() {
                     onClick={() => setRightTab('code')}
                     className={`flex-1 py-2 font-mono ${
                       rightTab === 'code'
-                        ? 'border-b-2 border-[#2b579a] text-[#2b579a]'
-                        : 'text-[#605e5c] hover:text-[#201f1e]'
+                        ? 'border-b-2 border-[#4f46e5] text-[#4f46e5]'
+                        : 'text-[#6b7280] hover:text-[#111827]'
                     }`}
                   >
                     &lt;/&gt; Code
@@ -1038,8 +1039,8 @@ export default function EditorPage() {
           )}
 
           {dragOver && (
-            <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#2b579a]/10">
-              <div className="rounded-[2px] border-2 border-dashed border-[#2b579a] bg-white/95 px-6 py-4 text-center text-sm font-medium text-[#2b579a] shadow-lg">
+            <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#4f46e5]/10">
+              <div className="rounded-lg border-2 border-dashed border-[#4f46e5] bg-white/95 px-6 py-4 text-center text-sm font-medium text-[#4f46e5] shadow-lg">
                 Drop an HTML file or project .json (HTML is imported as a file)
               </div>
             </div>

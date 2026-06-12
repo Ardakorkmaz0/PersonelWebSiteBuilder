@@ -58,13 +58,13 @@ export default function CodePanel() {
       type="button"
       onClick={() => setActive(f.name)}
       style={{ paddingLeft: indent }}
-      className={`flex w-full items-center gap-1.5 rounded-[2px] py-1 pr-1.5 text-left text-xs ${
+      className={`flex w-full items-center gap-1.5 rounded-lg py-1 pr-1.5 text-left text-xs ${
         file?.name === f.name
-          ? 'bg-[#eff3fb] text-[#2b579a]'
-          : 'text-[#323130] hover:bg-[#f3f2f1]'
+          ? 'bg-[#eef2ff] text-[#4f46e5]'
+          : 'text-[#374151] hover:bg-[#f3f4f6]'
       }`}
     >
-      <span className="w-8 text-[10px] font-semibold text-[#605e5c]">
+      <span className="w-8 text-[10px] font-semibold text-[#6b7280]">
         {ICON[f.lang] || 'FILE'}
       </span>
       <span className="truncate">{f.name}</span>
@@ -111,8 +111,8 @@ export default function CodePanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-[#e1dfdd] px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e7eb] px-3 py-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
           Code files
         </span>
         <div className="ml-auto flex items-center gap-1.5">
@@ -120,7 +120,7 @@ export default function CodePanel() {
             type="button"
             onClick={downloadSingleHtml}
             title="Download a single responsive .html file"
-            className="rounded-[2px] border border-[#8a8886] px-2 py-0.5 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
+            className="rounded-lg border border-[#d1d5db] px-2 py-0.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
           >
             HTML
           </button>
@@ -128,7 +128,7 @@ export default function CodePanel() {
             type="button"
             onClick={downloadZip}
             title="Download all pages and schema as a .zip"
-            className="rounded-[2px] bg-[#2b579a] px-2 py-0.5 text-xs font-semibold text-white hover:bg-[#1e3f6f]"
+            className="rounded-lg bg-[#4f46e5] px-2 py-0.5 text-xs font-semibold text-white hover:bg-[#4338ca]"
           >
             ZIP
           </button>
@@ -137,12 +137,12 @@ export default function CodePanel() {
 
       <div className="flex min-h-0 flex-1">
         {/* File tree */}
-        <div className="w-36 shrink-0 overflow-y-auto border-r border-[#e1dfdd] bg-[#faf9f8] p-1.5">
-          <div className="flex items-center gap-1 px-1 py-1 text-xs font-semibold text-[#323130]">
+        <div className="w-36 shrink-0 overflow-y-auto border-r border-[#e5e7eb] bg-[#f9fafb] p-1.5">
+          <div className="flex items-center gap-1 px-1 py-1 text-xs font-semibold text-[#374151]">
             <span className="font-mono text-[10px]">/</span>
             <span>my-site</span>
           </div>
-          <div className="flex items-center gap-1 py-1 pl-3 text-xs font-medium text-[#605e5c]">
+          <div className="flex items-center gap-1 py-1 pl-3 text-xs font-medium text-[#6b7280]">
             <span className="font-mono text-[10px]">/</span>
             <span>pages</span>
           </div>
@@ -156,21 +156,21 @@ export default function CodePanel() {
 
         {/* Code view */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between border-b border-[#e1dfdd] px-3 py-1.5">
-            <span className="font-mono text-xs text-[#605e5c]">{file?.name}</span>
+          <div className="flex shrink-0 items-center justify-between border-b border-[#e5e7eb] px-3 py-1.5">
+            <span className="font-mono text-xs text-[#6b7280]">{file?.name}</span>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={downloadCurrentFile}
                 title={`Download ${file?.name}`}
-                className="rounded-[2px] border border-[#8a8886] px-2 py-0.5 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
+                className="rounded-lg border border-[#d1d5db] px-2 py-0.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
               >
                 File
               </button>
               <button
                 type="button"
                 onClick={copy}
-                className="rounded-[2px] border border-[#8a8886] px-2 py-0.5 text-xs font-medium text-[#323130] hover:bg-[#f3f2f1]"
+                className="rounded-lg border border-[#d1d5db] px-2 py-0.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
               >
                 {copied ? 'Copied' : 'Copy'}
               </button>

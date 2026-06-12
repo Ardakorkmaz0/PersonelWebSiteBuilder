@@ -4,7 +4,7 @@ import { ContainerEditor, TabsEditor } from './FlowCanvasItem.jsx'
 import { snapDraggedRect } from '../../utils/snapping.js'
 
 const MIN = 20
-const ACCENT = '#2b579a'
+const ACCENT = '#4f46e5'
 
 // [direction, absolute-position style, cursor]
 const HANDLES = [
@@ -146,7 +146,7 @@ export default function FreeCanvasItem({ component }) {
       {hidden && (
         <span
           style={{ position: 'absolute', top: 2, left: 2, zIndex: 25 }}
-          className="rounded-[2px] bg-[#201f1e]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
+          className="rounded-lg bg-[#111827]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           Hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}
         </span>
@@ -162,7 +162,7 @@ export default function FreeCanvasItem({ component }) {
               remove(component.id)
             }}
             style={{ position: 'absolute', top: 2, right: 2, zIndex: 30 }}
-            className="rounded-[2px] bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
+            className="rounded-lg bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
           >
             Delete
           </button>

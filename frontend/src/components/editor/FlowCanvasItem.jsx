@@ -11,7 +11,7 @@ import { RenderComponent } from '../renderer/Renderer.jsx'
 import { TAB_STYLES } from '../renderer/constants.js'
 import { sanitizeStyles } from '../../utils/sanitize.js'
 
-const ACCENT = '#2b579a'
+const ACCENT = '#4f46e5'
 const MIN = 20
 const FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
 
@@ -72,10 +72,10 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
         style={{ flex: '0 0 100%', width: '100%', cursor: 'pointer', zIndex: isSelected ? 20 : 1 }}
       >
         <div
-          className={`flex items-center gap-2 rounded-[2px] border border-dashed px-2 py-1 text-[11px] ${
+          className={`flex items-center gap-2 rounded-lg border border-dashed px-2 py-1 text-[11px] ${
             isSelected
-              ? 'border-[#2b579a] bg-[#eff3fb] text-[#2b579a]'
-              : 'border-[#c8c6c4] bg-[#faf9f8] text-[#a19f9d] hover:text-[#605e5c]'
+              ? 'border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]'
+              : 'border-[#d1d5db] bg-[#f9fafb] text-[#9ca3af] hover:text-[#6b7280]'
           }`}
         >
           <span aria-hidden>🚫</span>
@@ -135,7 +135,7 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
             remove(component.id)
           }}
           style={{ position: 'absolute', top: 2, right: 2, zIndex: 30 }}
-          className="rounded-[2px] bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
+          className="rounded-lg bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
         >
           Delete
         </button>
@@ -226,7 +226,7 @@ export function ContainerEditor({ component }) {
         }}
       >
         {kids.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center py-4 text-center text-xs text-[#a19f9d]">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center py-4 text-center text-xs text-[#9ca3af]">
             Drop components here
           </div>
         ) : (
@@ -339,7 +339,7 @@ function TabsCanvasItem({ component }) {
       {hidden && (
         <span
           style={{ position: 'absolute', top: 2, left: 2, zIndex: 25 }}
-          className="rounded-[2px] bg-[#201f1e]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
+          className="rounded-lg bg-[#111827]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           Hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}
         </span>
@@ -355,7 +355,7 @@ function TabsCanvasItem({ component }) {
               remove(component.id)
             }}
             style={{ position: 'absolute', top: 2, right: 2, zIndex: 30 }}
-            className="rounded-[2px] bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
+            className="rounded-lg bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
           >
             Delete
           </button>
@@ -483,7 +483,7 @@ export function TabsEditor({ component }) {
           }}
         >
           {panelKids.length === 0 ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center py-4 text-center text-xs text-[#a19f9d]">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center py-4 text-center text-xs text-[#9ca3af]">
               Drop components here
             </div>
           ) : (

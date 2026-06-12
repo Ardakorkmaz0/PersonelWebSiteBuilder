@@ -34,12 +34,12 @@ function PaletteItem({ item, onPick }) {
         }}
         onClick={() => onPick(item.type)}
         title={`Click to place, or drag onto the page — ${item.label}`}
-        className="flex cursor-pointer items-center gap-3 rounded-[2px] border border-[#e1dfdd] bg-white px-3 py-2 text-sm select-none hover:border-[#2b579a] hover:bg-[#eff3fb] active:cursor-grabbing"
+        className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-sm select-none hover:border-[#4f46e5] hover:bg-[#eef2ff] active:cursor-grabbing"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-[2px] bg-[#f3f2f1] text-base">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f3f4f6] text-base">
           {item.icon}
         </span>
-        <span className="font-medium text-[#323130]">{item.label}</span>
+        <span className="font-medium text-[#374151]">{item.label}</span>
       </div>
     )
   }
@@ -49,14 +49,14 @@ function PaletteItem({ item, onPick }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`flex cursor-grab items-center gap-3 rounded-[2px] border border-[#e1dfdd] bg-white px-3 py-2 text-sm select-none hover:border-[#2b579a] hover:bg-[#eff3fb] active:cursor-grabbing ${
+      className={`flex cursor-grab items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-sm select-none hover:border-[#4f46e5] hover:bg-[#eef2ff] active:cursor-grabbing ${
         isDragging ? 'opacity-40' : ''
       }`}
     >
-      <span className="flex h-7 w-7 items-center justify-center rounded-[2px] bg-[#f3f2f1] text-base">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f3f4f6] text-base">
         {item.icon}
       </span>
-      <span className="font-medium text-[#323130]">{item.label}</span>
+      <span className="font-medium text-[#374151]">{item.label}</span>
     </div>
   )
 }
@@ -65,10 +65,10 @@ function PaletteItem({ item, onPick }) {
 // omitted the palette behaves as the classic dnd-kit canvas palette.
 export default function Sidebar({ onPickComponent }) {
   return (
-    <aside className="w-60 shrink-0 overflow-y-auto border-r border-[#e1dfdd] bg-[#faf9f8] p-4">
+    <aside className="w-60 shrink-0 overflow-y-auto border-r border-[#e5e7eb] bg-[#f9fafb] p-4">
       <PagesPanel />
-      <div className="mb-3 border-t border-[#e1dfdd]" />
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#605e5c]">
+      <div className="mb-3 border-t border-[#e5e7eb]" />
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
         Components
       </h2>
       <div className="space-y-2">
@@ -76,7 +76,7 @@ export default function Sidebar({ onPickComponent }) {
           <PaletteItem key={item.type} item={item} onPick={onPickComponent} />
         ))}
       </div>
-      <p className="mt-4 text-xs leading-relaxed text-[#605e5c]">
+      <p className="mt-4 text-xs leading-relaxed text-[#6b7280]">
         {onPickComponent
           ? 'Click a component, then click in the page where it should go — or drag it straight onto the spot.'
           : 'Drag a component onto the canvas to add it.'}

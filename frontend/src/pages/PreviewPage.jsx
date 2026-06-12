@@ -249,12 +249,12 @@ export default function PreviewPage() {
           allowFullScreen
           style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', border: 'none' }}
         />
-        <div className="fixed right-4 top-4 z-[100] flex overflow-hidden rounded-[2px] border border-[#8a8886] bg-white text-xs font-semibold shadow-lg">
+        <div className="fixed right-4 top-4 z-[100] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg">
           <button
             type="button"
             onClick={() => setHtmlPreviewMode('static')}
             className={`px-3 py-2 ${
-              staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+              staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
             Static preview
@@ -263,14 +263,14 @@ export default function PreviewPage() {
             type="button"
             onClick={() => setHtmlPreviewMode('live')}
             className={`px-3 py-2 ${
-              !staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+              !staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
             Run JavaScript
           </button>
         </div>
         {site.published === false && (
-          <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-[2px] border border-[#8a8886] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
+          <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
             Draft preview — this site is not published yet, only you can see it.
           </div>
         )}
@@ -332,12 +332,12 @@ ${customCssBlock(site?.schema?.customCss)}`
             border: 'none',
           }}
         />
-        <div className="fixed right-4 top-4 z-[120] flex overflow-hidden rounded-[2px] border border-[#8a8886] bg-white text-xs font-semibold shadow-lg">
+        <div className="fixed right-4 top-4 z-[120] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg">
           <button
             type="button"
             onClick={() => setComponentPreviewMode('static')}
             className={`px-3 py-2 ${
-              staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+              staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
             Static preview
@@ -346,14 +346,14 @@ ${customCssBlock(site?.schema?.customCss)}`
             type="button"
             onClick={() => setComponentPreviewMode('live')}
             className={`px-3 py-2 ${
-              !staticMode ? 'bg-[#2b579a] text-white' : 'text-[#323130] hover:bg-[#f3f2f1]'
+              !staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
             Run JavaScript
           </button>
         </div>
         {site.published === false && (
-          <div className="fixed bottom-4 left-1/2 z-[120] -translate-x-1/2 rounded-[2px] border border-[#8a8886] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
+          <div className="fixed bottom-4 left-1/2 z-[120] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
             Draft preview — this site is not published yet, only you can see it.
           </div>
         )}
@@ -397,7 +397,7 @@ ${customCssBlock(site?.schema?.customCss)}`
       <ResponsiveSite key={current.id} page={current} />
 
       {site && site.published === false && (
-        <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-[2px] border border-[#8a8886] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
+        <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
           Draft preview — this site is not published yet, only you can see it.
         </div>
       )}

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { paletteItems } from '../registry.jsx'
 import PagesPanel from './PagesPanel.jsx'
@@ -63,24 +64,76 @@ function PaletteItem({ item, onPick }) {
 
 // `onPickComponent(type)` opts the sidebar into HTML-placement mode. When
 // omitted the palette behaves as the classic dnd-kit canvas palette.
-export default function Sidebar({ onPickComponent }) {
+// `filesPanel` (HTML mode) adds a VS Code-style Files tab — the page/file
+// explorer node rendered by the editor — alongside the Components palette.
+// `onCollapse` shows a chevron that hides the whole rail.
+export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
+  const [tab, setTab] = useState(filesPanel ? 'files' : 'components')
+  const showTabs = !!filesPanel
   return (
-    <aside className="w-60 shrink-0 overflow-y-auto border-r border-[#e5e7eb] bg-[#f9fafb] p-4">
-      <PagesPanel />
-      <div className="mb-3 border-t border-[#e5e7eb]" />
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-        Components
-      </h2>
-      <div className="space-y-2">
-        {paletteItems.map((item) => (
-          <PaletteItem key={item.type} item={item} onPick={onPickComponent} />
-        ))}
+    <aside className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[#e5e7eb] bg-[#f9fafb]">
+      <div className="flex shrink-0 items-center border-b border-[#e5e7eb] bg-white">
+        {showTabs ? (
+          <>
+            {[['files', '📁 Files'], ['components', '🧱 Components']].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`flex-1 py-2 text-xs font-semibold ${
+                  tab === id
+                    ? 'border-b-2 border-[#4f46e5] text-[#4f46e5]'
+                    : 'text-[#6b7280] hover:text-[#111827]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </>
+        ) : (
+          <span className="flex-1 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+            Pages &amp; components
+          </span>
+        )}
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            title="Hide panel"
+            className="px-2 py-2 text-xs text-[#9ca3af] hover:text-[#374151]"
+          >
+            «
+          </button>
+        )}
       </div>
-      <p className="mt-4 text-xs leading-relaxed text-[#6b7280]">
-        {onPickComponent
-          ? 'Click a component, then click in the page where it should go — or drag it straight onto the spot.'
-          : 'Drag a component onto the canvas to add it.'}
-      </p>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {showTabs && tab === 'files' ? (
+          filesPanel
+        ) : (
+          <>
+            {!showTabs && (
+              <>
+                <PagesPanel />
+                <div className="mb-3 border-t border-[#e5e7eb]" />
+              </>
+            )}
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+              Components
+            </h2>
+            <div className="space-y-2">
+              {paletteItems.map((item) => (
+                <PaletteItem key={item.type} item={item} onPick={onPickComponent} />
+              ))}
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-[#6b7280]">
+              {onPickComponent
+                ? 'Click a component, then click in the page where it should go — or drag it straight onto the spot.'
+                : 'Drag a component onto the canvas to add it.'}
+            </p>
+          </>
+        )}
+      </div>
     </aside>
   )
 }

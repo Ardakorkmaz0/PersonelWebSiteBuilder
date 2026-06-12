@@ -405,6 +405,17 @@ def sanitize_custom_js(value):
     return js
 
 
+def _page_html(value):
+    """Per-page HTML document (multi-page HTML sites): free-form string with
+    the same trust model and size cap as Site.html — it is only ever rendered
+    inside sandboxed iframes without allow-same-origin."""
+    if not isinstance(value, str):
+        return ''
+    if len(value) > 2_000_000:
+        raise serializers.ValidationError('Page HTML is too large (max ~2MB).')
+    return value
+
+
 def validate_and_clean_schema(schema):
     """Validate the overall structure and return a fully sanitized copy."""
     if not isinstance(schema, dict):
@@ -433,6 +444,8 @@ def validate_and_clean_schema(schema):
             'mobileFold': _num(page.get('mobileFold'), 0, 0, 20000),
             'mobileManual': bool(page.get('mobileManual')),
             'flowMode': bool(page.get('flowMode')),
+            # Multi-page HTML sites keep one full document per page.
+            'html': _page_html(page.get('html')),
             'components': [sanitize_component(c) for c in comps],
         })
     return {

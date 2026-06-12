@@ -113,23 +113,46 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
 
   function applyQuickColors() {
     if (!pickedColors.length || busy) return
-    const label = pickedColors.join(' + ')
-    // Deterministic path: swap the document's CSS color variables directly —
-    // instant, and content can't possibly be harmed. AI only as fallback.
-    const det = currentHtml ? applyPaletteToHtml(currentHtml, pickedColors) : null
+    const picked = [...pickedColors]
+    const label = picked.join(' + ')
     setPickedColors([])
     setQuickPanel(null)
-    if (det && onApplyHtml) {
-      onApplyHtml(det)
+    const logApplied = (how) =>
       setMessages((m) => [
         ...m,
         { id: rand(), role: 'user', text: `🎨 Theme colors → ${label}` },
-        { id: rand(), role: 'assistant', text:
-          'Recolored the theme by updating the site\'s CSS color variables directly — instant, no AI call, and nothing else was touched. Undo brings the old colors back.' },
+        { id: rand(), role: 'assistant', text: how },
+      ])
+    // Component sites: colors live in the schema theme — set it directly.
+    if (!isHtmlSite) {
+      executeTool('updateTheme', { patch: { primaryColor: picked[0] } })
+      logApplied('Updated the design theme\'s primary color — instant, no AI call. Undo (Ctrl+Z) brings the old color back.')
+      return
+    }
+    // HTML sites, deterministic path: swap CSS color variables, or recolor
+    // the dominant brand colors when the page has no variables. AI is only
+    // the last resort.
+    const det = currentHtml ? applyPaletteToHtml(currentHtml, picked) : null
+    if (det && onApplyHtml) {
+      onApplyHtml(det)
+      logApplied('Recolored the theme by updating the page\'s colors directly — instant, no AI call, and nothing else was touched. Undo brings the old colors back.')
+      return
+    }
+    send(`Restyle the site to use this color palette: primary ${picked[0]}${picked[1] ? `, secondary ${picked[1]}` : ''}. Keep every piece of content exactly as it is; change only the CSS.`)
+  }
+
+  function applyQuickFont(f) {
+    setQuickPanel(null)
+    if (!isHtmlSite) {
+      executeTool('updateTheme', { patch: { fontFamily: `'${f}', sans-serif` } })
+      setMessages((m) => [
+        ...m,
+        { id: rand(), role: 'user', text: `🔤 Font → ${f}` },
+        { id: rand(), role: 'assistant', text: `Set the design theme's font to ${f} — applied instantly, no AI call.` },
       ])
       return
     }
-    send(`Restyle the site to use this color palette: primary ${pickedColors[0]}${pickedColors[1] ? `, secondary ${pickedColors[1]}` : ''}. Keep every piece of content exactly as it is; change only the CSS.`)
+    send(`Use the Google Font "${f}" across the site for headings and body text. Keep all content and layout exactly the same; change only the typography.`)
   }
 
   // The header rebuilds whenever a storage event fires so that if the toolbar
@@ -588,14 +611,16 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         )}
       </div>
 
-      {/* Quick actions — structured pickers, no typing needed. */}
-      {isHtmlSite && (
+      {/* Quick actions — structured pickers, no typing needed. Colors and
+          fonts work in BOTH modes (theme store for component sites, direct
+          CSS swap for HTML sites); sections only exist on HTML pages. */}
+      {(
         <div className="border-t border-[#e5e7eb] bg-[#f9fafb] px-2 pb-1.5 pt-1.5">
           <div className="flex flex-wrap gap-1.5">
             {[
               ['colors', '🎨 Theme colors'],
               ['font', '🔤 Font'],
-              ['section', '➕ Add section'],
+              ...(isHtmlSite ? [['section', '➕ Add section']] : []),
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -678,10 +703,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                     key={f}
                     type="button"
                     disabled={busy}
-                    onClick={() => {
-                      setQuickPanel(null)
-                      send(`Use the Google Font "${f}" across the site for headings and body text. Keep all content and layout exactly the same; change only the typography.`)
-                    }}
+                    onClick={() => applyQuickFont(f)}
                     className="rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1 text-[12px] text-[#374151] hover:border-[#4f46e5] hover:bg-[#eef2ff] disabled:opacity-40"
                   >
                     {f}

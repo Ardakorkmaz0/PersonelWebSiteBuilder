@@ -155,6 +155,7 @@ export default function Canvas() {
   if (isMobile) {
     return (
       <main
+        id="canvas-scroll"
         className="flex-1 overflow-auto bg-gray-100 p-8"
         onClickCapture={preventCanvasAnchorClicks}
       >
@@ -180,6 +181,7 @@ export default function Canvas() {
 
   return (
     <main
+      id="canvas-scroll"
       className="flex-1 overflow-auto bg-gray-100 p-8"
       onClickCapture={preventCanvasAnchorClicks}
     >

@@ -21,6 +21,8 @@ import Sidebar from '../components/editor/Sidebar.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
+import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
+import { pageFileName } from '../utils/pageFiles.js'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
@@ -48,6 +50,7 @@ const CodePanel = lazy(() => import('../components/editor/CodePanel.jsx'))
 const HtmlWorkspace = lazy(() => import('../components/editor/HtmlWorkspace.jsx'))
 const TemplatePicker = lazy(() => import('../components/editor/TemplatePicker.jsx'))
 const HistoryPanel = lazy(() => import('../components/editor/HistoryPanel.jsx'))
+const NotesPanel = lazy(() => import('../components/editor/NotesPanel.jsx'))
 
 function PanelFallback() {
   return (
@@ -76,13 +79,35 @@ function cssEscape(value) {
   return String(value).replace(/["\\]/g, '\\$&')
 }
 
+// Slim vertical strip shown in place of a collapsed side rail — click to
+// reopen. Keeps a visible affordance so the panel never feels "lost".
+function CollapsedRail({ side, label, onOpen }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={`Show ${label}`}
+      className={`flex w-7 shrink-0 flex-col items-center gap-2 bg-white py-3 text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
+        side === 'left' ? 'border-r border-[#e5e7eb]' : 'border-l border-[#e5e7eb]'
+      }`}
+    >
+      <span className="text-sm font-bold">{side === 'left' ? '»' : '«'}</span>
+      <span
+        className="text-[10px] font-semibold uppercase tracking-widest"
+        style={{ writingMode: 'vertical-rl' }}
+      >
+        {label}
+      </span>
+    </button>
+  )
+}
+
 export default function EditorPage() {
   const { id } = useParams()
 
   const loadSchema = useEditorStore((s) => s.loadSchema)
   const importSchema = useEditorStore((s) => s.importSchema)
   const addComponent = useEditorStore((s) => s.addComponent)
-  const enableFlowMode = useEditorStore((s) => s.enableFlowMode)
   const setLayout = useEditorStore((s) => s.setLayout)
   const viewport = useEditorStore((s) => s.viewport)
   const setViewport = useEditorStore((s) => s.setViewport)
@@ -91,7 +116,6 @@ export default function EditorPage() {
   const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
   const mobileW = useEditorStore((s) => selectCurrentPage(s).mobileWidth || 390)
   const mobileFold = useEditorStore((s) => selectCurrentPage(s).mobileFold || 0)
-  const flowMode = useEditorStore((s) => !!selectCurrentPage(s).flowMode)
   const duplicateComponent = useEditorStore((s) => s.duplicateComponent)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
@@ -113,6 +137,7 @@ export default function EditorPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   // HTML-mode component placement: the palette item the user is about to drop
   // into the HTML document (null when not placing).
@@ -121,7 +146,16 @@ export default function EditorPage() {
   const htmlInputRef = useRef(null)
   const folderInputRef = useRef(null)
   const workspaceRef = useRef(null)
-  const [siteHtml, setSiteHtml] = useState('')
+  // Multi-page HTML sites: one full document per page, keyed by page id.
+  // `siteHtml` is the ACTIVE page's document; the map is what gets saved
+  // (schema.pages[i].html) with the home page mirrored to site.html for
+  // backward compatibility.
+  const currentPageId = useEditorStore((s) => s.currentPageId)
+  const storePages = useEditorStore((s) => s.schema.pages)
+  const [pageHtmlMap, setPageHtmlMap] = useState({})
+  const siteHtml = pageHtmlMap[currentPageId] || ''
+  const setSiteHtml = (html) =>
+    setPageHtmlMap((m) => ({ ...m, [currentPageId]: html }))
   const [htmlDirty, setHtmlDirty] = useState(false)
   // Element selected inside the HTML edit iframe — drives the right-rail
   // element properties panel (null → site settings).
@@ -132,6 +166,20 @@ export default function EditorPage() {
   // placements, panel edits, and Remove HTML are all undoable.
   const [htmlPast, setHtmlPast] = useState([])
   const [htmlFuture, setHtmlFuture] = useState([])
+  // Collapsible side rails (persisted): hide the palette / properties rail
+  // to give the canvas the full width.
+  const [leftOpen, setLeftOpen] = useState(() => {
+    try { return localStorage.getItem('pwb_left_open') !== '0' } catch { return true }
+  })
+  const [rightOpen, setRightOpen] = useState(() => {
+    try { return localStorage.getItem('pwb_right_open') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('pwb_left_open', leftOpen ? '1' : '0') } catch { /* ignore */ }
+  }, [leftOpen])
+  useEffect(() => {
+    try { localStorage.setItem('pwb_right_open', rightOpen ? '1' : '0') } catch { /* ignore */ }
+  }, [rightOpen])
   // Linked local .html file (File System Access API): every Save also writes
   // the document back to this file. { handle, name } or null. Persisted in
   // IndexedDB per site, so the link survives page reloads; the browser
@@ -140,8 +188,12 @@ export default function EditorPage() {
 
   useEffect(() => {
     let active = true
-    loadLocalFileHandle(id).then((handle) => {
-      if (active && handle?.name) setLocalFile({ handle, name: handle.name })
+    loadLocalFileHandle(id).then((rec) => {
+      // New records are { handle, pageId }; old ones are a bare handle.
+      const handle = rec?.handle || rec
+      if (active && handle?.name) {
+        setLocalFile({ handle, name: handle.name, pageId: rec?.pageId })
+      }
     })
     return () => {
       active = false
@@ -149,8 +201,8 @@ export default function EditorPage() {
   }, [id])
 
   function linkLocalFile(handle, name) {
-    setLocalFile({ handle, name })
-    storeLocalFileHandle(id, handle)
+    setLocalFile({ handle, name, pageId: currentPageId })
+    storeLocalFileHandle(id, { handle, pageId: currentPageId })
   }
 
   function unlinkLocalFile() {
@@ -207,7 +259,16 @@ export default function EditorPage() {
         setTitle(data.title)
         setSlug(data.slug)
         setPublished(data.published)
-        setSiteHtml(data.html || '')
+        // Per-page HTML from the schema; legacy single-document sites carry
+        // their html at the site level — map it onto the first page.
+        const map = {}
+        const pages = data.schema?.pages || []
+        pages.forEach((p) => {
+          if (p?.html && p.html.trim()) map[p.id] = p.html
+        })
+        const firstId = pages[0]?.id
+        if (data.html && firstId && !map[firstId]) map[firstId] = data.html
+        setPageHtmlMap(map)
         setHtmlDirty(false)
         loadSchema(data.schema)
       })
@@ -281,6 +342,21 @@ export default function EditorPage() {
     setActiveType(data?.from === 'palette' ? data.type : null)
   }
 
+  // Auto-scroll the canvas while dragging near its top/bottom edge, so long
+  // pages can receive drops below the fold. (dnd-kit's built-in autoscroll
+  // doesn't reach our nested scroll container reliably.)
+  function onDragMove(event) {
+    const startY = event.activatorEvent?.clientY
+    if (startY == null) return
+    const y = startY + (event.delta?.y ?? 0)
+    const scroller = document.getElementById('canvas-scroll')
+    if (!scroller) return
+    const rect = scroller.getBoundingClientRect()
+    const EDGE = 70
+    if (y > rect.bottom - EDGE) scroller.scrollTop += 16
+    else if (y < rect.top + EDGE) scroller.scrollTop -= 16
+  }
+
   function onDragEnd(event) {
     setActiveType(null)
     const { active, over } = event
@@ -328,40 +404,88 @@ export default function EditorPage() {
   // mode switch.
   function commitHtml(next, { reseedWorkspace = false } = {}) {
     if (next === siteHtml) return
-    setHtmlPast((p) => [...p.slice(-(HTML_HISTORY_CAP - 1)), siteHtml])
+    setHtmlPast((p) => [
+      ...p.slice(-(HTML_HISTORY_CAP - 1)),
+      { pageId: currentPageId, html: siteHtml },
+    ])
     setHtmlFuture([])
     setSiteHtml(next)
     setHtmlDirty(true)
     if (reseedWorkspace) workspaceRef.current?.setDocument?.(next)
   }
 
+  // Undo entries carry the page they belong to, so undoing after a page
+  // switch restores the right document (and reseeds only when visible).
   function undoHtml() {
     if (!htmlPast.length) return
-    const prev = htmlPast[htmlPast.length - 1]
+    const entry = htmlPast[htmlPast.length - 1]
     setHtmlPast(htmlPast.slice(0, -1))
-    setHtmlFuture((f) => [...f, siteHtml])
-    setSiteHtml(prev)
+    setHtmlFuture((f) => [...f, { pageId: entry.pageId, html: pageHtmlMap[entry.pageId] || '' }])
+    setPageHtmlMap((m) => ({ ...m, [entry.pageId]: entry.html }))
     setHtmlDirty(true)
-    workspaceRef.current?.setDocument?.(prev)
+    if (entry.pageId === currentPageId) workspaceRef.current?.setDocument?.(entry.html)
   }
 
   function redoHtml() {
     if (!htmlFuture.length) return
-    const next = htmlFuture[htmlFuture.length - 1]
+    const entry = htmlFuture[htmlFuture.length - 1]
     setHtmlFuture(htmlFuture.slice(0, -1))
-    setHtmlPast((p) => [...p.slice(-(HTML_HISTORY_CAP - 1)), siteHtml])
-    setSiteHtml(next)
+    setHtmlPast((p) => [
+      ...p.slice(-(HTML_HISTORY_CAP - 1)),
+      { pageId: entry.pageId, html: pageHtmlMap[entry.pageId] || '' },
+    ])
+    setPageHtmlMap((m) => ({ ...m, [entry.pageId]: entry.html }))
     setHtmlDirty(true)
-    workspaceRef.current?.setDocument?.(next)
+    if (entry.pageId === currentPageId) workspaceRef.current?.setDocument?.(entry.html)
+  }
+
+  // Switch the active page: commit whatever the open workspace surface holds
+  // into the page we are LEAVING first, so edits can't be lost or leak into
+  // the next page. The workspace remounts per page (key={currentPageId}).
+  function switchToPage(pageId) {
+    if (pageId === currentPageId) return
+    const live = workspaceRef.current?.getHtml?.()
+    if (live != null && live !== siteHtml) commitHtml(live)
+    setHtmlSelection(null)
+    useEditorStore.getState().selectPage(pageId)
+  }
+
+  // Load an HTML document into a specific page (Files panel ⬆ / empty-page
+  // import). Undoable like every other HTML change.
+  function importHtmlIntoPage(pageId, htmlText) {
+    if (pageId === currentPageId) {
+      commitHtml(htmlText, { reseedWorkspace: true })
+      return
+    }
+    setHtmlPast((p) => [
+      ...p.slice(-(HTML_HISTORY_CAP - 1)),
+      { pageId, html: pageHtmlMap[pageId] || '' },
+    ])
+    setHtmlFuture([])
+    setPageHtmlMap((m) => ({ ...m, [pageId]: htmlText }))
+    setHtmlDirty(true)
   }
 
   async function save(nextPublished = published) {
     setSaving(true)
     setError('')
     try {
-      const schema = useEditorStore.getState().schema
-      const html = siteHtml ? (workspaceRef.current?.getHtml?.() ?? siteHtml) : ''
-      if (html !== siteHtml) setSiteHtml(html)
+      const schemaBase = useEditorStore.getState().schema
+      // Fold the open workspace surface's html into the active page first.
+      const live = workspaceRef.current?.getHtml?.()
+      const map = { ...pageHtmlMap }
+      if (live != null && live !== siteHtml) {
+        map[currentPageId] = live
+        setSiteHtml(live)
+      }
+      // Per-page html rides inside the schema; the home page's document is
+      // mirrored to site.html so single-page flows (and old data) keep working.
+      const schema = {
+        ...schemaBase,
+        pages: schemaBase.pages.map((p) => ({ ...p, html: map[p.id] || '' })),
+      }
+      const homeId = schemaBase.pages[0]?.id
+      const html = map[homeId] || ''
       // A blank title 400s on the server (required field) and so does one
       // over 100 chars (model max_length) — save with a safe value instead
       // of failing the whole request over the title input.
@@ -370,11 +494,12 @@ export default function EditorPage() {
       // click is a fresh user gesture, so Chrome still allows the readwrite
       // permission re-prompt. After a slow server request the activation can
       // expire and the prompt gets auto-denied — the write would fail
-      // silently every time.
+      // silently every time. The link belongs to the page it was created on.
       let fileError = ''
-      if (localFile?.handle && html) {
+      const fileHtml = map[localFile?.pageId] ?? html
+      if (localFile?.handle && fileHtml) {
         try {
-          await writeHtmlToHandle(localFile.handle, html)
+          await writeHtmlToHandle(localFile.handle, fileHtml)
         } catch (e) {
           fileError = e?.message || String(e)
         }
@@ -476,23 +601,26 @@ export default function EditorPage() {
   }
 
   // Start a fresh, genuinely responsive HTML site from a clean starter.
+  // No confirm for an EMPTY page — there is nothing to lose there.
   function startBlankHtml() {
     setImportOpen(false)
     if (
+      siteHtml.trim() &&
       !window.confirm(
-        'Start from a blank responsive HTML template? Your current content changes (use "Remove HTML" to go back). Nothing is saved until you press Save.',
+        'Start from a blank responsive HTML template? This page\'s current content changes (Undo brings it back). Nothing is saved until you press Save.',
       )
     )
       return
     commitHtml(blankResponsiveSite(title || 'My Site', useEditorStore.getState().schema.theme), { reseedWorkspace: true })
   }
 
-  // Load a ready-made responsive template as the site's HTML.
+  // Load a ready-made responsive template as the ACTIVE page's HTML.
   function pickTemplate(tpl) {
     setTemplateOpen(false)
     if (
+      siteHtml.trim() &&
       !window.confirm(
-        `Start from the “${tpl.name}” template? Your current content changes (use "Remove HTML" to go back). Nothing is saved until you press Save.`,
+        `Start from the “${tpl.name}” template? This page's current content changes (Undo brings it back). Nothing is saved until you press Save.`,
       )
     )
       return
@@ -510,7 +638,10 @@ export default function EditorPage() {
       setError('Drop an HTML file, a project folder, or a project .json.')
       return
     }
+    // Importing onto an EMPTY html page replaces nothing — skip the confirm.
+    const replacesSomething = jsons.length > 0 || siteHtml.trim() || !isHtmlSite
     if (
+      replacesSomething &&
       !window.confirm(
         'Replace the current design with the imported project? You can Undo, and nothing is saved until you click Save.',
       )
@@ -527,7 +658,11 @@ export default function EditorPage() {
       }
       const okJson = importSchema(JSON.parse(await jsons[0].text()))
       if (okJson) {
-        commitHtml('', { reseedWorkspace: true }) // a component project replaces any HTML
+        // A component project replaces the HTML of EVERY page.
+        setPageHtmlMap({})
+        setHtmlPast([])
+        setHtmlFuture([])
+        setHtmlDirty(true)
         return 'json'
       }
       setError('Could not import: no usable design found in those files.')
@@ -568,7 +703,13 @@ export default function EditorPage() {
     )
   }
 
-  const isHtmlSite = !!(siteHtml && siteHtml.trim())
+  // The site is an "HTML site" when ANY page carries an HTML document; the
+  // ACTIVE page may still be empty (freshly added) — it then shows the
+  // empty-page starter instead of the workspace.
+  const isHtmlSite = Object.values(pageHtmlMap).some((h) => h && h.trim())
+  const currentPageHasHtml = !!siteHtml.trim()
+  const currentPageIndex = Math.max(0, storePages.findIndex((p) => p.id === currentPageId))
+  const currentPage = storePages[currentPageIndex] || storePages[0]
   const sizePresets = viewport === 'mobile' ? MOBILE_CANVAS_PRESETS : PC_CANVAS_PRESETS
   const curW = viewport === 'mobile' ? mobileW : pcWidth
   const curFold = viewport === 'mobile' ? mobileFold : pcFold
@@ -616,31 +757,9 @@ export default function EditorPage() {
           />
           {!isHtmlSite && (
           <>
-          {flowMode ? (
-            <span
-              title="HTML flow mode is always responsive and cannot be turned off for this page."
-              className="rounded-lg border border-[#16a34a] bg-[#dcfce7] px-3 py-1.5 text-sm font-semibold text-[#15803d]"
-            >
-              HTML Flow On
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Enable HTML Flow mode? Components will follow normal HTML document order, so PC and mobile share the same responsive layout. This mode cannot be turned off for this page.',
-                  )
-                ) {
-                  enableFlowMode()
-                }
-              }}
-              title="Use normal HTML document flow so the same component order works on PC and mobile"
-              className="rounded-lg border border-[#4f46e5] px-3 py-1.5 text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
-            >
-              HTML Flow
-            </button>
-          )}
+          {/* HTML Flow stays supported for existing flow pages, but the
+              toggle is gone — "Convert to responsive HTML" + HTML mode is
+              the one blessed path to responsive sites now. */}
           <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
             <button
               onClick={() => setViewport('pc')}
@@ -835,18 +954,18 @@ export default function EditorPage() {
                 <button
                   onClick={exportHtmlToDisk}
                   title={supportsLocalFiles()
-                    ? 'No file on disk is linked yet. Click to save the HTML to a file — afterwards every Save updates it automatically.'
-                    : 'Download the HTML file'}
-                  className="flex items-center gap-1 rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-xs text-[#6b7280] hover:border-[#d1d5db] hover:text-[#374151]"
+                    ? 'Export the HTML to a file on disk — afterwards every Save updates that file automatically.'
+                    : 'Export (download) the HTML file'}
+                  className="flex items-center gap-1 rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-xs text-[#6b7280] hover:border-[#9ca3af] hover:text-[#374151]"
                 >
-                  💾 {supportsLocalFiles() ? 'Link file' : 'Download'}
+                  💾 Export
                 </button>
               )}
               <button
                 onClick={() => {
-                  if (window.confirm('Remove the HTML content and return to the component editor? (Undo brings it back.)')) {
+                  if (window.confirm("Remove this page's HTML? (Undo brings it back. The site returns to the component editor once no page has HTML.)")) {
                     commitHtml('')
-                    unlinkLocalFile()
+                    if (localFile?.pageId === currentPageId) unlinkLocalFile()
                     setHtmlSelection(null)
                   }
                 }}
@@ -894,6 +1013,16 @@ export default function EditorPage() {
           </button>
           <button
             type="button"
+            onClick={() => setNotesOpen((o) => !o)}
+            title="Work journal: calendar + per-day notes (what you did today)"
+            className={`rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
+              notesOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
+            }`}
+          >
+            🗓 Notes
+          </button>
+          <button
+            type="button"
             onClick={previewCurrentSite}
             disabled={saving}
             className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60"
@@ -935,6 +1064,7 @@ export default function EditorPage() {
         sensors={sensors}
         collisionDetection={nestedFirstCollision}
         onDragStart={onDragStart}
+        onDragMove={onDragMove}
         onDragEnd={onDragEnd}
       >
         <div
@@ -952,56 +1082,127 @@ export default function EditorPage() {
         >
           {isHtmlSite ? (
             <>
-              {/* Component palette stays available in HTML mode. Picking an item
-                  (click or drag) splices that component's HTML snippet into the
-                  document at the spot the user points at in the workspace. */}
-              <Sidebar onPickComponent={(type) => setPendingType(type)} />
-              <Suspense fallback={<PanelFallback />}>
-                <HtmlWorkspace
-                  ref={workspaceRef}
-                  html={siteHtml}
-                  fileName={localFile?.name || 'index.html'}
-                  onCommit={(h) => commitHtml(h)}
-                  onRequestSave={() => save()}
-                  onElementSelect={setHtmlSelection}
-                  pendingType={pendingType}
-                  onPlaced={() => setPendingType(null)}
-                  onCancelPlacement={() => setPendingType(null)}
+              {/* Left rail: VS Code-style Files tab (pages as .html files) +
+                  the component palette. Picking a palette item splices that
+                  component's snippet into the document where the user points. */}
+              {leftOpen ? (
+                <Sidebar
+                  key="html-rail"
+                  onPickComponent={(type) => setPendingType(type)}
+                  onCollapse={() => setLeftOpen(false)}
+                  filesPanel={
+                    <PageFilesPanel
+                      htmlMap={pageHtmlMap}
+                      onSelect={switchToPage}
+                      onImportInto={importHtmlIntoPage}
+                    />
+                  }
                 />
-              </Suspense>
+              ) : (
+                <CollapsedRail side="left" label="Files" onOpen={() => setLeftOpen(true)} />
+              )}
+              {currentPageHasHtml ? (
+                <Suspense fallback={<PanelFallback />}>
+                  <HtmlWorkspace
+                    key={currentPageId}
+                    ref={workspaceRef}
+                    html={siteHtml}
+                    fileName={
+                      (localFile?.pageId === currentPageId && localFile?.name) ||
+                      pageFileName(currentPage, currentPageIndex === 0)
+                    }
+                    onCommit={(h) => commitHtml(h)}
+                    onRequestSave={() => save()}
+                    onElementSelect={setHtmlSelection}
+                    pendingType={pendingType}
+                    onPlaced={() => setPendingType(null)}
+                    onCancelPlacement={() => setPendingType(null)}
+                  />
+                </Suspense>
+              ) : (
+                /* Freshly added page: no document yet — offer the starters
+                   instead of showing the previous page's content. */
+                <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6">
+                  <div className="ms-card w-full max-w-md p-8 text-center">
+                    <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-2xl">
+                      📄
+                    </div>
+                    <h2 className="text-base font-bold text-[#111827]">
+                      {pageFileName(currentPage, currentPageIndex === 0)} is empty
+                    </h2>
+                    <p className="mt-1 text-sm text-[#6b7280]">
+                      Give this page its own HTML — every page of the site is its own file.
+                    </p>
+                    <div className="mt-5 flex flex-col gap-2">
+                      <button onClick={startBlankHtml} className="ms-btn ms-btn-primary w-full py-2">
+                        Start blank HTML
+                      </button>
+                      <button onClick={() => setTemplateOpen(true)} className="ms-btn w-full py-2">
+                        Choose a template…
+                      </button>
+                      <button onClick={() => htmlInputRef.current?.click()} className="ms-btn w-full py-2">
+                        Import an HTML file…
+                      </button>
+                    </div>
+                  </div>
+                </main>
+              )}
               {/* Right rail in HTML mode: element properties when something
                   is selected in the edit iframe, site settings otherwise. */}
-              <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
-                <div className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-                  {htmlSelection ? 'Element' : 'Site settings'}
+              {rightOpen ? (
+                <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
+                  <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+                      {htmlSelection ? 'Element' : 'Site settings'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRightOpen(false)}
+                      title="Hide panel"
+                      className="rounded-md px-1.5 py-0.5 text-xs text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
+                    >
+                      »
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto">
+                    {htmlSelection ? (
+                      <HtmlElementPanel
+                        info={htmlSelection}
+                        onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
+                        onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
+                        onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
+                        onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}
+                        onDelete={() => workspaceRef.current?.deleteSelected?.()}
+                        onClose={() => workspaceRef.current?.clearSelection?.()}
+                      />
+                    ) : (
+                      <PropertiesPanel />
+                    )}
+                  </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  {htmlSelection ? (
-                    <HtmlElementPanel
-                      info={htmlSelection}
-                      onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
-                      onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
-                      onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
-                      onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}
-                      onDelete={() => workspaceRef.current?.deleteSelected?.()}
-                      onClose={() => workspaceRef.current?.clearSelection?.()}
-                    />
-                  ) : (
-                    <PropertiesPanel />
-                  )}
-                </div>
-              </div>
+              ) : (
+                <CollapsedRail
+                  side="right"
+                  label={htmlSelection ? 'Element' : 'Settings'}
+                  onOpen={() => setRightOpen(true)}
+                />
+              )}
             </>
           ) : (
             <>
-              <Sidebar />
+              {leftOpen ? (
+                <Sidebar key="components-rail" onCollapse={() => setLeftOpen(false)} />
+              ) : (
+                <CollapsedRail side="left" label="Components" onOpen={() => setLeftOpen(true)} />
+              )}
               <Canvas />
+              {rightOpen ? (
               <div
                 className={`flex shrink-0 flex-col border-l border-gray-200 bg-white ${
                   rightTab === 'code' ? 'w-[480px]' : 'w-72'
                 }`}
               >
-                <div className="flex shrink-0 border-b border-gray-200 text-sm">
+                <div className="flex shrink-0 items-center border-b border-gray-200 text-sm">
                   <button
                     type="button"
                     onClick={() => setRightTab('props')}
@@ -1024,6 +1225,14 @@ export default function EditorPage() {
                   >
                     &lt;/&gt; Code
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setRightOpen(false)}
+                    title="Hide panel"
+                    className="px-2 py-2 text-xs text-[#9ca3af] hover:text-[#374151]"
+                  >
+                    »
+                  </button>
                 </div>
                 <div className="min-h-0 flex-1">
                   {rightTab === 'code' ? (
@@ -1035,6 +1244,9 @@ export default function EditorPage() {
                   )}
                 </div>
               </div>
+              ) : (
+                <CollapsedRail side="right" label="Properties" onOpen={() => setRightOpen(true)} />
+              )}
             </>
           )}
 
@@ -1071,6 +1283,12 @@ export default function EditorPage() {
         </Suspense>
       )}
 
+      {notesOpen && (
+        <Suspense fallback={null}>
+          <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
+        </Suspense>
+      )}
+
       {historyOpen && (
         <Suspense fallback={null}>
           <HistoryPanel
@@ -1083,8 +1301,18 @@ export default function EditorPage() {
               // store + local state so the canvas reflects it immediately
               // (no manual reload needed).
               if (fresh?.schema) loadSchema(fresh.schema)
-              if (typeof fresh?.html === 'string') {
-                setSiteHtml(fresh.html)
+              {
+                // Rebuild the per-page html map exactly like the initial load.
+                const map = {}
+                const pages = fresh?.schema?.pages || []
+                pages.forEach((p) => {
+                  if (p?.html && p.html.trim()) map[p.id] = p.html
+                })
+                const firstId = pages[0]?.id
+                if (fresh?.html && firstId && !map[firstId]) map[firstId] = fresh.html
+                setPageHtmlMap(map)
+                setHtmlPast([])
+                setHtmlFuture([])
                 setHtmlDirty(false)
               }
               if (fresh?.published !== undefined) setPublished(fresh.published)

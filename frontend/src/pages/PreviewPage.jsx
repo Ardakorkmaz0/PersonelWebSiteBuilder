@@ -219,11 +219,25 @@ export default function PreviewPage() {
     )
   }
 
-  // HTML site: render the raw document in a sandboxed iframe so its JavaScript
-  // runs (isolated — allow-scripts WITHOUT allow-same-origin, so it cannot touch
-  // this app or the visitor's session). Native, full-viewport, responsive.
-  if (site?.html) {
+  const go = (pageId) => {
+    setActiveId(pageId)
+    window.history.pushState(null, '', `#${encodeURIComponent(pageId)}`)
+  }
+
+  // HTML site: render the raw document(s) in a sandboxed iframe so the
+  // JavaScript runs (isolated — allow-scripts WITHOUT allow-same-origin, so it
+  // cannot touch this app or the visitor's session). Multi-page sites carry
+  // one document per schema page; a top nav switches between them. Legacy
+  // single-document sites only have site.html.
+  const htmlPages = (site?.schema?.pages || [])
+    .filter((p) => (p?.html || '').trim())
+    .map((p) => ({ id: p.id, name: p.name || 'Page', html: p.html }))
+  if (!htmlPages.length && site?.html) {
+    htmlPages.push({ id: 'home', name: 'Home', html: site.html })
+  }
+  if (htmlPages.length) {
     const staticMode = searchParams.get('mode') === 'static'
+    const activeHtmlPage = htmlPages.find((p) => p.id === activeId) || htmlPages[0]
     // Inject a viewport meta when the document lacks one so phones render
     // the responsive layout instead of a zoomed-out desktop page. Live mode
     // also gets the interactive shim (tabs + '#' anchor interception) — the
@@ -231,7 +245,9 @@ export default function PreviewPage() {
     // readonly guard. Without it, in-page anchor links would navigate the
     // about:srcdoc iframe and blank the site out.
     const iframeHtml = withViewportMeta(
-      staticMode ? withoutExecutableScripts(site.html) : withBuilderInteractiveHtml(site.html),
+      staticMode
+        ? withoutExecutableScripts(activeHtmlPage.html)
+        : withBuilderInteractiveHtml(activeHtmlPage.html),
     )
     const setHtmlPreviewMode = (nextMode) => {
       const next = new URLSearchParams(searchParams)
@@ -241,13 +257,40 @@ export default function PreviewPage() {
     }
     return (
       <>
+        {htmlPages.length > 1 && (
+          <nav className="fixed inset-x-0 top-0 z-[110] flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/85 px-3 py-2 backdrop-blur">
+            {htmlPages.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => go(p.id)}
+                className={`rounded-lg px-3 py-1 text-sm font-medium ${
+                  p.id === activeHtmlPage.id
+                    ? 'bg-[#4f46e5] text-white'
+                    : 'text-[#374151] hover:bg-[#f3f4f6]'
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+          </nav>
+        )}
         <iframe
+          key={activeHtmlPage.id}
           title={site.title || 'site'}
           srcDoc={iframeHtml}
           sandbox={staticMode ? STATIC_HTML_SANDBOX : PUBLIC_HTML_SANDBOX}
           allow={HTML_ALLOW}
           allowFullScreen
-          style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', border: 'none' }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            paddingTop: htmlPages.length > 1 ? 44 : 0,
+            boxSizing: 'border-box',
+          }}
         />
         <div className="fixed right-4 top-4 z-[100] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg">
           <button
@@ -281,11 +324,6 @@ export default function PreviewPage() {
   const siteCss = `${themeVariablesCss(site?.schema?.theme)}
 body { font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, sans-serif); color: var(--site-text, #1d1d1f); background: var(--site-bg, #ffffff); }
 ${customCssBlock(site?.schema?.customCss)}`
-
-  const go = (id) => {
-    setActiveId(id)
-    window.history.pushState(null, '', `#${encodeURIComponent(id)}`)
-  }
 
   if (useIframe) {
     const setComponentPreviewMode = (nextMode) => {

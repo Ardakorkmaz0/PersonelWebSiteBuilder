@@ -42,7 +42,9 @@ import { componentToHtml } from '../../utils/componentToHtml.js'
 // - AI additions: applyAiHtml() relocates content the model appended to the
 //   bottom of <body> so it lands near what the user is currently looking at,
 //   then scrolls/flashes the new block after the reload.
-// - Device sizes drive responsive testing; compatibility mode aids non-responsive pages.
+// - Device sizes drive responsive testing; a viewport meta is injected
+//   automatically when the document lacks one, so every page previews the
+//   way a real phone renders it.
 const DEVICES = [
   { id: 'fit', label: 'Responsive - area width', w: 0, h: 0 },
   { id: 'desktop-16-9', label: 'Desktop 16:9 - 1280x720', w: 1280, h: 720 },
@@ -59,28 +61,12 @@ const DEVICES = [
   { id: 'android', label: 'Large Android - 412x915', w: 412, h: 915 },
 ]
 
-const COMPAT_CSS = `<style id="__compat__">
-  html { -webkit-text-size-adjust: 100%; }
-  body { overflow-x: hidden !important; }
-  img, video, svg, canvas, iframe, object, embed { max-width: 100% !important; height: auto !important; }
-  table { display: block; overflow-x: auto; }
-</style>`
-const COMPAT_VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1.0" />'
-
 function setDocumentDesignMode(doc, value) {
   try {
     doc.designMode = value
   } catch {
     /* ignore */
   }
-}
-
-function withCompat(html) {
-  const inject = COMPAT_VIEWPORT + COMPAT_CSS
-  let out = String(html || '')
-  if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
-  if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + inject)
-  return inject + out
 }
 
 // The view iframe runs with an opaque origin (no allow-same-origin), so the
@@ -151,7 +137,6 @@ function HtmlWorkspace({
   const [mode, setMode] = useState('view')
   const [deviceId, setDeviceId] = useState('fit')
   const [landscape, setLandscape] = useState(false)
-  const [compat, setCompat] = useState(false)
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
@@ -502,14 +487,12 @@ function HtmlWorkspace({
   }, [])
 
   const viewScrollIndex = scrollOnce && scrollOnce.html === html ? scrollOnce.index : null
-  // View mode also gets a viewport meta when the document lacks one, so the
-  // phone-size device frames preview what a real phone will actually render.
+  // View mode always gets a viewport meta when the document lacks one, so the
+  // phone-size device frames preview what a real phone will actually render —
+  // no separate "compatibility mode" toggle needed.
   const srcDoc =
     mode === 'view'
-      ? withViewExtras(
-          withBuilderRuntimeHtml(withViewportMeta(compat ? withCompat(html) : html)),
-          viewScrollIndex,
-        )
+      ? withViewExtras(withBuilderRuntimeHtml(withViewportMeta(html)), viewScrollIndex)
       : editSeed
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
@@ -518,28 +501,8 @@ function HtmlWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-[#e5e7eb] bg-[#f9fafb]">
-        <div className="border-b border-[#e5e7eb] px-3 py-2 text-xs font-semibold uppercase text-[#6b7280]">
-          Files
-        </div>
-        <button
-          type="button"
-          onClick={() => switchMode(mode === 'source' ? 'view' : 'source')}
-          title={fileName}
-          className={`mx-2 mt-2 flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-sm ${
-            mode === 'source'
-              ? 'border-[#4f46e5] bg-[#eef2ff] text-[#111827]'
-              : 'border-[#e5e7eb] bg-white text-[#374151] hover:border-[#d1d5db]'
-          }`}
-        >
-          <span className="min-w-0 truncate font-medium">{fileName}</span>
-          <span className="shrink-0 text-xs text-[#6b7280]">HTML</span>
-        </button>
-        <div className="mt-3 px-3 text-xs leading-relaxed text-[#6b7280]">
-          View runs the site as-is. Use Edit for text changes or Source for the HTML file.
-        </div>
-      </aside>
-
+      {/* The page/file list lives in the editor's left rail (Files tab) —
+          the workspace itself is just the toolbar + stage. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
           <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
@@ -575,18 +538,6 @@ function HtmlWorkspace({
               >
                 {landscape ? '⟲' : '⟳'}
               </button>
-              <label className="flex items-center gap-1.5 text-xs text-[#374151]" title="Compatibility mode: fits overflowing content to the screen (view mode)">
-                <input
-                  type="checkbox"
-                  className="accent-[#4f46e5]"
-                  checked={compat}
-                  onChange={(e) => {
-                    setCompat(e.target.checked)
-                    setNonce((n) => n + 1)
-                  }}
-                />
-                Compatibility
-              </label>
             </>
           )}
           {mode === 'source' && (

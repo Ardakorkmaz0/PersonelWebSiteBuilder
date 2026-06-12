@@ -23,6 +23,8 @@ import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
 import { pageFileName } from '../utils/pageFiles.js'
+import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
+import { Renderer } from '../components/renderer/Renderer.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
@@ -138,6 +140,11 @@ export default function EditorPage() {
   const [templateOpen, setTemplateOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
+  // HTML mode device frame (selector lives in the shared header).
+  const [htmlDevice, setHtmlDevice] = useState('fit')
+  const [htmlLandscape, setHtmlLandscape] = useState(false)
+  // Component mode View/Edit/Source bar (mirrors the HTML workspace bar).
+  const [canvasMode, setCanvasMode] = useState('edit') // 'view' | 'edit' | 'source'
   const [dragOver, setDragOver] = useState(false)
   // HTML-mode component placement: the palette item the user is about to drop
   // into the HTML document (null when not placing).
@@ -767,6 +774,54 @@ export default function EditorPage() {
               commitHtml(placed) // applyAiHtml already reseeded the workspace
             }}
           />
+          {isHtmlSite && (
+            <>
+              {/* Device controls mirror the component editor's PC/Mobile +
+                  size block, so both modes share the same header anatomy. */}
+              <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+                <button
+                  onClick={() => { setHtmlDevice('fit'); setHtmlLandscape(false) }}
+                  className={
+                    !isMobileDevice(htmlDevice)
+                      ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                      : 'px-2.5 py-1 text-[#374151]'
+                  }
+                >
+                  PC
+                </button>
+                <button
+                  onClick={() => setHtmlDevice('iphone15')}
+                  className={
+                    isMobileDevice(htmlDevice)
+                      ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                      : 'px-2.5 py-1 text-[#374151]'
+                  }
+                >
+                  Mobile
+                </button>
+              </div>
+              <select
+                value={htmlDevice}
+                onChange={(e) => setHtmlDevice(e.target.value)}
+                title="Screen / device width"
+                className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+              >
+                {DEVICES.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setHtmlLandscape((v) => !v)}
+                disabled={htmlDevice === 'fit'}
+                title="Landscape / portrait"
+                className="rounded-lg px-2 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
+              >
+                {htmlLandscape ? '⟲' : '⟳'}
+              </button>
+            </>
+          )}
           {!isHtmlSite && (
           <>
           {/* HTML Flow stays supported for existing flow pages, but the
@@ -1101,6 +1156,8 @@ export default function EditorPage() {
                   key={currentPageId}
                   ref={workspaceRef}
                   html={siteHtml}
+                  deviceId={htmlDevice}
+                  landscape={htmlLandscape}
                   fileName={
                     (localFile?.pageId === currentPageId && localFile?.name) ||
                     pageFileName(currentPage, currentPageIndex === 0)
@@ -1166,17 +1223,69 @@ export default function EditorPage() {
                   filesPanel={
                     <PageFilesPanel
                       mode="pages"
-                      onActiveClick={() => {
-                        setRightOpen(true)
-                        setRightTab((t) => (t === 'code' ? 'props' : 'code'))
-                      }}
+                      onActiveClick={() => setCanvasMode((m) => (m === 'source' ? 'edit' : 'source'))}
                     />
                   }
                 />
               ) : (
                 <CollapsedRail side="left" label="Files" onOpen={() => setLeftOpen(true)} />
               )}
-              <Canvas />
+              {/* Canvas column with the same View/Edit/Source bar the HTML
+                  workspace has — identical chrome in both editor modes. */}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
+                  <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+                    {[['view', 'View'], ['edit', 'Edit'], ['source', 'Source']].map(([id, label]) => (
+                      <button
+                        key={id}
+                        onClick={() => setCanvasMode(id)}
+                        className={
+                          canvasMode === id
+                            ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                            : 'px-2.5 py-1 text-[#374151]'
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="ml-auto text-xs text-[#6b7280]">
+                    {canvasMode === 'view'
+                      ? 'Read-only preview of this page'
+                      : canvasMode === 'source'
+                        ? 'Page schema & custom code'
+                        : 'Drag, resize, and edit components'}
+                  </span>
+                </div>
+                {canvasMode === 'edit' ? (
+                  <Canvas />
+                ) : canvasMode === 'view' ? (
+                  <main className="min-h-0 flex-1 overflow-auto bg-gray-100 p-8">
+                    <div
+                      className="mx-auto bg-white shadow"
+                      style={{ width: viewport === 'mobile' ? mobileW : pcWidth }}
+                    >
+                      <Renderer
+                        components={currentPage.components || []}
+                        background={
+                          viewport === 'mobile'
+                            ? currentPage.backgroundMobile || currentPage.background || '#ffffff'
+                            : currentPage.background || '#ffffff'
+                        }
+                        viewport={viewport}
+                        width={viewport === 'mobile' ? mobileW : pcWidth}
+                        flowMode={!!currentPage.flowMode}
+                      />
+                    </div>
+                  </main>
+                ) : (
+                  <div className="min-h-0 flex-1 bg-white">
+                    <Suspense fallback={<PanelFallback />}>
+                      <CodePanel />
+                    </Suspense>
+                  </div>
+                )}
+              </div>
               {rightOpen ? (
               <div
                 className={`flex shrink-0 flex-col border-l border-gray-200 bg-white ${

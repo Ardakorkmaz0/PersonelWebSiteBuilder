@@ -1,3 +1,19 @@
+// One-click theme presets: picking one replaces the palette AND re-themes
+// the existing components (the panel calls applyTheme right after). New
+// components always inherit the active theme via themedStyles().
+export const THEME_PRESETS = [
+  { id: 'apple', name: 'Clean Apple', theme: { primaryColor: '#0071e3', textColor: '#1d1d1f', mutedColor: '#6e6e73', backgroundColor: '#ffffff', surfaceColor: '#ffffff', softColor: '#f5f5f7', headerColor: '#1d1d1f', headerTextColor: '#f5f5f7', fontFamily: "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", radius: '18px', buttonRadius: '980px' } },
+  { id: 'indigo', name: 'Indigo SaaS', theme: { primaryColor: '#4f46e5', textColor: '#171723', mutedColor: '#62636f', backgroundColor: '#ffffff', surfaceColor: '#ffffff', softColor: '#f4f4fb', headerColor: '#ffffff', headerTextColor: '#171723', fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', radius: '14px', buttonRadius: '10px' } },
+  { id: 'coral', name: 'Warm Coral', theme: { primaryColor: '#e8543f', textColor: '#27201e', mutedColor: '#766a66', backgroundColor: '#fffaf7', surfaceColor: '#ffffff', softColor: '#fcefe9', headerColor: '#fffaf7', headerTextColor: '#27201e', fontFamily: '"Poppins", system-ui, sans-serif', radius: '18px', buttonRadius: '999px' } },
+  { id: 'forest', name: 'Forest Calm', theme: { primaryColor: '#166534', textColor: '#1a2e1f', mutedColor: '#5c6f61', backgroundColor: '#fbfdf9', surfaceColor: '#ffffff', softColor: '#eef4ec', headerColor: '#1a2e1f', headerTextColor: '#eef4ec', fontFamily: '"DM Sans", system-ui, sans-serif', radius: '10px', buttonRadius: '8px' } },
+  { id: 'noir', name: 'Noir Gold', theme: { primaryColor: '#eab308', textColor: '#f1efe9', mutedColor: '#a6a195', backgroundColor: '#121110', surfaceColor: '#181614', softColor: '#1a1917', headerColor: '#121110', headerTextColor: '#f1efe9', fontFamily: '"DM Sans", system-ui, sans-serif', radius: '2px', buttonRadius: '2px' } },
+  { id: 'ocean', name: 'Ocean Teal', theme: { primaryColor: '#0e7490', textColor: '#102a33', mutedColor: '#5b7480', backgroundColor: '#ffffff', surfaceColor: '#ffffff', softColor: '#f0f7f9', headerColor: '#0e7490', headerTextColor: '#ffffff', fontFamily: '"Open Sans", system-ui, sans-serif', radius: '12px', buttonRadius: '10px' } },
+  { id: 'plum', name: 'Plum Elegant', theme: { primaryColor: '#86198f', textColor: '#241627', mutedColor: '#73637a', backgroundColor: '#fefcff', surfaceColor: '#ffffff', softColor: '#f8f0fa', headerColor: '#fefcff', headerTextColor: '#241627', fontFamily: '"Lora", Georgia, serif', radius: '16px', buttonRadius: '999px' } },
+  { id: 'mono', name: 'Minimal Mono', theme: { primaryColor: '#111111', textColor: '#111111', mutedColor: '#6f6f6f', backgroundColor: '#ffffff', surfaceColor: '#ffffff', softColor: '#f5f5f5', headerColor: '#ffffff', headerTextColor: '#111111', fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', radius: '0px', buttonRadius: '0px' } },
+  { id: 'slate', name: 'Slate Dark', theme: { primaryColor: '#38bdf8', textColor: '#e8edf4', mutedColor: '#94a3b8', backgroundColor: '#0b1220', surfaceColor: '#0f1828', softColor: '#101a2e', headerColor: '#0b1220', headerTextColor: '#e8edf4', fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', radius: '12px', buttonRadius: '10px' } },
+  { id: 'ivory', name: 'Ivory Serif', theme: { primaryColor: '#9a6b4f', textColor: '#2c2520', mutedColor: '#7c7167', backgroundColor: '#faf7f2', surfaceColor: '#fffdf9', softColor: '#f1ebe1', headerColor: '#2c2520', headerTextColor: '#faf7f2', fontFamily: '"Playfair Display", Georgia, serif', radius: '4px', buttonRadius: '4px' } },
+]
+
 export const DEFAULT_THEME = {
   primaryColor: '#0071e3',
   textColor: '#1d1d1f',

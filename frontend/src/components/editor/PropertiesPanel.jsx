@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
-import { DEFAULT_THEME, FONT_OPTIONS } from '../../utils/theme.js'
+import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS } from '../../utils/theme.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
 import {
   appendSnippet,
@@ -668,6 +668,8 @@ export default function PropertiesPanel() {
   const removeComponent = useEditorStore((s) => s.removeComponent)
   const setActiveTab = useEditorStore((s) => s.setActiveTab)
   const setTabsChildren = useEditorStore((s) => s.setTabsChildren)
+  const applyThemeToComponent = useEditorStore((s) => s.applyThemeToComponent)
+  const copyComponentToPage = useEditorStore((s) => s.copyComponentToPage)
 
   const isMobile = viewport === 'mobile'
   const isFlow = !!page.flowMode
@@ -739,6 +741,33 @@ export default function PropertiesPanel() {
               >
                 Apply to design
               </button>
+            </div>
+            {/* One-click presets: set the palette AND restyle every existing
+                component. New components always inherit the active theme. */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {THEME_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  title={`Use the "${p.name}" theme and apply it to the whole design`}
+                  onClick={() => {
+                    updateTheme(p.theme)
+                    applyTheme()
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-left text-[11px] font-medium text-[#374151] transition hover:border-[#4f46e5] hover:bg-[#eef2ff]"
+                >
+                  <span className="flex shrink-0 -space-x-1">
+                    {[p.theme.primaryColor, p.theme.headerColor, p.theme.softColor].map((c, i) => (
+                      <span
+                        key={i}
+                        className="h-3.5 w-3.5 rounded-full border border-black/10"
+                        style={{ background: c }}
+                      />
+                    ))}
+                  </span>
+                  <span className="truncate">{p.name}</span>
+                </button>
+              ))}
             </div>
             <LabeledColor
               label="Primary color"
@@ -1055,6 +1084,37 @@ export default function PropertiesPanel() {
           >
             {isFlow ? 'Move next' : 'Forward'}
           </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => applyThemeToComponent(component.id)}
+            title="Restyle this component with the active theme (colors, font, radius)"
+            className="rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+          >
+            🎨 Apply theme
+          </button>
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) copyComponentToPage(component.id, e.target.value)
+              e.target.value = ''
+            }}
+            disabled={schema.pages.length < 2}
+            title="Copy this component (with all its properties) onto another page"
+            className="rounded-lg border border-[#d1d5db] bg-white px-1.5 py-1.5 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none disabled:opacity-40"
+          >
+            <option value="" disabled>
+              Copy to page…
+            </option>
+            {schema.pages
+              .filter((p) => p.id !== page.id)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
         </div>
         <button
           type="button"

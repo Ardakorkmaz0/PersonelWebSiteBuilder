@@ -5,6 +5,7 @@ import {
   withBuilderRuntimeHtml,
   withViewportMeta,
 } from '../../utils/htmlRuntime.js'
+import { DEVICES } from '../../utils/htmlDevices.js'
 import {
   DRAG_MIME,
   closestPlaceableBlock,
@@ -44,22 +45,8 @@ import { componentToHtml } from '../../utils/componentToHtml.js'
 //   then scrolls/flashes the new block after the reload.
 // - Device sizes drive responsive testing; a viewport meta is injected
 //   automatically when the document lacks one, so every page previews the
-//   way a real phone renders it.
-const DEVICES = [
-  { id: 'fit', label: 'Responsive - area width', w: 0, h: 0 },
-  { id: 'desktop-16-9', label: 'Desktop 16:9 - 1280x720', w: 1280, h: 720 },
-  { id: 'desktop-16-10', label: 'Desktop 16:10 - 1280x800', w: 1280, h: 800 },
-  { id: 'laptop', label: 'Laptop - 1440x900', w: 1440, h: 900 },
-  { id: 'fhd', label: 'Full HD - 1920x1080', w: 1920, h: 1080 },
-  { id: 'ipad', label: 'iPad - 768x1024', w: 768, h: 1024 },
-  { id: 'ipadpro', label: 'iPad Pro - 1024x1366', w: 1024, h: 1366 },
-  { id: 'iphonese', label: 'iPhone SE - 375x667', w: 375, h: 667 },
-  { id: 'iphone15', label: 'iPhone 15 - 393x852', w: 393, h: 852 },
-  { id: 'iphonemax', label: 'iPhone Pro Max - 430x932', w: 430, h: 932 },
-  { id: 'galaxys', label: 'Galaxy S - 360x780', w: 360, h: 780 },
-  { id: 'galaxyultra', label: 'Galaxy Ultra - 384x824', w: 384, h: 824 },
-  { id: 'android', label: 'Large Android - 412x915', w: 412, h: 915 },
-]
+//   way a real phone renders it. The device selector itself lives in the
+//   editor HEADER (shared chrome) — this component receives it as props.
 
 function setDocumentDesignMode(doc, value) {
   try {
@@ -127,6 +114,8 @@ function withViewExtras(html, scrollIndex) {
 function HtmlWorkspace({
   html,
   fileName = 'index.html',
+  deviceId = 'fit',
+  landscape = false,
   onCommit,
   onRequestSave,
   onElementSelect,
@@ -138,8 +127,6 @@ function HtmlWorkspace({
   onCancelPlacement,
 }, ref) {
   const [mode, setMode] = useState('view')
-  const [deviceId, setDeviceId] = useState('fit')
-  const [landscape, setLandscape] = useState(false)
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
@@ -293,14 +280,21 @@ function HtmlWorkspace({
   const mutateSelected = useCallback((fn) => {
     const doc = iframeRef.current?.contentDocument
     const el = selectedRef.current
-    if (!doc?.body || !el || !el.isConnected) return
+    if (!doc?.body || !el) return
+    if (!el.isConnected) {
+      // The node died (deleted while typing, page reseeded, …). Close the
+      // panel instead of silently swallowing edits — "Properties sometimes
+      // doesn't work" was exactly this dead-end.
+      clearSelection()
+      return
+    }
     const result = fn(doc, el)
     const next = result === null ? null : result || el
     selectedRef.current = next
     setSelectedElement(doc, next)
     onCommit?.(serializeDocument(doc))
     onElementSelect?.(next ? describeElement(next) : null)
-  }, [onCommit, onElementSelect])
+  }, [clearSelection, onCommit, onElementSelect])
 
   // Replace the open document wholesale (undo/redo, template load) — without
   // this, an open edit/source surface would clobber the new HTML with its
@@ -534,30 +528,6 @@ function HtmlWorkspace({
               Source
             </button>
           </div>
-          {mode !== 'source' && (
-            <>
-              <select
-                value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
-                title="Screen / device width"
-                className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
-              >
-                {DEVICES.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => setLandscape((v) => !v)}
-                disabled={isFit}
-                title="Landscape / portrait"
-                className="rounded-lg px-2 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
-              >
-                {landscape ? '⟲' : '⟳'}
-              </button>
-            </>
-          )}
           {mode === 'source' && (
             <button
               type="button"

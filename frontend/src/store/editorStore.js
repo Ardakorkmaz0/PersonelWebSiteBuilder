@@ -1307,6 +1307,45 @@ export const useEditorStore = create((set, get) => ({
     })
   },
 
+  // Copy a component (with all its properties + children) onto ANOTHER page,
+  // so a tuned element survives across pages without rebuilding it.
+  copyComponentToPage: (id, pageId) => {
+    get().record('copy-to-page')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      if (!pageId || pageId === page.id) return {}
+      const target = state.schema.pages.find((p) => p.id === pageId)
+      const src = findInTree(page.components, id)
+      if (!target || !src) return {}
+      const copy = cloneTree(src)
+      return {
+        schema: withComponents(state.schema, pageId, [...target.components, copy]),
+        dirty: true,
+      }
+    })
+  },
+
+  // Re-apply the active theme to ONE component (colors, font, radius) — the
+  // per-element companion to applyTheme(), which restyles the whole design.
+  applyThemeToComponent: (id) => {
+    get().record('apply-theme')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const retheme = (nodes) =>
+        nodes.map((n) => {
+          if (n.id === id) {
+            return { ...n, styles: themedStyles(n.type, n.styles, state.schema.theme) }
+          }
+          if (Array.isArray(n.children)) return { ...n, children: retheme(n.children) }
+          return n
+        })
+      return {
+        schema: withComponents(state.schema, page.id, retheme(page.components)),
+        dirty: true,
+      }
+    })
+  },
+
   bringToFront: (id) => {
     get().record('zorder')
     set((state) => {

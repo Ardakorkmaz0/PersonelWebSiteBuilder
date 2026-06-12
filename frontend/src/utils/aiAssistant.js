@@ -1355,6 +1355,19 @@ Design system — every page you produce must look professionally designed:
 - Images: prefer CSS gradient placeholders or https://picsum.photos URLs; always max-width:100%; height:auto.
 - Exactly one @media (max-width: 768px) block: stack grids to one column, shrink section padding, show the hamburger.
 
+Page recipes — when the request matches one of these site types, follow the section order exactly (it is what professional sites of that type use):
+- CV / resume: header (name + role + contact line) → 2-3 sentence profile → experience as a vertical timeline (period, title, company, one achievement with a number) → education + skills side by side (skill bars or chips) → email CTA. Real-sounding employers and metrics, never "Company A".
+- Portfolio: hero with one-line positioning → grid of 6 projects (gradient thumbnail, tag chip, title, one-line result) → about with 3 stats → contact CTA card.
+- SaaS / startup landing: hero (badge, headline, sub, 2 CTAs) → 3-4 stat row → 3 feature cards → 3-tier pricing (middle tier highlighted "Most popular") → 3-item FAQ (details/summary) → CTA band → footer.
+- Restaurant / café: hero → menu as category headings with dish/price rows (dashed leader line) → hours + address block → events/catering CTA.
+- Photography: hero → masonry gallery (CSS columns, varied aspect-ratio gradient tiles) → short about → booking CTA.
+- Blog: small hero (title + one-liner) → list of 4-6 post cards (tag chip, date, title, excerpt) → newsletter CTA.
+- Event / wedding: hero with date+place badge → schedule timeline → venue block with map link → RSVP CTA (mailto).
+- Shop: hero → product grid (gradient image tile, name, price) → brand story → contact CTA.
+- Link in bio: single centered column, avatar circle with initial, name, one-liner, 4-6 full-width link cards with emoji + arrow.
+
+Quality bar: the result must look like a $2,000 custom site, not a homework page. Never leave default browser styles visible (Times New Roman, blue links, 8px body margin = instant failure). Every section needs real, specific copy for the topic — concrete numbers, names, and prices beat vague claims.
+
 THE LATEST USER MESSAGE IS THE PRIMARY INTENT. Older turns are reference only. If the user previously asked for X and now asks for Y, return a Y-focused document. Do not blend two unrelated requests.`
 
 // One-shot HTML generation against the active provider, reusing the existing

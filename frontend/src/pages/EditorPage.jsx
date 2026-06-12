@@ -146,6 +146,9 @@ export default function EditorPage() {
   const htmlInputRef = useRef(null)
   const folderInputRef = useRef(null)
   const workspaceRef = useRef(null)
+  // Latest html-mode undo handlers for the global Ctrl+Z listener (which is
+  // bound once and must not re-bind on every html change).
+  const htmlHistoryRef = useRef({})
   // Multi-page HTML sites: one full document per page, keyed by page id.
   // `siteHtml` is the ACTIVE page's document; the map is what gets saved
   // (schema.pages[i].html) with the home page mirrored to site.html for
@@ -156,6 +159,10 @@ export default function EditorPage() {
   const siteHtml = pageHtmlMap[currentPageId] || ''
   const setSiteHtml = (html) =>
     setPageHtmlMap((m) => ({ ...m, [currentPageId]: html }))
+  // The site is an "HTML site" when ANY page carries an HTML document; the
+  // ACTIVE page may still be empty (freshly added) — the workspace then shows
+  // its starter card in place of the page.
+  const isHtmlSite = Object.values(pageHtmlMap).some((h) => h && h.trim())
   const [htmlDirty, setHtmlDirty] = useState(false)
   // Element selected inside the HTML edit iframe — drives the right-rail
   // element properties panel (null → site settings).
@@ -238,6 +245,12 @@ export default function EditorPage() {
     }
   }, [])
 
+  // Keep the global Ctrl+Z listener pointed at the right history (html
+  // snapshot stacks vs canvas store) without re-binding it every render.
+  useEffect(() => {
+    htmlHistoryRef.current = { isHtmlSite, undoHtml, redoHtml }
+  })
+
   // Warn before closing/refreshing the tab while there are unsaved changes —
   // losing an edited HTML document or canvas design silently is brutal.
   useEffect(() => {
@@ -298,12 +311,16 @@ export default function EditorPage() {
 
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
-        e.shiftKey ? redo() : undo()
+        const h = htmlHistoryRef.current
+        if (h.isHtmlSite) (e.shiftKey ? h.redoHtml : h.undoHtml)?.()
+        else e.shiftKey ? redo() : undo()
         return
       }
       if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault()
-        redo()
+        const h = htmlHistoryRef.current
+        if (h.isHtmlSite) h.redoHtml?.()
+        else redo()
         return
       }
       if (typing) return
@@ -703,11 +720,6 @@ export default function EditorPage() {
     )
   }
 
-  // The site is an "HTML site" when ANY page carries an HTML document; the
-  // ACTIVE page may still be empty (freshly added) — it then shows the
-  // empty-page starter instead of the workspace.
-  const isHtmlSite = Object.values(pageHtmlMap).some((h) => h && h.trim())
-  const currentPageHasHtml = !!siteHtml.trim()
   const currentPageIndex = Math.max(0, storePages.findIndex((p) => p.id === currentPageId))
   const currentPage = storePages[currentPageIndex] || storePages[0]
   const sizePresets = viewport === 'mobile' ? MOBILE_CANVAS_PRESETS : PC_CANVAS_PRESETS
@@ -804,22 +816,6 @@ export default function EditorPage() {
               <option value="custom">Custom - {curW}px</option>
             )}
           </select>
-          <button
-            onClick={undo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-            className="rounded-lg px-2 py-1.5 text-base text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
-          >
-            &#8634;
-          </button>
-          <button
-            onClick={redo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Shift+Z)"
-            className="rounded-lg px-2 py-1.5 text-base text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
-          >
-            &#8635;
-          </button>
           </>
           )}
           <input
@@ -956,9 +952,9 @@ export default function EditorPage() {
                   title={supportsLocalFiles()
                     ? 'Export the HTML to a file on disk — afterwards every Save updates that file automatically.'
                     : 'Export (download) the HTML file'}
-                  className="flex items-center gap-1 rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-xs text-[#6b7280] hover:border-[#9ca3af] hover:text-[#374151]"
+                  className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
                 >
-                  💾 Export
+                  Export
                 </button>
               )}
               <button
@@ -975,31 +971,26 @@ export default function EditorPage() {
               </button>
             </>
           )}
-          {/* Visible while in HTML mode OR while the stacks still hold HTML
-              states — undoing past the first HTML snapshot drops back to the
-              component editor, and Redo must stay reachable from there. */}
-          {(isHtmlSite || htmlPast.length > 0 || htmlFuture.length > 0) && (
-            <>
-              <button
-                type="button"
-                onClick={undoHtml}
-                disabled={!htmlPast.length}
-                title="Undo the last change (component placement, AI apply, template load, panel edit...)"
-                className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
-              >
-                ↶ Undo
-              </button>
-              <button
-                type="button"
-                onClick={redoHtml}
-                disabled={!htmlFuture.length}
-                title="Redo"
-                className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
-              >
-                ↷
-              </button>
-            </>
-          )}
+          {/* Shared Undo/Redo — identical in both modes; dispatches to the
+              HTML snapshot stacks or the canvas store as appropriate. */}
+          <button
+            type="button"
+            onClick={() => (isHtmlSite ? undoHtml() : undo())}
+            disabled={isHtmlSite ? !htmlPast.length : !canUndo}
+            title="Undo (Ctrl+Z)"
+            className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
+          >
+            ↶
+          </button>
+          <button
+            type="button"
+            onClick={() => (isHtmlSite ? redoHtml() : redo())}
+            disabled={isHtmlSite ? !htmlFuture.length : !canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+            className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
+          >
+            ↷
+          </button>
           <button
             type="button"
             onClick={() => setHistoryOpen((o) => !o)}
@@ -1092,8 +1083,10 @@ export default function EditorPage() {
                   onCollapse={() => setLeftOpen(false)}
                   filesPanel={
                     <PageFilesPanel
+                      mode="html"
                       htmlMap={pageHtmlMap}
                       onSelect={switchToPage}
+                      onActiveClick={() => workspaceRef.current?.toggleSource?.()}
                       onImportInto={importHtmlIntoPage}
                     />
                   }
@@ -1101,52 +1094,28 @@ export default function EditorPage() {
               ) : (
                 <CollapsedRail side="left" label="Files" onOpen={() => setLeftOpen(true)} />
               )}
-              {currentPageHasHtml ? (
-                <Suspense fallback={<PanelFallback />}>
-                  <HtmlWorkspace
-                    key={currentPageId}
-                    ref={workspaceRef}
-                    html={siteHtml}
-                    fileName={
-                      (localFile?.pageId === currentPageId && localFile?.name) ||
-                      pageFileName(currentPage, currentPageIndex === 0)
-                    }
-                    onCommit={(h) => commitHtml(h)}
-                    onRequestSave={() => save()}
-                    onElementSelect={setHtmlSelection}
-                    pendingType={pendingType}
-                    onPlaced={() => setPendingType(null)}
-                    onCancelPlacement={() => setPendingType(null)}
-                  />
-                </Suspense>
-              ) : (
-                /* Freshly added page: no document yet — offer the starters
-                   instead of showing the previous page's content. */
-                <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6">
-                  <div className="ms-card w-full max-w-md p-8 text-center">
-                    <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-2xl">
-                      📄
-                    </div>
-                    <h2 className="text-base font-bold text-[#111827]">
-                      {pageFileName(currentPage, currentPageIndex === 0)} is empty
-                    </h2>
-                    <p className="mt-1 text-sm text-[#6b7280]">
-                      Give this page its own HTML — every page of the site is its own file.
-                    </p>
-                    <div className="mt-5 flex flex-col gap-2">
-                      <button onClick={startBlankHtml} className="ms-btn ms-btn-primary w-full py-2">
-                        Start blank HTML
-                      </button>
-                      <button onClick={() => setTemplateOpen(true)} className="ms-btn w-full py-2">
-                        Choose a template…
-                      </button>
-                      <button onClick={() => htmlInputRef.current?.click()} className="ms-btn w-full py-2">
-                        Import an HTML file…
-                      </button>
-                    </div>
-                  </div>
-                </main>
-              )}
+              {/* The workspace renders for EMPTY pages too — same toolbar and
+                  chrome, with the starter card where the page would show. */}
+              <Suspense fallback={<PanelFallback />}>
+                <HtmlWorkspace
+                  key={currentPageId}
+                  ref={workspaceRef}
+                  html={siteHtml}
+                  fileName={
+                    (localFile?.pageId === currentPageId && localFile?.name) ||
+                    pageFileName(currentPage, currentPageIndex === 0)
+                  }
+                  onCommit={(h) => commitHtml(h)}
+                  onRequestSave={() => save()}
+                  onElementSelect={setHtmlSelection}
+                  onStartBlank={startBlankHtml}
+                  onOpenTemplates={() => setTemplateOpen(true)}
+                  onImportFile={() => htmlInputRef.current?.click()}
+                  pendingType={pendingType}
+                  onPlaced={() => setPendingType(null)}
+                  onCancelPlacement={() => setPendingType(null)}
+                />
+              </Suspense>
               {/* Right rail in HTML mode: element properties when something
                   is selected in the edit iframe, site settings otherwise. */}
               {rightOpen ? (
@@ -1191,9 +1160,21 @@ export default function EditorPage() {
           ) : (
             <>
               {leftOpen ? (
-                <Sidebar key="components-rail" onCollapse={() => setLeftOpen(false)} />
+                <Sidebar
+                  key="components-rail"
+                  onCollapse={() => setLeftOpen(false)}
+                  filesPanel={
+                    <PageFilesPanel
+                      mode="pages"
+                      onActiveClick={() => {
+                        setRightOpen(true)
+                        setRightTab((t) => (t === 'code' ? 'props' : 'code'))
+                      }}
+                    />
+                  }
+                />
               ) : (
-                <CollapsedRail side="left" label="Components" onOpen={() => setLeftOpen(true)} />
+                <CollapsedRail side="left" label="Files" onOpen={() => setLeftOpen(true)} />
               )}
               <Canvas />
               {rightOpen ? (

@@ -130,6 +130,9 @@ function HtmlWorkspace({
   onCommit,
   onRequestSave,
   onElementSelect,
+  onStartBlank,
+  onOpenTemplates,
+  onImportFile,
   pendingType,
   onPlaced,
   onCancelPlacement,
@@ -318,6 +321,8 @@ function HtmlWorkspace({
     applyAiHtml,
     clearSelection,
     setDocument,
+    // Files-panel affordance: clicking the open file toggles its source view.
+    toggleSource: () => switchMode(mode === 'source' ? 'view' : 'source'),
     updateSelectedElement: (patch) =>
       mutateSelected((doc, el) => { applyElementPatch(el, patch) }),
     duplicateSelected: () =>
@@ -332,7 +337,7 @@ function HtmlWorkspace({
         try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
       }),
     deleteSelected: () => mutateSelected((doc, el) => { el.remove(); return null }),
-  }), [applyAiHtml, clearSelection, mutateSelected, readHtml, setDocument])
+  }), [applyAiHtml, clearSelection, mode, mutateSelected, readHtml, setDocument, switchMode])
 
   const device = DEVICES.find((d) => d.id === deviceId) || DEVICES[0]
   const isFit = device.id === 'fit'
@@ -372,6 +377,17 @@ function HtmlWorkspace({
   const attachPlacementListeners = useCallback((doc) => {
     if (!doc?.body) return () => {}
     ensurePlacementChrome(doc)
+    // Dragging/aiming near the top/bottom edge scrolls the page, so a
+    // component can be dropped below the fold of a long document. behavior:
+    // 'instant' bypasses the page's own `scroll-behavior: smooth`, which
+    // would swallow these rapid little nudges.
+    const autoScroll = (clientY) => {
+      const win = doc.defaultView
+      if (!win) return
+      const EDGE = 60
+      if (clientY > win.innerHeight - EDGE) win.scrollBy({ top: 18, behavior: 'instant' })
+      else if (clientY < EDGE && win.scrollY > 0) win.scrollBy({ top: -18, behavior: 'instant' })
+    }
     const hover = (x, y) => {
       const hit = doc.elementFromPoint(x, y)
       const target = closestPlaceableBlock(hit, doc.body)
@@ -389,12 +405,14 @@ function HtmlWorkspace({
     }
     const onMouseMove = (e) => {
       if (!pendingRef.current) return
+      autoScroll(e.clientY)
       hover(e.clientX, e.clientY)
     }
     const onDragOver = (e) => {
       if (!pendingRef.current) return
       if (Array.from(e.dataTransfer?.types || []).includes(DRAG_MIME)) {
         e.preventDefault()
+        autoScroll(e.clientY)
         hover(e.clientX, e.clientY)
       }
     }
@@ -592,8 +610,36 @@ function HtmlWorkspace({
               value={sourceDraft}
               onChange={(e) => setSourceDraft(e.target.value)}
               spellCheck={false}
-              className="min-h-0 flex-1 resize-none bg-[#1e1e1e] p-4 font-mono text-sm leading-relaxed text-gray-100 outline-none"
+              placeholder="This page has no HTML yet — paste or write a full document here, then Apply & Save."
+              className="min-h-0 flex-1 resize-none bg-[#1e1e1e] p-4 font-mono text-sm leading-relaxed text-gray-100 outline-none placeholder:text-gray-500"
             />
+          </main>
+        ) : !String(html || '').trim() ? (
+          /* Empty page: keep the full workspace chrome (toolbar, device bar)
+             and put the starter actions where the page would render — the
+             editor looks identical whether a page has HTML yet or not. */
+          <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6">
+            <div className="ms-card w-full max-w-md p-8 text-center">
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-2xl">
+                📄
+              </div>
+              <h2 className="text-base font-bold text-[#111827]">{fileName} is empty</h2>
+              <p className="mt-1 text-sm text-[#6b7280]">
+                Give this page its own HTML — every page of the site is its own file. You can also
+                switch to Source and paste code directly.
+              </p>
+              <div className="mt-5 flex flex-col gap-2">
+                <button onClick={onStartBlank} className="ms-btn ms-btn-primary w-full py-2">
+                  Start blank HTML
+                </button>
+                <button onClick={onOpenTemplates} className="ms-btn w-full py-2">
+                  Choose a template…
+                </button>
+                <button onClick={onImportFile} className="ms-btn w-full py-2">
+                  Import an HTML file…
+                </button>
+              </div>
+            </div>
           </main>
         ) : (
           <main

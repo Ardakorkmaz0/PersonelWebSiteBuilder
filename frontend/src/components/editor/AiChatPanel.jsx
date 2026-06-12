@@ -3,16 +3,37 @@ import {
   AI_PROVIDERS,
   SUGGESTION_CHIPS,
   coerceToHtmlDocument,
+  contentPreservationRatio,
+  detectHtmlIntent,
   executeTool,
   getApiKey,
   getModel,
   getModelsFor,
   getProvider,
   recoverIntentFromPrompt,
+  repairDroppedSections,
   runAiHtmlPrompt,
   runAiPrompt,
   setProvider,
 } from '../../utils/aiAssistant.js'
+import { THEME_SWATCHES, applyPaletteToHtml } from '../../utils/htmlTheme.js'
+
+// Quick-action option lists (HTML mode). Fonts go through the AI with a
+// strict "typography only" instruction; sections use the ADD contract.
+const QUICK_FONTS = [
+  'Inter', 'Poppins', 'Playfair Display', 'Space Grotesk',
+  'DM Sans', 'Montserrat', 'Lora', 'JetBrains Mono',
+]
+const QUICK_SECTIONS = [
+  ['💳 Pricing', 'Add a 3-tier pricing section (middle tier highlighted as "Most popular") that matches the current design.'],
+  ['❓ FAQ', 'Add an FAQ section with 4 relevant questions using details/summary elements, matching the current design.'],
+  ['🖼 Gallery', 'Add a responsive gallery section with gradient placeholder tiles, matching the current design.'],
+  ['💬 Testimonials', 'Add a testimonials section with 3 quote cards, matching the current design.'],
+  ['📊 Stats', 'Add a row of 4 key statistics relevant to this site, matching the current design.'],
+  ['👥 Team', 'Add a team section with 4 member cards using initial avatars, matching the current design.'],
+  ['📰 Newsletter', 'Add a newsletter signup section with an email call-to-action, matching the current design.'],
+  ['✉️ Contact', 'Add a contact section with an email call-to-action card, matching the current design.'],
+]
 import { useEditorStore } from '../../store/editorStore.js'
 
 // Per-tab chat history persistence. Kept in localStorage so a refresh while
@@ -85,6 +106,31 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
   // "the AI did nothing". Force the HTML path whenever the site is HTML.
   const isHtmlSite = !!(currentHtml && currentHtml.trim())
   const effectiveAiMode = isHtmlSite ? 'html' : aiMode
+  // Quick actions: structured pickers (color swatches, fonts, sections) so
+  // common asks don't require typing — and colors apply deterministically.
+  const [quickPanel, setQuickPanel] = useState(null) // 'colors' | 'font' | 'section'
+  const [pickedColors, setPickedColors] = useState([])
+
+  function applyQuickColors() {
+    if (!pickedColors.length || busy) return
+    const label = pickedColors.join(' + ')
+    // Deterministic path: swap the document's CSS color variables directly —
+    // instant, and content can't possibly be harmed. AI only as fallback.
+    const det = currentHtml ? applyPaletteToHtml(currentHtml, pickedColors) : null
+    setPickedColors([])
+    setQuickPanel(null)
+    if (det && onApplyHtml) {
+      onApplyHtml(det)
+      setMessages((m) => [
+        ...m,
+        { id: rand(), role: 'user', text: `🎨 Theme colors → ${label}` },
+        { id: rand(), role: 'assistant', text:
+          'Recolored the theme by updating the site\'s CSS color variables directly — instant, no AI call, and nothing else was touched. Undo brings the old colors back.' },
+      ])
+      return
+    }
+    send(`Restyle the site to use this color palette: primary ${pickedColors[0]}${pickedColors[1] ? `, secondary ${pickedColors[1]}` : ''}. Keep every piece of content exactly as it is; change only the CSS.`)
+  }
 
   // The header rebuilds whenever a storage event fires so that if the toolbar
   // (AiBar) auto-corrected the model on boot, the badge here updates too.
@@ -284,12 +330,39 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           ])
           return
         }
-        onApplyHtml(doc.html)
+        // Intent guards for edits of an existing document:
+        //  - ADD: if the model dropped existing sections while "adding",
+        //    salvage the new sections and graft them onto the original.
+        //  - STYLE: if a "restyle" rewrote most of the copy, block it — a
+        //    theme change must never cost the user their content.
+        const intent = currentHtml && currentHtml.trim() ? detectHtmlIntent(trimmed) : 'general'
+        let finalHtml = doc.html
+        let repaired = false
+        if (intent === 'add' && !doc.grafted) {
+          const fix = repairDroppedSections(currentHtml, finalHtml)
+          finalHtml = fix.html
+          repaired = fix.repaired
+        } else if (intent === 'style') {
+          const kept = contentPreservationRatio(currentHtml, finalHtml)
+          if (kept < 0.6) {
+            setMessages((m) => [
+              ...m,
+              { id: rand(), role: 'assistant', text:
+                `I blocked this change: the model rewrote most of your page content (only ${Math.round(kept * 100)}% survived) while it was asked to restyle. Your site is untouched — try again, or use the 🎨 Theme colors button below for a safe, instant recolor.`,
+                allFailed: true,
+              },
+            ])
+            return
+          }
+        }
+        onApplyHtml(finalHtml)
         setMessages((m) => [
           ...m,
-          { id: rand(), role: 'assistant', text: doc.grafted
-            ? 'The model sent back just the new part, so I added it to your current page — it should be highlighted in the preview. Say "move it above the hero" or similar to reposition it.'
-            : `Generated ~${Math.round(doc.html.length / 1024)} KB of HTML and loaded it into the editor. Iterate by saying things like "make the header sticky" or "use Inter font" — I'll rewrite the document.`,
+          { id: rand(), role: 'assistant', text: repaired
+            ? 'The model tried to rewrite your page while adding — I kept your original content and grafted only the new section onto it (highlighted in the preview).'
+            : doc.grafted
+              ? 'The model sent back just the new part, so I added it to your current page — it should be highlighted in the preview. Say "move it above the hero" or similar to reposition it.'
+              : `Generated ~${Math.round(finalHtml.length / 1024)} KB of HTML and loaded it into the editor. Iterate by saying things like "make the header sticky" or "use Inter font" — I'll rewrite the document.`,
           },
         ])
         return
@@ -514,6 +587,132 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">{error}</div>
         )}
       </div>
+
+      {/* Quick actions — structured pickers, no typing needed. */}
+      {isHtmlSite && (
+        <div className="border-t border-[#e1dfdd] bg-[#faf9f8] px-2 pb-1.5 pt-1.5">
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              ['colors', '🎨 Theme colors'],
+              ['font', '🔤 Font'],
+              ['section', '➕ Add section'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                disabled={busy}
+                onClick={() => setQuickPanel(quickPanel === id ? null : id)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
+                  quickPanel === id
+                    ? 'border-[#2b579a] bg-[#eff3fb] text-[#2b579a]'
+                    : 'border-[#e1dfdd] bg-white text-[#605e5c] hover:border-[#8a8886] hover:text-[#323130]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {quickPanel === 'colors' && (
+            <div className="mt-1.5 rounded-[4px] border border-[#e1dfdd] bg-white p-2">
+              <div className="mb-1.5 text-[11px] text-[#605e5c]">
+                Pick 1–2 colors — first becomes the primary, second the secondary. Applies instantly, no typing.
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {THEME_SWATCHES.map(([hex, name]) => {
+                  const idx = pickedColors.indexOf(hex)
+                  return (
+                    <button
+                      key={hex}
+                      type="button"
+                      title={name}
+                      onClick={() =>
+                        setPickedColors((cur) =>
+                          cur.includes(hex)
+                            ? cur.filter((c) => c !== hex)
+                            : cur.length >= 2
+                              ? [cur[0], hex]
+                              : [...cur, hex],
+                        )
+                      }
+                      className="relative h-7 w-7 rounded-full border border-black/10"
+                      style={{
+                        background: hex,
+                        outline: idx >= 0 ? '2px solid #2b579a' : 'none',
+                        outlineOffset: '1px',
+                      }}
+                    >
+                      {idx >= 0 && (
+                        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b579a] text-[9px] font-bold text-white">
+                          {idx + 1}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setPickedColors([]); setQuickPanel(null) }}
+                  className="rounded-[4px] px-2.5 py-1 text-[11px] text-[#605e5c] hover:bg-[#f3f2f1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!pickedColors.length || busy}
+                  onClick={applyQuickColors}
+                  className="rounded-[4px] bg-[#2b579a] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[#1e4079] disabled:bg-[#a19f9d]"
+                >
+                  Apply colors
+                </button>
+              </div>
+            </div>
+          )}
+          {quickPanel === 'font' && (
+            <div className="mt-1.5 rounded-[4px] border border-[#e1dfdd] bg-white p-2">
+              <div className="mb-1.5 text-[11px] text-[#605e5c]">Pick a font — typography changes, content stays.</div>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_FONTS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setQuickPanel(null)
+                      send(`Use the Google Font "${f}" across the site for headings and body text. Keep all content and layout exactly the same; change only the typography.`)
+                    }}
+                    className="rounded-[4px] border border-[#e1dfdd] bg-white px-2.5 py-1 text-[12px] text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] disabled:opacity-40"
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {quickPanel === 'section' && (
+            <div className="mt-1.5 rounded-[4px] border border-[#e1dfdd] bg-white p-2">
+              <div className="mb-1.5 text-[11px] text-[#605e5c]">Add a ready-made section — your existing content is preserved.</div>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_SECTIONS.map(([label, prompt]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setQuickPanel(null)
+                      send(prompt)
+                    }}
+                    className="rounded-[4px] border border-[#e1dfdd] bg-white px-2.5 py-1 text-[12px] text-[#323130] hover:border-[#2b579a] hover:bg-[#eff3fb] disabled:opacity-40"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Composer */}
       <div className="border-t border-[#e1dfdd] bg-white p-2">

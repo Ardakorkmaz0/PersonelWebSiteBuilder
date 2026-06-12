@@ -1391,7 +1391,11 @@ async function callHtmlModeOnce(prompt, { history = [], currentHtml = '' }) {
   const seed = currentHtml && currentHtml.trim()
     ? `\n\nCurrent HTML (rewrite this):\n${currentHtml.slice(0, 30_000)}\n`
     : ''
-  const fullPrompt = `${HIST ? `Recent chat:\n${HIST}\n` : ''}${seed}\nUser request: ${prompt}\n\nReturn the full HTML document now.`
+  // Edits of an existing document get an intent-specific contract appended —
+  // weak models otherwise "helpfully" rewrite the whole page on an "add a
+  // section" request and drop half the content.
+  const contract = seed ? INTENT_CONTRACTS[detectHtmlIntent(prompt)] : ''
+  const fullPrompt = `${HIST ? `Recent chat:\n${HIST}\n` : ''}${seed}\nUser request: ${prompt}${contract}\n\nReturn the full HTML document now.`
 
   // For Gemini we hit the same generateContent endpoint without tools.
   if (provider === 'gemini') {
@@ -1469,6 +1473,67 @@ export function cleanHtmlResponse(raw) {
   const docStart = s.search(/<!DOCTYPE\s+html|<html[\s>]/i)
   if (docStart > 0) s = s.slice(docStart)
   return s
+}
+
+// ---- HTML-mode edit intents -------------------------------------------------
+// Classify what the user is asking of an EXISTING document, so the transport
+// can append a hard contract and the panel can verify the result. Keyword
+// lists cover English + Turkish (the user-facing languages of this product).
+export function detectHtmlIntent(prompt) {
+  // NOTE: JS \b is ASCII-only — it never fires after Turkish letters like
+  // 'ı' ("temayı"), so use an explicit letter lookahead instead.
+  const s = ` ${String(prompt || '').toLowerCase()} `
+  const END = '(?![a-zçğıöşü])'
+  if (new RegExp(`[ \\n](add|insert|append|attach|include|put|create a new|ekle|eklesen|eklemek|yeni bölüm|bir de)${END}`).test(s)) {
+    return 'add'
+  }
+  if (new RegExp(`[ \\n](theme|tema|temayı|temasını|color|colour|colors|renk|renkler|renkleri|palette|palet|recolor|restyle|dark mode|light mode|koyu tema|açık tema|font|typography|yazı tipi|stil|style it|görünüm)${END}`).test(s)) {
+    return 'style'
+  }
+  return 'general'
+}
+
+const INTENT_CONTRACTS = {
+  add: '\n\nIMPORTANT — this is an ADD request. Return the COMPLETE current document with EVERY existing section preserved exactly as it is (same text, same order, same styling). Only insert the new element where it belongs. Do not rewrite, reformat, or drop anything that already exists.',
+  style: '\n\nIMPORTANT — this is a RESTYLE request. Keep every piece of content (all text, links, images, sections and their order) exactly as it is. Change ONLY the presentation: the <style> rules, colors, fonts, spacing. Do not delete, reword, or reorder any content.',
+  general: '',
+}
+
+const norm = (el) => String(el?.outerHTML || '').replace(/\s+/g, ' ').trim()
+
+// How much of the old document's wording survived into the new one (0..1).
+// Token-based, so harmless CSS/markup churn doesn't count as loss. Used to
+// catch a model that "restyled" a page by rewriting half the copy.
+export function contentPreservationRatio(oldHtml, newHtml) {
+  const tokens = (h) => {
+    const doc = new DOMParser().parseFromString(String(h || ''), 'text/html')
+    return (doc.body?.textContent || '').toLowerCase().split(/\W+/).filter((w) => w.length > 3)
+  }
+  const oldTok = tokens(oldHtml)
+  if (!oldTok.length) return 1
+  const newSet = new Set(tokens(newHtml))
+  const kept = oldTok.filter((w) => newSet.has(w)).length
+  return kept / oldTok.length
+}
+
+// ADD-request repair: when the model dropped existing top-level sections
+// while "adding" something, salvage the genuinely NEW sections from its
+// response and graft them onto the ORIGINAL document instead of accepting
+// the lossy rewrite. Returns { html, repaired }.
+export function repairDroppedSections(oldHtml, newHtml) {
+  const parse = (h) => new DOMParser().parseFromString(String(h || ''), 'text/html')
+  const oldDoc = parse(oldHtml)
+  const newDoc = parse(newHtml)
+  const oldKids = [...oldDoc.body.children]
+  const newSet = new Set([...newDoc.body.children].map(norm))
+  const missing = oldKids.filter((k) => !newSet.has(norm(k)))
+  if (!missing.length) return { html: newHtml, repaired: false }
+  const oldSet = new Set(oldKids.map(norm))
+  const added = [...newDoc.body.children].filter((k) => !oldSet.has(norm(k)))
+  for (const node of added) {
+    oldDoc.body.appendChild(oldDoc.importNode(node, true))
+  }
+  return { html: '<!DOCTYPE html>\n' + oldDoc.documentElement.outerHTML, repaired: true }
 }
 
 // Last line of defence for HTML mode: weak models sometimes answer "add a

@@ -6,9 +6,12 @@ import { describe, expect, it } from 'vitest'
 import {
   cleanHtmlResponse,
   coerceToHtmlDocument,
+  contentPreservationRatio,
+  detectHtmlIntent,
   extractTextCalls,
   mapTopicToTemplate,
   recoverIntentFromPrompt,
+  repairDroppedSections,
 } from './aiAssistant.js'
 
 describe('cleanHtmlResponse — AI HTML-mode output parser', () => {
@@ -78,6 +81,69 @@ describe('coerceToHtmlDocument — fragment rescue for HTML mode', () => {
   it('returns null for pure prose with no markup', () => {
     expect(coerceToHtmlDocument('Sorry, I cannot do that.', { currentHtml: CURRENT })).toBeNull()
     expect(coerceToHtmlDocument('', { currentHtml: CURRENT })).toBeNull()
+  })
+})
+
+describe('detectHtmlIntent — edit-request classification', () => {
+  it('classifies add requests (English + Turkish)', () => {
+    expect(detectHtmlIntent('add a pricing section')).toBe('add')
+    expect(detectHtmlIntent('please insert a FAQ below the hero')).toBe('add')
+    expect(detectHtmlIntent('iletişim bölümü ekle')).toBe('add')
+  })
+
+  it('classifies style/theme requests (English + Turkish)', () => {
+    expect(detectHtmlIntent('make the theme dark mode')).toBe('style')
+    expect(detectHtmlIntent('change the colors to green')).toBe('style')
+    expect(detectHtmlIntent('temayı maviye çevir')).toBe('style')
+    expect(detectHtmlIntent('use the Poppins font')).toBe('style')
+  })
+
+  it('falls back to general for everything else', () => {
+    expect(detectHtmlIntent('build me a portfolio site')).toBe('general')
+    expect(detectHtmlIntent('rewrite the hero copy')).toBe('general')
+  })
+})
+
+describe('repairDroppedSections — ADD must never lose content', () => {
+  const OLD = '<!DOCTYPE html><html><body><header id="h">H</header><section id="a">A</section><footer id="f">F</footer></body></html>'
+
+  it('keeps a faithful response untouched', () => {
+    const NEW = '<!DOCTYPE html><html><body><header id="h">H</header><section id="a">A</section><section id="new">NEW</section><footer id="f">F</footer></body></html>'
+    const out = repairDroppedSections(OLD, NEW)
+    expect(out.repaired).toBe(false)
+    expect(out.html).toBe(NEW)
+  })
+
+  it('grafts the new section onto the original when old sections were dropped', () => {
+    // The model "added" a section but dropped the header and footer.
+    const LOSSY = '<!DOCTYPE html><html><body><section id="a">A</section><section id="new">NEW</section></body></html>'
+    const out = repairDroppedSections(OLD, LOSSY)
+    expect(out.repaired).toBe(true)
+    expect(out.html).toContain('<header id="h">')
+    expect(out.html).toContain('<footer id="f">')
+    expect(out.html).toContain('id="new"')
+  })
+
+  it('returns the original when the response contains nothing new', () => {
+    const EMPTY = '<!DOCTYPE html><html><body><section id="a">A</section></body></html>'
+    const out = repairDroppedSections(OLD, EMPTY)
+    expect(out.repaired).toBe(true)
+    expect(out.html).toContain('<header id="h">')
+    expect(out.html).toContain('<section id="a">')
+  })
+})
+
+describe('contentPreservationRatio — restyle guard', () => {
+  const OLD = '<html><body><p>quantum widgets accelerate enterprise productivity remarkably</p></body></html>'
+
+  it('reports ~1 when the copy survives a restyle', () => {
+    const NEW = '<html><head><style>body{color:red}</style></head><body><p>quantum widgets accelerate enterprise productivity remarkably</p></body></html>'
+    expect(contentPreservationRatio(OLD, NEW)).toBeGreaterThan(0.9)
+  })
+
+  it('reports low when the model rewrote the copy', () => {
+    const NEW = '<html><body><p>completely different sentences about another topic entirely</p></body></html>'
+    expect(contentPreservationRatio(OLD, NEW)).toBeLessThan(0.4)
   })
 })
 

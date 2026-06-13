@@ -47,6 +47,7 @@ function SectionTitle({ children }) {
 export default function HtmlElementPanel({
   info,
   onChange,
+  onSelectParent,
   onDuplicate,
   onMoveUp,
   onMoveDown,
@@ -58,9 +59,9 @@ export default function HtmlElementPanel({
   return (
     <div className="p-3">
       <div className="mb-1 flex items-center justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="text-sm font-semibold text-[#111827]">{label}</div>
-          <div className="max-w-[200px] truncate text-xs text-[#d1d5db]" title={info.classes}>
+          <div className="max-w-[200px] truncate text-xs text-[#9ca3af]" title={info.classes}>
             &lt;{info.tag}&gt;{info.classes ? ` .${info.classes.split(' ').join(' .')}` : ''}
           </div>
         </div>
@@ -73,9 +74,27 @@ export default function HtmlElementPanel({
           ×
         </button>
       </div>
-      <div className="mb-3 rounded-lg bg-[#eef2ff] px-2 py-1.5 text-xs text-[#4f46e5]">
-        Editing the selected page element
-      </div>
+
+      {/* Breadcrumb + Select parent — the way to reach a container (section,
+          div) you can't click directly. */}
+      {info.hasParent && (
+        <div className="mb-2 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onSelectParent}
+            title={`Select the containing ${info.parentTag}`}
+            className="flex items-center gap-1 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-xs font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
+          >
+            ↑ Select parent
+            <span className="text-[#9ca3af]">&lt;{info.parentTag}&gt;</span>
+          </button>
+        </div>
+      )}
+      {info.ancestors?.length > 0 && (
+        <div className="mb-3 truncate text-[11px] text-[#9ca3af]" title={info.ancestors.join(' › ')}>
+          {info.ancestors.join(' › ')} › <span className="text-[#4f46e5]">{info.tag}</span>
+        </div>
+      )}
 
       {(info.canEditText || info.href !== null || info.src !== null) && (
         <>
@@ -149,6 +168,20 @@ export default function HtmlElementPanel({
           label="Background"
           value={info.background || '#ffffff'}
           onChange={(v) => onChange({ background: v })}
+        />
+      </div>
+
+      <SectionTitle>Box</SectionTitle>
+      <div className="space-y-2">
+        <LabeledNumber
+          label="Padding (px)"
+          value={info.padding}
+          onChange={(v) => onChange({ padding: v })}
+        />
+        <LabeledNumber
+          label="Corner radius (px)"
+          value={info.radius}
+          onChange={(v) => onChange({ radius: v })}
         />
       </div>
 

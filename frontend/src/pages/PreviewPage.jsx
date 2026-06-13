@@ -321,7 +321,11 @@ export default function PreviewPage() {
             boxSizing: 'border-box',
           }}
         />
-        <div className="fixed right-4 top-4 z-[100] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg">
+        {/* Bottom-right, clear of the (possibly multi-row) top page nav, so
+            the Static/Run-JS toggle is always visible and clickable. */}
+        <div
+          className="fixed bottom-4 right-4 z-[120] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg"
+        >
           <button
             type="button"
             onClick={() => setHtmlPreviewMode('static')}

@@ -59,6 +59,10 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     cs = null
   }
   const canEditText = isTextEditable(el)
+  const px = (v) => Math.round(parseFloat(v) || 0)
+  // The parent we'd jump to with "Select parent" (skips inline wrappers,
+  // stops at <body>) and a readable ancestor trail for context.
+  const parent = selectableParent(el)
   return {
     tag,
     classes: [...el.classList].join(' '),
@@ -67,12 +71,42 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     href: tag === 'a' ? el.getAttribute('href') || '' : null,
     src: tag === 'img' ? el.getAttribute('src') || '' : null,
     alt: tag === 'img' ? el.getAttribute('alt') || '' : null,
-    fontSize: cs ? Math.round(parseFloat(cs.fontSize) || 0) : 0,
+    hasParent: !!parent,
+    parentTag: parent ? parent.tagName.toLowerCase() : null,
+    ancestors: ancestorTrail(el),
+    childCount: el.childElementCount,
+    fontSize: cs ? px(cs.fontSize) : 0,
     fontWeight: cs ? String(cs.fontWeight || '') : '',
     textAlign: cs ? cs.textAlign || '' : '',
     color: cs ? cssColorToHex(cs.color) : '',
     background: cs ? cssColorToHex(cs.backgroundColor) : '',
+    padding: cs ? px(cs.paddingTop) : 0,
+    radius: cs ? px(cs.borderTopLeftRadius) : 0,
   }
+}
+
+// The element a "Select parent" action should jump to: the nearest ancestor
+// that isn't an inline-formatting wrapper, stopping before <body>.
+export function selectableParent(el) {
+  let node = el?.parentElement
+  while (node && INLINE_FORMAT_TAGS.has(node.tagName)) node = node.parentElement
+  if (!node) return null
+  const body = el.ownerDocument?.body
+  if (node === body || node === el.ownerDocument?.documentElement) return null
+  return node
+}
+
+// Readable ancestor tags from just under <body> down to (and excluding) the
+// element itself — drives the breadcrumb so the user can see where they are.
+function ancestorTrail(el) {
+  const body = el.ownerDocument?.body
+  const trail = []
+  let node = el.parentElement
+  while (node && node !== body && node !== el.ownerDocument?.documentElement) {
+    if (!INLINE_FORMAT_TAGS.has(node.tagName)) trail.unshift(node.tagName.toLowerCase())
+    node = node.parentElement
+  }
+  return trail.slice(-4) // keep it short
 }
 
 // Apply a partial update from the panel. Only keys present in `patch` are
@@ -98,6 +132,14 @@ export function applyElementPatch(el, patch = {}) {
   if (patch.textAlign !== undefined) setStyle('textAlign', patch.textAlign)
   if (patch.color !== undefined) setStyle('color', patch.color)
   if (patch.background !== undefined) setStyle('backgroundColor', patch.background)
+  if (patch.padding !== undefined) {
+    const n = Number(patch.padding)
+    setStyle('padding', n > 0 ? `${n}px` : '')
+  }
+  if (patch.radius !== undefined) {
+    const n = Number(patch.radius)
+    setStyle('borderRadius', n >= 0 && String(patch.radius) !== '' ? `${n}px` : '')
+  }
 }
 
 // Insert a deep clone right after the element. Returns the clone (the panel

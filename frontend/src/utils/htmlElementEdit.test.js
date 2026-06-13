@@ -9,6 +9,7 @@ import {
   duplicateElement,
   moveElement,
   resolveSelectableElement,
+  selectableParent,
 } from './htmlElementEdit.js'
 
 beforeEach(() => {
@@ -87,6 +88,17 @@ describe('describeElement', () => {
     const info = describeElement(document.getElementById('hero'))
     expect(info.canEditText).toBe(false)
   })
+
+  it('reports the selectable parent + ancestor trail', () => {
+    const para = describeElement(document.getElementById('para'))
+    expect(para.hasParent).toBe(true)
+    expect(para.parentTag).toBe('section')
+    expect(para.ancestors).toEqual(['section'])
+    // A top-level section's parent is <body> → no selectable parent.
+    const hero = describeElement(document.getElementById('hero'))
+    expect(hero.hasParent).toBe(false)
+    expect(hero.ancestors).toEqual([])
+  })
 })
 
 describe('applyElementPatch', () => {
@@ -153,5 +165,31 @@ describe('duplicateElement / moveElement', () => {
     expect(moveElement(title, 'up')).toBe(false)
     const pic = document.getElementById('pic')
     expect(moveElement(pic, 'down')).toBe(false)
+  })
+})
+
+describe('selectableParent', () => {
+  it('returns the containing element', () => {
+    expect(selectableParent(document.getElementById('para'))).toBe(document.getElementById('hero'))
+  })
+
+  it('skips inline wrappers', () => {
+    expect(selectableParent(document.getElementById('bold'))).toBe(document.getElementById('title'))
+  })
+
+  it('returns null at the top level (parent is body)', () => {
+    expect(selectableParent(document.getElementById('hero'))).toBeNull()
+  })
+})
+
+describe('applyElementPatch — box styles', () => {
+  it('sets and clears padding and radius', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { padding: 24, radius: 12 })
+    expect(p.style.padding).toBe('24px')
+    expect(p.style.borderRadius).toBe('12px')
+    applyElementPatch(p, { padding: 0, radius: '' })
+    expect(p.style.padding).toBe('')
+    expect(p.style.borderRadius).toBe('')
   })
 })

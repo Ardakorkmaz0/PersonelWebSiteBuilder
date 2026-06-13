@@ -1216,6 +1216,7 @@ export default function EditorPage() {
                       <HtmlElementPanel
                         info={htmlSelection}
                         onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
+                        onSelectParent={() => workspaceRef.current?.selectParent?.()}
                         onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
                         onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
                         onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}

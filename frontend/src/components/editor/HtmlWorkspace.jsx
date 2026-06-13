@@ -29,6 +29,7 @@ import {
   duplicateElement,
   moveElement,
   resolveSelectableElement,
+  selectableParent,
 } from '../../utils/htmlElementEdit.js'
 import { componentToHtml } from '../../utils/componentToHtml.js'
 
@@ -331,7 +332,20 @@ function HtmlWorkspace({
         try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
       }),
     deleteSelected: () => mutateSelected((doc, el) => { el.remove(); return null }),
-  }), [applyAiHtml, clearSelection, mode, mutateSelected, readHtml, setDocument, switchMode])
+    // Climb to the containing element (section/div) — the only practical way
+    // to select & style a container you can't click directly.
+    selectParent: () => {
+      const doc = iframeRef.current?.contentDocument
+      const el = selectedRef.current
+      if (!doc || !el) return
+      const parent = selectableParent(el)
+      if (!parent) return
+      selectedRef.current = parent
+      setSelectedElement(doc, parent)
+      try { parent.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
+      onElementSelect?.(describeElement(parent))
+    },
+  }), [applyAiHtml, clearSelection, mode, mutateSelected, onElementSelect, readHtml, setDocument, switchMode])
 
   const device = DEVICES.find((d) => d.id === deviceId) || DEVICES[0]
   const isFit = device.id === 'fit'

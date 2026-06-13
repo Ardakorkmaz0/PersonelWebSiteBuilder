@@ -24,6 +24,7 @@ import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
 import { pageFileName } from '../utils/pageFiles.js'
 import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
+import { applyThemeToDocument } from '../utils/htmlTheme.js'
 import { Renderer } from '../components/renderer/Renderer.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
@@ -488,6 +489,26 @@ export default function EditorPage() {
     setHtmlFuture([])
     setPageHtmlMap((m) => ({ ...m, [pageId]: htmlText }))
     setHtmlDirty(true)
+  }
+
+  // Theme presets / Apply, on an HTML site: rewrite EVERY page's document
+  // with the new palette + font. The current page rides commitHtml (undo +
+  // live reseed); the others are merged into the map in the same batch.
+  function applyThemeToAllHtmlPages(theme) {
+    const liveCur = workspaceRef.current?.getHtml?.() ?? pageHtmlMap[currentPageId] ?? ''
+    setPageHtmlMap((prev) => {
+      const next = { ...prev }
+      for (const [pid, h] of Object.entries(prev)) {
+        if (pid === currentPageId || !h || !h.trim()) continue
+        const applied = applyThemeToDocument(h, theme)
+        if (applied) next[pid] = applied
+      }
+      return next
+    })
+    if (liveCur && liveCur.trim()) {
+      const appliedCur = applyThemeToDocument(liveCur, theme)
+      if (appliedCur) commitHtml(appliedCur, { reseedWorkspace: true })
+    }
   }
 
   async function save(nextPublished = published) {
@@ -1202,7 +1223,7 @@ export default function EditorPage() {
                         onClose={() => workspaceRef.current?.clearSelection?.()}
                       />
                     ) : (
-                      <PropertiesPanel />
+                      <PropertiesPanel htmlMode onApplyThemeToHtml={applyThemeToAllHtmlPages} />
                     )}
                   </div>
                 </div>

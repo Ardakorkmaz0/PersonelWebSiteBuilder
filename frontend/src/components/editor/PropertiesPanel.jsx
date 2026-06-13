@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
-import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS } from '../../utils/theme.js'
+import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS, normalizeTheme } from '../../utils/theme.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
 import {
   appendSnippet,
@@ -642,7 +642,7 @@ function groupedStyles(keys) {
   return groups
 }
 
-export default function PropertiesPanel() {
+export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }) {
   const selectedId = useEditorStore((s) => s.selectedId)
   const schema = useEditorStore((s) => s.schema)
   const page = useEditorStore(selectCurrentPage)
@@ -736,23 +736,28 @@ export default function PropertiesPanel() {
               <SectionTitle>Theme</SectionTitle>
               <button
                 type="button"
-                onClick={applyTheme}
+                onClick={() => (htmlMode ? onApplyThemeToHtml?.(theme) : applyTheme())}
+                title={htmlMode
+                  ? 'Apply this palette + font to every HTML page'
+                  : 'Apply the theme to every component'}
                 className="rounded-lg border border-[#4f46e5] px-2 py-1 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
               >
-                Apply to design
+                {htmlMode ? 'Apply to pages' : 'Apply to design'}
               </button>
             </div>
-            {/* One-click presets: set the palette AND restyle every existing
-                component. New components always inherit the active theme. */}
+            {/* One-click presets: set the palette AND restyle everything —
+                the component schema (component mode) or every HTML page's
+                document (HTML mode). New components inherit the active theme. */}
             <div className="grid grid-cols-2 gap-1.5">
               {THEME_PRESETS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
-                  title={`Use the "${p.name}" theme and apply it to the whole design`}
+                  title={`Use the "${p.name}" theme and apply it to the whole site`}
                   onClick={() => {
                     updateTheme(p.theme)
-                    applyTheme()
+                    if (htmlMode) onApplyThemeToHtml?.(normalizeTheme(p.theme))
+                    else applyTheme()
                   }}
                   className="flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-left text-[11px] font-medium text-[#374151] transition hover:border-[#4f46e5] hover:bg-[#eef2ff]"
                 >

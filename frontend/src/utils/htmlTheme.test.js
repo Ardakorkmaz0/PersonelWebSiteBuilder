@@ -2,7 +2,13 @@
 // without touching anything else, and must signal (null) when the document
 // has no recognizable color variables so the caller falls back to the AI.
 import { describe, expect, it } from 'vitest'
-import { THEME_SWATCHES, applyPaletteToHtml, replaceDominantColors } from './htmlTheme.js'
+import {
+  THEME_SWATCHES,
+  applyPaletteToHtml,
+  applyThemeToDocument,
+  injectThemeFont,
+  replaceDominantColors,
+} from './htmlTheme.js'
 
 const DOC = `<!DOCTYPE html><html><head><style>
 :root { --accent:#4f46e5; --accent-soft:rgba(79,70,229,0.1); --ink:#111; }
@@ -61,5 +67,65 @@ describe('replaceDominantColors', () => {
 
   it('returns null for pages with only neutral colors', () => {
     expect(replaceDominantColors('<style>p{color:#fafafa;background:#101010}</style>', ['#f00'])).toBeNull()
+  })
+})
+
+describe('applyThemeToDocument', () => {
+  const THEME = {
+    primaryColor: '#e8543f',
+    textColor: '#27201e',
+    backgroundColor: '#fffaf7',
+    softColor: '#fcefe9',
+    fontFamily: '"Poppins", system-ui, sans-serif',
+  }
+
+  it('maps theme fields onto a wide set of CSS variable names', () => {
+    const doc = '<head><style>:root{--accent:#000;--ink:#222;--bg:#fff;--soft:#eee}</style></head><body>x</body>'
+    const out = applyThemeToDocument(doc, THEME)
+    expect(out).toContain('--accent:#e8543f')
+    expect(out).toContain('--ink:#27201e')
+    expect(out).toContain('--bg:#fffaf7')
+    expect(out).toContain('--soft:#fcefe9')
+  })
+
+  it('injects a font override + Google Font link', () => {
+    const out = applyThemeToDocument('<head></head><body>x</body>', THEME)
+    expect(out).toContain('data-pwb-theme-font')
+    expect(out).toContain('Poppins')
+    expect(out).toContain('fonts.googleapis.com')
+  })
+
+  it('recolors dominant brand colors when the page has no variables', () => {
+    const doc = '<head><style>.btn{background:#1d4ed8}.a{color:#1d4ed8}</style></head><body>hi</body>'
+    const out = applyThemeToDocument(doc, { primaryColor: '#e8543f' })
+    expect(out).toContain('#e8543f')
+    expect(out).not.toContain('#1d4ed8')
+  })
+
+  it('is idempotent — re-applying does not stack font blocks', () => {
+    const once = applyThemeToDocument('<head></head><body>x</body>', THEME)
+    const twice = applyThemeToDocument(once, THEME)
+    const count = (s) => (s.match(/data-pwb-theme-font/g) || []).length
+    expect(count(twice)).toBe(count(once))
+  })
+
+  it('returns null for empty input', () => {
+    expect(applyThemeToDocument('', THEME)).toBeNull()
+    expect(applyThemeToDocument('<body>x</body>', null)).toBeNull()
+  })
+})
+
+describe('injectThemeFont', () => {
+  it('strips a previous injection before adding the new one', () => {
+    const a = injectThemeFont('<head></head><body></body>', '"Inter", sans-serif')
+    const b = injectThemeFont(a, '"Lora", serif')
+    expect(b).toContain('Lora')
+    expect(b).not.toContain('Inter')
+  })
+
+  it('removes its block entirely when given no font', () => {
+    const a = injectThemeFont('<head></head><body></body>', '"Inter", sans-serif')
+    const b = injectThemeFont(a, '')
+    expect(b).not.toContain('data-pwb-theme-font')
   })
 })

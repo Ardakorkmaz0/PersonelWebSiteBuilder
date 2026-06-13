@@ -4,13 +4,18 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   applyElementPatch,
+  bindLinkToTarget,
   cssColorToHex,
   describeElement,
   duplicateElement,
+  ensureElementId,
   moveElement,
+  nearestAnchor,
+  reorderToPoint,
   resolveSelectableElement,
   selectableParent,
 } from './htmlElementEdit.js'
+import { closestPlaceableBlock, insertPositionForY } from './htmlPlacement.js'
 
 beforeEach(() => {
   document.body.innerHTML = `
@@ -191,5 +196,54 @@ describe('applyElementPatch — box styles', () => {
     applyElementPatch(p, { padding: 0, radius: '' })
     expect(p.style.padding).toBe('')
     expect(p.style.borderRadius).toBe('')
+  })
+})
+
+describe('ensureElementId / bindLinkToTarget / nearestAnchor', () => {
+  it('derives a stable, unique id from text and reuses an existing one', () => {
+    const fresh = document.querySelector('#second p') // no id in the fixture
+    expect(fresh.id).toBe('')
+    const id = ensureElementId(fresh)
+    expect(id).toBe('2nd')
+    expect(ensureElementId(fresh)).toBe('2nd') // reuses
+    // an element that already has an id keeps it
+    expect(ensureElementId(document.getElementById('para'))).toBe('para')
+  })
+
+  it('points a link at a target, giving the target an id', () => {
+    const link = document.getElementById('link')
+    const hero = document.getElementById('hero')
+    const href = bindLinkToTarget(link, hero)
+    expect(href).toBe('#' + hero.id)
+    expect(link.getAttribute('href')).toBe(href)
+  })
+
+  it('only binds when the source is an anchor', () => {
+    expect(bindLinkToTarget(document.getElementById('para'), document.getElementById('hero'))).toBe('')
+  })
+
+  it('finds the nearest anchor above an element', () => {
+    document.body.innerHTML = '<a id="a1"><span id="s1">x</span></a>'
+    expect(nearestAnchor(document.getElementById('s1'), document.body)).toBe(document.getElementById('a1'))
+  })
+})
+
+describe('reorderToPoint', () => {
+  it('moves a node before/after the block under the point', () => {
+    // jsdom has no layout, so stub getBoundingClientRect for a deterministic
+    // "after" decision and elementFromPoint to return the target.
+    const a = document.getElementById('hero')
+    const b = document.getElementById('second')
+    b.getBoundingClientRect = () => ({ top: 100, height: 200, left: 0, width: 100, bottom: 300, right: 100 })
+    document.elementFromPoint = () => b
+    const moved = reorderToPoint(document, a, 50, 290, { closestPlaceableBlock, insertPositionForY })
+    expect(moved).toBe(b)
+    expect(b.nextElementSibling).toBe(a) // a moved to after b (lower 60%)
+  })
+
+  it('returns null when dropped on itself', () => {
+    const a = document.getElementById('hero')
+    document.elementFromPoint = () => a
+    expect(reorderToPoint(document, a, 0, 0, { closestPlaceableBlock, insertPositionForY })).toBeNull()
   })
 })

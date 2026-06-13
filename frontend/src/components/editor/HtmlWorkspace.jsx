@@ -25,9 +25,12 @@ import {
 } from '../../utils/htmlPlacement.js'
 import {
   applyElementPatch,
+  bindLinkToTarget,
   describeElement,
   duplicateElement,
   moveElement,
+  nearestAnchor,
+  reorderToPoint,
   resolveSelectableElement,
   selectableParent,
 } from '../../utils/htmlElementEdit.js'
@@ -131,6 +134,11 @@ function HtmlWorkspace({
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
+  // Edit sub-tool (only meaningful in edit mode): 'text' = click-to-type,
+  // 'rearrange' = drag blocks to reorder, 'link' = connect a link to a target.
+  const [editTool, setEditTool] = useState('text')
+  const [linkHint, setLinkHint] = useState(null) // link-tool guidance text
+  const linkSourceRef = useRef(null) // chosen <a> awaiting a target (link tool)
 
   const iframeRef = useRef(null)
   const stageRef = useRef(null)
@@ -140,6 +148,9 @@ function HtmlWorkspace({
   // per load) always read the current value without re-binding.
   const pendingRef = useRef(pendingType)
   useEffect(() => { pendingRef.current = pendingType }, [pendingType])
+  // Latest edit tool for the load-time selection listener (bound once).
+  const editToolRef = useRef(editTool)
+  useEffect(() => { editToolRef.current = editTool }, [editTool])
   // The element currently selected in the properties panel (edit mode only).
   // A ref, not state: it's a live DOM node inside the iframe.
   const selectedRef = useRef(null)
@@ -211,6 +222,8 @@ function HtmlWorkspace({
     if (next === 'edit') setEditSeed(currentHtml)
     if (next === 'source') setSourceDraft(currentHtml)
     clearSelection() // the selected node dies with the edit document
+    setEditTool('text') // always re-enter edit on the plain text tool
+    setLinkHint(null)
     setNonce((n) => n + 1)
     setMode(next)
   }, [clearSelection, mode, onCommit, readHtml])
@@ -444,13 +457,152 @@ function HtmlWorkspace({
     }
   }, [onCancelPlacement, placeAt])
 
+  // ----- rearrange: drag a block to a new position --------------------------
+  const attachRearrangeListeners = useCallback((doc) => {
+    if (!doc?.body) return () => {}
+    ensurePlacementChrome(doc)
+    let dragging = null
+    const blocks = () => [...doc.body.querySelectorAll('*')].filter(
+      (el) => closestPlaceableBlock(el, doc.body) === el && el !== doc.body,
+    )
+    const arm = () => blocks().forEach((el) => { el.draggable = true; el.setAttribute('data-pwb-drag', '') })
+    const disarm = () => doc.body.querySelectorAll('[data-pwb-drag]').forEach((el) => {
+      el.removeAttribute('draggable')
+      el.removeAttribute('data-pwb-drag')
+    })
+    arm()
+    const onDragStart = (e) => {
+      const block = closestPlaceableBlock(e.target, doc.body)
+      if (!block || block === doc.body) return
+      dragging = block
+      e.dataTransfer.effectAllowed = 'move'
+      try { e.dataTransfer.setData('text/plain', 'pwb-move') } catch { /* ignore */ }
+    }
+    const onDragOver = (e) => {
+      if (!dragging) return
+      e.preventDefault()
+      const win = doc.defaultView
+      const EDGE = 60
+      if (e.clientY > win.innerHeight - EDGE) win.scrollBy({ top: 18, behavior: 'instant' })
+      else if (e.clientY < EDGE && win.scrollY > 0) win.scrollBy({ top: -18, behavior: 'instant' })
+      const target = closestPlaceableBlock(doc.elementFromPoint(e.clientX, e.clientY), doc.body)
+      setHoverTarget(doc, target && target !== doc.body && target !== dragging ? target : null)
+    }
+    const onDrop = (e) => {
+      if (!dragging) return
+      e.preventDefault()
+      const moved = reorderToPoint(doc, dragging, e.clientX, e.clientY, { closestPlaceableBlock, insertPositionForY })
+      const node = dragging
+      dragging = null
+      setHoverTarget(doc, null)
+      if (moved) {
+        disarm()
+        removePlacementChrome(doc)
+        onCommit?.(serializeDocument(doc))
+        flashNode(doc, node)
+        // re-arm on the (now committed) live doc for the next drag
+        arm()
+        ensurePlacementChrome(doc)
+      }
+    }
+    const onDragEnd = () => { dragging = null; setHoverTarget(doc, null) }
+    doc.addEventListener('dragstart', onDragStart, true)
+    doc.addEventListener('dragover', onDragOver, true)
+    doc.addEventListener('drop', onDrop, true)
+    doc.addEventListener('dragend', onDragEnd, true)
+    return () => {
+      disarm()
+      doc.removeEventListener('dragstart', onDragStart, true)
+      doc.removeEventListener('dragover', onDragOver, true)
+      doc.removeEventListener('drop', onDrop, true)
+      doc.removeEventListener('dragend', onDragEnd, true)
+      removePlacementChrome(doc)
+    }
+  }, [onCommit])
+
+  // ----- link: click a link, then click its target ---------------------------
+  const drawConnection = useCallback((doc, a, b) => {
+    if (!doc?.body || !a || !b) return
+    const ra = a.getBoundingClientRect()
+    const rb = b.getBoundingClientRect()
+    const win = doc.defaultView
+    const sx = ra.left + ra.width / 2 + win.scrollX
+    const sy = ra.top + ra.height / 2 + win.scrollY
+    const tx = rb.left + rb.width / 2 + win.scrollX
+    const ty = rb.top + rb.height / 2 + win.scrollY
+    const ns = 'http://www.w3.org/2000/svg'
+    const svg = doc.createElementNS(ns, 'svg')
+    svg.setAttribute('data-pwb-chrome', '')
+    svg.setAttribute('style', `position:absolute;left:0;top:0;width:${doc.body.scrollWidth}px;height:${doc.body.scrollHeight}px;pointer-events:none;z-index:2147483647;overflow:visible`)
+    const line = doc.createElementNS(ns, 'line')
+    line.setAttribute('x1', sx); line.setAttribute('y1', sy)
+    line.setAttribute('x2', tx); line.setAttribute('y2', ty)
+    line.setAttribute('stroke', '#4f46e5')
+    line.setAttribute('stroke-width', '3')
+    line.setAttribute('stroke-dasharray', '6 4')
+    svg.appendChild(line)
+    for (const [cx, cy] of [[sx, sy], [tx, ty]]) {
+      const dot = doc.createElementNS(ns, 'circle')
+      dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', '5')
+      dot.setAttribute('fill', '#4f46e5')
+      svg.appendChild(dot)
+    }
+    doc.body.appendChild(svg)
+    win.setTimeout(() => { try { svg.remove() } catch { /* gone */ } }, 1400)
+  }, [])
+
+  const attachLinkListeners = useCallback((doc) => {
+    if (!doc?.body) return () => {}
+    ensurePlacementChrome(doc)
+    linkSourceRef.current = null
+    const onClick = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!linkSourceRef.current) {
+        const anchor = nearestAnchor(e.target, doc.body)
+        if (!anchor) { setLinkHint('Pick a LINK first (a nav item or button-link), then click its target.'); return }
+        linkSourceRef.current = anchor
+        setHoverTarget(doc, anchor)
+        setLinkHint('Now click the element this link should jump to.')
+        return
+      }
+      const target = closestPlaceableBlock(e.target, doc.body)
+      if (!target || target === doc.body || target === linkSourceRef.current) return
+      const href = bindLinkToTarget(linkSourceRef.current, target)
+      drawConnection(doc, linkSourceRef.current, target)
+      const src = linkSourceRef.current
+      linkSourceRef.current = null
+      setHoverTarget(doc, null)
+      if (href) {
+        onCommit?.(serializeDocument(doc))
+        setLinkHint(`Linked → ${href}. Click another link to connect more, or leave Link mode.`)
+        flashNode(doc, src)
+      }
+    }
+    const onMove = (e) => {
+      if (linkSourceRef.current) {
+        const t = closestPlaceableBlock(doc.elementFromPoint(e.clientX, e.clientY), doc.body)
+        setHoverTarget(doc, t && t !== doc.body && t !== linkSourceRef.current ? t : null)
+      }
+    }
+    doc.addEventListener('click', onClick, true)
+    doc.addEventListener('mousemove', onMove, true)
+    return () => {
+      linkSourceRef.current = null
+      doc.removeEventListener('click', onClick, true)
+      doc.removeEventListener('mousemove', onMove, true)
+      setHoverTarget(doc, null)
+      removePlacementChrome(doc)
+    }
+  }, [drawConnection, onCommit])
+
   function onIframeLoad() {
     const doc = iframeRef.current?.contentDocument
     if (!doc) return
     if (mode === 'edit') {
-      // designMode ON for free-text editing, but OFF while placing so clicks
-      // are insertions, not caret moves.
-      setDocumentDesignMode(doc, placing ? 'off' : 'on')
+      // designMode ON only for the free-text tool — off for placing and for
+      // the rearrange/link tools so clicks/drags aren't caret moves.
+      setDocumentDesignMode(doc, placing || editTool !== 'text' ? 'off' : 'on')
       // Dashed hover outlines + text cursor — makes "click anywhere and
       // type" discoverable. Stripped from every save by serializeDocument.
       ensureEditHintChrome(doc)
@@ -472,7 +624,7 @@ function HtmlWorkspace({
   // listeners) are discarded wholesale on reload, so no cleanup is needed.
   function attachSelectionListeners(doc) {
     doc.addEventListener('click', (e) => {
-      if (pendingRef.current) return // placement owns clicks right now
+      if (pendingRef.current || editToolRef.current !== 'text') return // owned by another tool
       const el = resolveSelectableElement(e.target, doc.body)
       selectedRef.current = el
       setSelectedElement(doc, el)
@@ -489,23 +641,42 @@ function HtmlWorkspace({
     })
   }
 
-  // (Re)bind placement listeners whenever placement turns on for an already
-  // loaded edit iframe (e.g. user clicks a second component without leaving
-  // edit mode → no iframe reload, so onIframeLoad won't fire again).
+  // Single edit-mode tool manager: (re)binds the listeners for whatever is
+  // active — palette placement, rearrange-drag, link-connect, or plain text
+  // editing — and flips designMode accordingly. Re-runs when the tool or the
+  // placement state changes without needing an iframe reload.
   useEffect(() => {
     const doc = iframeRef.current?.contentDocument
     if (!doc || mode !== 'edit') return undefined
     if (placing) {
       setDocumentDesignMode(doc, 'off')
       clearSelection() // placement clicks shouldn't fight the element panel
-      const cleanup = attachPlacementListeners(doc)
-      return cleanup
+      return attachPlacementListeners(doc)
     }
-    // leaving placement → restore caret editing + clear chrome
+    if (editTool === 'rearrange') {
+      setDocumentDesignMode(doc, 'off')
+      clearSelection()
+      return attachRearrangeListeners(doc)
+    }
+    if (editTool === 'link') {
+      setDocumentDesignMode(doc, 'off')
+      clearSelection()
+      return attachLinkListeners(doc)
+    }
+    // text tool → caret editing, no extra chrome
     setDocumentDesignMode(doc, 'on')
     removePlacementChrome(doc)
     return undefined
-  }, [attachPlacementListeners, clearSelection, placing, mode, nonce])
+  }, [
+    attachPlacementListeners,
+    attachRearrangeListeners,
+    attachLinkListeners,
+    clearSelection,
+    placing,
+    editTool,
+    mode,
+    nonce,
+  ])
 
   // Don't fire a stale panel refresh after unmount.
   useEffect(() => () => {
@@ -542,6 +713,26 @@ function HtmlWorkspace({
               Source
             </button>
           </div>
+          {/* Edit sub-tools — sit right next to View/Edit/Source. */}
+          {mode === 'edit' && !placing && (
+            <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+              {[
+                ['text', '✎ Text', 'Click any text and type'],
+                ['rearrange', '⇅ Move', 'Drag a block to reorder it'],
+                ['link', '🔗 Link', 'Click a link, then click where it should go'],
+              ].map(([id, label, title]) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={title}
+                  onClick={() => { setEditTool(id); setLinkHint(id === 'link' ? 'Click a LINK (nav item / button-link), then click its target.' : null) }}
+                  className={editTool === id ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {mode === 'source' && (
             <button
               type="button"
@@ -564,9 +755,21 @@ function HtmlWorkspace({
               ? 'Live preview: JavaScript, links, forms, and scrolling are enabled'
               : mode === 'source'
                 ? `${fileName} source file`
-                : 'Click any text in the page and type — like a document'}
+                : editTool === 'rearrange'
+                  ? 'Drag any block to reorder it'
+                  : editTool === 'link'
+                    ? 'Connect a link to a target'
+                    : 'Click any text in the page and type — like a document'}
           </span>
         </div>
+
+        {/* Link-tool guidance banner. */}
+        {mode === 'edit' && editTool === 'link' && !placing && (
+          <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
+            <span aria-hidden>🔗</span>
+            <span>{linkHint || 'Click a LINK (nav item / button-link), then click the element it should jump to.'}</span>
+          </div>
+        )}
 
         {/* Placement banner — shows the active component + how to cancel. */}
         {placing && (

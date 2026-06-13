@@ -151,6 +151,67 @@ export function duplicateElement(el) {
   return clone
 }
 
+// Slugify a string into an id-safe token.
+function slugify(s) {
+  return String(s || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40)
+}
+
+// Ensure an element has a stable, unique id (so a link can target it). Reuses
+// an existing id; otherwise derives one from the element's text, falling back
+// to the tag name, and de-dupes against the document.
+export function ensureElementId(el) {
+  if (!el || el.nodeType !== 1) return ''
+  if (el.id) return el.id
+  const doc = el.ownerDocument
+  const base = slugify(el.textContent) || el.tagName.toLowerCase()
+  let id = base
+  let n = 2
+  while (doc.getElementById(id)) id = `${base}-${n++}`
+  el.id = id
+  return id
+}
+
+// Link binding for the visual "connect a link to a target" tool: point the
+// source anchor at the target element (giving the target an id if needed).
+// Returns the href that was set, or '' when the source isn't a link.
+export function bindLinkToTarget(sourceAnchor, targetEl) {
+  if (!sourceAnchor || sourceAnchor.tagName !== 'A' || !targetEl) return ''
+  const id = ensureElementId(targetEl)
+  const href = `#${id}`
+  sourceAnchor.setAttribute('href', href)
+  return href
+}
+
+// The nearest <a> at or above `el` (the bindable "source" for link mode).
+export function nearestAnchor(el, bodyEl) {
+  let node = el
+  while (node && node !== bodyEl) {
+    if (node.nodeType === 1 && node.tagName === 'A') return node
+    node = node.parentElement
+  }
+  return null
+}
+
+// Move `node` to before/after the block under (clientX, clientY). Returns the
+// drop target block, or null when the move was a no-op (dropped on itself /
+// inside itself / nowhere valid).
+export function reorderToPoint(doc, node, clientX, clientY, helpers) {
+  const { closestPlaceableBlock, insertPositionForY } = helpers
+  if (!doc?.body || !node) return null
+  const hit = doc.elementFromPoint(clientX, clientY)
+  const target = closestPlaceableBlock(hit, doc.body)
+  if (!target || target === doc.body || target === node || node.contains(target)) return null
+  const rect = target.getBoundingClientRect()
+  const position = insertPositionForY(rect.top, rect.height, clientY)
+  target.insertAdjacentElement(position, node)
+  return target
+}
+
 // Swap the element with its previous/next sibling. Returns true when a move
 // actually happened (false at the edges).
 export function moveElement(el, dir) {

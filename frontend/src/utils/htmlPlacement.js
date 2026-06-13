@@ -190,6 +190,14 @@ export function serializeDocument(doc) {
     el.removeAttribute(FLASH_ATTR)
     el.removeAttribute(SELECTED_ATTR)
   })
+  // The rearrange tool sets draggable on blocks; never let that leak into
+  // saved HTML. Drop the marker + the draggable attribute it added.
+  root.querySelectorAll('[data-pwb-drag]').forEach((el) => {
+    el.removeAttribute('data-pwb-drag')
+    el.removeAttribute('draggable')
+  })
+  // Strip the transient SVG connection line drawn by the link tool.
+  root.querySelectorAll('svg[data-pwb-chrome]').forEach((el) => el.remove())
   return '<!DOCTYPE html>\n' + root.outerHTML
 }
 

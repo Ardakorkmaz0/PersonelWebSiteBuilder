@@ -34,6 +34,7 @@ import {
   LabeledNumber,
   LabeledRange,
   LabeledCheckbox,
+  LinkTargetControl,
   LinksEditor,
   TabsEditorControl,
 } from './controls.jsx'
@@ -536,7 +537,12 @@ function SectionTitle({ children }) {
   )
 }
 
-function PropControl({ field, value, onChange, extras }) {
+function PropControl({ field, value, onChange, extras, pages = [] }) {
+  // An href field becomes the visual link-target picker (page / top / section
+  // / URL) instead of a raw text box.
+  if (field.key === 'href') {
+    return <LinkTargetControl label={field.label} value={value} onChange={onChange} pages={pages} />
+  }
   if (field.control === 'textarea') {
     return <LabeledTextarea label={field.label} value={value} onChange={onChange} />
   }
@@ -560,7 +566,7 @@ function PropControl({ field, value, onChange, extras }) {
     )
   }
   if (field.control === 'links') {
-    return <LinksEditor label={field.label} value={value} onChange={onChange} />
+    return <LinksEditor label={field.label} value={value} onChange={onChange} pages={pages} />
   }
   if (field.control === 'tabs') {
     return (
@@ -994,6 +1000,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                 key={field.key}
                 field={field}
                 value={component.props[field.key]}
+                pages={schema.pages}
                 onChange={(val) => updateProps(component.id, { [field.key]: val })}
                 extras={
                   component.type === 'tabs' && field.control === 'tabs'
@@ -1013,9 +1020,10 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
         {LINKABLE_TYPES.has(component.type) && (
           <section className="space-y-3">
             <SectionTitle>Link</SectionTitle>
-            <PropControl
-              field={{ key: 'href', label: 'Link URL (optional)', control: 'text' }}
+            <LinkTargetControl
+              label="Wrap in a link"
               value={component.props.href}
+              pages={schema.pages}
               onChange={(val) => updateProps(component.id, { href: val })}
             />
           </section>

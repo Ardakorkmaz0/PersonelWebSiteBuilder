@@ -510,13 +510,89 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
   )
 }
 
-export function LinksEditor({ label, value, onChange }) {
+// Unreal-blueprint-style link target picker: instead of typing a raw href,
+// you pick WHERE the link goes — a page, the top of the current page, a named
+// section, or an external URL — and the right href is written for you. The
+// published page navigates by `#<pageId>` (page switch), `#top` (scroll up),
+// or `#<section-id>` (scroll to element), all handled by the runtime.
+export function LinkTargetControl({ label, value, onChange, pages = [] }) {
+  const href = typeof value === 'string' ? value : ''
+  const pageIds = new Set(pages.map((p) => p.id))
+  let kind
+  if (!href) kind = 'none'
+  else if (/^(https?:|mailto:|tel:)/i.test(href)) kind = 'url'
+  else if (href === '#' || href === '#top') kind = 'top'
+  else if (href.startsWith('#') && pageIds.has(href.slice(1))) kind = 'page'
+  else if (href.startsWith('#')) kind = 'section'
+  else kind = 'url'
+
+  const setKind = (k) => {
+    if (k === 'none') onChange('')
+    else if (k === 'top') onChange('#top')
+    else if (k === 'page') onChange('#' + (pages[0]?.id || ''))
+    else if (k === 'section') onChange('#section')
+    else onChange(/^https?:/i.test(href) ? href : 'https://')
+  }
+
+  return (
+    <label className="block">
+      {label && <span className={labelCls}>{label}</span>}
+      <select
+        className={inputCls + ' mb-1'}
+        value={kind}
+        onChange={(e) => setKind(e.target.value)}
+      >
+        <option value="none">No link</option>
+        <option value="page">→ Go to page</option>
+        <option value="top">↑ Top of this page</option>
+        <option value="section"># Section on this page</option>
+        <option value="url">🔗 External URL</option>
+      </select>
+      {kind === 'page' && (
+        <select
+          className={inputCls}
+          value={href.slice(1)}
+          onChange={(e) => onChange('#' + e.target.value)}
+        >
+          {pages.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {kind === 'section' && (
+        <input
+          type="text"
+          className={inputCls}
+          value={href.replace(/^#/, '')}
+          placeholder="section id (e.g. contact)"
+          onChange={(e) => onChange('#' + e.target.value.replace(/^#/, ''))}
+        />
+      )}
+      {kind === 'url' && (
+        <input
+          type="text"
+          className={inputCls}
+          value={href}
+          placeholder="https://…"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+      {kind === 'top' && (
+        <p className="text-xs text-[#9ca3af]">Clicking scrolls to the top of the page.</p>
+      )}
+    </label>
+  )
+}
+
+export function LinksEditor({ label, value, onChange, pages = [] }) {
   const links = Array.isArray(value) ? value : []
 
   const update = (i, patch) =>
     onChange(links.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
   const remove = (i) => onChange(links.filter((_, idx) => idx !== i))
-  const add = () => onChange([...links, { label: 'New link', href: '#' }])
+  const add = () => onChange([...links, { label: 'New link', href: '#top' }])
 
   return (
     <div>
@@ -541,12 +617,11 @@ export function LinksEditor({ label, value, onChange }) {
               placeholder="Label"
               onChange={(e) => update(i, { label: e.target.value })}
             />
-            <input
-              type="text"
-              className={inputCls}
+            <LinkTargetControl
+              label=""
               value={link.href ?? ''}
-              placeholder="#section or https://..."
-              onChange={(e) => update(i, { href: e.target.value })}
+              onChange={(href) => update(i, { href })}
+              pages={pages}
             />
           </div>
         ))}

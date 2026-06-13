@@ -140,17 +140,46 @@ export default function PreviewPage() {
   }, [slug])
 
   // Pick the visible page from the URL hash (#<pageId>) so links/anchors work.
+  // Only switch when the hash names a real page — in-page anchors like #top or
+  // #contact are scroll targets and must NOT bounce the visitor to the home
+  // page. The first pick (no/unknown hash) defaults to the first page.
   useEffect(() => {
     if (!site) return
     const pages = site?.schema?.pages || []
+    let settled = false
     const pick = () => {
       const h = decodeURIComponent((window.location.hash || '').replace(/^#/, ''))
-      setActiveId(pages.some((p) => p.id === h) ? h : pages[0]?.id || null)
+      if (pages.some((p) => p.id === h)) {
+        setActiveId(h)
+        settled = true
+      } else if (!settled) {
+        setActiveId(pages[0]?.id || null)
+        settled = true
+      }
+      // else: unknown hash (#top / #section) → leave the page as-is, let the
+      // browser scroll to the matching element.
     }
     pick()
     window.addEventListener('hashchange', pick)
     return () => window.removeEventListener('hashchange', pick)
   }, [site])
+
+  // "Top of page" links (#top / #) scroll to the top in component sites —
+  // there's no element with that id, so the browser wouldn't otherwise act.
+  // #pageId is handled by the hashchange listener; #section scrolls natively.
+  useEffect(() => {
+    const onClick = (e) => {
+      const a = e.target.closest?.('a[href^="#"]')
+      if (!a) return
+      const href = a.getAttribute('href')
+      if (href === '#' || href === '#top') {
+        e.preventDefault()
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }
+    document.addEventListener('click', onClick)
+    return () => document.removeEventListener('click', onClick)
+  }, [])
 
   // All hooks MUST be called on every render in the same order — keep these
   // memos above the early returns below so React doesn't see the hook count

@@ -1495,7 +1495,7 @@ export function detectHtmlIntent(prompt) {
 
 const INTENT_CONTRACTS = {
   add: '\n\nIMPORTANT — this is an ADD request. Return the COMPLETE current document with EVERY existing section preserved exactly as it is (same text, same order, same styling). Only insert the new element where it belongs. Do not rewrite, reformat, or drop anything that already exists.',
-  style: '\n\nIMPORTANT — this is a RESTYLE request. Keep every piece of content (all text, links, images, sections and their order) exactly as it is. Change ONLY the presentation: the <style> rules, colors, fonts, spacing. Do not delete, reword, or reorder any content.',
+  style: '\n\nIMPORTANT — this is a RESTYLE request. Change ONLY presentation: <style> rules, colors, fonts, spacing. Keep every piece of content (all text, links, images) and the EXACT same set of sections/elements — the number of sections must not change. Do NOT add any new section, element, image, or text. Do NOT remove, reword, or reorder anything. If you cannot restyle without adding content, restyle only.',
   general: '',
 }
 

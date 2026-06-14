@@ -83,10 +83,14 @@ function paintConnections(doc) {
   const svg = doc.createElementNS(ns, 'svg')
   svg.setAttribute('data-pwb-connections', '')
   svg.setAttribute('data-pwb-chrome', '')
-  svg.setAttribute('style', `position:absolute;left:0;top:0;width:${doc.body.scrollWidth}px;height:${doc.body.scrollHeight}px;pointer-events:none;z-index:2147483647;overflow:visible`)
+  // position:fixed → the SVG's (0,0) IS the viewport top-left, so
+  // getBoundingClientRect() coords map directly with no scroll math and no
+  // dependency on body margin / positioning context (the old bug). Lines are
+  // repainted on scroll/resize so they keep tracking the elements.
+  svg.setAttribute('style', 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;overflow:visible')
   const center = (el) => {
     const r = el.getBoundingClientRect()
-    return [r.left + r.width / 2 + win.scrollX, r.top + r.height / 2 + win.scrollY]
+    return [r.left + r.width / 2, r.top + r.height / 2]
   }
   for (const [a, b] of pairs) {
     const [sx, sy] = center(a)
@@ -97,7 +101,7 @@ function paintConnections(doc) {
     line.setAttribute('stroke', '#4f46e5')
     line.setAttribute('stroke-width', '2.5')
     line.setAttribute('stroke-dasharray', '6 4')
-    line.setAttribute('opacity', '0.85')
+    line.setAttribute('opacity', '0.9')
     svg.appendChild(line)
     for (const [cx, cy] of [[sx, sy], [tx, ty]]) {
       const dot = doc.createElementNS(ns, 'circle')
@@ -633,6 +637,7 @@ function HtmlWorkspace({
     doc.addEventListener('click', onClick, true)
     doc.addEventListener('mousemove', onMove, true)
     doc.defaultView.addEventListener('scroll', onScroll, { passive: true })
+    doc.defaultView.addEventListener('resize', onScroll)
     return () => {
       linkSourceRef.current = null
       onLinkArmedChange?.(false)
@@ -640,6 +645,7 @@ function HtmlWorkspace({
       doc.removeEventListener('click', onClick, true)
       doc.removeEventListener('mousemove', onMove, true)
       doc.defaultView.removeEventListener('scroll', onScroll)
+      doc.defaultView.removeEventListener('resize', onScroll)
       doc.querySelectorAll('svg[data-pwb-connections]').forEach((s) => s.remove())
       setHoverTarget(doc, null)
       removePlacementChrome(doc)
@@ -763,8 +769,10 @@ function HtmlWorkspace({
               Source
             </button>
           </div>
-          {/* Edit sub-tools — sit right next to View/Edit/Source. */}
-          {mode === 'edit' && !placing && (
+          {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
+              empty page: there's no document to act on, so the starter card is
+              the single clear action instead of dead chips. */}
+          {mode === 'edit' && !placing && !!String(html || '').trim() && (
             <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
               {[
                 ['text', '✎ Text', 'Click any text and type'],

@@ -797,7 +797,7 @@ export default function EditorPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-[#e5e7eb] bg-white px-4 py-2 shadow-sm">
+      <header className="flex flex-nowrap items-center gap-2 overflow-hidden border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
         <Link to="/" className="flex items-center gap-2 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
           <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
           <span>&larr; Sites</span>
@@ -833,7 +833,7 @@ export default function EditorPage() {
         {(dirty || htmlDirty) && <span className="text-xs text-amber-500">Unsaved changes</span>}
         {justSaved && <span className="text-xs text-[#15803d]">Saved &#10003;</span>}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}

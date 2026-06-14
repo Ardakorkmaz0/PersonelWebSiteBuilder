@@ -60,6 +60,55 @@ function setDocumentDesignMode(doc, value) {
   }
 }
 
+// Draw a persistent connector line for EVERY in-document link→target binding
+// (anchor href="#id" whose id resolves in the same doc). Replaces any prior
+// layer, so a rebound link drops its old line immediately. Cross-page links
+// (#pageId, #top) have no in-doc target → no line. The layer is data-pwb-chrome
+// so serializeDocument strips it from saved HTML. Module-scope (no React deps)
+// so it can be called from both the link listeners and the imperative API.
+function paintConnections(doc) {
+  if (!doc?.body) return
+  doc.querySelectorAll('svg[data-pwb-connections]').forEach((s) => s.remove())
+  const win = doc.defaultView
+  if (!win) return
+  const pairs = []
+  for (const a of doc.querySelectorAll('a[href^="#"]')) {
+    const id = a.getAttribute('href').slice(1)
+    if (!id || id === 'top') continue
+    const target = doc.getElementById(id)
+    if (target && target !== a) pairs.push([a, target])
+  }
+  if (!pairs.length) return
+  const ns = 'http://www.w3.org/2000/svg'
+  const svg = doc.createElementNS(ns, 'svg')
+  svg.setAttribute('data-pwb-connections', '')
+  svg.setAttribute('data-pwb-chrome', '')
+  svg.setAttribute('style', `position:absolute;left:0;top:0;width:${doc.body.scrollWidth}px;height:${doc.body.scrollHeight}px;pointer-events:none;z-index:2147483647;overflow:visible`)
+  const center = (el) => {
+    const r = el.getBoundingClientRect()
+    return [r.left + r.width / 2 + win.scrollX, r.top + r.height / 2 + win.scrollY]
+  }
+  for (const [a, b] of pairs) {
+    const [sx, sy] = center(a)
+    const [tx, ty] = center(b)
+    const line = doc.createElementNS(ns, 'line')
+    line.setAttribute('x1', sx); line.setAttribute('y1', sy)
+    line.setAttribute('x2', tx); line.setAttribute('y2', ty)
+    line.setAttribute('stroke', '#4f46e5')
+    line.setAttribute('stroke-width', '2.5')
+    line.setAttribute('stroke-dasharray', '6 4')
+    line.setAttribute('opacity', '0.85')
+    svg.appendChild(line)
+    for (const [cx, cy] of [[sx, sy], [tx, ty]]) {
+      const dot = doc.createElementNS(ns, 'circle')
+      dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', '4.5')
+      dot.setAttribute('fill', '#4f46e5')
+      svg.appendChild(dot)
+    }
+  }
+  doc.body.appendChild(svg)
+}
+
 // The view iframe runs with an opaque origin (no allow-same-origin), so the
 // parent can't read its scroll position. This injected reporter posts the
 // index of the topmost visible <body> child instead — applyAiHtml uses it as
@@ -123,6 +172,7 @@ function HtmlWorkspace({
   onCommit,
   onRequestSave,
   onElementSelect,
+  onLinkArmedChange,
   onStartBlank,
   onOpenTemplates,
   onImportFile,
@@ -358,7 +408,23 @@ function HtmlWorkspace({
       try { parent.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
       onElementSelect?.(describeElement(parent))
     },
-  }), [applyAiHtml, clearSelection, mode, mutateSelected, onElementSelect, readHtml, setDocument, switchMode])
+    // Link tool + Files panel: bind the picked source link to a whole page
+    // (href = #pageId), which the published multi-page nav resolves.
+    bindSourceToPage: (pageId) => {
+      const doc = iframeRef.current?.contentDocument
+      const src = linkSourceRef.current
+      if (!doc || !src || !pageId) return false // not armed → caller navigates
+      src.setAttribute('href', `#${pageId}`)
+      linkSourceRef.current = null
+      onLinkArmedChange?.(false)
+      setHoverTarget(doc, null)
+      onCommit?.(serializeDocument(doc))
+      paintConnections(doc) // the source's old in-doc line (if any) disappears
+      setLinkHint(`Linked → page (#${pageId}). Click another link to connect more.`)
+      flashNode(doc, src)
+      return true
+    },
+  }), [applyAiHtml, clearSelection, mode, mutateSelected, onCommit, onElementSelect, onLinkArmedChange, readHtml, setDocument, switchMode])
 
   const device = DEVICES.find((d) => d.id === deviceId) || DEVICES[0]
   const isFit = device.id === 'fit'
@@ -521,40 +587,17 @@ function HtmlWorkspace({
   }, [onCommit])
 
   // ----- link: click a link, then click its target ---------------------------
-  const drawConnection = useCallback((doc, a, b) => {
-    if (!doc?.body || !a || !b) return
-    const ra = a.getBoundingClientRect()
-    const rb = b.getBoundingClientRect()
-    const win = doc.defaultView
-    const sx = ra.left + ra.width / 2 + win.scrollX
-    const sy = ra.top + ra.height / 2 + win.scrollY
-    const tx = rb.left + rb.width / 2 + win.scrollX
-    const ty = rb.top + rb.height / 2 + win.scrollY
-    const ns = 'http://www.w3.org/2000/svg'
-    const svg = doc.createElementNS(ns, 'svg')
-    svg.setAttribute('data-pwb-chrome', '')
-    svg.setAttribute('style', `position:absolute;left:0;top:0;width:${doc.body.scrollWidth}px;height:${doc.body.scrollHeight}px;pointer-events:none;z-index:2147483647;overflow:visible`)
-    const line = doc.createElementNS(ns, 'line')
-    line.setAttribute('x1', sx); line.setAttribute('y1', sy)
-    line.setAttribute('x2', tx); line.setAttribute('y2', ty)
-    line.setAttribute('stroke', '#4f46e5')
-    line.setAttribute('stroke-width', '3')
-    line.setAttribute('stroke-dasharray', '6 4')
-    svg.appendChild(line)
-    for (const [cx, cy] of [[sx, sy], [tx, ty]]) {
-      const dot = doc.createElementNS(ns, 'circle')
-      dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', '5')
-      dot.setAttribute('fill', '#4f46e5')
-      svg.appendChild(dot)
-    }
-    doc.body.appendChild(svg)
-    win.setTimeout(() => { try { svg.remove() } catch { /* gone */ } }, 1400)
-  }, [])
-
   const attachLinkListeners = useCallback((doc) => {
     if (!doc?.body) return () => {}
     ensurePlacementChrome(doc)
     linkSourceRef.current = null
+    onLinkArmedChange?.(false)
+    paintConnections(doc)
+    let scrollT = null
+    const onScroll = () => {
+      if (scrollT) return
+      scrollT = doc.defaultView.setTimeout(() => { scrollT = null; paintConnections(doc) }, 80)
+    }
     const onClick = (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -562,20 +605,22 @@ function HtmlWorkspace({
         const anchor = nearestAnchor(e.target, doc.body)
         if (!anchor) { setLinkHint('Pick a LINK first (a nav item or button-link), then click its target.'); return }
         linkSourceRef.current = anchor
+        onLinkArmedChange?.(true)
         setHoverTarget(doc, anchor)
-        setLinkHint('Now click the element this link should jump to.')
+        setLinkHint('Now click the target element — or click a PAGE in the left Files panel to link to another page.')
         return
       }
       const target = closestPlaceableBlock(e.target, doc.body)
       if (!target || target === doc.body || target === linkSourceRef.current) return
       const href = bindLinkToTarget(linkSourceRef.current, target)
-      drawConnection(doc, linkSourceRef.current, target)
       const src = linkSourceRef.current
       linkSourceRef.current = null
+      onLinkArmedChange?.(false)
       setHoverTarget(doc, null)
       if (href) {
         onCommit?.(serializeDocument(doc))
-        setLinkHint(`Linked → ${href}. Click another link to connect more, or leave Link mode.`)
+        paintConnections(doc)
+        setLinkHint(`Linked → ${href}. Click another link to connect more.`)
         flashNode(doc, src)
       }
     }
@@ -587,14 +632,19 @@ function HtmlWorkspace({
     }
     doc.addEventListener('click', onClick, true)
     doc.addEventListener('mousemove', onMove, true)
+    doc.defaultView.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       linkSourceRef.current = null
+      onLinkArmedChange?.(false)
+      if (scrollT) doc.defaultView.clearTimeout(scrollT)
       doc.removeEventListener('click', onClick, true)
       doc.removeEventListener('mousemove', onMove, true)
+      doc.defaultView.removeEventListener('scroll', onScroll)
+      doc.querySelectorAll('svg[data-pwb-connections]').forEach((s) => s.remove())
       setHoverTarget(doc, null)
       removePlacementChrome(doc)
     }
-  }, [drawConnection, onCommit])
+  }, [onCommit, onLinkArmedChange])
 
   function onIframeLoad() {
     const doc = iframeRef.current?.contentDocument

@@ -14,6 +14,8 @@ import { pageFileName } from '../../utils/pageFiles.js'
 export default function PageFilesPanel({
   htmlMap = {},
   mode = 'html',
+  linkArmed = false,
+  onLinkToPage,
   onSelect,
   onActiveClick,
   onImportInto,
@@ -90,14 +92,26 @@ export default function PageFilesPanel({
         ) : (
           <button
             type="button"
-            onClick={() => (active ? onActiveClick?.(page.id) : openPage(page.id))}
+            onClick={() => {
+              // Link tool waiting for a target → bind the picked link to this
+              // page instead of navigating. bindSourceToPage returns true only
+              // when a source link was armed, so this never blocks normal
+              // navigation when the link tool isn't mid-bind.
+              if (onLinkToPage && onLinkToPage(page.id)) return
+              if (active) onActiveClick?.(page.id)
+              else openPage(page.id)
+            }}
             title={
-              active
-                ? `${page.name} — click again to ${mode === 'html' ? 'open/close the source code' : 'open/close the code panel'}`
-                : `Open ${page.name}`
+              linkArmed
+                ? `Link the selected element to ${page.name}`
+                : active
+                  ? `${page.name} — click again to ${mode === 'html' ? 'open/close the source code' : 'open/close the code panel'}`
+                  : `Open ${page.name}`
             }
             className={`min-w-0 flex-1 truncate text-left font-mono text-[12.5px] ${
-              active ? 'font-semibold text-[#4f46e5]' : 'text-[#374151]'
+              linkArmed
+                ? 'rounded bg-[#eef2ff] px-1 text-[#4f46e5] ring-1 ring-[#c7d2fe]'
+                : active ? 'font-semibold text-[#4f46e5]' : 'text-[#374151]'
             }`}
           >
             {fname}
@@ -152,6 +166,11 @@ export default function PageFilesPanel({
 
   return (
     <div>
+      {linkArmed && (
+        <div className="mb-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2 py-1.5 text-[11px] font-medium text-[#1e40af]">
+          🔗 Click a page to link the selected element to it.
+        </div>
+      )}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
           Explorer

@@ -175,6 +175,9 @@ export default function EditorPage() {
   // Element selected inside the HTML edit iframe — drives the right-rail
   // element properties panel (null → site settings).
   const [htmlSelection, setHtmlSelection] = useState(null)
+  // Link tool has a source picked and is waiting for a target — clicking a
+  // page in the Files panel then links the source to that page.
+  const [linkArmed, setLinkArmed] = useState(false)
   // Undo/redo for HTML-mode changes. The component editor has the store's
   // history; HTML edits get their own snapshot stacks here. Every HTML
   // mutation funnels through commitHtml so template loads, AI applies,
@@ -1161,6 +1164,8 @@ export default function EditorPage() {
                     <PageFilesPanel
                       mode="html"
                       htmlMap={pageHtmlMap}
+                      linkArmed={linkArmed}
+                      onLinkToPage={(pid) => workspaceRef.current?.bindSourceToPage?.(pid)}
                       onSelect={switchToPage}
                       onActiveClick={() => workspaceRef.current?.toggleSource?.()}
                       onImportInto={importHtmlIntoPage}
@@ -1186,6 +1191,7 @@ export default function EditorPage() {
                   onCommit={(h) => commitHtml(h)}
                   onRequestSave={() => save()}
                   onElementSelect={setHtmlSelection}
+                  onLinkArmedChange={setLinkArmed}
                   onStartBlank={startBlankHtml}
                   onOpenTemplates={() => setTemplateOpen(true)}
                   onImportFile={() => htmlInputRef.current?.click()}

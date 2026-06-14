@@ -31,8 +31,17 @@ export default function PageFilesPanel({
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState('')
   const [collapsed, setCollapsed] = useState(() => new Set())
+  // New-page mode chooser: null when closed, otherwise { folder } for the page
+  // about to be created. The user picks Empty canvas vs HTML page.
+  const [addPrompt, setAddPrompt] = useState(null)
   const importRef = useRef(null)
   const importTarget = useRef(null)
+
+  const createPage = (mode) => {
+    if (!addPrompt) return
+    addPage('New Page', addPrompt.folder, mode)
+    setAddPrompt(null)
+  }
 
   const commitRename = () => {
     if (editingId && draft.trim()) renamePage(editingId, draft.trim())
@@ -178,7 +187,7 @@ export default function PageFilesPanel({
         <span className="flex gap-0.5">
           <button
             type="button"
-            onClick={() => addPage('New Page')}
+            onClick={() => setAddPrompt({ folder: '' })}
             title="New page (file)"
             className="rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
           >
@@ -186,7 +195,7 @@ export default function PageFilesPanel({
           </button>
           <button
             type="button"
-            onClick={() => addPage('New Page', `Folder ${folderCount + 1}`)}
+            onClick={() => setAddPrompt({ folder: `Folder ${folderCount + 1}` })}
             title="New page inside a new folder"
             className="rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
           >
@@ -236,6 +245,54 @@ export default function PageFilesPanel({
           ? 'Each page is its own HTML file — the first one publishes as the home page. Click the open file again to view its source code.'
           : 'Pages of your design. Click the open page again to toggle the code panel.'}
       </p>
+
+      {addPrompt && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setAddPrompt(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-[#111827]">How should this page start?</h3>
+            <p className="mt-1 text-sm text-[#6b7280]">
+              Each page can use a different mode. You can switch a page later from its toolbar.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => createPage('empty')}
+                className="flex flex-col items-start gap-1 rounded-lg border border-[#e5e7eb] bg-white p-3 text-left hover:border-[#4f46e5] hover:bg-[#eef2ff]"
+              >
+                <span className="text-xl" aria-hidden>🧩</span>
+                <span className="text-sm font-semibold text-[#111827]">Empty canvas</span>
+                <span className="text-[11px] leading-snug text-[#6b7280]">
+                  Drag-and-drop components on a blank canvas.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => createPage('html')}
+                className="flex flex-col items-start gap-1 rounded-lg border border-[#e5e7eb] bg-white p-3 text-left hover:border-[#4f46e5] hover:bg-[#eef2ff]"
+              >
+                <span className="text-xl" aria-hidden>📄</span>
+                <span className="text-sm font-semibold text-[#111827]">HTML page</span>
+                <span className="text-[11px] leading-snug text-[#6b7280]">
+                  Upload, paste, or author a full HTML document.
+                </span>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAddPrompt(null)}
+              className="mt-4 w-full rounded-lg border border-[#e5e7eb] px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

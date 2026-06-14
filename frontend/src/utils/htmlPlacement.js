@@ -94,6 +94,7 @@ const EDIT_CHROME_ATTR = 'data-pwb-edit-chrome'
 const HOVER_ATTR = 'data-pwb-hover'
 const FLASH_ATTR = 'data-pwb-flash'
 const SELECTED_ATTR = 'data-pwb-selected'
+const LINK_SRC_ATTR = 'data-pwb-linksrc'
 
 export function ensurePlacementChrome(doc) {
   if (!doc?.documentElement) return
@@ -103,8 +104,20 @@ export function ensurePlacementChrome(doc) {
   style.textContent = `
     [${HOVER_ATTR}] { outline: 2px dashed #2563eb !important; outline-offset: 2px !important; cursor: copy !important; }
     [${FLASH_ATTR}] { outline: 3px solid #2563eb !important; outline-offset: 2px !important; transition: outline-color 0.3s; }
+    [${LINK_SRC_ATTR}] { outline: 3px solid #2563eb !important; outline-offset: 2px !important; background: rgba(37, 99, 235, 0.10) !important; }
   `
   ;(doc.head || doc.documentElement).appendChild(style)
+}
+
+// Persistent "this is the link source I picked" highlight — stays blue until
+// another element is picked (or it's cleared). One-attribute pattern like hover.
+export function setLinkSource(doc, el) {
+  if (!doc?.documentElement) return
+  ensurePlacementChrome(doc)
+  doc.querySelectorAll(`[${LINK_SRC_ATTR}]`).forEach((n) => {
+    if (n !== el) n.removeAttribute(LINK_SRC_ATTR)
+  })
+  if (el && el !== doc.body) el.setAttribute(LINK_SRC_ATTR, '')
 }
 
 // Edit-mode affordance: hovering any text-ish element shows a dashed outline
@@ -148,6 +161,7 @@ export function removePlacementChrome(doc) {
   doc.querySelectorAll(`style[${CHROME_STYLE_ATTR}]`).forEach((el) => el.remove())
   doc.querySelectorAll(`[${HOVER_ATTR}]`).forEach((el) => el.removeAttribute(HOVER_ATTR))
   doc.querySelectorAll(`[${FLASH_ATTR}]`).forEach((el) => el.removeAttribute(FLASH_ATTR))
+  doc.querySelectorAll(`[${LINK_SRC_ATTR}]`).forEach((el) => el.removeAttribute(LINK_SRC_ATTR))
 }
 
 // Move the hover highlight to `el` (or clear it when el is null/body).
@@ -185,19 +199,25 @@ export function serializeDocument(doc) {
   root
     .querySelectorAll(`style[${CHROME_STYLE_ATTR}], style[${EDIT_CHROME_ATTR}]`)
     .forEach((el) => el.remove())
-  root.querySelectorAll(`[${HOVER_ATTR}], [${FLASH_ATTR}], [${SELECTED_ATTR}]`).forEach((el) => {
-    el.removeAttribute(HOVER_ATTR)
-    el.removeAttribute(FLASH_ATTR)
-    el.removeAttribute(SELECTED_ATTR)
-  })
+  root
+    .querySelectorAll(`[${HOVER_ATTR}], [${FLASH_ATTR}], [${SELECTED_ATTR}], [${LINK_SRC_ATTR}]`)
+    .forEach((el) => {
+      el.removeAttribute(HOVER_ATTR)
+      el.removeAttribute(FLASH_ATTR)
+      el.removeAttribute(SELECTED_ATTR)
+      el.removeAttribute(LINK_SRC_ATTR)
+    })
   // The rearrange tool sets draggable on blocks; never let that leak into
   // saved HTML. Drop the marker + the draggable attribute it added.
   root.querySelectorAll('[data-pwb-drag]').forEach((el) => {
     el.removeAttribute('data-pwb-drag')
     el.removeAttribute('draggable')
   })
-  // Strip the transient SVG connection line drawn by the link tool.
-  root.querySelectorAll('svg[data-pwb-chrome]').forEach((el) => el.remove())
+  // Strip the transient SVG connection lines drawn by the link tool — both the
+  // current marker and any stale ones baked in by older app versions.
+  root
+    .querySelectorAll('svg[data-pwb-chrome], svg[data-pwb-connections]')
+    .forEach((el) => el.remove())
   return '<!DOCTYPE html>\n' + root.outerHTML
 }
 

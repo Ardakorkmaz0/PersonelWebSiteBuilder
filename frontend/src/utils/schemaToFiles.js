@@ -140,11 +140,15 @@ function baseRules(type) {
   }
 }
 
-const LINKABLE = new Set(['heading', 'text', 'image', 'card', 'badge', 'icon'])
+// Wrap an element in an <a> (display:contents keeps the layout) when it has a
+// link. ANY component is linkable except anchors/interactive types — mirrors
+// the live renderer's NON_WRAP_LINK_TYPES so export matches preview.
+const NON_WRAP_LINK = new Set([
+  'button', 'linkbutton', 'navbar', 'tabs', 'container', 'accordion', 'select', 'input', 'html',
+])
 
-// Wrap an element in an <a> (display:contents keeps the layout) when it has a link.
 function linkWrap(c, html) {
-  const href = LINKABLE.has(c.type) ? sanitizeUrl((c.props || {}).href) : ''
+  const href = !NON_WRAP_LINK.has(c.type) ? sanitizeUrl((c.props || {}).href) : ''
   if (!href) return html
   const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''
   return `<a href="${esc(href)}" style="display:contents"${ext}>${html}</a>`
@@ -318,18 +322,20 @@ function innerHtml(c) {
 function openTag(c) {
   const tag = tagFor(c.type)
   const cls = `c-${c.id}`
+  // id lets in-page links (#componentId) scroll to this component.
+  const idAttr = ` id="${esc(c.id)}"`
   if (tag === 'a') {
     const href = sanitizeUrl((c.props || {}).href)
     const ext = /^https?:\/\//i.test(href)
       ? ' target="_blank" rel="noopener noreferrer"'
       : ''
-    return `<a class="${cls}" href="${esc(href || '#')}"${ext}>`
+    return `<a${idAttr} class="${cls}" href="${esc(href || '#')}"${ext}>`
   }
   if (tag === 'img') {
     const src = sanitizeImageSrc((c.props || {}).src)
-    return `<img class="${cls}" src="${esc(src)}" alt="${esc((c.props || {}).alt)}" />`
+    return `<img${idAttr} class="${cls}" src="${esc(src)}" alt="${esc((c.props || {}).alt)}" />`
   }
-  return `<${tag} class="${cls}">`
+  return `<${tag}${idAttr} class="${cls}">`
 }
 
 function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '', theme = null) {
@@ -369,7 +375,7 @@ function pageBody(page) {
           const l = c.layout || {}
           wrap = `position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px`
         }
-        return `      <div style="${wrap}">${linkWrap(c, inlineNode(c))}</div>`
+        return `      <div id="${esc(c.id)}" style="${wrap}">${linkWrap(c, inlineNode(c))}</div>`
       }
       const tag = tagFor(c.type)
       const el =

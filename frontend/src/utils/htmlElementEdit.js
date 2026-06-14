@@ -68,7 +68,9 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     classes: [...el.classList].join(' '),
     canEditText,
     text: canEditText ? el.textContent : '',
-    href: tag === 'a' ? el.getAttribute('href') || '' : null,
+    // Every element can carry a link (wrapped in <a> when needed), so the panel
+    // always offers the link picker — not just for existing anchors.
+    href: elementLinkHref(el),
     src: tag === 'img' ? el.getAttribute('src') || '' : null,
     alt: tag === 'img' ? el.getAttribute('alt') || '' : null,
     hasParent: !!parent,
@@ -82,6 +84,10 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     background: cs ? cssColorToHex(cs.backgroundColor) : '',
     padding: cs ? px(cs.paddingTop) : 0,
     radius: cs ? px(cs.borderTopLeftRadius) : 0,
+    width: cs ? px(cs.width) : 0,
+    marginTop: cs ? px(cs.marginTop) : 0,
+    marginBottom: cs ? px(cs.marginBottom) : 0,
+    display: cs ? String(cs.display || '') : '',
   }
 }
 
@@ -117,7 +123,7 @@ export function applyElementPatch(el, patch = {}) {
   if (patch.text !== undefined && isTextEditable(el)) {
     el.textContent = patch.text
   }
-  if (patch.href !== undefined && el.tagName === 'A') el.setAttribute('href', patch.href)
+  if (patch.href !== undefined) setElementLink(el, patch.href)
   if (patch.src !== undefined && el.tagName === 'IMG') el.setAttribute('src', patch.src)
   if (patch.alt !== undefined && el.tagName === 'IMG') el.setAttribute('alt', patch.alt)
   const setStyle = (prop, value) => {
@@ -140,6 +146,21 @@ export function applyElementPatch(el, patch = {}) {
     const n = Number(patch.radius)
     setStyle('borderRadius', n >= 0 && String(patch.radius) !== '' ? `${n}px` : '')
   }
+  // 0 width would hide the element, so 0 clears the override (auto width).
+  if (patch.width !== undefined) {
+    const n = Number(patch.width)
+    setStyle('width', n > 0 ? `${n}px` : '')
+  }
+  // Margins: 0 is a real value (collapse the gap), so always write it.
+  if (patch.marginTop !== undefined) {
+    const n = Number(patch.marginTop)
+    el.style.marginTop = `${n}px`
+  }
+  if (patch.marginBottom !== undefined) {
+    const n = Number(patch.marginBottom)
+    el.style.marginBottom = `${n}px`
+  }
+  if (patch.display !== undefined) setStyle('display', patch.display)
 }
 
 // Insert a deep clone right after the element. Returns the clone (the panel
@@ -174,6 +195,69 @@ export function ensureElementId(el) {
   while (doc.getElementById(id)) id = `${base}-${n++}`
   el.id = id
   return id
+}
+
+// Make `el` carry a link by ensuring it is (or is wrapped by) an <a>, so ANY
+// element — not just existing anchors — can become a link. Returns the anchor.
+// Reuses an existing wrapping <a>; otherwise wraps el in a fresh one in place.
+export function ensureAnchor(el) {
+  if (!el || el.nodeType !== 1) return null
+  if (el.tagName === 'A') return el
+  const parent = el.parentElement
+  // Already wrapped by an <a> that holds only this element → reuse it.
+  if (
+    parent &&
+    parent.tagName === 'A' &&
+    parent.childElementCount === 1 &&
+    parent.getAttribute('data-pwb-linkwrap') === ''
+  ) {
+    return parent
+  }
+  const doc = el.ownerDocument
+  const a = doc.createElement('a')
+  a.setAttribute('href', '#')
+  // Mark builder-created wrappers so "No link" can unwrap them cleanly.
+  a.setAttribute('data-pwb-linkwrap', '')
+  el.parentNode.insertBefore(a, el)
+  a.appendChild(el)
+  return a
+}
+
+// The effective link of an element: its own href (if it's an <a>) or the href
+// of a builder-created <a> wrapper around it. '' when there is no link yet.
+export function elementLinkHref(el) {
+  if (!el || el.nodeType !== 1) return ''
+  if (el.tagName === 'A') return el.getAttribute('href') || ''
+  const parent = el.parentElement
+  if (parent && parent.tagName === 'A' && parent.getAttribute('data-pwb-linkwrap') === '') {
+    return parent.getAttribute('href') || ''
+  }
+  return ''
+}
+
+// Set (or clear) an element's link. A non-anchor gets wrapped in an <a>; an
+// empty href on a builder-created wrapper unwraps it again so "No link" leaves
+// the markup clean. Real <a> elements just have their href set/removed.
+export function setElementLink(el, href) {
+  if (!el || el.nodeType !== 1) return
+  const value = String(href || '')
+  if (el.tagName === 'A') {
+    if (value) el.setAttribute('href', value)
+    else el.removeAttribute('href')
+    return
+  }
+  const parent = el.parentElement
+  const wrapped =
+    parent && parent.tagName === 'A' && parent.getAttribute('data-pwb-linkwrap') === ''
+  if (!value) {
+    // Unwrap a builder-created wrapper; leave foreign anchors alone.
+    if (wrapped) {
+      parent.replaceWith(...parent.childNodes)
+    }
+    return
+  }
+  const anchor = ensureAnchor(el)
+  if (anchor) anchor.setAttribute('href', value)
 }
 
 // Link binding for the visual "connect a link to a target" tool: point the

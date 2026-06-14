@@ -127,6 +127,12 @@ export default function EditorPage() {
   const markSaved = useEditorStore((s) => s.markSaved)
   const dirty = useEditorStore((s) => s.dirty)
   const theme = useEditorStore((s) => s.schema.theme)
+  const setPageMode = useEditorStore((s) => s.setPageMode)
+  // Component-canvas link tool (Empty mode mirror of the HTML link tool).
+  const linkMode = useEditorStore((s) => s.linkMode)
+  const linkSourceId = useEditorStore((s) => s.linkSourceId)
+  const setLinkMode = useEditorStore((s) => s.setLinkMode)
+  const bindLinkSourceToPage = useEditorStore((s) => s.bindLinkSourceToPage)
 
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
@@ -167,10 +173,13 @@ export default function EditorPage() {
   const siteHtml = pageHtmlMap[currentPageId] || ''
   const setSiteHtml = (html) =>
     setPageHtmlMap((m) => ({ ...m, [currentPageId]: html }))
-  // The site is an "HTML site" when ANY page carries an HTML document; the
-  // ACTIVE page may still be empty (freshly added) — the workspace then shows
+  // Per-page editor mode: the ACTIVE page decides whether the editor shows the
+  // HTML workspace ('html') or the component canvas ('empty'). Switching pages
+  // reconfigures the whole editor; `pageHtmlMap` still holds the HTML content.
+  // A freshly-added HTML page has no document yet — the workspace then shows
   // its starter card in place of the page.
-  const isHtmlSite = Object.values(pageHtmlMap).some((h) => h && h.trim())
+  const currentPageIsHtml =
+    (storePages.find((p) => p.id === currentPageId)?.mode || 'empty') === 'html'
   const [htmlDirty, setHtmlDirty] = useState(false)
   // Element selected inside the HTML edit iframe — drives the right-rail
   // element properties panel (null → site settings).
@@ -259,7 +268,7 @@ export default function EditorPage() {
   // Keep the global Ctrl+Z listener pointed at the right history (html
   // snapshot stacks vs canvas store) without re-binding it every render.
   useEffect(() => {
-    htmlHistoryRef.current = { isHtmlSite, undoHtml, redoHtml }
+    htmlHistoryRef.current = { currentPageIsHtml, undoHtml, redoHtml }
   })
 
   // Warn before closing/refreshing the tab while there are unsaved changes —
@@ -323,14 +332,14 @@ export default function EditorPage() {
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         const h = htmlHistoryRef.current
-        if (h.isHtmlSite) (e.shiftKey ? h.redoHtml : h.undoHtml)?.()
+        if (h.currentPageIsHtml) (e.shiftKey ? h.redoHtml : h.undoHtml)?.()
         else e.shiftKey ? redo() : undo()
         return
       }
       if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault()
         const h = htmlHistoryRef.current
-        if (h.isHtmlSite) h.redoHtml?.()
+        if (h.currentPageIsHtml) h.redoHtml?.()
         else redo()
         return
       }
@@ -364,6 +373,27 @@ export default function EditorPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo, duplicateComponent, setLayout])
+
+  // The component link tool only applies to the Empty-mode Edit canvas. Drop it
+  // whenever we leave that surface (View/Source, or an HTML page) so it can't
+  // linger and hijack clicks somewhere it doesn't belong.
+  useEffect(() => {
+    if (linkMode && (currentPageIsHtml || canvasMode !== 'edit')) setLinkMode(false)
+  }, [linkMode, currentPageIsHtml, canvasMode, setLinkMode])
+
+  // Clicking a cross-page link (#pageId) inside the HTML View iframe posts a
+  // 'pwb-navigate' message (the iframe is sandboxed and can't switch pages
+  // itself). Honour it so links can be tested right in the editor, the same
+  // way the published page does.
+  useEffect(() => {
+    const onMsg = (e) => {
+      if (e.data?.type !== 'pwb-navigate') return
+      const pid = decodeURIComponent(String(e.data.hash || '').replace(/^#/, ''))
+      if (pid && storePages.some((p) => p.id === pid)) switchToPage(pid)
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  })
 
   function onDragStart(event) {
     const data = event.active.data.current
@@ -481,6 +511,7 @@ export default function EditorPage() {
   // Load an HTML document into a specific page (Files panel ⬆ / empty-page
   // import). Undoable like every other HTML change.
   function importHtmlIntoPage(pageId, htmlText) {
+    setPageMode(pageId, 'html')
     if (pageId === currentPageId) {
       commitHtml(htmlText, { reseedWorkspace: true })
       return
@@ -584,6 +615,7 @@ export default function EditorPage() {
       )
         return
       commitHtml(picked.html, { reseedWorkspace: true })
+      setPageMode(currentPageId, 'html')
       linkLocalFile(picked.handle, picked.name)
     } catch (e) {
       if (!isPickerCancel(e)) setError(`Could not open the file: ${e?.message || e}`)
@@ -646,6 +678,7 @@ export default function EditorPage() {
     )
       return
     commitHtml(schemaToResponsiveHtml(useEditorStore.getState().schema, title), { reseedWorkspace: true })
+    setPageMode(currentPageId, 'html')
   }
 
   // Start a fresh, genuinely responsive HTML site from a clean starter.
@@ -660,6 +693,7 @@ export default function EditorPage() {
     )
       return
     commitHtml(blankResponsiveSite(title || 'My Site', useEditorStore.getState().schema.theme), { reseedWorkspace: true })
+    setPageMode(currentPageId, 'html')
   }
 
   // Load a ready-made responsive template as the ACTIVE page's HTML.
@@ -673,6 +707,7 @@ export default function EditorPage() {
     )
       return
     commitHtml(tpl.build(title || 'My Site', useEditorStore.getState().schema.theme), { reseedWorkspace: true })
+    setPageMode(currentPageId, 'html')
   }
 
   // Unified importer for an HTML file, a project folder (HTML + CSS), or a
@@ -687,7 +722,7 @@ export default function EditorPage() {
       return
     }
     // Importing onto an EMPTY html page replaces nothing — skip the confirm.
-    const replacesSomething = jsons.length > 0 || siteHtml.trim() || !isHtmlSite
+    const replacesSomething = jsons.length > 0 || siteHtml.trim() || !currentPageIsHtml
     if (
       replacesSomething &&
       !window.confirm(
@@ -698,10 +733,11 @@ export default function EditorPage() {
     setError('')
     try {
       if (htmls.length) {
-        // Keep the HTML exactly as-is (with its JavaScript). The site becomes an
-        // HTML site: viewed/edited in the embedded workspace and published inside
-        // a sandboxed iframe so its JS runs.
+        // Keep the HTML exactly as-is (with its JavaScript). This page becomes
+        // an HTML page: viewed/edited in the embedded workspace and published
+        // inside a sandboxed iframe so its JS runs.
         commitHtml(await htmlFilesToDocument(files), { reseedWorkspace: true })
+        setPageMode(currentPageId, 'html')
         return 'html'
       }
       const okJson = importSchema(JSON.parse(await jsons[0].text()))
@@ -778,6 +814,22 @@ export default function EditorPage() {
         >
           {published ? 'Published' : 'Draft'}
         </span>
+        {/* Which editing surface this page uses — switches as you move between
+            pages so the active mode is always obvious. */}
+        <span
+          title={
+            currentPageIsHtml
+              ? 'This page is an uploaded/authored HTML document'
+              : 'This page uses the drag-and-drop component canvas'
+          }
+          className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
+            currentPageIsHtml
+              ? 'bg-[#eef2ff] text-[#4f46e5]'
+              : 'bg-[#f1f5f9] text-[#475569]'
+          }`}
+        >
+          {currentPageIsHtml ? 'HTML Upload Mode' : 'Empty Mode'}
+        </span>
         {(dirty || htmlDirty) && <span className="text-xs text-amber-500">Unsaved changes</span>}
         {justSaved && <span className="text-xs text-[#15803d]">Saved &#10003;</span>}
 
@@ -798,10 +850,11 @@ export default function EditorPage() {
               commitHtml(placed) // applyAiHtml already reseeded the workspace
             }}
           />
-          {isHtmlSite && (
+          {currentPageIsHtml && (
             <>
               {/* Device controls mirror the component editor's PC/Mobile +
-                  size block, so both modes share the same header anatomy. */}
+                  size block exactly (same anatomy, no extra buttons), so the
+                  header stays consistent as you switch between page modes. */}
               <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
                 <button
                   onClick={() => { setHtmlDevice('fit'); setHtmlLandscape(false) }}
@@ -836,17 +889,9 @@ export default function EditorPage() {
                   </option>
                 ))}
               </select>
-              <button
-                onClick={() => setHtmlLandscape((v) => !v)}
-                disabled={htmlDevice === 'fit'}
-                title="Landscape / portrait"
-                className="rounded-lg px-2 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
-              >
-                {htmlLandscape ? '⟲' : '⟳'}
-              </button>
             </>
           )}
-          {!isHtmlSite && (
+          {!currentPageIsHtml && (
           <>
           {/* HTML Flow stays supported for existing flow pages, but the
               toggle is gone — "Convert to responsive HTML" + HTML mode is
@@ -958,7 +1003,7 @@ export default function EditorPage() {
                   >
                     Start blank HTML
                   </button>
-                  {!isHtmlSite && (
+                  {!currentPageIsHtml && (
                     <button
                       onClick={() => {
                         setImportOpen(false)
@@ -999,7 +1044,7 @@ export default function EditorPage() {
               </>
             )}
           </div>
-          {!isHtmlSite && (
+          {!currentPageIsHtml && (
           <>
           <button
             onClick={exportProject}
@@ -1010,7 +1055,7 @@ export default function EditorPage() {
           </button>
           </>
           )}
-          {isHtmlSite && (
+          {currentPageIsHtml && (
             <>
               {/* Linked-file state is always visible: green = Save writes to
                   this file on disk; gray = not linked, click to pick one.
@@ -1038,8 +1083,9 @@ export default function EditorPage() {
               )}
               <button
                 onClick={() => {
-                  if (window.confirm("Remove this page's HTML? (Undo brings it back. The site returns to the component editor once no page has HTML.)")) {
+                  if (window.confirm("Remove this page's HTML and switch it back to the component canvas? (Undo brings the HTML back.)")) {
                     commitHtml('')
+                    setPageMode(currentPageId, 'empty')
                     if (localFile?.pageId === currentPageId) unlinkLocalFile()
                     setHtmlSelection(null)
                   }
@@ -1054,8 +1100,8 @@ export default function EditorPage() {
               HTML snapshot stacks or the canvas store as appropriate. */}
           <button
             type="button"
-            onClick={() => (isHtmlSite ? undoHtml() : undo())}
-            disabled={isHtmlSite ? !htmlPast.length : !canUndo}
+            onClick={() => (currentPageIsHtml ? undoHtml() : undo())}
+            disabled={currentPageIsHtml ? !htmlPast.length : !canUndo}
             title="Undo (Ctrl+Z)"
             className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
           >
@@ -1063,8 +1109,8 @@ export default function EditorPage() {
           </button>
           <button
             type="button"
-            onClick={() => (isHtmlSite ? redoHtml() : redo())}
-            disabled={isHtmlSite ? !htmlFuture.length : !canRedo}
+            onClick={() => (currentPageIsHtml ? redoHtml() : redo())}
+            disabled={currentPageIsHtml ? !htmlFuture.length : !canRedo}
             title="Redo (Ctrl+Shift+Z)"
             className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
           >
@@ -1150,7 +1196,7 @@ export default function EditorPage() {
           }}
           onDrop={onDropFiles}
         >
-          {isHtmlSite ? (
+          {currentPageIsHtml ? (
             <>
               {/* Left rail: VS Code-style Files tab (pages as .html files) +
                   the component palette. Picking a palette item splices that
@@ -1221,6 +1267,7 @@ export default function EditorPage() {
                     {htmlSelection ? (
                       <HtmlElementPanel
                         info={htmlSelection}
+                        pages={storePages}
                         onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
                         onSelectParent={() => workspaceRef.current?.selectParent?.()}
                         onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
@@ -1251,6 +1298,9 @@ export default function EditorPage() {
                   filesPanel={
                     <PageFilesPanel
                       mode="pages"
+                      linkArmed={linkMode && !!linkSourceId}
+                      onLinkToPage={(pid) => bindLinkSourceToPage(pid)}
+                      onSelect={switchToPage}
                       onActiveClick={() => setCanvasMode((m) => (m === 'source' ? 'edit' : 'source'))}
                     />
                   }
@@ -1277,14 +1327,51 @@ export default function EditorPage() {
                       </button>
                     ))}
                   </div>
+                  {/* Link tool — mirrors the HTML workspace's Link sub-tool:
+                      click a button/link component, then click its target
+                      component (or a page in the Files panel). */}
+                  {canvasMode === 'edit' && (
+                    <button
+                      type="button"
+                      title="Connect a button/link to a target component or page"
+                      onClick={() => setLinkMode(!linkMode)}
+                      className={`flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                        linkMode
+                          ? 'border-[#4f46e5] bg-[#4f46e5] text-white'
+                          : 'border-[#d1d5db] text-[#374151] hover:bg-[#f3f4f6]'
+                      }`}
+                    >
+                      🔗 Link
+                    </button>
+                  )}
                   <span className="ml-auto text-xs text-[#6b7280]">
                     {canvasMode === 'view'
                       ? 'Read-only preview of this page'
                       : canvasMode === 'source'
                         ? 'Page schema & custom code'
-                        : 'Drag, resize, and edit components'}
+                        : linkMode
+                          ? 'Link tool: pick a link, then its target'
+                          : 'Drag, resize, and edit components'}
                   </span>
                 </div>
+                {/* Link-tool guidance banner (component mode). */}
+                {canvasMode === 'edit' && linkMode && (
+                  <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
+                    <span aria-hidden>🔗</span>
+                    <span>
+                      {linkSourceId
+                        ? 'Now click the target component — or click a PAGE in the left Files panel to link to another page.'
+                        : 'Click a button or link component to start, then click where it should jump to.'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setLinkMode(false)}
+                      className="ml-auto rounded-lg border border-[#93c5fd] bg-white px-2 py-0.5 font-medium text-[#1e40af] hover:bg-[#dbeafe]"
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
                 {canvasMode === 'edit' ? (
                   <Canvas />
                 ) : canvasMode === 'view' ? (

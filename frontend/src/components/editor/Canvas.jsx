@@ -21,6 +21,7 @@ export default function Canvas() {
   const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
   const mobileFold = page.mobileFold || 0
   const select = useEditorStore((s) => s.selectComponent)
+  const linkMode = useEditorStore((s) => s.linkMode)
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' })
   // The theme's font is what the published page paints in; reflect it on the
   // canvas root so brand-new components inherit it immediately AND the empty
@@ -39,6 +40,29 @@ export default function Canvas() {
   const background = isMobile ? bgMobile : bg
   const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
   const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
+
+  // Link-tool connectors: an arrow from each link component to the in-page
+  // component it targets (href="#<componentId>"). Drawn in canvas coordinates,
+  // so they live inside the artboard and need no scroll math. Page links
+  // (href="#<pageId>") have no matching component here → no arrow. Only shown
+  // while the link tool is active to keep the canvas clean otherwise.
+  const linkPairs = (linkMode ? components : [])
+    .map((c) => {
+      const href = c.props?.href || ''
+      if (!href.startsWith('#')) return null
+      const target = components.find((k) => k.id === href.slice(1))
+      if (!target || target.id === c.id) return null
+      const sL = (isMobile ? c.mobileLayout || c.layout : c.layout) || {}
+      const tL = (isMobile ? target.mobileLayout || target.layout : target.layout) || {}
+      return {
+        id: c.id,
+        x1: (sL.x || 0) + (sL.w || 0) / 2,
+        y1: (sL.y || 0) + (sL.h || 0) / 2,
+        x2: (tL.x || 0) + (tL.w || 0) / 2,
+        y2: (tL.y || 0) + (tL.h || 0) / 2,
+      }
+    })
+    .filter(Boolean)
 
   const canvas = (
     <div
@@ -99,6 +123,46 @@ export default function Canvas() {
             Visible screen limit · {fold}px
           </span>
         </div>
+      )}
+
+      {/* Link-tool connector arrows (component → in-page target). */}
+      {linkMode && linkPairs.length > 0 && (
+        <svg
+          className="pointer-events-none absolute inset-0"
+          width={canvasW}
+          height={minHeight}
+          style={{ zIndex: 46, overflow: 'visible' }}
+        >
+          <defs>
+            <marker
+              id="canvas-arrowhead"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5" />
+            </marker>
+          </defs>
+          {linkPairs.map((p) => (
+            <g key={p.id}>
+              <line
+                x1={p.x1}
+                y1={p.y1}
+                x2={p.x2}
+                y2={p.y2}
+                stroke="#4f46e5"
+                strokeWidth="2.5"
+                strokeDasharray="6 4"
+                opacity="0.9"
+                markerEnd="url(#canvas-arrowhead)"
+              />
+              <circle cx={p.x1} cy={p.y1} r="4.5" fill="#4f46e5" />
+            </g>
+          ))}
+        </svg>
       )}
 
       {/* Live snap guides rendered during free-canvas drags. Each guide is a

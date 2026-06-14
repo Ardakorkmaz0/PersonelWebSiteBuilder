@@ -27,6 +27,13 @@ export default function FreeCanvasItem({ component }) {
   const clearDragGuides = useEditorStore((s) => s.clearDragGuides)
   const remove = useEditorStore((s) => s.removeComponent)
 
+  // Component-canvas link tool: when armed, a click picks this component as the
+  // link source or target instead of selecting/moving it.
+  const linkMode = useEditorStore((s) => s.linkMode)
+  const linkSourceId = useEditorStore((s) => s.linkSourceId)
+  const pickLinkNode = useEditorStore((s) => s.pickLinkNode)
+  const isLinkSource = linkMode && linkSourceId === component.id
+
   const isSelected = selectedId === component.id
   // Edit the layout of the active breakpoint only.
   const layout =
@@ -39,6 +46,8 @@ export default function FreeCanvasItem({ component }) {
 
   function startMove(e) {
     if (e.button !== 0) return
+    // Link tool owns the pointer — don't drag/select while arming a link.
+    if (linkMode) { e.stopPropagation(); return }
     e.stopPropagation()
     select(component.id)
     const sx = e.clientX
@@ -113,20 +122,34 @@ export default function FreeCanvasItem({ component }) {
 
   return (
     <div
+      data-cid={component.id}
       onPointerDown={startMove}
+      onClick={(e) => {
+        if (!linkMode) return
+        e.stopPropagation()
+        pickLinkNode(component.id)
+      }}
       style={{
         position: 'absolute',
         left: x,
         top: y,
         width: w,
         height: h,
-        cursor: 'move',
-        zIndex: isSelected ? 20 : 1,
+        cursor: linkMode ? 'crosshair' : 'move',
+        zIndex: isSelected || isLinkSource ? 20 : 1,
         opacity: hidden ? 0.35 : 1,
-        outline: isSelected ? `2px solid ${ACCENT}` : undefined,
+        // Armed link source stays a solid blue ring (with a light wash) until
+        // the next click picks the target — same affordance as HTML mode.
+        outline: isLinkSource
+          ? `3px solid ${ACCENT}`
+          : isSelected
+            ? `2px solid ${ACCENT}`
+            : undefined,
+        outlineOffset: isLinkSource || isSelected ? '2px' : undefined,
+        background: isLinkSource ? 'rgba(79, 70, 229, 0.10)' : undefined,
       }}
       className={
-        isSelected ? '' : 'hover:outline hover:outline-1 hover:outline-[#a6b7d6]'
+        isSelected || linkMode ? '' : 'hover:outline hover:outline-1 hover:outline-[#a6b7d6]'
       }
     >
       {component.type === 'container' ? (
@@ -152,7 +175,7 @@ export default function FreeCanvasItem({ component }) {
         </span>
       )}
 
-      {isSelected && (
+      {isSelected && !linkMode && (
         <>
           <button
             type="button"

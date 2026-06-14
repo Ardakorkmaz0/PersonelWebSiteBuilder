@@ -20,6 +20,7 @@ import {
   removePlacementChrome,
   serializeDocument,
   setHoverTarget,
+  setLinkSource,
   setSelectedElement,
   visibleAnchorIndex,
 } from '../../utils/htmlPlacement.js'
@@ -28,6 +29,7 @@ import {
   bindLinkToTarget,
   describeElement,
   duplicateElement,
+  ensureAnchor,
   moveElement,
   nearestAnchor,
   reorderToPoint,
@@ -60,10 +62,10 @@ function setDocumentDesignMode(doc, value) {
   }
 }
 
-// Draw a persistent connector line for EVERY in-document link→target binding
+// Draw a persistent connector ARROW for EVERY in-document link→target binding
 // (anchor href="#id" whose id resolves in the same doc). Replaces any prior
 // layer, so a rebound link drops its old line immediately. Cross-page links
-// (#pageId, #top) have no in-doc target → no line. The layer is data-pwb-chrome
+// (#pageId, #top) have no in-doc target → no arrow. The layer is data-pwb-chrome
 // so serializeDocument strips it from saved HTML. Module-scope (no React deps)
 // so it can be called from both the link listeners and the imperative API.
 function paintConnections(doc) {
@@ -83,34 +85,75 @@ function paintConnections(doc) {
   const svg = doc.createElementNS(ns, 'svg')
   svg.setAttribute('data-pwb-connections', '')
   svg.setAttribute('data-pwb-chrome', '')
-  // position:fixed → the SVG's (0,0) IS the viewport top-left, so
-  // getBoundingClientRect() coords map directly with no scroll math and no
-  // dependency on body margin / positioning context (the old bug). Lines are
-  // repainted on scroll/resize so they keep tracking the elements.
-  svg.setAttribute('style', 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;overflow:visible')
-  const center = (el) => {
-    const r = el.getBoundingClientRect()
-    return [r.left + r.width / 2, r.top + r.height / 2]
-  }
+  // position:fixed → the SVG's (0,0) IS the viewport top-left, so a line drawn
+  // at an element's getBoundingClientRect centre sits exactly over it. The
+  // endpoints are recomputed every animation frame on scroll/resize
+  // (positionConnections), so the lines track BOTH normal elements AND
+  // position:fixed/sticky navbars (whose viewport coords stay put on scroll)
+  // with no lag and no flicker — the in-place update never rebuilds the layer.
+  svg.setAttribute(
+    'style',
+    'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;overflow:visible',
+  )
+  // An arrowhead marker so a binding reads as an arrow, not a plain dash.
+  const defs = doc.createElementNS(ns, 'defs')
+  const marker = doc.createElementNS(ns, 'marker')
+  marker.setAttribute('id', 'pwb-arrowhead')
+  marker.setAttribute('viewBox', '0 0 10 10')
+  marker.setAttribute('refX', '9')
+  marker.setAttribute('refY', '5')
+  marker.setAttribute('markerWidth', '7')
+  marker.setAttribute('markerHeight', '7')
+  marker.setAttribute('orient', 'auto-start-reverse')
+  const head = doc.createElementNS(ns, 'path')
+  head.setAttribute('d', 'M0,0 L10,5 L0,10 z')
+  head.setAttribute('fill', '#4f46e5')
+  marker.appendChild(head)
+  defs.appendChild(marker)
+  svg.appendChild(defs)
   for (const [a, b] of pairs) {
-    const [sx, sy] = center(a)
-    const [tx, ty] = center(b)
     const line = doc.createElementNS(ns, 'line')
-    line.setAttribute('x1', sx); line.setAttribute('y1', sy)
-    line.setAttribute('x2', tx); line.setAttribute('y2', ty)
+    line.__pwbSrc = a
+    line.__pwbDst = b
     line.setAttribute('stroke', '#4f46e5')
     line.setAttribute('stroke-width', '2.5')
     line.setAttribute('stroke-dasharray', '6 4')
     line.setAttribute('opacity', '0.9')
+    line.setAttribute('marker-end', 'url(#pwb-arrowhead)')
     svg.appendChild(line)
-    for (const [cx, cy] of [[sx, sy], [tx, ty]]) {
-      const dot = doc.createElementNS(ns, 'circle')
-      dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', '4.5')
-      dot.setAttribute('fill', '#4f46e5')
-      svg.appendChild(dot)
-    }
+    // A dot anchors the source end so the direction is obvious.
+    const dot = doc.createElementNS(ns, 'circle')
+    dot.__pwbEl = a
+    dot.setAttribute('r', '4.5')
+    dot.setAttribute('fill', '#4f46e5')
+    svg.appendChild(dot)
   }
   doc.body.appendChild(svg)
+  positionConnections(doc)
+}
+
+// Recompute the connector endpoints from the live element rects and write them
+// in place (no rebuild → no flicker). Cheap enough to run every animation frame
+// while scrolling, which is what keeps fixed/sticky sources attached.
+function positionConnections(doc) {
+  const svg = doc?.querySelector('svg[data-pwb-connections]')
+  if (!svg) return
+  const center = (el) => {
+    const r = el.getBoundingClientRect()
+    return [r.left + r.width / 2, r.top + r.height / 2]
+  }
+  svg.querySelectorAll('line').forEach((line) => {
+    if (!line.__pwbSrc || !line.__pwbDst || !line.__pwbSrc.isConnected || !line.__pwbDst.isConnected) return
+    const [sx, sy] = center(line.__pwbSrc)
+    const [tx, ty] = center(line.__pwbDst)
+    line.setAttribute('x1', sx); line.setAttribute('y1', sy)
+    line.setAttribute('x2', tx); line.setAttribute('y2', ty)
+  })
+  svg.querySelectorAll('circle').forEach((dot) => {
+    if (!dot.__pwbEl || !dot.__pwbEl.isConnected) return
+    const [cx, cy] = center(dot.__pwbEl)
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy)
+  })
 }
 
 // The view iframe runs with an opaque origin (no allow-same-origin), so the
@@ -205,6 +248,13 @@ function HtmlWorkspace({
   // Latest edit tool for the load-time selection listener (bound once).
   const editToolRef = useRef(editTool)
   useEffect(() => { editToolRef.current = editTool }, [editTool])
+  // Latest onCommit in a ref so the tool listeners (link/placement) can call it
+  // WITHOUT re-creating the listener factory on every parent render. The parent
+  // passes a fresh onCommit arrow each render; depending on it directly made the
+  // tool effect tear down + rebind mid-interaction, which silently un-armed the
+  // link source the instant it was picked (no bind, no persistent highlight).
+  const onCommitRef = useRef(onCommit)
+  useEffect(() => { onCommitRef.current = onCommit }, [onCommit])
   // The element currently selected in the properties panel (edit mode only).
   // A ref, not state: it's a live DOM node inside the iframe.
   const selectedRef = useRef(null)
@@ -361,6 +411,9 @@ function HtmlWorkspace({
     selectedRef.current = next
     setSelectedElement(doc, next)
     onCommit?.(serializeDocument(doc))
+    // Editing an href via the panel can add/change a connector — keep the
+    // arrows in sync while the Link tool is showing them.
+    if (editToolRef.current === 'link') paintConnections(doc)
     onElementSelect?.(next ? describeElement(next) : null)
   }, [clearSelection, onCommit, onElementSelect])
 
@@ -418,14 +471,17 @@ function HtmlWorkspace({
       const doc = iframeRef.current?.contentDocument
       const src = linkSourceRef.current
       if (!doc || !src || !pageId) return false // not armed → caller navigates
-      src.setAttribute('href', `#${pageId}`)
+      // The source may be any block — wrap it in <a> so the page link works.
+      const anchor = ensureAnchor(src)
+      anchor.setAttribute('href', `#${pageId}`)
       linkSourceRef.current = null
       onLinkArmedChange?.(false)
+      setLinkSource(doc, null)
       setHoverTarget(doc, null)
       onCommit?.(serializeDocument(doc))
       paintConnections(doc) // the source's old in-doc line (if any) disappears
-      setLinkHint(`Linked → page (#${pageId}). Click another link to connect more.`)
-      flashNode(doc, src)
+      setLinkHint(`Linked → page (#${pageId}). Click another element to connect more.`)
+      flashNode(doc, anchor)
       return true
     },
   }), [applyAiHtml, clearSelection, mode, mutateSelected, onCommit, onElementSelect, onLinkArmedChange, readHtml, setDocument, switchMode])
@@ -597,65 +653,88 @@ function HtmlWorkspace({
     linkSourceRef.current = null
     onLinkArmedChange?.(false)
     paintConnections(doc)
-    let scrollT = null
-    const onScroll = () => {
-      if (scrollT) return
-      scrollT = doc.defaultView.setTimeout(() => { scrollT = null; paintConnections(doc) }, 80)
+    const win = doc.defaultView
+    // Recompute the connector endpoints in place every animation frame while
+    // scrolling/resizing, so the lines stay attached to BOTH normal elements
+    // and position:fixed/sticky navbars (no rebuild → no flicker, no lag).
+    let rafPending = false
+    const onReflow = () => {
+      if (rafPending) return
+      rafPending = true
+      win.requestAnimationFrame(() => { rafPending = false; positionConnections(doc) })
     }
     const onClick = (e) => {
       e.preventDefault()
       e.stopPropagation()
       if (!linkSourceRef.current) {
-        const anchor = nearestAnchor(e.target, doc.body)
-        if (!anchor) { setLinkHint('Pick a LINK first (a nav item or button-link), then click its target.'); return }
-        linkSourceRef.current = anchor
+        // Source = the nearest existing link, or the SPECIFIC element clicked
+        // (wrapped in <a> on bind) — so every element can become a link. NOTE:
+        // we resolve the exact clicked element, NOT the top-level body block —
+        // real pages wrap everything in one container, and using that container
+        // made source and target collapse to the same node (link never bound).
+        const src = nearestAnchor(e.target, doc.body) || resolveSelectableElement(e.target, doc.body)
+        if (!src) { setLinkHint('Click any element to start the link, then click its target.'); return }
+        linkSourceRef.current = src
         onLinkArmedChange?.(true)
-        setHoverTarget(doc, anchor)
+        setLinkSource(doc, src) // persistent blue highlight until the next click
+        setHoverTarget(doc, null)
         setLinkHint('Now click the target element — or click a PAGE in the left Files panel to link to another page.')
         return
       }
-      const target = closestPlaceableBlock(e.target, doc.body)
-      if (!target || target === doc.body || target === linkSourceRef.current) return
-      const href = bindLinkToTarget(linkSourceRef.current, target)
-      const src = linkSourceRef.current
+      const source = linkSourceRef.current
+      const target = resolveSelectableElement(e.target, doc.body)
+      if (!target || target === source || source.contains?.(target)) {
+        setLinkHint('Pick a DIFFERENT element as the target.')
+        return
+      }
+      const anchor = ensureAnchor(source)
+      const href = bindLinkToTarget(anchor, target)
       linkSourceRef.current = null
       onLinkArmedChange?.(false)
+      setLinkSource(doc, null)
       setHoverTarget(doc, null)
       if (href) {
-        onCommit?.(serializeDocument(doc))
+        onCommitRef.current?.(serializeDocument(doc))
         paintConnections(doc)
-        setLinkHint(`Linked → ${href}. Click another link to connect more.`)
-        flashNode(doc, src)
+        setLinkHint(`Linked → ${href}. Click another element to connect more.`)
+        flashNode(doc, anchor)
       }
     }
     const onMove = (e) => {
       if (linkSourceRef.current) {
-        const t = closestPlaceableBlock(doc.elementFromPoint(e.clientX, e.clientY), doc.body)
-        setHoverTarget(doc, t && t !== doc.body && t !== linkSourceRef.current ? t : null)
+        const t = resolveSelectableElement(doc.elementFromPoint(e.clientX, e.clientY), doc.body)
+        setHoverTarget(doc, t && t !== linkSourceRef.current ? t : null)
       }
     }
     doc.addEventListener('click', onClick, true)
     doc.addEventListener('mousemove', onMove, true)
-    doc.defaultView.addEventListener('scroll', onScroll, { passive: true })
-    doc.defaultView.addEventListener('resize', onScroll)
+    win.addEventListener('scroll', onReflow, { passive: true })
+    win.addEventListener('resize', onReflow)
     return () => {
       linkSourceRef.current = null
       onLinkArmedChange?.(false)
-      if (scrollT) doc.defaultView.clearTimeout(scrollT)
+      win.removeEventListener('scroll', onReflow)
+      win.removeEventListener('resize', onReflow)
       doc.removeEventListener('click', onClick, true)
       doc.removeEventListener('mousemove', onMove, true)
-      doc.defaultView.removeEventListener('scroll', onScroll)
-      doc.defaultView.removeEventListener('resize', onScroll)
       doc.querySelectorAll('svg[data-pwb-connections]').forEach((s) => s.remove())
+      setLinkSource(doc, null)
       setHoverTarget(doc, null)
       removePlacementChrome(doc)
     }
-  }, [onCommit, onLinkArmedChange])
+    // onCommit is read through a ref so this factory stays stable — otherwise the
+    // tool effect tears down and rebinds on every parent render, un-arming the
+    // link source mid-pick.
+  }, [onLinkArmedChange])
 
   function onIframeLoad() {
     const doc = iframeRef.current?.contentDocument
     if (!doc) return
     if (mode === 'edit') {
+      // Drop any connection SVG baked into the document by an older app
+      // version — it would otherwise show as a stale arrow that never updates.
+      // The link tool repaints fresh ones from the live anchors when active.
+      doc.querySelectorAll('svg[data-pwb-connections]').forEach((s) => s.remove())
       // designMode ON only for the free-text tool — off for placing and for
       // the rearrange/link tools so clicks/drags aren't caret moves.
       setDocumentDesignMode(doc, placing || editTool !== 'text' ? 'off' : 'on')
@@ -723,16 +802,13 @@ function HtmlWorkspace({
     setDocumentDesignMode(doc, 'on')
     removePlacementChrome(doc)
     return undefined
-  }, [
-    attachPlacementListeners,
-    attachRearrangeListeners,
-    attachLinkListeners,
-    clearSelection,
-    placing,
-    editTool,
-    mode,
-    nonce,
-  ])
+    // Intentionally NOT depending on the attach* factory identities: the parent
+    // hands fresh onCommit/onPlaced arrows every render, which would otherwise
+    // re-run this effect on EVERY render — tearing down the active tool's
+    // listeners and un-arming an in-progress link pick. We only want to rebind
+    // when the actual tool/placement/document changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placing, editTool, mode, nonce])
 
   // Don't fire a stale panel refresh after unmount.
   useEffect(() => () => {

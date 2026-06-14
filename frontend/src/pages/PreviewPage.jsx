@@ -181,6 +181,24 @@ export default function PreviewPage() {
     return () => document.removeEventListener('click', onClick)
   }, [])
 
+  // Cross-page links FROM inside a sandboxed page iframe (HTML pages, and
+  // component pages that run JS) can't reach the parent directly, so their
+  // runtime posts a 'pwb-navigate' message when a #hash matches no element in
+  // their own document. If the hash names a real page, switch to it.
+  useEffect(() => {
+    const onMsg = (e) => {
+      if (e.data?.type !== 'pwb-navigate') return
+      const id = decodeURIComponent(String(e.data.hash || '').replace(/^#/, ''))
+      const list = site?.schema?.pages || []
+      if (id && list.some((p) => p.id === id)) {
+        setActiveId(id)
+        window.history.pushState(null, '', `#${encodeURIComponent(id)}`)
+      }
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [site])
+
   // All hooks MUST be called on every render in the same order — keep these
   // memos above the early returns below so React doesn't see the hook count
   // change between "loading" and "ok" renders.
@@ -258,15 +276,19 @@ export default function PreviewPage() {
   // cannot touch this app or the visitor's session). Multi-page sites carry
   // one document per schema page; a top nav switches between them. Legacy
   // single-document sites only have site.html.
-  const htmlPages = (site?.schema?.pages || [])
-    .filter((p) => (p?.html || '').trim())
-    .map((p) => ({ id: p.id, name: p.name || 'Page', html: p.html }))
-  if (!htmlPages.length && site?.html) {
-    htmlPages.push({ id: 'home', name: 'Home', html: site.html })
+  // Resolve the HTML for a page: its own per-page document, or — for a legacy
+  // single-document site — site.html mapped onto the home page.
+  const htmlFor = (p) => {
+    if ((p?.html || '').trim()) return p.html
+    if (p && pages[0]?.id === p.id && (site?.html || '').trim()) return site.html
+    return ''
   }
-  if (htmlPages.length) {
+  const currentHtml = htmlFor(current)
+  // The ACTIVE page decides how THIS view renders, so a mixed site can have
+  // HTML pages and component pages side by side — all reachable from one nav.
+  const currentIsHtml = current?.mode === 'html' || !!currentHtml.trim()
+  if (currentIsHtml) {
     const staticMode = searchParams.get('mode') === 'static'
-    const activeHtmlPage = htmlPages.find((p) => p.id === activeId) || htmlPages[0]
     // Inject a viewport meta when the document lacks one so phones render
     // the responsive layout instead of a zoomed-out desktop page. Live mode
     // also gets the interactive shim (tabs + '#' anchor interception) — the
@@ -275,8 +297,8 @@ export default function PreviewPage() {
     // about:srcdoc iframe and blank the site out.
     const iframeHtml = withViewportMeta(
       staticMode
-        ? withoutExecutableScripts(activeHtmlPage.html)
-        : withBuilderInteractiveHtml(activeHtmlPage.html),
+        ? withoutExecutableScripts(currentHtml)
+        : withBuilderInteractiveHtml(currentHtml),
     )
     const setHtmlPreviewMode = (nextMode) => {
       const next = new URLSearchParams(searchParams)
@@ -286,15 +308,15 @@ export default function PreviewPage() {
     }
     return (
       <>
-        {htmlPages.length > 1 && (
+        {pages.length > 1 && (
           <nav className="fixed inset-x-0 top-0 z-[110] flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/85 px-3 py-2 backdrop-blur">
-            {htmlPages.map((p) => (
+            {pages.map((p) => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => go(p.id)}
                 className={`rounded-lg px-3 py-1 text-sm font-medium ${
-                  p.id === activeHtmlPage.id
+                  p.id === current.id
                     ? 'bg-[#4f46e5] text-white'
                     : 'text-[#374151] hover:bg-[#f3f4f6]'
                 }`}
@@ -305,7 +327,7 @@ export default function PreviewPage() {
           </nav>
         )}
         <iframe
-          key={activeHtmlPage.id}
+          key={current.id}
           title={site.title || 'site'}
           srcDoc={iframeHtml}
           sandbox={staticMode ? STATIC_HTML_SANDBOX : PUBLIC_HTML_SANDBOX}
@@ -317,7 +339,7 @@ export default function PreviewPage() {
             width: '100%',
             height: '100%',
             border: 'none',
-            paddingTop: htmlPages.length > 1 ? 44 : 0,
+            paddingTop: pages.length > 1 ? 44 : 0,
             boxSizing: 'border-box',
           }}
         />

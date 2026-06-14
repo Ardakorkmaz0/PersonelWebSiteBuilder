@@ -4,6 +4,7 @@ import {
   LabeledSelect,
   LabeledText,
   LabeledTextarea,
+  LinkTargetControl,
 } from './controls.jsx'
 
 // Friendly names for the tag chip — users think "Heading", not "h2".
@@ -32,6 +33,14 @@ const ALIGN_OPTIONS = [
   ['right', 'Right'],
 ]
 
+const DISPLAY_OPTIONS = [
+  ['', 'Default'],
+  ['block', 'Block'],
+  ['inline-block', 'Inline block'],
+  ['flex', 'Flex'],
+  ['inline', 'Inline'],
+]
+
 function SectionTitle({ children }) {
   return (
     <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-[#6b7280] first:mt-0">
@@ -46,6 +55,7 @@ function SectionTitle({ children }) {
 // workspace's imperative API — `info` is just the current snapshot.
 export default function HtmlElementPanel({
   info,
+  pages = [],
   onChange,
   onSelectParent,
   onDuplicate,
@@ -109,11 +119,11 @@ export default function HtmlElementPanel({
               />
             )}
             {info.href !== null && (
-              <LabeledText
+              <LinkTargetControl
                 label="Link (href)"
                 value={info.href}
                 onChange={(v) => onChange({ href: v })}
-                placeholder="https://... or #section"
+                pages={pages}
               />
             )}
             {info.src !== null && (
@@ -182,6 +192,31 @@ export default function HtmlElementPanel({
           label="Corner radius (px)"
           value={info.radius}
           onChange={(v) => onChange({ radius: v })}
+        />
+      </div>
+
+      <SectionTitle>Size &amp; spacing</SectionTitle>
+      <div className="space-y-2">
+        <LabeledNumber
+          label="Width (px, 0 = auto)"
+          value={info.width}
+          onChange={(v) => onChange({ width: v })}
+        />
+        <LabeledNumber
+          label="Margin top (px)"
+          value={info.marginTop}
+          onChange={(v) => onChange({ marginTop: v })}
+        />
+        <LabeledNumber
+          label="Margin bottom (px)"
+          value={info.marginBottom}
+          onChange={(v) => onChange({ marginBottom: v })}
+        />
+        <LabeledSelect
+          label="Display"
+          value={info.display}
+          onChange={(v) => onChange({ display: v })}
+          options={DISPLAY_OPTIONS}
         />
       </div>
 

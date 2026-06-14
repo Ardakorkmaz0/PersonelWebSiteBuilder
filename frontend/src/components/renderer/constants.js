@@ -5,6 +5,14 @@ export const LINKABLE_TYPES = new Set([
   'heading', 'text', 'image', 'card', 'badge', 'icon',
 ])
 
+// Types we never wrap in an <a> when they carry an href: the ones that ARE
+// anchors already (button/linkbutton), hold their own nested links (navbar), or
+// are interactive and would have their clicks swallowed by an outer link
+// (tabs/container/accordion/select/input/html). Everything else is linkable.
+export const NON_WRAP_LINK_TYPES = new Set([
+  'button', 'linkbutton', 'navbar', 'tabs', 'container', 'accordion', 'select', 'input', 'html',
+])
+
 // Shared tab-strip styles used by the editor and live renderer so the visual
 // output stays identical.
 export const TAB_STYLES = {

@@ -20,11 +20,14 @@ function genId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function blankPage(name = 'New Page', folder = '', id) {
+function blankPage(name = 'New Page', folder = '', id, mode = 'empty') {
   return {
     id: id || genId('page'),
     name,
     folder,
+    // 'empty' = component canvas, 'html' = uploaded/authored HTML document. A
+    // brand-new page is Empty; importing/authoring HTML flips it to 'html'.
+    mode: mode === 'html' ? 'html' : 'empty',
     components: [],
     background: '#ffffff',
     backgroundMobile: '#ffffff',
@@ -586,11 +589,16 @@ function normalizePage(page) {
     const auto = autoMobileLayout(components, mobileWidth)
     components = components.map((c) => ({ ...c, mobileLayout: auto[c.id] || c.mobileLayout }))
   }
+  // Per-page editor mode. Old/loaded data has no `mode`: a page that carries an
+  // HTML document is 'html', everything else is the component canvas ('empty').
+  const mode =
+    page.mode === 'html' || (page.html || '').trim() ? 'html' : 'empty'
   return {
     ...page,
     id: page.id || genId('page'),
     name: typeof page.name === 'string' && page.name ? page.name : 'Page',
     folder: typeof page.folder === 'string' ? page.folder : '',
+    mode,
     components,
     background: page.background || '#ffffff',
     backgroundMobile: page.backgroundMobile || page.background || '#ffffff',
@@ -642,6 +650,10 @@ export const useEditorStore = create((set, get) => ({
   dirty: false,
   past: [],
   future: [],
+  // Component-canvas link tool (the Empty-mode mirror of the HTML link tool):
+  // linkMode arms the tool; linkSourceId is the component awaiting a target.
+  linkMode: false,
+  linkSourceId: null,
   // Live snap guide overlay state, set during free-canvas drags by
   // FreeCanvasItem / TabsCanvasItem and rendered by Canvas. Each guide:
   // { type: 'v'|'h', pos } in canvas coordinate pixels.
@@ -718,6 +730,8 @@ export const useEditorStore = create((set, get) => ({
       dirty: false,
       past: [],
       future: [],
+      linkMode: false,
+      linkSourceId: null,
     })
   },
 
@@ -737,6 +751,8 @@ export const useEditorStore = create((set, get) => ({
         selectedId: null,
         viewport: 'pc',
         dirty: true,
+        linkMode: false,
+        linkSourceId: null,
       }
     })
     return true
@@ -746,13 +762,14 @@ export const useEditorStore = create((set, get) => ({
   selectPage: (id) =>
     set((state) => {
       if (!state.schema.pages.some((p) => p.id === id)) return {}
-      return { currentPageId: id, selectedId: null }
+      // The pending link source belongs to the page we are leaving.
+      return { currentPageId: id, selectedId: null, linkSourceId: null }
     }),
 
-  addPage: (name = 'New Page', folder = '') => {
+  addPage: (name = 'New Page', folder = '', mode = 'empty') => {
     get().record('add-page')
     set((state) => {
-      const page = blankPage(name, folder)
+      const page = blankPage(name, folder, undefined, mode)
       return {
         schema: { ...state.schema, pages: [...state.schema.pages, page] },
         currentPageId: page.id,
@@ -760,6 +777,20 @@ export const useEditorStore = create((set, get) => ({
         dirty: true,
       }
     })
+  },
+
+  // Flip a page between the component canvas ('empty') and an HTML document
+  // ('html'). The HTML content itself lives in EditorPage's pageHtmlMap; this
+  // just records which surface the editor shows for the page.
+  setPageMode: (id, mode) => {
+    const next = mode === 'html' ? 'html' : 'empty'
+    const page = get().schema.pages.find((p) => p.id === id)
+    if (!page || page.mode === next) return
+    get().record('page-mode-' + id)
+    set((state) => ({
+      schema: mapPage(state.schema, id, (p) => ({ ...p, mode: next })),
+      dirty: true,
+    }))
   },
 
   renamePage: (id, name) => {
@@ -973,6 +1004,45 @@ export const useEditorStore = create((set, get) => ({
   },
 
   selectComponent: (id) => set({ selectedId: id }),
+
+  // ---- Component-canvas link tool ----------------------------------------
+  // Arm/disarm the link tool. Leaving the tool always drops the pending source.
+  setLinkMode: (v) =>
+    set({ linkMode: !!v, linkSourceId: v ? get().linkSourceId : null }),
+  cancelLink: () => set({ linkSourceId: null }),
+
+  // Click handler for the link tool: first click picks a link-capable source
+  // (a button/link or any wrap-in-<a> component); second click binds it to the
+  // target component via an in-page anchor (#targetId). Mirrors the HTML-mode
+  // "click a link, then click its target" flow. Returns a short status string
+  // so the canvas banner can guide the user.
+  pickLinkNode: (id) => {
+    const state = get()
+    const page = selectCurrentPage(state)
+    const node = findInTree(page.components, id)
+    if (!node) return ''
+    // ANY component can be a link source — the renderer wraps it in an <a> when
+    // it carries an href (the types that are already anchors set it directly).
+    if (!state.linkSourceId) {
+      set({ linkSourceId: id })
+      return 'armed'
+    }
+    if (id === state.linkSourceId) return 'same'
+    get().updateProps(state.linkSourceId, { href: `#${id}` })
+    set({ linkSourceId: null })
+    return 'linked'
+  },
+
+  // Link tool + Files panel: bind the armed source to a whole page (#pageId),
+  // which the published multi-page nav resolves. Returns true only when a
+  // source was armed, so a normal Files click still navigates otherwise.
+  bindLinkSourceToPage: (pageId) => {
+    const { linkSourceId } = get()
+    if (!linkSourceId || !pageId) return false
+    get().updateProps(linkSourceId, { href: `#${pageId}` })
+    set({ linkSourceId: null })
+    return true
+  },
 
   // Align a component to one of its parent box edges or to centre. Mode is
   // one of left | centerH | right | top | middleV | bottom. For top-level

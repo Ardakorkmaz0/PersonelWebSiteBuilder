@@ -8,12 +8,15 @@ import {
   cssColorToHex,
   describeElement,
   duplicateElement,
+  elementLinkHref,
+  ensureAnchor,
   ensureElementId,
   moveElement,
   nearestAnchor,
   reorderToPoint,
   resolveSelectableElement,
   selectableParent,
+  setElementLink,
 } from './htmlElementEdit.js'
 import { closestPlaceableBlock, insertPositionForY } from './htmlPlacement.js'
 
@@ -199,6 +202,33 @@ describe('applyElementPatch — box styles', () => {
   })
 })
 
+describe('applyElementPatch — size & spacing', () => {
+  it('sets width and clears it at 0 (auto)', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { width: 320 })
+    expect(p.style.width).toBe('320px')
+    applyElementPatch(p, { width: 0 })
+    expect(p.style.width).toBe('')
+  })
+
+  it('always writes margins, including 0', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { marginTop: 16, marginBottom: 24 })
+    expect(p.style.marginTop).toBe('16px')
+    expect(p.style.marginBottom).toBe('24px')
+    applyElementPatch(p, { marginTop: 0 })
+    expect(p.style.marginTop).toBe('0px')
+  })
+
+  it('sets and clears display', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { display: 'flex' })
+    expect(p.style.display).toBe('flex')
+    applyElementPatch(p, { display: '' })
+    expect(p.style.display).toBe('')
+  })
+})
+
 describe('ensureElementId / bindLinkToTarget / nearestAnchor', () => {
   it('derives a stable, unique id from text and reuses an existing one', () => {
     const fresh = document.querySelector('#second p') // no id in the fixture
@@ -225,6 +255,36 @@ describe('ensureElementId / bindLinkToTarget / nearestAnchor', () => {
   it('finds the nearest anchor above an element', () => {
     document.body.innerHTML = '<a id="a1"><span id="s1">x</span></a>'
     expect(nearestAnchor(document.getElementById('s1'), document.body)).toBe(document.getElementById('a1'))
+  })
+})
+
+describe('ensureAnchor / elementLinkHref / setElementLink', () => {
+  it('wraps a non-anchor in an <a> and reuses that wrapper', () => {
+    const p = document.getElementById('para')
+    const a = ensureAnchor(p)
+    expect(a.tagName).toBe('A')
+    expect(a.firstElementChild).toBe(p)
+    expect(ensureAnchor(p)).toBe(a) // reuses the builder wrapper
+  })
+
+  it('returns an existing anchor unchanged', () => {
+    const link = document.getElementById('link')
+    expect(ensureAnchor(link)).toBe(link)
+  })
+
+  it('reads the effective link of any element', () => {
+    expect(elementLinkHref(document.getElementById('link'))).toBe('#contact')
+    expect(elementLinkHref(document.getElementById('para'))).toBe('') // none yet
+  })
+
+  it('sets a link by wrapping and clears it by unwrapping', () => {
+    const p = document.getElementById('para')
+    setElementLink(p, '#page_about')
+    expect(elementLinkHref(p)).toBe('#page_about')
+    expect(p.parentElement.tagName).toBe('A')
+    setElementLink(p, '') // "No link" → unwrap the builder anchor
+    expect(p.parentElement.tagName).toBe('SECTION')
+    expect(elementLinkHref(p)).toBe('')
   })
 })
 

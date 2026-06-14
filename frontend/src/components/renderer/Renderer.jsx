@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { registry, CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import { sanitizeStyles, sanitizeUrl } from '../../utils/sanitize.js'
-import { FULL_BLEED_TYPES, LINKABLE_TYPES, TAB_STYLES } from './constants.js'
+import { FULL_BLEED_TYPES, NON_WRAP_LINK_TYPES, TAB_STYLES } from './constants.js'
 import {
   absoluteChildrenHeight,
   canvasHeight,
@@ -215,7 +215,9 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
   )
   // Optional link wrapper: `display:contents` keeps the layout identical while
   // making the whole component clickable, just like wrapping any element in <a>.
-  const href = LINKABLE_TYPES.has(component.type)
+  // ANY component can carry a link except the ones that are already anchors or
+  // are interactive (they handle their own clicks / nested links).
+  const href = !NON_WRAP_LINK_TYPES.has(component.type)
     ? sanitizeUrl(component.props?.href)
     : ''
   if (href) {
@@ -267,7 +269,8 @@ export function Renderer({
         {list.map((c) => {
           if (isHidden(c, viewport)) return null
           return (
-            <div key={c.id} style={flowItemStyle(c, viewport, canvasW)}>
+            // id lets in-page links (#componentId) scroll to this component.
+            <div key={c.id} id={c.id} style={flowItemStyle(c, viewport, canvasW)}>
               <RenderComponent component={c} flowMode viewport={viewport} />
             </div>
           )
@@ -292,6 +295,8 @@ export function Renderer({
         return (
           <div
             key={c.id}
+            // id lets in-page links (#componentId) scroll to this component.
+            id={c.id}
             style={{
               position: 'absolute',
               left: l.x || 0,

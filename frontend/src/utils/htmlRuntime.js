@@ -98,7 +98,11 @@ const INTERACTIVE_SCRIPT = `
         event.preventDefault();
         var id = decodeURIComponent(href.slice(1));
         var target = id && document.getElementById(id);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+        // No matching element in THIS document — it may be a cross-page link
+        // (#pageId). The page renders in a sandboxed, opaque-origin iframe, so
+        // ask the host to switch pages. Unknown hashes are simply ignored.
+        try { parent.postMessage({ type: 'pwb-navigate', hash: href }, '*'); } catch (e) {}
         return;
       }
       // Anything else (relative paths, javascript:, etc.) — block to avoid

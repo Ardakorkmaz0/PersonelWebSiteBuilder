@@ -130,6 +130,15 @@ export function applyElementPatch(el, patch = {}) {
     if (value) el.style[prop] = value
     else el.style[prop] = ''
   }
+  // Spacing / sizing controls often "do nothing" because the page's own CSS
+  // pins them with !important (very common in templates). Write THESE as
+  // !important so the panel's explicit edit actually wins; clearing removes
+  // the override so the stylesheet value shows through again. Uses kebab-case
+  // property names (setProperty requires them).
+  const setImp = (prop, value) => {
+    if (value === '' || value == null) el.style.removeProperty(prop)
+    else el.style.setProperty(prop, value, 'important')
+  }
   if (patch.fontSize !== undefined) {
     const n = Number(patch.fontSize)
     setStyle('fontSize', n > 0 ? `${n}px` : '')
@@ -140,25 +149,25 @@ export function applyElementPatch(el, patch = {}) {
   if (patch.background !== undefined) setStyle('backgroundColor', patch.background)
   if (patch.padding !== undefined) {
     const n = Number(patch.padding)
-    setStyle('padding', n > 0 ? `${n}px` : '')
+    setImp('padding', n > 0 ? `${n}px` : '')
   }
   if (patch.radius !== undefined) {
     const n = Number(patch.radius)
-    setStyle('borderRadius', n >= 0 && String(patch.radius) !== '' ? `${n}px` : '')
+    setImp('border-radius', n >= 0 && String(patch.radius) !== '' ? `${n}px` : '')
   }
   // 0 width would hide the element, so 0 clears the override (auto width).
   if (patch.width !== undefined) {
     const n = Number(patch.width)
-    setStyle('width', n > 0 ? `${n}px` : '')
+    setImp('width', n > 0 ? `${n}px` : '')
   }
   // Margins: 0 is a real value (collapse the gap), so always write it.
   if (patch.marginTop !== undefined) {
     const n = Number(patch.marginTop)
-    el.style.marginTop = `${n}px`
+    setImp('margin-top', `${n}px`)
   }
   if (patch.marginBottom !== undefined) {
     const n = Number(patch.marginBottom)
-    el.style.marginBottom = `${n}px`
+    setImp('margin-bottom', `${n}px`)
   }
   if (patch.display !== undefined) setStyle('display', patch.display)
 }
@@ -218,6 +227,12 @@ export function ensureAnchor(el) {
   a.setAttribute('href', '#')
   // Mark builder-created wrappers so "No link" can unwrap them cleanly.
   a.setAttribute('data-pwb-linkwrap', '')
+  // The wrapper must be INVISIBLE: `display:contents` makes it generate no box
+  // (so it never breaks flex/grid layout or repaints the element), and the
+  // color/decoration overrides stop the anchor's default blue underline from
+  // cascading in. Mirrors the component renderer's link wrapper — adding a link
+  // must not change how the element looks or lays out.
+  a.setAttribute('style', 'display:contents;color:inherit;text-decoration:none')
   el.parentNode.insertBefore(a, el)
   a.appendChild(el)
   return a

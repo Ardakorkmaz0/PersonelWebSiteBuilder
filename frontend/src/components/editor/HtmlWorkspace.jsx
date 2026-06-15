@@ -139,7 +139,12 @@ function positionConnections(doc) {
   const svg = doc?.querySelector('svg[data-pwb-connections]')
   if (!svg) return
   const center = (el) => {
-    const r = el.getBoundingClientRect()
+    let r = el.getBoundingClientRect()
+    // A `display:contents` link wrapper generates no box of its own (0×0) —
+    // measure its content instead so the connector still lands on the element.
+    if (r.width === 0 && r.height === 0 && el.firstElementChild) {
+      r = el.firstElementChild.getBoundingClientRect()
+    }
     return [r.left + r.width / 2, r.top + r.height / 2]
   }
   svg.querySelectorAll('line').forEach((line) => {
@@ -216,6 +221,7 @@ function HtmlWorkspace({
   fileName = 'index.html',
   deviceId = 'fit',
   landscape = false,
+  persistKey,
   onCommit,
   onRequestSave,
   onElementSelect,
@@ -227,13 +233,24 @@ function HtmlWorkspace({
   onPlaced,
   onCancelPlacement,
 }, ref) {
-  const [mode, setMode] = useState('view')
+  // The view/edit/source surface and the edit sub-tool are restored from
+  // localStorage (per site) so a browser refresh lands the user back exactly
+  // where they were — index.html in, say, edit + link — instead of resetting
+  // to the read-only View. Helpers swallow storage errors (private mode, etc.).
+  const lsGet = (k, def) => {
+    try { return localStorage.getItem(`pwb_${k}_${persistKey}`) || def } catch { return def }
+  }
+  const [mode, setMode] = useState(() => lsGet('htmlmode', 'view'))
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
   // Edit sub-tool (only meaningful in edit mode): 'text' = click-to-type,
   // 'rearrange' = drag blocks to reorder, 'link' = connect a link to a target.
-  const [editTool, setEditTool] = useState('text')
+  const [editTool, setEditTool] = useState(() => lsGet('htmltool', 'text'))
+  // Bumped on every iframe load so the tool manager rebinds AFTER the document
+  // is ready — needed when edit/link is restored on mount (the first effect run
+  // happens before the iframe body exists).
+  const [loadTick, setLoadTick] = useState(0)
   const [linkHint, setLinkHint] = useState(null) // link-tool guidance text
   const linkSourceRef = useRef(null) // chosen <a> awaiting a target (link tool)
 
@@ -248,6 +265,13 @@ function HtmlWorkspace({
   // Latest edit tool for the load-time selection listener (bound once).
   const editToolRef = useRef(editTool)
   useEffect(() => { editToolRef.current = editTool }, [editTool])
+  // Persist the surface + sub-tool so a refresh restores them (see lsGet).
+  useEffect(() => {
+    try { localStorage.setItem(`pwb_htmlmode_${persistKey}`, mode) } catch { /* ignore */ }
+  }, [persistKey, mode])
+  useEffect(() => {
+    try { localStorage.setItem(`pwb_htmltool_${persistKey}`, editTool) } catch { /* ignore */ }
+  }, [persistKey, editTool])
   // Latest onCommit in a ref so the tool listeners (link/placement) can call it
   // WITHOUT re-creating the listener factory on every parent render. The parent
   // passes a fresh onCommit arrow each render; depending on it directly made the
@@ -730,6 +754,9 @@ function HtmlWorkspace({
   function onIframeLoad() {
     const doc = iframeRef.current?.contentDocument
     if (!doc) return
+    // Tell the tool manager the document is now ready, so a restored edit/link
+    // surface binds its listeners (the first effect pass ran before this load).
+    setLoadTick((t) => t + 1)
     if (mode === 'edit') {
       // Drop any connection SVG baked into the document by an older app
       // version — it would otherwise show as a stale arrow that never updates.
@@ -806,9 +833,9 @@ function HtmlWorkspace({
     // hands fresh onCommit/onPlaced arrows every render, which would otherwise
     // re-run this effect on EVERY render — tearing down the active tool's
     // listeners and un-arming an in-progress link pick. We only want to rebind
-    // when the actual tool/placement/document changes.
+    // when the actual tool/placement/document changes (loadTick = iframe ready).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placing, editTool, mode, nonce])
+  }, [placing, editTool, mode, nonce, loadTick])
 
   // Don't fire a stale panel refresh after unmount.
   useEffect(() => () => {

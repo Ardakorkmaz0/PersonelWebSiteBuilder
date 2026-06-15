@@ -134,6 +134,13 @@ export default function EditorPage() {
   const setLinkMode = useEditorStore((s) => s.setLinkMode)
   const bindLinkSourceToPage = useEditorStore((s) => s.bindLinkSourceToPage)
 
+  // Captured ONCE at mount, before the page-persist effect can overwrite the
+  // stored value with the store's default 'page_home'. Without this the restore
+  // always read 'page_home' (the effect fired first), so a refresh only ever
+  // returned to the home page — never the page you were actually on.
+  const [savedPageOnMount] = useState(() => {
+    try { return localStorage.getItem('pwb_page_' + id) || '' } catch { return '' }
+  })
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [published, setPublished] = useState(false)
@@ -151,7 +158,10 @@ export default function EditorPage() {
   const [htmlDevice, setHtmlDevice] = useState('fit')
   const [htmlLandscape, setHtmlLandscape] = useState(false)
   // Component mode View/Edit/Source bar (mirrors the HTML workspace bar).
-  const [canvasMode, setCanvasMode] = useState('edit') // 'view' | 'edit' | 'source'
+  // Restored from localStorage so a refresh keeps the surface you were on.
+  const [canvasMode, setCanvasMode] = useState(() => {
+    try { return localStorage.getItem('pwb_canvasmode_' + id) || 'edit' } catch { return 'edit' }
+  }) // 'view' | 'edit' | 'source'
   const [dragOver, setDragOver] = useState(false)
   // HTML-mode component placement: the palette item the user is about to drop
   // into the HTML document (null when not placing).
@@ -207,6 +217,15 @@ export default function EditorPage() {
   useEffect(() => {
     try { localStorage.setItem('pwb_right_open', rightOpen ? '1' : '0') } catch { /* ignore */ }
   }, [rightOpen])
+  // Remember the active page + component surface per site, so a browser refresh
+  // returns to exactly where the user left off (the HTML workspace's
+  // view/edit/source + link sub-tool is persisted inside HtmlWorkspace itself).
+  useEffect(() => {
+    try { localStorage.setItem('pwb_page_' + id, currentPageId) } catch { /* ignore */ }
+  }, [id, currentPageId])
+  useEffect(() => {
+    try { localStorage.setItem('pwb_canvasmode_' + id, canvasMode) } catch { /* ignore */ }
+  }, [id, canvasMode])
   // Linked local .html file (File System Access API): every Save also writes
   // the document back to this file. { handle, name } or null. Persisted in
   // IndexedDB per site, so the link survives page reloads; the browser
@@ -304,6 +323,13 @@ export default function EditorPage() {
         setPageHtmlMap(map)
         setHtmlDirty(false)
         loadSchema(data.schema)
+        // Restore the page the user was last editing (per-site) so a refresh
+        // stays put instead of bouncing back to the home page. Uses the value
+        // captured at mount (savedPageOnMount), not a fresh read — the persist
+        // effect has already rewritten localStorage to the default by now.
+        if (savedPageOnMount && pages.some((p) => p.id === savedPageOnMount)) {
+          useEditorStore.getState().selectPage(savedPageOnMount)
+        }
       })
       .catch((e) => active && setError(apiError(e)))
       .finally(() => {
@@ -314,7 +340,7 @@ export default function EditorPage() {
       active = false
       clearTimeout(loadingTimer)
     }
-  }, [id, loadSchema])
+  }, [id, loadSchema, savedPageOnMount])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -797,18 +823,18 @@ export default function EditorPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-nowrap items-center gap-2 overflow-hidden border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
-        <Link to="/" className="flex items-center gap-2 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
+      <header className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
+        <Link to="/" title="Back to Sites" className="flex shrink-0 items-center gap-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
           <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
-          <span>&larr; Sites</span>
+          <span>&larr;</span>
         </Link>
         <input
-          className="rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none"
+          className="min-w-[3rem] max-w-[160px] flex-shrink rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${
             published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
           }`}
         >
@@ -822,7 +848,7 @@ export default function EditorPage() {
               ? 'This page is an uploaded/authored HTML document'
               : 'This page uses the drag-and-drop component canvas'
           }
-          className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
+          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
             currentPageIsHtml
               ? 'bg-[#eef2ff] text-[#4f46e5]'
               : 'bg-[#f1f5f9] text-[#475569]'
@@ -830,10 +856,14 @@ export default function EditorPage() {
         >
           {currentPageIsHtml ? 'HTML Upload Mode' : 'Empty Mode'}
         </span>
-        {(dirty || htmlDirty) && <span className="text-xs text-amber-500">Unsaved changes</span>}
-        {justSaved && <span className="text-xs text-[#15803d]">Saved &#10003;</span>}
+        {(dirty || htmlDirty) && <span className="shrink-0 whitespace-nowrap text-xs text-amber-500">Unsaved changes</span>}
+        {justSaved && <span className="shrink-0 whitespace-nowrap text-xs text-[#15803d]">Saved &#10003;</span>}
 
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+        {/* Actions pinned to the right edge (ml-auto). On a wide screen they sit
+            on one row, right-aligned; on a narrow window they wrap (still
+            right-aligned) rather than getting clipped, so Save/Publish stay
+            visible. Compact gaps keep them on one row for as long as possible. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}
@@ -881,7 +911,7 @@ export default function EditorPage() {
                 value={htmlDevice}
                 onChange={(e) => setHtmlDevice(e.target.value)}
                 title="Screen / device width"
-                className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+                className="max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
               >
                 {DEVICES.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -1227,6 +1257,7 @@ export default function EditorPage() {
                 <HtmlWorkspace
                   key={currentPageId}
                   ref={workspaceRef}
+                  persistKey={id}
                   html={siteHtml}
                   deviceId={htmlDevice}
                   landscape={htmlLandscape}

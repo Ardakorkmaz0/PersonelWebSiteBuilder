@@ -255,7 +255,6 @@ function HtmlWorkspace({
   const linkSourceRef = useRef(null) // chosen <a> awaiting a target (link tool)
 
   const iframeRef = useRef(null)
-  const stageRef = useRef(null)
   const [stage, setStage] = useState({ w: 0, h: 0 })
   const placing = !!pendingType
   // Keep the latest pendingType in a ref so the iframe listeners (bound once
@@ -316,14 +315,24 @@ function HtmlWorkspace({
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  useEffect(() => {
-    const el = stageRef.current
+  // Callback ref for the preview stage. A plain useRef + one-shot effect missed
+  // resizes: the stage element is (re)created when switching between the
+  // starter card / source / preview branches, and may not exist on first mount,
+  // so the observer either never attached or watched a detached node — leaving
+  // the responsive iframe frozen at a stale width after collapsing a side rail.
+  // Re-attaching on every element mount keeps the stage size always current.
+  const stageRoRef = useRef(null)
+  const stageRef = useCallback((el) => {
+    if (stageRoRef.current) {
+      stageRoRef.current.disconnect()
+      stageRoRef.current = null
+    }
     if (!el) return
     const update = () => setStage({ w: el.clientWidth, h: el.clientHeight })
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
-    return () => ro.disconnect()
+    stageRoRef.current = ro
   }, [])
 
   const readHtml = useCallback(() => {
@@ -852,6 +861,30 @@ function HtmlWorkspace({
       : editSeed
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
+  // The preview iframe — rendered into either the CSS-filled responsive frame
+  // or the scaled fixed-device frame below. One definition keeps its key/ref
+  // identical across both so it isn't needlessly torn down.
+  const stageIframe = (
+    <iframe
+      key={`${mode}-${nonce}`}
+      ref={iframeRef}
+      title="site"
+      srcDoc={srcDoc}
+      sandbox={sandbox}
+      allow={HTML_ALLOW}
+      allowFullScreen
+      onLoad={onIframeLoad}
+      style={{
+        width: '100%',
+        height: '100%',
+        border: 'none',
+        display: 'block',
+        background: '#ffffff',
+        scrollbarGutter: 'stable',
+      }}
+    />
+  )
+
   const toggleBtn = (active) =>
     active ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'
 
@@ -994,40 +1027,36 @@ function HtmlWorkspace({
             ref={stageRef}
             className="relative flex flex-1 items-start justify-center overflow-hidden bg-[#f3f4f6] p-3"
           >
-            <div style={{ width: Math.round(contentW * scale), height: Math.round(contentH * scale) }}>
+            {isFit ? (
+              // Responsive ("area width") preview: the iframe simply FILLS the
+              // stage via CSS, so its width tracks side-rail collapses and
+              // window resizes with no JS measurement — a frozen ResizeObserver
+              // can no longer leave the preview stuck at half width.
               <div
-                className="bg-white"
-                style={{
-                  width: contentW,
-                  height: contentH,
-                  position: 'relative',
-                  transform: `scale(${scale})`,
-                  transformOrigin: 'top left',
-                  boxShadow: isFit ? 'none' : '0 1px 6px rgba(0,0,0,0.15)',
-                  border: isFit ? 'none' : '1px solid #d1d5db',
-                  outline: placing ? '2px solid #2563eb' : 'none',
-                }}
+                className="h-full w-full overflow-hidden bg-white"
+                style={{ outline: placing ? '2px solid #2563eb' : 'none' }}
               >
-                <iframe
-                  key={`${mode}-${nonce}`}
-                  ref={iframeRef}
-                  title="site"
-                  srcDoc={srcDoc}
-                  sandbox={sandbox}
-                  allow={HTML_ALLOW}
-                  allowFullScreen
-                  onLoad={onIframeLoad}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    border: 'none',
-                    display: 'block',
-                    background: '#ffffff',
-                    scrollbarGutter: 'stable',
-                  }}
-                />
+                {stageIframe}
               </div>
-            </div>
+            ) : (
+              <div style={{ width: Math.round(contentW * scale), height: Math.round(contentH * scale) }}>
+                <div
+                  className="bg-white"
+                  style={{
+                    width: contentW,
+                    height: contentH,
+                    position: 'relative',
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'top left',
+                    boxShadow: '0 1px 6px rgba(0,0,0,0.15)',
+                    border: '1px solid #d1d5db',
+                    outline: placing ? '2px solid #2563eb' : 'none',
+                  }}
+                >
+                  {stageIframe}
+                </div>
+              </div>
+            )}
           </main>
         )}
       </div>

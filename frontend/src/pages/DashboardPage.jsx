@@ -98,6 +98,13 @@ export default function DashboardPage() {
           >
             {creating ? 'Creating…' : '+ Create site'}
           </button>
+          <Link
+            to="/code"
+            title="Open a folder from your computer and edit its HTML/CSS/JS in place"
+            className="ms-btn flex items-center whitespace-nowrap px-5"
+          >
+            📂 Open local project
+          </Link>
         </form>
 
         {error && (

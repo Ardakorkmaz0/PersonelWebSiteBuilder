@@ -218,6 +218,10 @@ export function serializeDocument(doc) {
   root
     .querySelectorAll('svg[data-pwb-chrome], svg[data-pwb-connections]')
     .forEach((el) => el.remove())
+  // Strip styles/scripts the Code-project preview injected for visual fidelity
+  // (the original <link>/<script src> are kept), so saving the file back never
+  // bakes the resolved CSS/JS into the source.
+  root.querySelectorAll('[data-pwb-injected]').forEach((el) => el.remove())
   return '<!DOCTYPE html>\n' + root.outerHTML
 }
 

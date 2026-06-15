@@ -14,6 +14,7 @@ import ProtectedRoute from './routes/ProtectedRoute.jsx'
 // flashing blank between chunks.
 const EditorPage = lazy(() => import('./pages/EditorPage.jsx'))
 const PreviewPage = lazy(() => import('./pages/PreviewPage.jsx'))
+const CodeProjectPage = lazy(() => import('./pages/CodeProjectPage.jsx'))
 
 function FullScreenLoading() {
   return (
@@ -43,6 +44,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <EditorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/code"
+            element={
+              <ProtectedRoute>
+                <CodeProjectPage />
               </ProtectedRoute>
             }
           />

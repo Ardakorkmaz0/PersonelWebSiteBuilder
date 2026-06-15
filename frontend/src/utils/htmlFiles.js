@@ -207,3 +207,120 @@ export async function htmlFilesToDocument(fileList) {
 
   return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
 }
+
+// ---------------------------------------------------------------------------
+// Live preview assembly for the "Code project" editor. Unlike
+// htmlFilesToDocument (one-shot, from a FileList), this reads the CURRENT,
+// possibly-edited contents out of an in-memory map so editing a linked CSS/JS
+// updates the preview live. The map is keyed by project-relative path; each
+// entry is { kind, content, handle } (text files carry `content`; assets carry
+// a File System Access `handle` we data-URL on demand).
+// ---------------------------------------------------------------------------
+
+async function handleToDataUrl(entry) {
+  if (!entry?.handle) return ''
+  try {
+    return await fileToDataUrl(await entry.handle.getFile())
+  } catch {
+    return ''
+  }
+}
+
+// Resolve a href/src ref (relative to baseDir) to a map entry: try the
+// directory-relative path, then the root-relative path, then a bare basename.
+function resolveInMap(ref, baseDir, filesMap) {
+  const clean = normalizePath(stripHashAndQuery(ref))
+  if (!clean) return null
+  const candidates = [normalizePath(`${baseDir}/${clean}`), clean]
+  for (const c of candidates) if (filesMap.has(c)) return filesMap.get(c)
+  const base = basename(clean)
+  for (const [p, f] of filesMap) if (basename(p) === base) return f
+  return null
+}
+
+// url(...) inlining against the in-memory map (CSS files reference assets
+// relative to the CSS file's own folder).
+async function inlineCssUrlsMap(css, baseDir, filesMap) {
+  const text = String(css || '')
+  const re = /url\(\s*(['"]?)(.*?)\1\s*\)/gi
+  let out = ''
+  let last = 0
+  for (const match of text.matchAll(re)) {
+    const ref = match[2]
+    out += text.slice(last, match.index)
+    if (!isLocalRef(ref)) {
+      out += match[0]
+    } else {
+      const entry = resolveInMap(ref, baseDir, filesMap)
+      const url = entry ? await handleToDataUrl(entry) : ''
+      out += url ? `url("${url}")` : match[0]
+    }
+    last = match.index + match[0].length
+  }
+  return out + text.slice(last)
+}
+
+// Build a preview document for the HTML file at `htmlPath` from the live map.
+// - opts.forEdit=false (View): inline linked CSS as <style>, inline linked
+//   <script src> JS, and data-URL assets → a self-contained, runnable document.
+// - opts.forEdit=true (Edit): KEEP the original <link>/<script src> (so writing
+//   the file back preserves its references) but ADD an injected <style
+//   data-pwb-injected> with the resolved CSS so the page still looks styled in
+//   the no-network srcdoc iframe. serializeDocument strips data-pwb-injected.
+export async function assemblePreviewHtml(htmlText, htmlPath, filesMap, opts = {}) {
+  const forEdit = !!opts.forEdit
+  const htmlDir = dirname(normalizePath(htmlPath || ''))
+  const doc = new DOMParser().parseFromString(String(htmlText || ''), 'text/html')
+
+  for (const link of [...doc.querySelectorAll('link[rel~="stylesheet"][href]')]) {
+    const href = link.getAttribute('href')
+    if (!isLocalRef(href)) continue
+    const entry = resolveInMap(href, htmlDir, filesMap)
+    if (entry?.kind !== 'css') continue
+    const cssDir = dirname(entry.path)
+    const css = await inlineCssUrlsMap(entry.content || '', cssDir, filesMap)
+    const style = doc.createElement('style')
+    style.setAttribute('data-pwb-injected', href)
+    style.textContent = css
+    if (forEdit) link.after(style) // keep the <link>, add styling next to it
+    else link.replaceWith(style)
+  }
+
+  for (const style of [...doc.querySelectorAll('style:not([data-pwb-injected])')]) {
+    style.textContent = await inlineCssUrlsMap(style.textContent, htmlDir, filesMap)
+  }
+
+  if (!forEdit) {
+    for (const script of [...doc.querySelectorAll('script[src]')]) {
+      const src = script.getAttribute('src')
+      if (!isLocalRef(src)) continue
+      const entry = resolveInMap(src, htmlDir, filesMap)
+      if (entry?.kind !== 'js') continue
+      const inline = doc.createElement('script')
+      copyAttributes(script, inline, new Set(['src', 'integrity', 'crossorigin']))
+      inline.setAttribute('data-pwb-injected', src)
+      inline.textContent = entry.content || ''
+      script.replaceWith(inline)
+    }
+  }
+
+  for (const el of [...doc.querySelectorAll('[style]')]) {
+    el.setAttribute('style', await inlineCssUrlsMap(el.getAttribute('style'), htmlDir, filesMap))
+  }
+
+  for (const attr of ['src', 'poster', 'href']) {
+    for (const el of [...doc.querySelectorAll(`[${attr}]`)]) {
+      if (el.tagName.toLowerCase() === 'a' && attr === 'href') continue
+      if (el.tagName.toLowerCase() === 'link' && attr === 'href' && /stylesheet/i.test(el.rel)) continue
+      const ref = el.getAttribute(attr)
+      if (!isLocalRef(ref)) continue
+      const entry = resolveInMap(ref, htmlDir, filesMap)
+      if (entry?.kind === 'asset') {
+        const url = await handleToDataUrl(entry)
+        if (url) el.setAttribute(attr, url)
+      }
+    }
+  }
+
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
+}

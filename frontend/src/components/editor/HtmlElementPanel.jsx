@@ -41,6 +41,23 @@ const DISPLAY_OPTIONS = [
   ['inline', 'Inline'],
 ]
 
+const JUSTIFY_OPTIONS = [
+  ['', 'Default'],
+  ['flex-start', 'Start'],
+  ['center', 'Center'],
+  ['flex-end', 'End'],
+  ['space-between', 'Space between'],
+  ['space-around', 'Space around'],
+]
+
+const ALIGN_OPTIONS_FLEX = [
+  ['', 'Default'],
+  ['stretch', 'Stretch'],
+  ['flex-start', 'Start'],
+  ['center', 'Center'],
+  ['flex-end', 'End'],
+]
+
 function SectionTitle({ children }) {
   return (
     <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-[#6b7280] first:mt-0">
@@ -203,6 +220,11 @@ export default function HtmlElementPanel({
           onChange={(v) => onChange({ width: v })}
         />
         <LabeledNumber
+          label="Height (px, 0 = auto)"
+          value={info.height}
+          onChange={(v) => onChange({ height: v })}
+        />
+        <LabeledNumber
           label="Margin top (px)"
           value={info.marginTop}
           onChange={(v) => onChange({ marginTop: v })}
@@ -218,6 +240,47 @@ export default function HtmlElementPanel({
           onChange={(v) => onChange({ display: v })}
           options={DISPLAY_OPTIONS}
         />
+      </div>
+
+      <SectionTitle>Border</SectionTitle>
+      <div className="space-y-2">
+        <LabeledNumber
+          label="Border width (px)"
+          value={info.borderWidth}
+          onChange={(v) => onChange({ borderWidth: v })}
+        />
+        <LabeledColor
+          label="Border color"
+          value={info.borderColor || '#000000'}
+          onChange={(v) => onChange({ borderColor: v })}
+        />
+      </div>
+
+      {/* Layout controls — the practical way to space/align the items inside a
+          row container like a navbar (which is a flex box, not a plain block). */}
+      <SectionTitle>Layout (rows / flex)</SectionTitle>
+      <div className="space-y-2">
+        <LabeledSelect
+          label="Justify (horizontal)"
+          value={info.justifyContent}
+          onChange={(v) => onChange({ justifyContent: v })}
+          options={JUSTIFY_OPTIONS}
+        />
+        <LabeledSelect
+          label="Align (vertical)"
+          value={info.alignItems}
+          onChange={(v) => onChange({ alignItems: v })}
+          options={ALIGN_OPTIONS_FLEX}
+        />
+        <LabeledNumber
+          label="Gap between items (px)"
+          value={info.gap}
+          onChange={(v) => onChange({ gap: v })}
+        />
+        <p className="text-[11px] leading-snug text-[#9ca3af]">
+          Tip: set Display to “Flex” first if these don’t take effect — they
+          arrange the element’s direct children (e.g. a navbar’s links).
+        </p>
       </div>
 
       <SectionTitle>Arrange</SectionTitle>

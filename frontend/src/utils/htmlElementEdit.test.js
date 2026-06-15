@@ -227,6 +227,34 @@ describe('applyElementPatch — size & spacing', () => {
     applyElementPatch(p, { display: '' })
     expect(p.style.display).toBe('')
   })
+
+  it('sets height and clears it at 0', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { height: 120 })
+    expect(p.style.height).toBe('120px')
+    applyElementPatch(p, { height: 0 })
+    expect(p.style.height).toBe('')
+  })
+
+  it('sets a solid border from width + colour and removes it at 0', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { borderWidth: 2, borderColor: '#ff0000' })
+    expect(p.style.getPropertyValue('border-width')).toBe('2px')
+    expect(p.style.getPropertyValue('border-style')).toBe('solid')
+    // jsdom normalises hex to rgb(); just confirm a red border colour landed.
+    expect(p.style.getPropertyValue('border-color')).toMatch(/#ff0000|rgb\(255, 0, 0\)/)
+    applyElementPatch(p, { borderWidth: 0 })
+    expect(p.style.getPropertyValue('border-width')).toBe('')
+    expect(p.style.getPropertyValue('border-style')).toBe('')
+  })
+
+  it('sets flex layout (justify / align / gap)', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { justifyContent: 'space-between', alignItems: 'center', gap: 16 })
+    expect(p.style.justifyContent).toBe('space-between')
+    expect(p.style.alignItems).toBe('center')
+    expect(p.style.getPropertyValue('gap')).toBe('16px')
+  })
 })
 
 describe('ensureElementId / bindLinkToTarget / nearestAnchor', () => {

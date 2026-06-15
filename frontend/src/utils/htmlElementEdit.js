@@ -85,9 +85,18 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     padding: cs ? px(cs.paddingTop) : 0,
     radius: cs ? px(cs.borderTopLeftRadius) : 0,
     width: cs ? px(cs.width) : 0,
+    height: cs ? px(cs.height) : 0,
     marginTop: cs ? px(cs.marginTop) : 0,
     marginBottom: cs ? px(cs.marginBottom) : 0,
     display: cs ? String(cs.display || '') : '',
+    // Border (single width/colour for the whole box — covers the common case).
+    borderWidth: cs ? px(cs.borderTopWidth) : 0,
+    borderColor: cs ? cssColorToHex(cs.borderTopColor) : '',
+    // Flex layout — lets a nav/row container space and align its children
+    // (the navbar case: it's a flex box, not a plain block).
+    justifyContent: cs ? String(cs.justifyContent || '') : '',
+    alignItems: cs ? String(cs.alignItems || '') : '',
+    gap: cs ? px(cs.columnGap || cs.gap) : 0,
   }
 }
 
@@ -155,10 +164,14 @@ export function applyElementPatch(el, patch = {}) {
     const n = Number(patch.radius)
     setImp('border-radius', n >= 0 && String(patch.radius) !== '' ? `${n}px` : '')
   }
-  // 0 width would hide the element, so 0 clears the override (auto width).
+  // 0 width/height clears the override (auto), so the element isn't collapsed.
   if (patch.width !== undefined) {
     const n = Number(patch.width)
     setImp('width', n > 0 ? `${n}px` : '')
+  }
+  if (patch.height !== undefined) {
+    const n = Number(patch.height)
+    setImp('height', n > 0 ? `${n}px` : '')
   }
   // Margins: 0 is a real value (collapse the gap), so always write it.
   if (patch.marginTop !== undefined) {
@@ -170,6 +183,26 @@ export function applyElementPatch(el, patch = {}) {
     setImp('margin-bottom', `${n}px`)
   }
   if (patch.display !== undefined) setStyle('display', patch.display)
+  // Border: width drives a solid border; 0 removes it. Colour is independent.
+  if (patch.borderWidth !== undefined) {
+    const n = Number(patch.borderWidth)
+    if (n > 0) {
+      setImp('border-style', 'solid')
+      setImp('border-width', `${n}px`)
+    } else {
+      el.style.removeProperty('border-width')
+      el.style.removeProperty('border-style')
+    }
+  }
+  if (patch.borderColor !== undefined) setImp('border-color', patch.borderColor)
+  // Flex layout controls (only take effect on flex/inline-flex containers, but
+  // harmless otherwise) — the practical way to space/align a navbar's items.
+  if (patch.justifyContent !== undefined) setStyle('justifyContent', patch.justifyContent)
+  if (patch.alignItems !== undefined) setStyle('alignItems', patch.alignItems)
+  if (patch.gap !== undefined) {
+    const n = Number(patch.gap)
+    setImp('gap', n > 0 ? `${n}px` : '')
+  }
 }
 
 // Insert a deep clone right after the element. Returns the clone (the panel

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import {
   buildTree,
+  compactTree,
+  copyProjectTo,
   rememberProjectRoot,
   clearProjectRoot,
   writeFileToHandle,
@@ -41,7 +43,7 @@ export const useProjectStore = create((set, get) => ({
       rootHandle,
       rootName: rootHandle?.name || 'project',
       files: map,
-      tree: buildTree(files),
+      tree: compactTree(buildTree(files)),
       dirty: new Set(),
       activePath: home,
       error: '',
@@ -122,6 +124,21 @@ export const useProjectStore = create((set, get) => ({
       })
     } catch (e) {
       set({ saving: false, error: e?.message || String(e) })
+    }
+  },
+
+  // Write a full copy of the project (current edits applied) into a folder the
+  // user picks — the original on disk is left untouched. Returns true on success.
+  saveCopy: async (targetDir) => {
+    if (!targetDir) return false
+    set({ saving: true, error: '' })
+    try {
+      await copyProjectTo(targetDir, [...get().files.values()])
+      set({ saving: false })
+      return true
+    } catch (e) {
+      set({ saving: false, error: e?.message || String(e) })
+      return false
     }
   },
 }))

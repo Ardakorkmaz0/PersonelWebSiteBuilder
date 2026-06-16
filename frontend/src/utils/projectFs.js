@@ -136,6 +136,34 @@ export function buildTree(files) {
   return root
 }
 
+// Collapse single-child directory CHAINS into one node ("compact folders",
+// like VS Code) so a deep `frontend/src/components` wrapper never buries the
+// files inside it. The synthetic root (name '') is kept as the project
+// container — only its descendants fold. Pure: returns a fresh tree, the
+// merged node keeps the DEEPEST path (so dirty/collapse lookups still match
+// the real file paths underneath).
+export function compactTree(root) {
+  const compactDir = (node) => {
+    let name = node.name
+    let cur = node
+    while (cur.children && cur.children.length === 1 && cur.children[0].type === 'dir') {
+      const child = cur.children[0]
+      name = name ? `${name}/${child.name}` : child.name
+      cur = child
+    }
+    const children = (cur.children || []).map((c) =>
+      c.type === 'dir' ? compactDir(c) : c,
+    )
+    return { ...cur, name, children }
+  }
+  return {
+    ...root,
+    children: (root.children || []).map((c) =>
+      c.type === 'dir' ? compactDir(c) : c,
+    ),
+  }
+}
+
 // Re-request readwrite permission if the browser dropped it (it does so per
 // session), then write `text` to the file. Mirrors localFile.writeHtmlToHandle.
 export async function writeFileToHandle(handle, text) {
@@ -147,6 +175,41 @@ export async function writeFileToHandle(handle, text) {
   const writable = await handle.createWritable()
   await writable.write(String(text ?? ''))
   await writable.close()
+}
+
+// Pop the directory picker for a COPY target (a user gesture) — a fresh folder
+// the edited project is written into, leaving the original untouched.
+export async function chooseTargetFolder() {
+  return window.showDirectoryPicker({ mode: 'readwrite' })
+}
+
+// Write the whole project (with the user's edits applied) into `targetDir`,
+// recreating the relative folder structure. Text files come from their live
+// `content`; assets are copied byte-for-byte from their source handle. Used by
+// "Save a copy to…" so a working, runnable copy lands in a folder of choice.
+export async function copyProjectTo(targetDir, files) {
+  if (targetDir.queryPermission) {
+    let perm = await targetDir.queryPermission({ mode: 'readwrite' })
+    if (perm !== 'granted') perm = await targetDir.requestPermission({ mode: 'readwrite' })
+    if (perm !== 'granted') throw new Error('Write permission for the target folder was declined.')
+  }
+  for (const f of files) {
+    const parts = String(f.path).split('/').filter(Boolean)
+    const fileName = parts.pop()
+    let dir = targetDir
+    for (const part of parts) {
+      dir = await dir.getDirectoryHandle(part, { create: true })
+    }
+    const fileHandle = await dir.getFileHandle(fileName, { create: true })
+    const writable = await fileHandle.createWritable()
+    if (isTextKind(f.kind)) {
+      await writable.write(String(f.content ?? ''))
+    } else {
+      // Asset: stream the original bytes straight through.
+      await writable.write(await f.handle.getFile())
+    }
+    await writable.close()
+  }
 }
 
 // Read an asset file as a data: URL (used when assembling a preview). Returns
@@ -165,6 +228,115 @@ export async function assetDataUrl(handle) {
     return `data:${mime};base64,${btoa(binary)}`
   } catch {
     return ''
+  }
+}
+
+// ---- dev-server detection for the ● Live setup helper ---------------------
+// A browser can't START a server, but it CAN read the project's marker files to
+// tell the user WHICH server to run, at WHAT url — then auto-fill it and show a
+// live up/down dot. (Frontend frameworks serve the pages you preview.)
+
+async function hasChildFile(dirHandle, name) {
+  try { await dirHandle.getFileHandle(name); return true } catch { return false }
+}
+async function readChildJson(dirHandle, name) {
+  try {
+    const fh = await dirHandle.getFileHandle(name)
+    return JSON.parse(await (await fh.getFile()).text())
+  } catch { return null }
+}
+
+// Map a package.json to its dev server (framework → conventional port + command).
+export function frameworkFromPackageJson(pkg) {
+  const deps = { ...(pkg?.dependencies || {}), ...(pkg?.devDependencies || {}) }
+  const scripts = pkg?.scripts || {}
+  const has = (n) => Object.prototype.hasOwnProperty.call(deps, n)
+  if (has('next')) return { label: 'Next.js', url: 'http://localhost:3000', command: 'npm run dev' }
+  if (has('nuxt') || has('nuxt3')) return { label: 'Nuxt', url: 'http://localhost:3000', command: 'npm run dev' }
+  if (has('@angular/core')) return { label: 'Angular', url: 'http://localhost:4200', command: 'npm start' }
+  if (has('astro')) return { label: 'Astro', url: 'http://localhost:4321', command: 'npm run dev' }
+  if (has('@sveltejs/kit')) return { label: 'SvelteKit', url: 'http://localhost:5173', command: 'npm run dev' }
+  if (has('react-scripts')) return { label: 'Create React App', url: 'http://localhost:3000', command: 'npm start' }
+  if (has('@vue/cli-service')) return { label: 'Vue CLI', url: 'http://localhost:8080', command: 'npm run serve' }
+  if (has('vite')) return { label: 'Vite', url: 'http://localhost:5173', command: 'npm run dev' }
+  const command = scripts.dev ? 'npm run dev' : scripts.start ? 'npm start' : 'npm run dev'
+  return { label: 'Node', url: 'http://localhost:3000', command }
+}
+
+// Re-issue a candidate's start command bound to a specific port (per framework
+// syntax) — used to suggest a free port when the default one is already busy.
+function commandWithPort(c, port) {
+  if (c.type === 'django') return `python manage.py runserver ${port}`
+  if (c.type === 'php') return `php artisan serve --port=${port}`
+  if (c.type === 'rails') return `bin/rails server -p ${port}`
+  if (c.type === 'node') {
+    if (/Next/i.test(c.label)) return `${c.command} -- -p ${port}`
+    if (/Create React App/i.test(c.label)) return `$env:PORT=${port}; ${c.command}` // PowerShell
+    return `${c.command} -- --port ${port}`
+  }
+  return c.command
+}
+
+function hostOf(url) { try { return new URL(url).hostname } catch { return '127.0.0.1' } }
+function portOf(url) { try { return Number(new URL(url).port) || 0 } catch { return 0 } }
+
+// Inspect a folder (+ its immediate subfolders) for dev-server markers, so the
+// ● Live helper can suggest the command + url. Returns an ordered candidate list
+// (frontend servers first); [] when it looks like a plain static site. Each
+// candidate is probed: when its default port is already serving something
+// (`busy`), a free alternative port + its start command are attached so two
+// projects that share a default port (e.g. Django on 8000) don't collide.
+// Django/Laravel use 127.0.0.1 — the host those tools actually bind/print.
+export async function detectDevServer(rootHandle) {
+  if (!rootHandle) return []
+  const dirs = [{ handle: rootHandle, name: '' }]
+  try {
+    for await (const entry of rootHandle.values()) {
+      if (entry.kind === 'directory' && !skipDir(entry.name)) dirs.push({ handle: entry, name: entry.name })
+    }
+  } catch { /* ignore */ }
+  const found = []
+  for (const d of dirs) {
+    const pkg = await readChildJson(d.handle, 'package.json')
+    if (pkg) found.push({ type: 'node', ...frameworkFromPackageJson(pkg), cwd: d.name })
+    if (await hasChildFile(d.handle, 'manage.py')) {
+      found.push({ type: 'django', label: 'Django', url: 'http://127.0.0.1:8000', command: 'python manage.py runserver', cwd: d.name })
+    }
+    if (await hasChildFile(d.handle, 'artisan')) {
+      found.push({ type: 'php', label: 'Laravel', url: 'http://127.0.0.1:8000', command: 'php artisan serve', cwd: d.name })
+    }
+    if ((await hasChildFile(d.handle, 'config.ru')) && (await hasChildFile(d.handle, 'Gemfile'))) {
+      found.push({ type: 'rails', label: 'Rails', url: 'http://localhost:3000', command: 'bin/rails server', cwd: d.name })
+    }
+  }
+  // Probe each default port; when busy, find the next free port + its command.
+  for (const c of found) {
+    c.busy = await pingDevServer(c.url, 1200)
+    const base = portOf(c.url)
+    if (c.busy && base) {
+      const host = hostOf(c.url)
+      let free = base + 1
+      for (let i = 0; i < 10; i++) {
+        if (!(await pingDevServer(`http://${host}:${free}`, 900))) break
+        free++
+      }
+      c.altUrl = `http://${host}:${free}`
+      c.altCommand = commandWithPort(c, free)
+    }
+  }
+  const rank = (t) => (t === 'node' ? 0 : 1)
+  return found.sort((a, b) => rank(a.type) - rank(b.type))
+}
+
+// Is something answering at `url`? A no-cors ping resolves (opaque) when the
+// server responds at all, rejects on connection-refused — enough for up/down.
+export async function pingDevServer(url, timeoutMs = 2500) {
+  if (!url) return false
+  try {
+    await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
+    return true
+  } catch {
+    return false
   }
 }
 

@@ -37,6 +37,7 @@ import {
   selectableParent,
 } from '../../utils/htmlElementEdit.js'
 import { componentToHtml } from '../../utils/componentToHtml.js'
+import { matchingCssRules } from '../../utils/htmlFiles.js'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
 // - View: real document in a sandboxed iframe with scripts enabled.
@@ -232,6 +233,30 @@ function HtmlWorkspace({
   pendingType,
   onPlaced,
   onCancelPlacement,
+  // Code-project mode: when set, the View document and Edit seed are produced
+  // by this async hook (HTML with its linked CSS/JS resolved from sibling
+  // files) instead of using `html` verbatim. `assembleDeps` is a value that,
+  // when it changes (e.g. a linked CSS file was edited), re-runs the View
+  // assembly so the preview stays live. Absent → the classic single-document
+  // flow, unchanged. readHtml() still returns serializeDocument(doc), which
+  // strips the injected <style>/<script> so the file written back keeps its
+  // original <link>/<script src> references.
+  assemble,
+  assembleDeps,
+  // Code-project mode: when set (e.g. http://localhost:8000), a "Live" tab
+  // appears that loads the REAL running dev server in an iframe — the only way
+  // to preview a server-rendered app (Django/Rails/PHP…) with its database
+  // content. The host app must serve it framable (X-Frame-Options/CSP); if not,
+  // the "Open in new tab" button still works.
+  liveUrl,
+  // Bumped by the parent after a Save to reload the Live iframe.
+  liveReloadKey = 0,
+  // Opens (and reuses) a real browser window showing the dev server — the
+  // reliable preview for servers that block iframe embedding (e.g. Django).
+  onOpenLiveWindow,
+  // Code-project mode: a short notice shown over the View when the page can't
+  // be statically rendered (bundled app / server template) — points at ● Live.
+  viewNotice,
 }, ref) {
   // The view/edit/source surface and the edit sub-tool are restored from
   // localStorage (per site) so a browser refresh lands the user back exactly
@@ -244,6 +269,12 @@ function HtmlWorkspace({
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
+  // Code-project mode only: the resolved View document (CSS/JS inlined from the
+  // sibling files). Recomputed by an effect whenever the file or a linked file
+  // changes; ignored entirely when `assemble` is absent.
+  const [assembledView, setAssembledView] = useState('')
+  // Bumped to force the Live iframe to reload the dev server (Reload button).
+  const [liveNonce, setLiveNonce] = useState(0)
   // Edit sub-tool (only meaningful in edit mode): 'text' = click-to-type,
   // 'rearrange' = drag blocks to reorder, 'link' = connect a link to a target.
   const [editTool, setEditTool] = useState(() => lsGet('htmltool', 'text'))
@@ -356,14 +387,19 @@ function HtmlWorkspace({
     if (next === mode) return
     const currentHtml = readHtml()
     if ((mode === 'edit' || mode === 'source') && onCommit) onCommit(currentHtml)
-    if (next === 'edit') setEditSeed(currentHtml)
+    // Edit seed: in code-project mode it's the assembled (linked-CSS-resolved)
+    // document; otherwise the raw html. Source always stays the raw file text.
+    if (next === 'edit') {
+      if (assemble) assemble(currentHtml, { forEdit: true }).then(setEditSeed)
+      else setEditSeed(currentHtml)
+    }
     if (next === 'source') setSourceDraft(currentHtml)
     clearSelection() // the selected node dies with the edit document
     setEditTool('text') // always re-enter edit on the plain text tool
     setLinkHint(null)
     setNonce((n) => n + 1)
     setMode(next)
-  }, [clearSelection, mode, onCommit, readHtml])
+  }, [assemble, clearSelection, mode, onCommit, readHtml])
 
   // When a palette component is picked (click or drag), force the iframe into
   // edit mode so its document is same-origin + mutable for placement.
@@ -372,6 +408,32 @@ function HtmlWorkspace({
     const timer = window.setTimeout(() => switchMode('edit'), 0)
     return () => window.clearTimeout(timer)
   }, [pendingType, mode, switchMode])
+
+  // Code-project View: resolve the linked CSS/JS into a self-contained,
+  // runnable document whenever the file — or any linked file (via
+  // assembleDeps) — changes, so the preview stays live.
+  useEffect(() => {
+    if (!assemble || mode !== 'view') return undefined
+    let alive = true
+    Promise.resolve(assemble(html, { forEdit: false })).then((doc) => {
+      if (alive) setAssembledView(doc)
+    })
+    return () => { alive = false }
+  }, [assemble, mode, html, assembleDeps])
+
+  // Code-project Edit seed when the workspace MOUNTS already in edit mode
+  // (restored from localStorage). Later entries are seeded by switchMode.
+  // Mount-only on purpose: element edits change `html` via onCommit, and
+  // reseeding on those would jump the caret.
+  useEffect(() => {
+    if (!assemble || mode !== 'edit') return undefined
+    let alive = true
+    Promise.resolve(assemble(html, { forEdit: true })).then((doc) => {
+      if (alive) { setEditSeed(doc); setNonce((n) => n + 1) }
+    })
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Where is the user looking right now? Edit mode: measure directly (the
   // document is same-origin). View mode: last index the reporter posted.
@@ -466,6 +528,9 @@ function HtmlWorkspace({
 
   useImperativeHandle(ref, () => ({
     getHtml: readHtml,
+    // Which CSS rules (in the given [{ path, content }] files) style the
+    // currently-selected element — for the Code-project "jump to CSS" panel.
+    matchCssRules: (cssFiles) => matchingCssRules(selectedRef.current, cssFiles),
     applyAiHtml,
     clearSelection,
     setDocument,
@@ -855,9 +920,12 @@ function HtmlWorkspace({
   // View mode always gets a viewport meta when the document lacks one, so the
   // phone-size device frames preview what a real phone will actually render —
   // no separate "compatibility mode" toggle needed.
+  // In code-project mode the View renders the assembled (linked-CSS/JS-resolved)
+  // document; otherwise the html prop is already self-contained.
+  const viewHtml = assemble ? assembledView : html
   const srcDoc =
     mode === 'view'
-      ? withViewExtras(withBuilderRuntimeHtml(withViewportMeta(html)), viewScrollIndex)
+      ? withViewExtras(withBuilderRuntimeHtml(withViewportMeta(viewHtml)), viewScrollIndex)
       : editSeed
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
@@ -904,6 +972,15 @@ function HtmlWorkspace({
             <button onClick={() => switchMode('source')} className={toggleBtn(mode === 'source')}>
               Source
             </button>
+            {liveUrl && (
+              <button
+                onClick={() => switchMode('live')}
+                title="Preview the real running dev server (with its database content)"
+                className={toggleBtn(mode === 'live')}
+              >
+                ● Live
+              </button>
+            )}
           </div>
           {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
               empty page: there's no document to act on, so the starter card is
@@ -944,18 +1021,56 @@ function HtmlWorkspace({
               Apply &amp; Save
             </button>
           )}
-          <span className="ml-auto text-xs text-[#6b7280]">
-            {mode === 'view'
-              ? 'Live preview: JavaScript, links, forms, and scrolling are enabled'
-              : mode === 'source'
-                ? `${fileName} source file`
-                : editTool === 'rearrange'
-                  ? 'Drag any block to reorder it'
-                  : editTool === 'link'
-                    ? 'Connect a link to a target'
-                    : 'Click any text in the page and type — like a document'}
-          </span>
+          {mode === 'live' && liveUrl ? (
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className="text-xs text-[#6b7280]">Real running dev server</span>
+              <button
+                type="button"
+                onClick={() => setLiveNonce((n) => n + 1)}
+                title="Reload the embedded preview"
+                className="rounded-lg border border-[#d1d5db] px-2.5 py-1 text-xs text-[#374151] hover:bg-[#f3f4f6]"
+              >
+                ↻ Reload
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenLiveWindow?.()}
+                title="Open the dev server in a real window — works even when embedding is blocked (Django), and auto-reloads on Save"
+                className="rounded-lg border border-[#4f46e5] bg-[#eef2ff] px-2.5 py-1 text-xs font-medium text-[#4f46e5] hover:bg-[#e0e7ff]"
+              >
+                Open live window ↗
+              </button>
+            </div>
+          ) : (
+            <span className="ml-auto text-xs text-[#6b7280]">
+              {mode === 'view'
+                ? 'Live preview: JavaScript, links, forms, and scrolling are enabled'
+                : mode === 'source'
+                  ? `${fileName} source file`
+                  : editTool === 'rearrange'
+                    ? 'Drag any block to reorder it'
+                    : editTool === 'link'
+                      ? 'Connect a link to a target'
+                      : 'Click any text in the page and type — like a document'}
+            </span>
+          )}
         </div>
+
+        {/* "Can't statically render" banner — bundled apps / server templates
+            stay blank/partial in View; point the user at the real dev server. */}
+        {mode === 'view' && viewNotice && (
+          <div className="flex items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-1.5 text-xs text-[#92400e]">
+            <span aria-hidden>⚠️</span>
+            <span className="min-w-0 flex-1">{viewNotice}</span>
+            <button
+              type="button"
+              onClick={() => switchMode('live')}
+              className="shrink-0 rounded-lg border border-[#fbbf24] bg-white px-2 py-0.5 font-medium text-[#92400e] hover:bg-[#fef3c7]"
+            >
+              Switch to ● Live
+            </button>
+          </div>
+        )}
 
         {/* Link-tool guidance banner. */}
         {mode === 'edit' && editTool === 'link' && !placing && (
@@ -982,7 +1097,32 @@ function HtmlWorkspace({
           </div>
         )}
 
-        {mode === 'source' ? (
+        {mode === 'live' ? (
+          liveUrl ? (
+            <main className="relative flex min-h-0 flex-1 flex-col bg-[#0b0b0b]">
+              <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-[#fffbe6] px-4 py-1.5 text-xs text-[#7a5d00]">
+                <span aria-hidden>💡</span>
+                <span className="truncate">
+                  Embedded preview of <span className="font-mono">{liveUrl}</span>. Blank? Many servers
+                  (Django) block embedding — click <strong>Open live window</strong>; it stays in sync
+                  and auto-reloads every time you Save.
+                </span>
+              </div>
+              <iframe
+                key={`live-${liveNonce}-${liveReloadKey}`}
+                title="live"
+                src={liveUrl}
+                className="min-h-0 w-full flex-1 border-0 bg-white"
+                allow={HTML_ALLOW}
+                allowFullScreen
+              />
+            </main>
+          ) : (
+            <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6 text-sm text-[#9ca3af]">
+              Enter your dev-server URL in the header, then this tab shows the real running page.
+            </main>
+          )
+        ) : mode === 'source' ? (
           <main className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e]">
             <div className="border-b border-white/10 bg-[#252526] px-4 py-2 font-mono text-xs text-gray-300">
               {fileName}

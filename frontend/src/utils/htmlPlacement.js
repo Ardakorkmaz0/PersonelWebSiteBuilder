@@ -141,6 +141,20 @@ export function ensureEditHintChrome(doc) {
       outline: 2px solid #2563eb !important;
       outline-offset: 2px !important;
     }
+    /* Code-project EDIT: server-side template tags ({% … %} / {{ … }}) shown as
+       small, muted, non-editable chips so the canvas stays tidy. */
+    [data-pwb-tt] {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.72em;
+      color: #9aa0a6;
+      background: rgba(125, 125, 125, 0.14);
+      border-radius: 3px;
+      padding: 0 3px;
+      margin: 0 1px;
+      opacity: 0.7;
+      white-space: nowrap;
+      user-select: none;
+    }
   `
   ;(doc.head || doc.documentElement).appendChild(style)
 }
@@ -222,6 +236,9 @@ export function serializeDocument(doc) {
   // (the original <link>/<script src> are kept), so saving the file back never
   // bakes the resolved CSS/JS into the source.
   root.querySelectorAll('[data-pwb-injected]').forEach((el) => el.remove())
+  // Unwrap the Code-project EDIT template-tag chips back to their exact text, so
+  // the saved file keeps `{% … %}` / `{{ … }}` byte-for-byte.
+  root.querySelectorAll('[data-pwb-tt]').forEach((el) => el.replaceWith(el.textContent))
   return '<!DOCTYPE html>\n' + root.outerHTML
 }
 

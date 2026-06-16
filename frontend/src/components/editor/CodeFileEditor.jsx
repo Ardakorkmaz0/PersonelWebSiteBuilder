@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { assetDataUrl } from '../../utils/projectFs.js'
 
 // Source editor for the non-HTML files of a Code project. Text files (CSS / JS)
@@ -27,17 +27,21 @@ function AssetPreview({ file }) {
   )
 }
 
-export default function CodeFileEditor({ file, onChange }) {
-  if (file.kind === 'asset') {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center border-b border-[#e5e7eb] bg-white px-4 py-1.5">
-          <span className="truncate font-mono text-xs text-[#6b7280]">{file.path}</span>
-        </div>
-        <AssetPreview file={file} />
-      </div>
-    )
-  }
+// `reveal` ({ index, length }) comes from "jump to CSS": when set, focus the
+// editor, select that range, and scroll it into view so the matched rule lands
+// in front of the user. DOM-only (no setState) so it never re-renders.
+function TextFileEditor({ file, onChange, reveal }) {
+  const taRef = useRef(null)
+  useEffect(() => {
+    const ta = taRef.current
+    if (!reveal || !ta) return
+    const start = Math.max(0, Math.min(reveal.index || 0, ta.value.length))
+    const end = Math.min(ta.value.length, start + (reveal.length || 0))
+    ta.focus()
+    try { ta.setSelectionRange(start, end) } catch { /* ignore */ }
+    const linesBefore = (ta.value.slice(0, start).match(/\n/g) || []).length
+    ta.scrollTop = Math.max(0, linesBefore * 21 - 80) // ~line height, leave headroom
+  }, [reveal])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -48,6 +52,7 @@ export default function CodeFileEditor({ file, onChange }) {
         <span className="truncate font-mono text-xs text-[#6b7280]">{file.path}</span>
       </div>
       <textarea
+        ref={taRef}
         value={file.content ?? ''}
         onChange={(e) => onChange(e.target.value)}
         spellCheck={false}
@@ -55,4 +60,18 @@ export default function CodeFileEditor({ file, onChange }) {
       />
     </div>
   )
+}
+
+export default function CodeFileEditor({ file, onChange, reveal }) {
+  if (file.kind === 'asset') {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center border-b border-[#e5e7eb] bg-white px-4 py-1.5">
+          <span className="truncate font-mono text-xs text-[#6b7280]">{file.path}</span>
+        </div>
+        <AssetPreview file={file} />
+      </div>
+    )
+  }
+  return <TextFileEditor file={file} onChange={onChange} reveal={reveal} />
 }

@@ -34,6 +34,7 @@ export default function Canvas() {
   const isMobile = viewport === 'mobile'
   const flowMode = !!page.flowMode
   const dragGuides = useEditorStore((s) => s.dragGuides)
+  const gridStep = useEditorStore((s) => s.gridStep)
   const canvasW = isMobile ? mobileWidth : pcWidth
   const sidePad = flowSidePad(viewport)
   const fold = isMobile ? mobileFold : pcFold
@@ -90,6 +91,15 @@ export default function Canvas() {
               gap: flowGap(viewport),
               padding: `0 ${sidePad}px`,
               boxSizing: 'border-box',
+            }
+          : {}),
+        // Grid overlay (free canvas only) — drawn over the background colour so
+        // the snap-to-grid step is visible while arranging.
+        ...(!flowMode && gridStep > 0
+          ? {
+              backgroundImage:
+                'linear-gradient(to right, rgba(79,70,229,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(79,70,229,0.08) 1px, transparent 1px)',
+              backgroundSize: `${gridStep}px ${gridStep}px`,
             }
           : {}),
       }}

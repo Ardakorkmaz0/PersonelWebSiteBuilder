@@ -646,6 +646,12 @@ export const useEditorStore = create((set, get) => ({
   schema: emptySchema(),
   currentPageId: 'page_home',
   selectedId: null,
+  // Multi-selection for the free canvas (shift-click / marquee). `selectedId`
+  // stays the PRIMARY (last picked) so the properties panel is unchanged; the
+  // align/distribute tools operate on the whole `selectedIds` set.
+  selectedIds: [],
+  // Snap-to-grid step in design px (0 = off). Applied during free-canvas drag.
+  gridStep: 0,
   viewport: 'pc', // 'pc' | 'mobile' — which breakpoint is being edited
   dirty: false,
   past: [],
@@ -763,7 +769,7 @@ export const useEditorStore = create((set, get) => ({
     set((state) => {
       if (!state.schema.pages.some((p) => p.id === id)) return {}
       // The pending link source belongs to the page we are leaving.
-      return { currentPageId: id, selectedId: null, linkSourceId: null }
+      return { currentPageId: id, selectedId: null, selectedIds: [], linkSourceId: null }
     }),
 
   addPage: (name = 'New Page', folder = '', mode = 'empty') => {
@@ -1003,7 +1009,148 @@ export const useEditorStore = create((set, get) => ({
     })
   },
 
-  selectComponent: (id) => set({ selectedId: id }),
+  selectComponent: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+
+  // Shift-click: add/remove a component from the multi-selection. The primary
+  // (`selectedId`, what the properties panel shows) becomes the just-toggled id
+  // when adding, or the last remaining one when removing.
+  toggleSelect: (id) =>
+    set((state) => {
+      if (!id) return {}
+      const has = state.selectedIds.includes(id)
+      const ids = has ? state.selectedIds.filter((x) => x !== id) : [...state.selectedIds, id]
+      return { selectedIds: ids, selectedId: has ? ids[ids.length - 1] || null : id }
+    }),
+
+  // Marquee / select-all: set the whole selection at once.
+  selectMany: (ids) =>
+    set({ selectedIds: [...ids], selectedId: ids.length ? ids[ids.length - 1] : null }),
+
+  setGridStep: (n) => set({ gridStep: Math.max(0, Math.round(Number(n) || 0)) }),
+
+  // Apply a layout patch to MANY components in one history step — the batched
+  // path for a group drag, so moving N selected items is a single undo.
+  setLayoutMany: (updates) => {
+    const key = get().layoutKey()
+    get().record('layout-many-' + key)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const apply = (arr) =>
+        arr.map((c) => {
+          const patch = updates[c.id]
+          if (patch) {
+            const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
+            return { ...c, [key]: { ...base, ...patch } }
+          }
+          return Array.isArray(c.children) ? { ...c, children: apply(c.children) } : c
+        })
+      const components = apply(page.components)
+      const schema =
+        key === 'mobileLayout'
+          ? mapPage(state.schema, page.id, (p) => ({ ...p, components, mobileManual: true }))
+          : withComponents(state.schema, page.id, components)
+      return { schema, dirty: true }
+    })
+  },
+
+  // Align the multi-selection. One item → align to the artboard (alignComponent).
+  // Two+ → align to the SELECTION'S bounding box (Figma-style "align selected").
+  alignSelection: (mode) => {
+    const ids = get().selectedIds
+    if (ids.length <= 1) {
+      if (ids[0]) get().alignComponent(ids[0], mode)
+      return
+    }
+    get().record('align-sel-' + mode)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const key = page.flowMode ? 'layout' : state.viewport === 'mobile' ? 'mobileLayout' : 'layout'
+      const items = ids
+        .map((id) => {
+          const c = findInTree(page.components, id)
+          const l = c && (c[key] || c.layout)
+          return l ? { id, x: l.x || 0, y: l.y || 0, w: l.w || 0, h: l.h || 0 } : null
+        })
+        .filter(Boolean)
+      if (items.length < 2) return {}
+      const minX = Math.min(...items.map((i) => i.x))
+      const maxX = Math.max(...items.map((i) => i.x + i.w))
+      const minY = Math.min(...items.map((i) => i.y))
+      const maxY = Math.max(...items.map((i) => i.y + i.h))
+      const pos = {}
+      for (const i of items) {
+        let nx = i.x
+        let ny = i.y
+        if (mode === 'left') nx = minX
+        else if (mode === 'right') nx = maxX - i.w
+        else if (mode === 'centerH') nx = (minX + maxX) / 2 - i.w / 2
+        else if (mode === 'top') ny = minY
+        else if (mode === 'bottom') ny = maxY - i.h
+        else if (mode === 'middleV') ny = (minY + maxY) / 2 - i.h / 2
+        pos[i.id] = { x: Math.max(0, Math.round(nx)), y: Math.max(0, Math.round(ny)) }
+      }
+      const apply = (arr) =>
+        arr.map((c) =>
+          pos[c.id]
+            ? { ...c, [key]: { ...(c[key] || c.layout), ...pos[c.id] } }
+            : Array.isArray(c.children)
+              ? { ...c, children: apply(c.children) }
+              : c,
+        )
+      const components = apply(page.components)
+      const schema =
+        key === 'mobileLayout'
+          ? mapPage(state.schema, page.id, (p) => ({ ...p, components, mobileManual: true }))
+          : withComponents(state.schema, page.id, components)
+      return { schema, dirty: true }
+    })
+  },
+
+  // Distribute the selected items evenly (equal gaps) along an axis. Needs 3+.
+  distributeSelection: (axis = 'x') => {
+    const ids = get().selectedIds
+    if (ids.length < 3) return
+    get().record('distribute-sel-' + axis)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const key = page.flowMode ? 'layout' : state.viewport === 'mobile' ? 'mobileLayout' : 'layout'
+      const sizeKey = axis === 'x' ? 'w' : 'h'
+      const items = ids
+        .map((id) => {
+          const c = findInTree(page.components, id)
+          const l = c && (c[key] || c.layout)
+          return l ? { id, [axis]: l[axis] || 0, [sizeKey]: l[sizeKey] || 0 } : null
+        })
+        .filter(Boolean)
+      if (items.length < 3) return {}
+      const sorted = [...items].sort((a, b) => (a[axis] || 0) - (b[axis] || 0))
+      const first = sorted[0]
+      const last = sorted[sorted.length - 1]
+      const span = (last[axis] || 0) + (last[sizeKey] || 0) - (first[axis] || 0)
+      const totalSize = sorted.reduce((s, i) => s + (i[sizeKey] || 0), 0)
+      const gap = (span - totalSize) / (sorted.length - 1)
+      let cursor = first[axis] || 0
+      const pos = {}
+      for (const i of sorted) {
+        pos[i.id] = { [axis]: Math.round(cursor) }
+        cursor += (i[sizeKey] || 0) + gap
+      }
+      const apply = (arr) =>
+        arr.map((c) =>
+          pos[c.id]
+            ? { ...c, [key]: { ...(c[key] || c.layout), ...pos[c.id] } }
+            : Array.isArray(c.children)
+              ? { ...c, children: apply(c.children) }
+              : c,
+        )
+      const components = apply(page.components)
+      const schema =
+        key === 'mobileLayout'
+          ? mapPage(state.schema, page.id, (p) => ({ ...p, components, mobileManual: true }))
+          : withComponents(state.schema, page.id, components)
+      return { schema, dirty: true }
+    })
+  },
 
   // ---- Component-canvas link tool ----------------------------------------
   // Arm/disarm the link tool. Leaving the tool always drops the pending source.
@@ -1470,6 +1617,7 @@ export const useEditorStore = create((set, get) => ({
       return {
         schema: withComponents(state.schema, page.id, components),
         selectedId: state.selectedId === id ? null : state.selectedId,
+        selectedIds: state.selectedIds.filter((x) => x !== id),
         dirty: true,
       }
     })

@@ -115,6 +115,8 @@ export default function EditorPage() {
   const viewport = useEditorStore((s) => s.viewport)
   const setViewport = useEditorStore((s) => s.setViewport)
   const setCanvasPreset = useEditorStore((s) => s.setCanvasPreset)
+  const gridStep = useEditorStore((s) => s.gridStep)
+  const setGridStep = useEditorStore((s) => s.setGridStep)
   const pcWidth = useEditorStore((s) => selectCurrentPage(s).canvasWidth || 1000)
   const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
   const mobileW = useEditorStore((s) => selectCurrentPage(s).mobileWidth || 390)
@@ -970,6 +972,18 @@ export default function EditorPage() {
               <option value="custom">Custom - {curW}px</option>
             )}
           </select>
+          <button
+            type="button"
+            onClick={() => setGridStep(gridStep ? 0 : 10)}
+            title="Snap dragged items to a 10px grid"
+            className={
+              gridStep
+                ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1.5 text-xs font-medium text-white'
+                : 'rounded-lg border border-[#d1d5db] px-2.5 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]'
+            }
+          >
+            # Grid
+          </button>
           </>
           )}
           <input

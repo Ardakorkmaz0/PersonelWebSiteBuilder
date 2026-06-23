@@ -20,9 +20,12 @@ const HANDLES = [
 
 export default function FreeCanvasItem({ component }) {
   const selectedId = useEditorStore((s) => s.selectedId)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
   const viewport = useEditorStore((s) => s.viewport)
   const select = useEditorStore((s) => s.selectComponent)
+  const toggleSelect = useEditorStore((s) => s.toggleSelect)
   const setLayout = useEditorStore((s) => s.setLayout)
+  const setLayoutMany = useEditorStore((s) => s.setLayoutMany)
   const setDragGuides = useEditorStore((s) => s.setDragGuides)
   const clearDragGuides = useEditorStore((s) => s.clearDragGuides)
   const remove = useEditorStore((s) => s.removeComponent)
@@ -34,7 +37,10 @@ export default function FreeCanvasItem({ component }) {
   const pickLinkNode = useEditorStore((s) => s.pickLinkNode)
   const isLinkSource = linkMode && linkSourceId === component.id
 
-  const isSelected = selectedId === component.id
+  const isSelected = selectedIds.includes(component.id)
+  // Resize handles + Delete only on a SOLE selection — a multi-selection just
+  // gets the outline (handles on every item would be noise).
+  const isPrimarySingle = selectedIds.length <= 1 && selectedId === component.id
   // Edit the layout of the active breakpoint only.
   const layout =
     viewport === 'mobile'
@@ -49,18 +55,30 @@ export default function FreeCanvasItem({ component }) {
     // Link tool owns the pointer — don't drag/select while arming a link.
     if (linkMode) { e.stopPropagation(); return }
     e.stopPropagation()
-    select(component.id)
+    // Shift-click toggles multi-selection (no drag).
+    if (e.shiftKey) { toggleSelect(component.id); return }
+    const state = useEditorStore.getState()
+    // Dragging an item that's already part of a multi-selection moves the WHOLE
+    // group; otherwise it becomes the single selection first.
+    const alreadyMulti = state.selectedIds.length > 1 && state.selectedIds.includes(component.id)
+    if (!alreadyMulti) select(component.id)
+    const groupIds = alreadyMulti ? state.selectedIds : [component.id]
+    const grid = state.gridStep
     const sx = e.clientX
     const sy = e.clientY
-    const orig = { x, y }
-    // Snapshot siblings (other top-level components on this page) + the
-    // artboard size ONCE per drag so onMove stays cheap.
-    const state = useEditorStore.getState()
+    // Snapshot the dragged group's origins + the snap siblings/artboard ONCE.
     const page = selectCurrentPage(state)
     const isMobile = state.viewport === 'mobile'
     const layoutKey = isMobile ? 'mobileLayout' : 'layout'
+    const origins = {}
+    for (const c of page.components || []) {
+      if (groupIds.includes(c.id)) {
+        const l = c[layoutKey] || c.layout || {}
+        origins[c.id] = { x: l.x || 0, y: l.y || 0 }
+      }
+    }
     const siblings = (page.components || [])
-      .filter((c) => c.id !== component.id)
+      .filter((c) => !groupIds.includes(c.id))
       .map((c) => {
         const l = c[layoutKey] || c.layout || {}
         return { id: c.id, x: l.x || 0, y: l.y || 0, w: l.w || 0, h: l.h || 0 }
@@ -70,14 +88,29 @@ export default function FreeCanvasItem({ component }) {
       h: 0, // unbounded → vertical guides off the centre/bottom of the page
     }
     function onMove(ev) {
-      const rawX = orig.x + (ev.clientX - sx)
-      const rawY = orig.y + (ev.clientY - sy)
+      const base = origins[component.id]
+      const rawX = base.x + (ev.clientX - sx)
+      const rawY = base.y + (ev.clientY - sy)
       const snap = snapDraggedRect(
         { id: component.id, x: rawX, y: rawY, w, h },
         siblings,
         artboard,
+        grid,
       )
-      setLayout(component.id, { x: snap.x, y: snap.y })
+      if (groupIds.length === 1) {
+        setLayout(component.id, { x: snap.x, y: snap.y })
+      } else {
+        const dx = snap.x - base.x
+        const dy = snap.y - base.y
+        const updates = {}
+        for (const id of groupIds) {
+          updates[id] = {
+            x: Math.max(0, Math.round(origins[id].x + dx)),
+            y: Math.max(0, Math.round(origins[id].y + dy)),
+          }
+        }
+        setLayoutMany(updates)
+      }
       setDragGuides(snap.guides)
     }
     function onUp() {
@@ -175,7 +208,7 @@ export default function FreeCanvasItem({ component }) {
         </span>
       )}
 
-      {isSelected && !linkMode && (
+      {isPrimarySingle && !linkMode && (
         <>
           <button
             type="button"

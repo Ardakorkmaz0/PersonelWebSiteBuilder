@@ -134,3 +134,64 @@ describe('component link tool', () => {
     expect(s().linkSourceId).toBeNull()
   })
 })
+
+describe('multi-select + align/distribute', () => {
+  function threeBoxes() {
+    freshTwoPageSchema()
+    s().addComponent('button', 0, 0)
+    s().addComponent('button', 0, 0)
+    s().addComponent('button', 0, 0)
+    const ids = selectCurrentPage(useEditorStore.getState()).components.map((c) => c.id)
+    s().setLayout(ids[0], { x: 10, y: 10, w: 100, h: 40 })
+    s().setLayout(ids[1], { x: 50, y: 200, w: 80, h: 40 })
+    s().setLayout(ids[2], { x: 300, y: 100, w: 60, h: 40 })
+    return ids
+  }
+  const layoutOf = (id) =>
+    selectCurrentPage(useEditorStore.getState()).components.find((c) => c.id === id).layout
+
+  it('toggleSelect builds a multi-selection with the primary = last toggled', () => {
+    const ids = threeBoxes()
+    s().selectComponent(ids[0])
+    s().toggleSelect(ids[1])
+    expect(s().selectedIds).toEqual([ids[0], ids[1]])
+    expect(s().selectedId).toBe(ids[1])
+    s().toggleSelect(ids[1]) // remove it again
+    expect(s().selectedIds).toEqual([ids[0]])
+    expect(s().selectedId).toBe(ids[0])
+  })
+
+  it('alignSelection(left) snaps every selected item to the selection left edge', () => {
+    const ids = threeBoxes()
+    s().selectMany(ids)
+    s().alignSelection('left')
+    expect(layoutOf(ids[0]).x).toBe(10)
+    expect(layoutOf(ids[1]).x).toBe(10)
+    expect(layoutOf(ids[2]).x).toBe(10)
+  })
+
+  it('distributeSelection(x) produces equal horizontal gaps', () => {
+    const ids = threeBoxes()
+    s().selectMany(ids)
+    s().distributeSelection('x')
+    const ls = ids.map(layoutOf).sort((a, b) => a.x - b.x)
+    const gap1 = ls[1].x - (ls[0].x + ls[0].w)
+    const gap2 = ls[2].x - (ls[1].x + ls[1].w)
+    expect(Math.abs(gap1 - gap2)).toBeLessThanOrEqual(1)
+  })
+
+  it('setLayoutMany moves several items in one history step', () => {
+    const ids = threeBoxes()
+    s().setLayoutMany({ [ids[0]]: { x: 5, y: 5 }, [ids[2]]: { x: 7, y: 9 } })
+    expect(layoutOf(ids[0])).toMatchObject({ x: 5, y: 5 })
+    expect(layoutOf(ids[2])).toMatchObject({ x: 7, y: 9 })
+    expect(layoutOf(ids[1])).toMatchObject({ x: 50, y: 200 }) // untouched
+  })
+
+  it('removing a component drops it from the multi-selection', () => {
+    const ids = threeBoxes()
+    s().selectMany(ids)
+    s().removeComponent(ids[1])
+    expect(s().selectedIds).toEqual([ids[0], ids[2]])
+  })
+})

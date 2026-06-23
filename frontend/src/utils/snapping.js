@@ -59,7 +59,10 @@ function snapAxis(start, size, candidates) {
   return best
 }
 
-export function snapDraggedRect(rect, siblings, artboard) {
+// `grid` (px, 0 = off): when an axis finds NO sibling/artboard snap, the position
+// rounds to the nearest grid line instead — so dragging lands on a tidy grid
+// while edge/centre alignment still wins when it's in range.
+export function snapDraggedRect(rect, siblings, artboard, grid = 0) {
   const { x, y, w, h, id } = rect
   const cands = buildCandidates(siblings, artboard, id)
   const x2 = snapAxis(x, w, cands.xs)
@@ -70,10 +73,14 @@ export function snapDraggedRect(rect, siblings, artboard) {
   if (x2) {
     outX = x + x2.delta
     guides.push({ type: 'v', pos: x2.pos })
+  } else if (grid > 0) {
+    outX = Math.round(x / grid) * grid
   }
   if (y2) {
     outY = y + y2.delta
     guides.push({ type: 'h', pos: y2.pos })
+  } else if (grid > 0) {
+    outY = Math.round(y / grid) * grid
   }
   return { x: outX, y: outY, guides }
 }

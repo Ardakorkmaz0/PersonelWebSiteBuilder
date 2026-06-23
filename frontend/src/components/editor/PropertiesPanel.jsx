@@ -661,6 +661,9 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const setCustomJs = useEditorStore((s) => s.setCustomJs)
   const applyComponentPreset = useEditorStore((s) => s.applyComponentPreset)
   const setLayout = useEditorStore((s) => s.setLayout)
+  const alignSelection = useEditorStore((s) => s.alignSelection)
+  const distributeSelection = useEditorStore((s) => s.distributeSelection)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
   const renamePage = useEditorStore((s) => s.renamePage)
   const setPageFolder = useEditorStore((s) => s.setPageFolder)
@@ -972,11 +975,64 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           </div>
         </section>
 
-        {/* Alignment buttons removed in favour of live snap guides during
-            drag. The store actions stay (still exposed to the AI as
-            alignComponent / distributeSiblings tools) but the manual UX is
-            now: just drag, the dashed magenta guides snap you to centres
-            and edges. */}
+        {/* Align & Distribute. Live snap guides still help while dragging; these
+            give precise, one-click control. One selection aligns to the
+            artboard; a multi-selection (shift-click on the canvas) aligns the
+            items to each other and can distribute equal gaps. */}
+        {showPositionControls && (
+          <section className="space-y-2">
+            <SectionTitle>
+              Align &amp; Distribute
+              {selectedIds.length > 1 && (
+                <span className="ml-1 font-normal normal-case text-[#9ca3af]">({selectedIds.length} selected)</span>
+              )}
+            </SectionTitle>
+            <p className="text-[11px] leading-snug text-[#9ca3af]">
+              {selectedIds.length > 1
+                ? 'Aligns the selected items to each other.'
+                : 'Aligns this item to the artboard. Shift-click on the canvas to select more.'}
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                ['left', 'Left'],
+                ['centerH', 'Center'],
+                ['right', 'Right'],
+                ['top', 'Top'],
+                ['middleV', 'Middle'],
+                ['bottom', 'Bottom'],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => alignSelection(mode)}
+                  className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb]"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                disabled={selectedIds.length < 3}
+                onClick={() => distributeSelection('x')}
+                title={selectedIds.length < 3 ? 'Select 3+ items (shift-click) to distribute' : 'Equal horizontal gaps'}
+                className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
+              >
+                ↔ Distribute
+              </button>
+              <button
+                type="button"
+                disabled={selectedIds.length < 3}
+                onClick={() => distributeSelection('y')}
+                title={selectedIds.length < 3 ? 'Select 3+ items (shift-click) to distribute' : 'Equal vertical gaps'}
+                className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
+              >
+                ↕ Distribute
+              </button>
+            </div>
+          </section>
+        )}
 
         <section className="space-y-2">
           <SectionTitle>Responsive</SectionTitle>

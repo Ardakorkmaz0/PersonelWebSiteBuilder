@@ -74,7 +74,9 @@ export default function Canvas() {
         position: 'relative',
         width: canvasW,
         minHeight,
-        background,
+        // backgroundColor (not the `background` shorthand) so it can coexist with
+        // the grid overlay's backgroundImage/backgroundSize without React warning.
+        backgroundColor: background,
         fontFamily: themeFontFamily,
         // Clip selection chrome (resize handles, outline) and any off-artboard
         // content at the canvas edge so you can't scroll into empty space beside

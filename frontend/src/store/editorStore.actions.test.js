@@ -195,3 +195,65 @@ describe('multi-select + align/distribute', () => {
     expect(s().selectedIds).toEqual([ids[0], ids[2]])
   })
 })
+
+describe('clipboard + selection shortcuts', () => {
+  const comps = () => selectCurrentPage(useEditorStore.getState()).components
+
+  it('copy + paste clones the selection with fresh ids, offset and selected', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 0, 0)
+    s().addComponent('heading', 0, 0)
+    const ids = comps().map((c) => c.id)
+    s().setLayout(ids[0], { x: 10, y: 10, w: 100, h: 40 })
+    s().selectMany(ids)
+    s().copySelection()
+    s().pasteClipboard()
+    expect(comps()).toHaveLength(4) // two originals + two pasted
+    const pasted = comps().slice(2)
+    expect(pasted.map((c) => c.id)).not.toContain(ids[0]) // fresh ids
+    expect(pasted[0].layout).toMatchObject({ x: 34, y: 34 }) // nudged +24
+    expect(s().selectedIds).toEqual(pasted.map((c) => c.id)) // selects the copies
+  })
+
+  it('cut copies then removes the selection', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 0, 0)
+    s().addComponent('button', 0, 0)
+    const ids = comps().map((c) => c.id)
+    s().selectMany([ids[0]])
+    s().cutSelection()
+    expect(comps()).toHaveLength(1)
+    expect(comps()[0].id).toBe(ids[1])
+    s().pasteClipboard() // the cut item is on the clipboard
+    expect(comps()).toHaveLength(2)
+  })
+
+  it('duplicateSelection clones every selected item', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 0, 0)
+    s().addComponent('button', 0, 0)
+    s().selectMany(comps().map((c) => c.id))
+    s().duplicateSelection()
+    expect(comps()).toHaveLength(4)
+  })
+
+  it('selectAll selects every top-level component', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 0, 0)
+    s().addComponent('button', 0, 0)
+    s().addComponent('heading', 0, 0)
+    s().selectComponent(null)
+    s().selectAll()
+    expect(s().selectedIds).toHaveLength(3)
+  })
+
+  it('removeSelection deletes all selected and clears the selection', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 0, 0)
+    s().addComponent('button', 0, 0)
+    s().selectMany(comps().map((c) => c.id))
+    s().removeSelection()
+    expect(comps()).toHaveLength(0)
+    expect(s().selectedIds).toEqual([])
+  })
+})

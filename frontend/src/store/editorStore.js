@@ -652,6 +652,9 @@ export const useEditorStore = create((set, get) => ({
   selectedIds: [],
   // Snap-to-grid step in design px (0 = off). Applied during free-canvas drag.
   gridStep: 0,
+  // In-app clipboard for component copy/cut/paste (holds detached snapshots;
+  // each paste re-clones them with fresh ids).
+  clipboard: [],
   viewport: 'pc', // 'pc' | 'mobile' — which breakpoint is being edited
   dirty: false,
   past: [],
@@ -1027,6 +1030,120 @@ export const useEditorStore = create((set, get) => ({
     set({ selectedIds: [...ids], selectedId: ids.length ? ids[ids.length - 1] : null }),
 
   setGridStep: (n) => set({ gridStep: Math.max(0, Math.round(Number(n) || 0)) }),
+
+  selectAll: () => {
+    const page = selectCurrentPage(get())
+    get().selectMany((page.components || []).map((c) => c.id))
+  },
+
+  // Copy the selected top-level components into the in-app clipboard (Ctrl+C).
+  copySelection: () => {
+    const page = selectCurrentPage(get())
+    const items = get()
+      .selectedIds.map((id) => findInTree(page.components, id))
+      .filter((c) => c && isTopLevel(page.components, c.id))
+      .map((c) => structuredClone(c))
+    if (items.length) set({ clipboard: items })
+    return items.length
+  },
+
+  // Paste the clipboard as fresh components, nudged +24 so they don't sit on the
+  // originals, and select the new copies (Ctrl+V).
+  pasteClipboard: () => {
+    if (!get().clipboard.length) return
+    get().record('paste')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const clones = state.clipboard.map((c) => {
+        const copy = cloneTree(c)
+        copy.layout = {
+          ...(c.layout || { x: 0, y: 0, w: 200, h: 80 }),
+          x: (c.layout?.x || 0) + 24,
+          y: (c.layout?.y || 0) + 24,
+        }
+        return copy
+      })
+      const newIds = clones.map((c) => c.id)
+      return {
+        schema: withComponents(state.schema, page.id, [...page.components, ...clones]),
+        selectedIds: newIds,
+        selectedId: newIds[newIds.length - 1] || null,
+        dirty: true,
+      }
+    })
+  },
+
+  cutSelection: () => {
+    if (get().copySelection()) get().removeSelection()
+  },
+
+  // Duplicate every selected component (Ctrl+D). One → the existing single path.
+  duplicateSelection: () => {
+    const ids = get().selectedIds
+    if (ids.length <= 1) {
+      if (ids[0]) get().duplicateComponent(ids[0])
+      return
+    }
+    get().record('dup-sel')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const clones = ids
+        .map((id) => findInTree(page.components, id))
+        .filter(Boolean)
+        .map((src) => {
+          const copy = cloneTree(src)
+          if (isTopLevel(page.components, src.id)) {
+            copy.layout = { ...src.layout, x: (src.layout?.x || 0) + 24, y: (src.layout?.y || 0) + 24 }
+          }
+          return copy
+        })
+      const newIds = clones.map((c) => c.id)
+      return {
+        schema: withComponents(state.schema, page.id, [...page.components, ...clones]),
+        selectedIds: newIds,
+        selectedId: newIds[newIds.length - 1] || null,
+        dirty: true,
+      }
+    })
+  },
+
+  // Delete every selected component (Delete / Backspace).
+  removeSelection: () => {
+    const ids = get().selectedIds
+    if (!ids.length) return
+    get().record('remove-sel')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      let components = page.components
+      for (const id of ids) components = removeFromTree(components, id)
+      return {
+        schema: withComponents(state.schema, page.id, components),
+        selectedId: null,
+        selectedIds: [],
+        dirty: true,
+      }
+    })
+  },
+
+  // Arrow-key nudge for the whole selection (one history step via setLayoutMany).
+  nudgeSelection: (dx, dy) => {
+    const ids = get().selectedIds
+    if (!ids.length) return
+    const key = get().layoutKey()
+    const page = selectCurrentPage(get())
+    const updates = {}
+    for (const id of ids) {
+      const c = findInTree(page.components, id)
+      const l = c && (c[key] || c.layout)
+      if (l) {
+        updates[id] = {
+          x: Math.max(0, Math.round((l.x || 0) + dx)),
+          y: Math.max(0, Math.round((l.y || 0) + dy)),
+        }
+      }
+    }
+    if (Object.keys(updates).length) get().setLayoutMany(updates)
+  },
 
   // Apply a layout patch to MANY components in one history step — the batched
   // path for a group drag, so moving N selected items is a single undo.

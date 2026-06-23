@@ -18,6 +18,7 @@ import {
 } from '../components/registry.jsx'
 import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
+import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
@@ -111,7 +112,6 @@ export default function EditorPage() {
   const loadSchema = useEditorStore((s) => s.loadSchema)
   const importSchema = useEditorStore((s) => s.importSchema)
   const addComponent = useEditorStore((s) => s.addComponent)
-  const setLayout = useEditorStore((s) => s.setLayout)
   const viewport = useEditorStore((s) => s.viewport)
   const setViewport = useEditorStore((s) => s.setViewport)
   const setCanvasPreset = useEditorStore((s) => s.setCanvasPreset)
@@ -121,7 +121,6 @@ export default function EditorPage() {
   const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
   const mobileW = useEditorStore((s) => selectCurrentPage(s).mobileWidth || 390)
   const mobileFold = useEditorStore((s) => selectCurrentPage(s).mobileFold || 0)
-  const duplicateComponent = useEditorStore((s) => s.duplicateComponent)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.past.length > 0)
@@ -153,6 +152,7 @@ export default function EditorPage() {
   const [justSaved, setJustSaved] = useState(false)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
   const [importOpen, setImportOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
@@ -373,34 +373,37 @@ export default function EditorPage() {
       }
       if (typing) return
 
-      const state = useEditorStore.getState()
-      const sel = state.selectedId
-      if (!sel) return
+      // Cheat-sheet: Ctrl+/ or ? toggles it (any mode).
+      if ((mod && e.key === '/') || e.key === '?') {
+        e.preventDefault()
+        setShortcutsOpen((o) => !o)
+        return
+      }
 
-      if (mod && e.key.toLowerCase() === 'd') {
-        e.preventDefault()
-        duplicateComponent(sel)
-        return
-      }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault()
-        state.removeComponent(sel)
-        return
-      }
+      // Everything below is the component-canvas arrange layer — not HTML pages.
+      if (htmlHistoryRef.current.currentPageIsHtml) return
+      const state = useEditorStore.getState()
+
+      if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); state.selectAll(); return }
+      if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); state.pasteClipboard(); return }
+      if (mod && e.key.toLowerCase() === 'c') { e.preventDefault(); state.copySelection(); return }
+      if (mod && e.key.toLowerCase() === 'x') { e.preventDefault(); state.cutSelection(); return }
+      if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); state.duplicateSelection(); return }
+
+      if (!state.selectedIds.length) return
+
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); state.removeSelection(); return }
+      if (e.key === 'Escape') { e.preventDefault(); state.selectComponent(null); return }
       if (selectCurrentPage(state).flowMode) return
-      const key = state.viewport === 'mobile' ? 'mobileLayout' : 'layout'
-      const comp = selectCurrentPage(state).components.find((c) => c.id === sel)
-      const layout = comp?.[key] || comp?.layout
-      if (!layout) return
       const step = e.shiftKey ? 10 : 1
-      if (e.key === 'ArrowLeft') { e.preventDefault(); setLayout(sel, { x: layout.x - step }) }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); setLayout(sel, { x: layout.x + step }) }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); setLayout(sel, { y: layout.y - step }) }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); setLayout(sel, { y: layout.y + step }) }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); state.nudgeSelection(-step, 0) }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); state.nudgeSelection(step, 0) }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); state.nudgeSelection(0, -step) }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); state.nudgeSelection(0, step) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo, duplicateComponent, setLayout])
+  }, [undo, redo])
 
   // The component link tool only applies to the Empty-mode Edit canvas. Drop it
   // whenever we leave that surface (View/Source, or an HTML page) so it can't
@@ -1173,6 +1176,14 @@ export default function EditorPage() {
           </button>
           <button
             type="button"
+            onClick={() => setShortcutsOpen(true)}
+            title="Keyboard shortcuts (Ctrl+/)"
+            className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
+          >
+            ⌨ Shortcuts
+          </button>
+          <button
+            type="button"
             onClick={() => setNotesOpen((o) => !o)}
             title="Work journal: calendar + per-day notes (what you did today)"
             className={`rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
@@ -1538,6 +1549,8 @@ export default function EditorPage() {
           <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
         </Suspense>
       )}
+
+      {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
 
       {historyOpen && (
         <Suspense fallback={null}>

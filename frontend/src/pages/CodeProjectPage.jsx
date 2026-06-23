@@ -120,6 +120,10 @@ export default function CodeProjectPage() {
   const [detectOpen, setDetectOpen] = useState(false)
   const [detecting, setDetecting] = useState(false)
   const [liveUp, setLiveUp] = useState(false)
+  // What kind of project this is, so the editor can set expectations up front:
+  // { kind: 'static' | 'app', framework }. null until classified.
+  const [projectInfo, setProjectInfo] = useState(null)
+  const [bannerNonce, setBannerNonce] = useState(0) // re-render after dismiss
   const workspaceRef = useRef(null)
   const supported = supportsProjectFolder()
 
@@ -191,6 +195,19 @@ export default function CodeProjectPage() {
   const saveActiveFile = async () => { await saveFile(activePath); reloadLive(); refreshLiveWindow() }
   const saveEverything = async () => { await saveAll(); reloadLive(); refreshLiveWindow() }
 
+  // The "what to expect" banner is dismissible per project (so it never nags
+  // twice for the same folder). Read from localStorage at render — cheap, and
+  // avoids a synchronous setState in an effect.
+  const bannerKey = `pwb_code_kindbanner_${rootName}`
+  const bannerDismissed = (() => {
+    void bannerNonce // re-read after a dismiss
+    try { return localStorage.getItem(bannerKey) === '1' } catch { return false }
+  })()
+  const dismissBanner = () => {
+    try { localStorage.setItem(bannerKey, '1') } catch { /* ignore */ }
+    setBannerNonce((n) => n + 1)
+  }
+
   // Detect the project's dev server(s) from its marker files (manage.py,
   // package.json…), auto-fill the ● Live URL, and show the exact command to run.
   const runDetect = async () => {
@@ -213,6 +230,27 @@ export default function CodeProjectPage() {
   useEffect(() => {
     if (rootHandle) return
     loadProjectRoot().then((h) => h?.name && setLastHandle(h))
+  }, [rootHandle])
+
+  // Classify the project once it's opened (static site vs a built/served app),
+  // so the editor can set expectations instead of letting the user hit a blank
+  // View. setState only inside the async body → no cascading-render lint issue.
+  useEffect(() => {
+    if (!rootHandle) return undefined
+    let alive = true
+    ;(async () => {
+      const cands = await detectDevServer(rootHandle, { probePorts: false })
+      const map = useProjectStore.getState().files
+      const home =
+        [...map.values()].find((f) => /(^|\/)index\.html?$/i.test(f.path)) ||
+        [...map.values()].find((f) => f.kind === 'html')
+      const build = home ? needsBuildToRender(home.content || '', home.path, map) : ''
+      const isApp = cands.length > 0 || build === 'bundler' || build === 'template'
+      const framework =
+        cands[0]?.label || (build === 'template' ? 'Server template' : build === 'bundler' ? 'Bundled app' : '')
+      if (alive) setProjectInfo({ kind: isApp ? 'app' : 'static', framework })
+    })()
+    return () => { alive = false }
   }, [rootHandle])
 
   // Poll the Live URL so the dot goes green once the dev server is up (the user
@@ -282,6 +320,12 @@ export default function CodeProjectPage() {
             Pick a folder on your computer. Only its web files (HTML, CSS, JS,
             images) are shown — edit them and save the changes straight back to
             disk.
+          </p>
+          <p className="mt-2 rounded-lg bg-[#f3f4f6] px-3 py-2 text-xs leading-relaxed text-[#6b7280]">
+            <strong className="text-[#374151]">Best for static sites</strong> (plain HTML/CSS/JS) —
+            full visual View &amp; Edit. For <strong className="text-[#374151]">React / Django</strong>
+            {' '}apps it’s a code editor + live preview: the page renders from your dev server, shown via
+            the <strong>● Live</strong> tab / window.
           </p>
           {supported ? (
             <div className="mt-5 flex flex-col gap-2">
@@ -493,6 +537,35 @@ export default function CodeProjectPage() {
 
       {(error || storeError) && (
         <div className="bg-red-50 px-4 py-2 text-sm text-red-600">{error || storeError}</div>
+      )}
+
+      {/* Set expectations up front: app projects can't be statically rendered,
+          so point the user at the real workflow before they hit a blank View. */}
+      {projectInfo?.kind === 'app' && !bannerDismissed && (
+        <div className="flex items-start gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2 text-xs text-[#92400e]">
+          <span aria-hidden className="mt-px">💡</span>
+          <div className="min-w-0 flex-1 leading-relaxed">
+            <strong>{projectInfo.framework || 'App'} project.</strong>{' '}
+            Its pages are built/served at runtime, so the static <em>View</em> stays blank or partial —
+            here <strong>/code is a code editor + live preview</strong>. To see the real page: start your
+            dev server, click <strong>⚙ Detect</strong> to fill the URL, then <strong>Open live window</strong>
+            {' '}(it auto-reloads every Save). Editing CSS/JS &amp; the template markup still works great.
+          </div>
+          <button
+            type="button"
+            onClick={runDetect}
+            className="shrink-0 rounded-lg border border-[#fbbf24] bg-white px-2 py-1 font-medium text-[#92400e] hover:bg-[#fef3c7]"
+          >
+            ⚙ Detect
+          </button>
+          <button
+            type="button"
+            onClick={dismissBanner}
+            className="shrink-0 rounded-lg px-2 py-1 font-medium text-[#92400e] hover:bg-[#fef3c7]"
+          >
+            Got it
+          </button>
+        </div>
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">

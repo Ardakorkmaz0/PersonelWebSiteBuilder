@@ -287,7 +287,9 @@ function portOf(url) { try { return Number(new URL(url).port) || 0 } catch { ret
 // (`busy`), a free alternative port + its start command are attached so two
 // projects that share a default port (e.g. Django on 8000) don't collide.
 // Django/Laravel use 127.0.0.1 — the host those tools actually bind/print.
-export async function detectDevServer(rootHandle) {
+// `probePorts:false` skips the network pings (busy/free-port suggestion) — used
+// for fast project classification on open, where only the marker scan matters.
+export async function detectDevServer(rootHandle, { probePorts = true } = {}) {
   if (!rootHandle) return []
   const dirs = [{ handle: rootHandle, name: '' }]
   try {
@@ -311,6 +313,7 @@ export async function detectDevServer(rootHandle) {
   }
   // Probe each default port; when busy, find the next free port + its command.
   for (const c of found) {
+    if (!probePorts) break
     c.busy = await pingDevServer(c.url, 1200)
     const base = portOf(c.url)
     if (c.busy && base) {

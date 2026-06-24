@@ -12,6 +12,7 @@ django-csp==4.0               # Content-Security-Policy header
 psycopg[binary]==3.3.4        # Postgres driver — picks up via DATABASE_URL
 sentry-sdk==2.61.1            # only initialised when SENTRY_DSN is set
 gunicorn==23.0.0              # prod WSGI server (Dockerfile CMD)
+redis==5.2.1                  # shared throttle/cache store when REDIS_URL is set
 
 # Dev / test
 pytest==9.0.3

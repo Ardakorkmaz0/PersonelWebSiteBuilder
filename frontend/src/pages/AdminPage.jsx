@@ -18,17 +18,50 @@ function Avatar({ url, name, size = 36 }) {
   )
 }
 
+// DRF may return a paginated envelope ({count, results, next}) or, if pagination
+// is ever turned off, a bare array — tolerate both.
+function readPage(d) {
+  if (Array.isArray(d)) return { rows: d, count: d.length, hasMore: false }
+  return { rows: d.results || [], count: d.count ?? (d.results || []).length, hasMore: !!d.next }
+}
+
 export default function AdminPage() {
   const [users, setUsers] = useState(null) // null = loading
+  const [count, setCount] = useState(0)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let alive = true
-    listAdminUsers()
-      .then((d) => alive && setUsers(d))
+    listAdminUsers(1)
+      .then((d) => {
+        if (!alive) return
+        const { rows, count: total, hasMore: more } = readPage(d)
+        setUsers(rows)
+        setCount(total)
+        setHasMore(more)
+      })
       .catch((e) => alive && setError(apiError(e, 'Admin access required.')))
     return () => { alive = false }
   }, [])
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const d = await listAdminUsers(page + 1)
+      const { rows, hasMore: more } = readPage(d)
+      setUsers((prev) => [...(prev || []), ...rows])
+      setPage((p) => p + 1)
+      setHasMore(more)
+    } catch (e) {
+      setError(apiError(e))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const totalSites = (users || []).reduce((n, u) => n + u.site_count, 0)
 
@@ -50,7 +83,9 @@ export default function AdminPage() {
         <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Users</h1>
         {users && (
           <p className="mb-6 mt-1 text-sm text-[#6b7280]">
-            {users.length} user{users.length !== 1 ? 's' : ''} · {totalSites} site{totalSites !== 1 ? 's' : ''}
+            {count} user{count !== 1 ? 's' : ''}
+            {hasMore ? ` (${users.length} loaded)` : ''} · {totalSites} site{totalSites !== 1 ? 's' : ''}
+            {hasMore ? ' shown' : ''}
           </p>
         )}
 
@@ -123,6 +158,13 @@ export default function AdminPage() {
                 )}
               </div>
             ))}
+            {hasMore && (
+              <div className="pt-2 text-center">
+                <button onClick={loadMore} disabled={loadingMore} className="ms-btn px-6 py-2.5">
+                  {loadingMore ? 'Loading…' : 'Load more'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>

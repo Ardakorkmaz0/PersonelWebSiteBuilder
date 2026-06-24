@@ -22,7 +22,11 @@ class TestPasswordStrength:
         assert resp.status_code == 400
 
     def test_strong_password_accepted(self, client):
-        resp = client.post('/api/auth/register/', {'username': 'newbie', 'password': 'Tr0ub4dour-x9'}, format='json')
+        resp = client.post(
+            '/api/auth/register/',
+            {'username': 'newbie', 'email': 'newbie@example.com', 'password': 'Tr0ub4dour-x9'},
+            format='json',
+        )
         assert resp.status_code == 201
         assert resp.data['token']
         assert resp.data['user']['username'] == 'newbie'
@@ -45,7 +49,11 @@ class TestGoogleLogin:
 class TestRecaptcha:
     def test_skipped_when_no_secret(self, client, settings):
         settings.RECAPTCHA_SECRET_KEY = ''
-        resp = client.post('/api/auth/register/', {'username': 'norobot', 'password': 'Tr0ub4dour-x9'}, format='json')
+        resp = client.post(
+            '/api/auth/register/',
+            {'username': 'norobot', 'email': 'norobot@example.com', 'password': 'Tr0ub4dour-x9'},
+            format='json',
+        )
         assert resp.status_code == 201  # no captcha required
 
     def test_required_when_secret_set(self, client, settings):

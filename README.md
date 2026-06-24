@@ -57,6 +57,14 @@ npm install
 npm run dev                       # http://localhost:5173
 ```
 
+## Going to production
+
+The app runs the same code in dev and prod — production hardening (Postgres,
+HTTPS/HSTS, CSP, rate limiting, and the local-AI proxy disabled outside DEBUG)
+turns on automatically when `DJANGO_DEBUG=False`. See **[DEPLOY.md](DEPLOY.md)**
+for the launch checklist (secrets, hosts, TLS, Redis for shared throttling) and
+the deferred items (email password-reset, S3 media, JWT) with how to wire each.
+
 ## Optional: Google sign-in, reCAPTCHA & Admin
 
 Google sign-in and the "I'm not a robot" check are **env-gated**: with no keys the

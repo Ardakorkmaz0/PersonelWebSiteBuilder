@@ -15,6 +15,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from django.db import transaction
@@ -73,8 +74,27 @@ def _verify_recaptcha(token):
 DEFAULT_LOCAL_BASE = 'http://localhost:11434/v1'
 
 
+def _local_ai_blocked():
+    """The local-AI endpoints forward to a base URL the CLIENT supplies, so on a
+    public (DEBUG=False) server they'd be an SSRF hole — an attacker could make
+    the server fetch arbitrary internal URLs (e.g. cloud metadata). They're also
+    useless in prod: the server can't reach a visitor's localhost Ollama. So we
+    hard-disable them outside DEBUG. Returns a 403 Response when blocked, else
+    None (dev → proceed)."""
+    if settings.DEBUG:
+        return None
+    return Response(
+        {'detail': 'Local AI is only available when running the app on your own machine.'},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    # Tight per-IP cap on the credential endpoints (~10/min) to stop signup spam
+    # and brute-force. See REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['auth'].
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request):
         if not _verify_recaptcha(request.data.get('recaptcha')):
@@ -98,6 +118,8 @@ class GoogleLoginView(APIView):
     token. Unset client id → 503 (the frontend hides the button anyway)."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request):
         client_id = settings.GOOGLE_OAUTH_CLIENT_ID
@@ -146,6 +168,8 @@ class GoogleLoginView(APIView):
 
 class LoginView(ObtainAuthToken):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(
@@ -295,6 +319,9 @@ class LocalAiStatusView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        blocked = _local_ai_blocked()
+        if blocked is not None:
+            return blocked
         base = _normalise_base(request.GET.get('base'))
         # Ollama's native /api/tags returns installed models. LM Studio's
         # /v1/models is OpenAI-compatible; we try both so either runtime
@@ -338,6 +365,9 @@ class LocalAiProxyView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        blocked = _local_ai_blocked()
+        if blocked is not None:
+            return blocked
         # Pop the per-request base URL out of the body so the rest of the
         # payload stays a clean OpenAI chat-completions request. Using the
         # body (instead of a custom header) keeps us out of CORS preflight
@@ -534,11 +564,19 @@ class CloneSiteView(APIView):
         return Response(SiteSerializer(copy).data, status=status.HTTP_201_CREATED)
 
 
+class AdminPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
 class AdminUsersView(ListAPIView):
-    """In-app admin panel data: every user + their sites. Admin-only (is_staff)."""
+    """In-app admin panel data: every user + their sites. Admin-only (is_staff).
+    Paginated (50/page) so the panel stays fast as the user base grows."""
 
     permission_classes = [IsAdminUser]
     serializer_class = AdminUserSerializer
+    pagination_class = AdminPagination
 
     def get_queryset(self):
         return (

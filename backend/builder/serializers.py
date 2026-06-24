@@ -32,11 +32,22 @@ class RegisterSerializer(serializers.ModelSerializer):
             message='This username is already taken.',
         )],
     )
+    # Required so every new account is reachable for password reset / receipts
+    # once email is wired (see DEPLOY.md). Uniqueness is enforced
+    # case-insensitively in validate_email; Google sign-in links by email the
+    # same way, so the two paths can't create two accounts for one address.
+    email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'password')
+        fields = ('id', 'username', 'email', 'password')
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('An account with this email already exists.')
+        return value
 
     def validate_password(self, value):
         # Run Django's configured AUTH_PASSWORD_VALIDATORS (length, common,
@@ -50,6 +61,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return User.objects.create_user(
             username=validated_data['username'],
+            email=validated_data['email'],
             password=validated_data['password'],
         )
 

@@ -11,6 +11,7 @@ const RECAPTCHA_ON = !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
 
 export default function RegisterPage() {
   const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [captcha, setCaptcha] = useState('')
   const [error, setError] = useState('')
@@ -29,7 +30,7 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
     try {
-      const { token, user } = await register(username, password, captcha)
+      const { token, user } = await register(username, email, password, captcha)
       setAuth(token, user, true)
       navigate('/')
     } catch (err) {
@@ -83,6 +84,18 @@ export default function RegisterPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-[#374151]">Email</span>
+            <input
+              type="email"
+              className="ms-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </label>

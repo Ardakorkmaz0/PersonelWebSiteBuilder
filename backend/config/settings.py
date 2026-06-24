@@ -180,7 +180,37 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Rate limiting — the single biggest gap for a public launch. Anon + user
+    # global caps blunt scraping/abuse; the tight `auth` scope (wired onto the
+    # register/login/google views) stops credential brute-force + signup spam.
+    # Counts live in the default cache (see CACHES) — LocMemCache per-process in
+    # dev, Redis (shared across gunicorn workers) when REDIS_URL is set in prod.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        # `user` is generous on purpose — the editor autosaves + uploads images,
+        # so a legitimate heavy session makes many requests; the real security
+        # lever is the tight `auth` scope on the credential endpoints.
+        'anon': os.getenv('DJANGO_THROTTLE_ANON', '120/min'),
+        'user': os.getenv('DJANGO_THROTTLE_USER', '6000/hour'),
+        'auth': os.getenv('DJANGO_THROTTLE_AUTH', '10/min'),
+    },
 }
+
+# Throttle/cache backend. DRF throttling stores its hit counters in the default
+# cache. The default LocMemCache is per-process — fine for a single dev server,
+# but in prod gunicorn runs multiple workers, so set REDIS_URL to share the
+# counters (and any future caching) across them. Requires the `redis` package.
+_REDIS_URL = os.getenv('REDIS_URL', '').strip()
+if _REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _REDIS_URL,
+        },
+    }
 
 # CORS — defaults to the Vite dev server in development, overridable in prod.
 CORS_ALLOWED_ORIGINS = _env_list(

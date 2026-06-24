@@ -1,7 +1,7 @@
 import client from './client.js'
 
-export async function register(username, password, recaptcha) {
-  const { data } = await client.post('/auth/register/', { username, password, recaptcha })
+export async function register(username, email, password, recaptcha) {
+  const { data } = await client.post('/auth/register/', { username, email, password, recaptcha })
   return data // { token, user }
 }
 

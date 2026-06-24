@@ -14,7 +14,7 @@ from PIL import Image as PILImage
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from .models import Profile, Site
+from .models import Profile
 
 
 def _png_bytes(width=4, height=3, color=(10, 20, 200)):
@@ -90,28 +90,3 @@ class TestProfile:
 
     def test_profile_requires_auth(self, client):
         assert client.get('/api/profile/').status_code in (401, 403)
-
-
-@pytest.mark.django_db
-class TestSiteFavorite:
-    def test_favorite_defaults_false_and_toggles_via_patch(self, client, alice):
-        _, token = alice
-        _auth(client, token)
-        created = client.post('/api/sites/', {'title': 'My Site'}, format='json')
-        site_id = created.data['id']
-        assert created.data['favorite'] is False
-
-        resp = client.patch(f'/api/sites/{site_id}/', {'favorite': True}, format='json')
-        assert resp.status_code == 200
-        assert resp.data['favorite'] is True
-        assert Site.objects.get(pk=site_id).favorite is True
-
-    def test_favorite_appears_in_dashboard_list(self, client, alice):
-        _, token = alice
-        _auth(client, token)
-        created = client.post('/api/sites/', {'title': 'Fav Site'}, format='json')
-        client.patch(f'/api/sites/{created.data["id"]}/', {'favorite': True}, format='json')
-        listing = client.get('/api/sites/')
-        assert listing.status_code == 200
-        row = next(s for s in listing.data if s['id'] == created.data['id'])
-        assert row['favorite'] is True

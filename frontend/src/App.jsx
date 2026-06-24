@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
-import DashboardPage from './pages/DashboardPage.jsx'
+import ExplorePage from './pages/ExplorePage.jsx'
 import ProtectedRoute from './routes/ProtectedRoute.jsx'
 
 // The editor and the public preview are the heaviest screens — together they
@@ -36,7 +36,7 @@ export default function App() {
             path="/"
             element={
               <ProtectedRoute>
-                <DashboardPage />
+                <ExplorePage />
               </ProtectedRoute>
             }
           />

@@ -12,8 +12,5 @@ export const updateSite = (id, payload) =>
 
 export const deleteSite = (id) => client.delete(`/sites/${id}/`)
 
-export const setFavorite = (id, favorite) =>
-  client.patch(`/sites/${id}/`, { favorite }).then((r) => r.data)
-
 export const getPublicSite = (slug) =>
   client.get(`/public/sites/${slug}/`).then((r) => r.data)

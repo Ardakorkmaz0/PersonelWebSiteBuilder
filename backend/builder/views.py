@@ -12,9 +12,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.db import transaction
+from django.db.models import Count, F
+from django.utils import timezone
 
-from .models import Profile, Site, SiteVersion, UploadedImage
+from .models import Favorite, Profile, Site, SiteVersion, UploadedImage
 from .serializers import (
+    ExploreSiteSerializer,
     ProfileSerializer,
     PublicSiteSerializer,
     RegisterSerializer,
@@ -24,6 +27,19 @@ from .serializers import (
     UploadedImageSerializer,
     UserSerializer,
 )
+
+
+def _favorited_ids(user):
+    """Set of site ids the user has favorited (for is_favorited), empty when
+    anonymous."""
+    if not user or not user.is_authenticated:
+        return set()
+    return set(Favorite.objects.filter(user=user).values_list('site_id', flat=True))
+
+
+def _explore_response(sites, request):
+    ctx = {'request': request, 'favorited_ids': _favorited_ids(request.user)}
+    return Response(ExploreSiteSerializer(sites, many=True, context=ctx).data)
 
 # Default Ollama base URL. Users with LM Studio / a custom port pass their
 # own via the X-Local-Base-Url request header; we still default to Ollama
@@ -315,4 +331,86 @@ class PublicSiteView(APIView):
                 {'detail': 'Site not found or not published.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        # Count real external views (published, not the owner previewing their
+        # own) — F() so concurrent views don't clobber each other.
+        if site.published and not is_owner:
+            Site.objects.filter(pk=site.pk).update(view_count=F('view_count') + 1)
         return Response(PublicSiteSerializer(site).data)
+
+
+class ExploreView(APIView):
+    """The Discover feed: every user's PUBLISHED sites, ranked. ?sort=top
+    (all-time popularity) or trending (popularity decayed by age, the default).
+    Anonymous-readable; a token just fills in is_favorited."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        sort = request.GET.get('sort', 'trending')
+        sites = list(
+            Site.objects.filter(published=True)
+            .select_related('owner', 'owner__profile')
+            .annotate(favorite_count=Count('favorited_by'))
+        )
+
+        def popularity(s):
+            return s.view_count + 5 * s.favorite_count
+
+        if sort == 'top':
+            sites.sort(key=lambda s: (popularity(s), s.updated_at), reverse=True)
+        else:
+            now = timezone.now()
+
+            def trending(s):
+                age_h = max(0.0, (now - s.updated_at).total_seconds() / 3600.0)
+                return (popularity(s) + 1) / ((age_h + 2) ** 1.5)
+
+            sites.sort(key=trending, reverse=True)
+        return _explore_response(sites[:60], request)
+
+
+class FavoritesView(APIView):
+    """The current user's favorited sites (the Favorites tab), newest-favorited
+    first, with the same card shape as Explore."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        fav_ids = list(
+            Favorite.objects.filter(user=request.user)
+            .order_by('-created_at')
+            .values_list('site_id', flat=True)
+        )
+        by_id = {
+            s.id: s
+            for s in Site.objects.filter(id__in=fav_ids)
+            .select_related('owner', 'owner__profile')
+            .annotate(favorite_count=Count('favorited_by'))
+        }
+        sites = [by_id[i] for i in fav_ids if i in by_id]  # preserve fav order
+        return _explore_response(sites, request)
+
+
+class FavoriteToggleView(APIView):
+    """POST to favorite / DELETE to unfavorite ANY published site (or your own).
+    Separate from the owner-scoped SiteViewSet so you can star others' sites."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _site(self, request, site_id):
+        try:
+            site = Site.objects.get(pk=site_id)
+        except Site.DoesNotExist:
+            return None
+        return site if (site.published or site.owner_id == request.user.id) else None
+
+    def post(self, request, site_id):
+        site = self._site(request, site_id)
+        if site is None:
+            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+        Favorite.objects.get_or_create(user=request.user, site=site)
+        return Response({'favorited': True}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, site_id):
+        Favorite.objects.filter(user=request.user, site_id=site_id).delete()
+        return Response({'favorited': False})

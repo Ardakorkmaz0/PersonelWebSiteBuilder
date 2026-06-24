@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { getProfile, updateProfile, uploadAvatar } from '../api/profile.js'
 import { fetchMe } from '../api/auth.js'
+import { listSites, createSite, deleteSite } from '../api/sites.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
+import { orderSites } from '../utils/siteSort.js'
+import SitePreview from '../components/dashboard/SitePreview.jsx'
 
 export default function ProfilePage() {
   const setUser = useAuthStore((s) => s.setUser)
+  const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
@@ -17,6 +21,13 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false)
   const fileRef = useRef(null)
 
+  // My sites
+  const [sites, setSites] = useState([])
+  const [sitesLoading, setSitesLoading] = useState(true)
+  const [query, setQuery] = useState('')
+  const [newTitle, setNewTitle] = useState('')
+  const [creating, setCreating] = useState(false)
+
   useEffect(() => {
     getProfile()
       .then((p) => {
@@ -26,14 +37,19 @@ export default function ProfilePage() {
       })
       .catch((e) => setError(apiError(e)))
       .finally(() => setLoading(false))
+    listSites()
+      .then(setSites)
+      .catch((e) => setError(apiError(e)))
+      .finally(() => setSitesLoading(false))
   }, [])
 
-  // Keep the header avatar/name in sync after any profile change.
+  const visibleSites = useMemo(() => orderSites(sites, query), [sites, query])
+
   async function refreshHeader() {
     try {
       setUser(await fetchMe())
     } catch {
-      /* non-fatal: the page already shows the latest */
+      /* non-fatal */
     }
   }
 
@@ -72,20 +88,43 @@ export default function ProfilePage() {
     }
   }
 
+  async function onCreate(e) {
+    e.preventDefault()
+    if (!newTitle.trim()) return
+    setCreating(true)
+    try {
+      const site = await createSite(newTitle.trim())
+      navigate(`/editor/${site.id}`)
+    } catch (e) {
+      setError(apiError(e))
+      setCreating(false)
+    }
+  }
+
+  async function onDelete(id) {
+    if (!window.confirm('Delete this site? This cannot be undone.')) return
+    try {
+      await deleteSite(id)
+      setSites((prev) => prev.filter((s) => s.id !== id))
+    } catch (e) {
+      setError(apiError(e))
+    }
+  }
+
   const letter = (displayName || profile?.username || '?').trim().charAt(0).toUpperCase()
 
   return (
     <div className="min-h-screen bg-[#f7f8fa]">
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <Link to="/" className="flex items-center gap-2.5 text-[#374151] hover:text-[#111827]">
             <span className="brand-mark">S</span>
-            <span className="text-sm font-medium">&larr; My sites</span>
+            <span className="text-sm font-medium">&larr; Explore</span>
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="mb-6 text-2xl font-bold tracking-tight text-[#111827]">Profile</h1>
 
         {error && (
@@ -98,21 +137,14 @@ export default function ProfilePage() {
           <p className="text-sm text-[#6b7280]">Loading…</p>
         ) : (
           <form onSubmit={onSave} className="ms-card space-y-6 p-6">
-            {/* Avatar */}
             <div className="flex items-center gap-5">
-              <div className="relative">
-                {profile?.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt=""
-                    className="h-20 w-20 rounded-full object-cover ring-2 ring-[#eef2ff]"
-                  />
-                ) : (
-                  <span className="grid h-20 w-20 place-items-center rounded-full bg-[#eef2ff] text-3xl font-semibold text-[#4f46e5]">
-                    {letter}
-                  </span>
-                )}
-              </div>
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="h-20 w-20 rounded-full object-cover ring-2 ring-[#eef2ff]" />
+              ) : (
+                <span className="grid h-20 w-20 place-items-center rounded-full bg-[#eef2ff] text-3xl font-semibold text-[#4f46e5]">
+                  {letter}
+                </span>
+              )}
               <div>
                 <input
                   ref={fileRef}
@@ -121,12 +153,7 @@ export default function ProfilePage() {
                   onChange={onAvatar}
                   className="hidden"
                 />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  className="ms-btn px-4"
-                >
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="ms-btn px-4">
                   {uploading ? 'Uploading…' : profile?.avatar_url ? 'Change photo' : 'Upload photo'}
                 </button>
                 <p className="mt-1.5 text-xs text-[#9ca3af]">PNG, JPG, GIF, WEBP, AVIF or SVG. Max 5 MB.</p>
@@ -134,9 +161,7 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-[#374151]">
-                Display name
-              </label>
+              <label className="mb-1 block text-sm font-medium text-[#374151]">Display name</label>
               <input
                 className="ms-input w-full"
                 placeholder={profile?.username}
@@ -144,7 +169,7 @@ export default function ProfilePage() {
                 maxLength={80}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
-              <p className="mt-1 text-xs text-[#9ca3af]">Shown in the header. Defaults to your username.</p>
+              <p className="mt-1 text-xs text-[#9ca3af]">Shown in the header and on your sites. Defaults to your username.</p>
             </div>
 
             <div>
@@ -168,6 +193,90 @@ export default function ProfilePage() {
             </div>
           </form>
         )}
+
+        {/* My sites — including drafts (these are private; only published ones
+            show on Explore). */}
+        <section className="mt-12">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-bold tracking-tight text-[#111827]">My sites</h2>
+            <form onSubmit={onCreate} className="flex gap-2">
+              <input
+                className="ms-input w-44"
+                placeholder="New site title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+              <button type="submit" disabled={creating || !newTitle.trim()} className="ms-btn ms-btn-primary whitespace-nowrap px-4">
+                {creating ? '…' : '+ Create'}
+              </button>
+            </form>
+          </div>
+
+          {sites.length > 0 && (
+            <div className="relative mb-5 max-w-sm">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]">🔍</span>
+              <input
+                className="ms-input w-full pl-9"
+                placeholder="Search your sites…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          )}
+
+          {sitesLoading ? (
+            <p className="text-sm text-[#6b7280]">Loading…</p>
+          ) : sites.length === 0 ? (
+            <div className="ms-card border-dashed py-14 text-center">
+              <p className="font-medium text-[#374151]">No sites yet</p>
+              <p className="mt-1 text-sm text-[#6b7280]">Create your first site above.</p>
+            </div>
+          ) : visibleSites.length === 0 ? (
+            <p className="text-sm text-[#6b7280]">No sites match “{query}”.</p>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleSites.map((site) => (
+                <div key={site.id} className="ms-card group flex flex-col overflow-hidden p-0 transition hover:-translate-y-0.5 hover:shadow-md">
+                  <Link to={`/editor/${site.id}`} className="block">
+                    <SitePreview site={site} source="owner" height={140} />
+                  </Link>
+                  <div className="flex flex-1 flex-col p-4">
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="truncate font-semibold text-[#111827]">{site.title}</h3>
+                        <p className="mt-0.5 truncate text-xs text-[#9ca3af]">/site/{site.slug}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          site.published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
+                        }`}
+                      >
+                        {site.published ? 'Published' : 'Draft'}
+                      </span>
+                    </div>
+                    <div className="mt-auto flex items-center gap-3 text-sm">
+                      <Link to={`/editor/${site.id}`} className="ms-btn ms-btn-primary">
+                        Open editor
+                      </Link>
+                      {site.published && (
+                        <Link to={`/site/${site.slug}`} className="font-medium text-[#4f46e5] hover:underline">
+                          View
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => onDelete(site.id)}
+                        className="ml-auto rounded-lg px-2 py-1 text-[#9ca3af] transition hover:bg-red-50 hover:text-red-600"
+                        title="Delete site"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   )

@@ -59,8 +59,9 @@ class Site(models.Model):
     # iframe so their JavaScript runs isolated from the app/visitor session).
     html = models.TextField(blank=True, default='')
     published = models.BooleanField(default=False)
-    # Starred on the dashboard → sorted to the front. Per-site, per-owner.
-    favorite = models.BooleanField(default=False)
+    # How many times the public /site/<slug> page has been viewed (by anyone
+    # other than the owner). Drives the Explore "Top"/"Trending" ranking.
+    view_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -83,6 +84,32 @@ class Site(models.Model):
             slug = f'{base}-{counter}'
             counter += 1
         return slug
+
+
+class Favorite(models.Model):
+    """A user starring a site on the Explore feed (social, per-user — you can
+    favorite anyone's published site, including your own). `favorite_count` for
+    ranking is COUNT() of these; the user's Favorites tab is their own rows."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='favorites',
+    )
+    site = models.ForeignKey(
+        Site,
+        on_delete=models.CASCADE,
+        related_name='favorited_by',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'site')
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', '-created_at'])]
+
+    def __str__(self):
+        return f'fav({self.user_id} -> {self.site_id})'
 
 
 class SiteVersion(models.Model):

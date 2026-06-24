@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getSite } from '../../api/sites.js'
+import { getSite, getPublicSite } from '../../api/sites.js'
 import { schemaToResponsiveHtml } from '../../utils/responsiveHtml.js'
 import { withoutExecutableScripts } from '../../utils/htmlRuntime.js'
 
@@ -19,7 +19,7 @@ function buildDoc(site) {
   return withoutExecutableScripts(raw)
 }
 
-export default function SitePreview({ site, height = 150 }) {
+export default function SitePreview({ site, height = 150, source = 'owner' }) {
   const boxRef = useRef(null)
   const [doc, setDoc] = useState(() => cache.get(site.id) || null)
   const [visible, setVisible] = useState(false)
@@ -59,7 +59,8 @@ export default function SitePreview({ site, height = 150 }) {
   useEffect(() => {
     if (!visible || doc) return undefined
     let alive = true
-    getSite(site.id)
+    const fetcher = source === 'public' ? getPublicSite(site.slug) : getSite(site.id)
+    fetcher
       .then((full) => {
         const d = buildDoc(full)
         cache.set(site.id, d)
@@ -67,7 +68,7 @@ export default function SitePreview({ site, height = 150 }) {
       })
       .catch(() => alive && setFailed(true))
     return () => { alive = false }
-  }, [visible, doc, site.id])
+  }, [visible, doc, site.id, site.slug, source])
 
   const scale = width / LOGICAL_W
 

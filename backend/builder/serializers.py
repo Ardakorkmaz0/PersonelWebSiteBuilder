@@ -94,20 +94,52 @@ class ProfileSerializer(serializers.ModelSerializer):
         return file
 
 
+class ExploreSiteSerializer(serializers.ModelSerializer):
+    """A site as it appears on the Explore feed — owner attribution + popularity
+    counts, no schema/html. `favorite_count` is annotated by the view (Count of
+    favorited_by); `is_favorited` comes from context['favorited_ids']."""
+
+    owner_username = serializers.CharField(source='owner.username', read_only=True)
+    owner_display_name = serializers.SerializerMethodField()
+    owner_avatar_url = serializers.SerializerMethodField()
+    favorite_count = serializers.IntegerField(read_only=True)
+    is_favorited = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Site
+        fields = ('id', 'title', 'slug', 'owner_username', 'owner_display_name',
+                  'owner_avatar_url', 'view_count', 'favorite_count',
+                  'is_favorited', 'updated_at')
+
+    def _profile(self, obj):
+        return getattr(obj.owner, 'profile', None)
+
+    def get_owner_display_name(self, obj):
+        prof = self._profile(obj)
+        return (prof.display_name if prof and prof.display_name else '') or obj.owner.username
+
+    def get_owner_avatar_url(self, obj):
+        prof = self._profile(obj)
+        return _absolute_image_url(prof.avatar if prof else None, self.context)
+
+    def get_is_favorited(self, obj):
+        return obj.id in self.context.get('favorited_ids', set())
+
+
 class SiteListSerializer(serializers.ModelSerializer):
     """Lightweight representation for the dashboard list (no schema)."""
 
     class Meta:
         model = Site
-        fields = ('id', 'title', 'slug', 'published', 'favorite', 'created_at', 'updated_at')
+        fields = ('id', 'title', 'slug', 'published', 'view_count', 'created_at', 'updated_at')
 
 
 class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'schema', 'html', 'published',
-                  'favorite', 'created_at', 'updated_at')
-        read_only_fields = ('id', 'slug', 'created_at', 'updated_at')
+                  'view_count', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'slug', 'view_count', 'created_at', 'updated_at')
 
     def validate_schema(self, value):
         return validate_and_clean_schema(value)

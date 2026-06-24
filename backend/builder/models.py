@@ -146,6 +146,48 @@ class Favorite(models.Model):
         return f'fav({self.user_id} -> {self.site_id})'
 
 
+class Report(models.Model):
+    """A user flagging a published site for moderation. One open report per
+    (site, reporter) so a single user can't spam the same site; admins triage
+    these in the in-app admin panel."""
+
+    REASON_CHOICES = [
+        ('spam', 'Spam or misleading'),
+        ('inappropriate', 'Inappropriate or offensive'),
+        ('copyright', 'Copyright or impersonation'),
+        ('malware', 'Malicious or phishing'),
+        ('other', 'Other'),
+    ]
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('resolved', 'Resolved'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='reports')
+    # Keep the report even if the reporter deletes their account — moderation
+    # history shouldn't vanish — so SET_NULL rather than CASCADE.
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reports_made',
+    )
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES, default='other')
+    detail = models.CharField(max_length=500, blank=True, default='')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='open', db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('site', 'reporter')
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', '-created_at'])]
+
+    def __str__(self):
+        return f'report#{self.pk} ({self.site_id}, {self.reason}, {self.status})'
+
+
 class SiteVersion(models.Model):
     """Point-in-time snapshot of a Site's schema + html.
 

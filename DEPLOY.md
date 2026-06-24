@@ -47,24 +47,27 @@ code.
    `redis` service to compose / use a managed Redis.
 8. **Monitoring** — set `SENTRY_DSN`.
 
+## Password reset — built; just add an SMTP provider
+
+The full password-reset flow is **already implemented** (no-enumeration request +
+signed-token confirm at `/api/auth/password/reset/[confirm/]`, throttled, revokes
+old tokens on success; `/forgot-password` + `/reset-password` pages on the SPA).
+It's env-gated on email config:
+
+- **With no `EMAIL_HOST`** (dev): the email — including the reset link — is printed
+  to the server console, so you can test the flow locally.
+- **For real delivery**: set the SMTP env vars (`EMAIL_HOST`, `EMAIL_PORT`,
+  `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL`)
+  for any provider (Gmail app password, SendGrid, SES…), and set
+  `DJANGO_FRONTEND_URL` so the emailed link points at your real SPA origin.
+
+See `backend/.env.example` for the exact variable names. (Optional future add:
+email *verification* on signup — gate publishing on a verified address.)
+
 ## Deferred features — wire these when you actually need them
 
 These need external accounts or product decisions and were intentionally **not**
 built yet (premature before launch). Each is a small, well-scoped addition:
-
-### Email: password reset + verification
-The register form now **collects and enforces a unique email**, so the data is
-ready. To turn on reset/verification you need an outbound mail provider:
-
-1. Add an `EMAIL_BACKEND` + SMTP settings (Gmail app password, SendGrid, SES…)
-   to `settings.py`, all env-gated (`EMAIL_HOST`, `EMAIL_HOST_USER`,
-   `EMAIL_HOST_PASSWORD`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL`).
-2. Expose a password-reset flow — either Django's built-in
-   `PasswordResetView`/`PasswordResetConfirmView`, or a small DRF endpoint pair
-   (request-reset → emails a signed token; confirm-reset → sets the new
-   password). Add the matching `/reset` pages on the frontend.
-3. (Optional) email verification on signup — mark `Profile.email_verified`, gate
-   publishing on it.
 
 ### Media at horizontal scale
 `MEDIA_ROOT` is a local volume — fine for one web instance, but uploads written

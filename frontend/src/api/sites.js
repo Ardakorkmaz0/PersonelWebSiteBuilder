@@ -18,3 +18,7 @@ export const cloneSite = (slug) =>
 
 export const getPublicSite = (slug) =>
   client.get(`/public/sites/${slug}/`).then((r) => r.data)
+
+// Flag a published site for moderation (one report per user per site).
+export const reportSite = (siteId, reason, detail = '') =>
+  client.post(`/sites/${siteId}/report/`, { reason, detail }).then((r) => r.data)

@@ -1,8 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { cloneSite } from '../../api/sites.js'
+import { cloneSite, reportSite } from '../../api/sites.js'
 import { useAuthStore } from '../../store/authStore.js'
+import { apiError } from '../../utils/errors.js'
 import { schemaToSingleHtml } from '../../utils/schemaToFiles.js'
+
+const REPORT_REASONS = [
+  ['spam', 'Spam or misleading'],
+  ['inappropriate', 'Inappropriate or offensive'],
+  ['copyright', 'Copyright or impersonation'],
+  ['malware', 'Malicious or phishing'],
+  ['other', 'Other'],
+]
 
 // The source (code) of a public site: its raw HTML when it has one, else the
 // HTML emitted from its component schema.
@@ -24,6 +33,12 @@ export default function PublicToolbar({ site }) {
   const [showCode, setShowCode] = useState(false)
   const [cloning, setCloning] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showReport, setShowReport] = useState(false)
+  const [reason, setReason] = useState('spam')
+  const [detail, setDetail] = useState('')
+  const [reporting, setReporting] = useState(false)
+  const [reported, setReported] = useState(false)
+  const [reportError, setReportError] = useState('')
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
 
@@ -38,6 +53,30 @@ export default function PublicToolbar({ site }) {
       navigate(`/editor/${copy.id}`)
     } catch {
       setCloning(false)
+    }
+  }
+
+  function onOpenReport() {
+    if (!token) {
+      navigate('/login')
+      return
+    }
+    setReported(false)
+    setReportError('')
+    setShowReport(true)
+  }
+
+  async function onSubmitReport(e) {
+    e.preventDefault()
+    setReporting(true)
+    setReportError('')
+    try {
+      await reportSite(site.id, reason, detail.trim())
+      setReported(true)
+    } catch (err) {
+      setReportError(apiError(err, 'Could not submit the report.'))
+    } finally {
+      setReporting(false)
     }
   }
 
@@ -62,6 +101,14 @@ export default function PublicToolbar({ site }) {
           className="rounded-lg bg-[#4f46e5] px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-[#4338ca] disabled:opacity-60"
         >
           {cloning ? 'Copying…' : '✦ Use this'}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenReport}
+          title="Report this site"
+          className="rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#b91c1c] shadow-lg backdrop-blur hover:bg-white"
+        >
+          ⚑ Report
         </button>
       </div>
 
@@ -102,6 +149,71 @@ export default function PublicToolbar({ site }) {
             <pre className="min-h-0 flex-1 overflow-auto whitespace-pre p-4 font-mono text-xs leading-relaxed text-gray-100">
               {code}
             </pre>
+          </div>
+        </div>
+      )}
+
+      {showReport && (
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowReport(false)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#e5e7eb] px-5 py-3">
+              <span className="text-sm font-semibold text-[#111827]">Report this site</span>
+              <button
+                type="button"
+                onClick={() => setShowReport(false)}
+                className="rounded-md px-2 py-1 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
+              >
+                ×
+              </button>
+            </div>
+
+            {reported ? (
+              <div className="space-y-4 p-5">
+                <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-800">
+                  Thanks — our team will review this site.
+                </div>
+                <button onClick={() => setShowReport(false)} className="ms-btn ms-btn-primary w-full py-2.5">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={onSubmitReport} className="space-y-4 p-5">
+                {reportError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {reportError}
+                  </div>
+                )}
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-[#374151]">Reason</span>
+                  <select className="ms-input" value={reason} onChange={(e) => setReason(e.target.value)}>
+                    {REPORT_REASONS.map(([id, label]) => (
+                      <option key={id} value={id}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-[#374151]">
+                    Details <span className="font-normal text-[#9ca3af]">(optional)</span>
+                  </span>
+                  <textarea
+                    className="ms-input min-h-[80px] resize-y"
+                    maxLength={500}
+                    value={detail}
+                    onChange={(e) => setDetail(e.target.value)}
+                    placeholder="Anything that helps us review it faster."
+                  />
+                </label>
+                <button type="submit" disabled={reporting} className="ms-btn ms-btn-primary w-full py-2.5">
+                  {reporting ? 'Submitting…' : 'Submit report'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

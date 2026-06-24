@@ -145,6 +145,29 @@ AUTH_PASSWORD_VALIDATORS = [
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '').strip()
 RECAPTCHA_SECRET_KEY = os.getenv('RECAPTCHA_SECRET_KEY', '').strip()
 
+# Email — used by the password-reset flow. Env-gated: set EMAIL_HOST (any SMTP:
+# Gmail app password, SendGrid, SES…) to send real mail. With no host, dev prints
+# the email to the console (so you can copy the reset link locally) and the
+# reset endpoint reports that email isn't configured rather than silently
+# pretending to send. DEFAULT_FROM_EMAIL is the visible "from".
+EMAIL_HOST = os.getenv('EMAIL_HOST', '').strip()
+EMAIL_CONFIGURED = bool(EMAIL_HOST)
+if EMAIL_CONFIGURED:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '').strip()
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+    EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', True)
+    EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', False)
+else:
+    # No SMTP host configured → print emails to the console (dev convenience).
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Sitebuilder <no-reply@localhost>')
+
+# Where the SPA is hosted — used to build absolute links in emails (password
+# reset). Defaults to the Vite dev server; set DJANGO_FRONTEND_URL in prod.
+FRONTEND_URL = os.getenv('DJANGO_FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True

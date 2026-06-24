@@ -5,3 +5,18 @@ import client from './client.js'
 // full `next` URL to follow pagination, otherwise the first page is fetched.
 export const listAdminUsers = (page = 1) =>
   client.get('/admin/users/', { params: { page } }).then((r) => r.data)
+
+// Moderation queue (defaults to open reports). status: open|resolved|dismissed|all
+export const listReports = (status = 'open', page = 1) =>
+  client.get('/admin/reports/', { params: { status, page } }).then((r) => r.data)
+
+export const resolveReport = (reportId, action /* 'resolve' | 'dismiss' */) =>
+  client.post(`/admin/reports/${reportId}/resolve/`, { action }).then((r) => r.data)
+
+// Suspend (is_active=false) or reinstate a user.
+export const suspendUser = (userId, suspend) =>
+  client.post(`/admin/users/${userId}/suspend/`, { suspend }).then((r) => r.data)
+
+// Take down a site: 'unpublish' (reversible) or 'delete' (hard).
+export const moderateSite = (siteId, action) =>
+  client.post(`/admin/sites/${siteId}/moderate/`, { action }).then((r) => r.data)

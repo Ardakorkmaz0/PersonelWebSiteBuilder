@@ -102,10 +102,13 @@ Add the keys below to turn each on, then restart both servers.
 > The CSP already allows the Google/gstatic domains these scripts load from.
 > See `backend/.env.example` and `frontend/.env.example` for the exact variable names.
 
-### Admin panel (Users & their sites)
+### Admin panel (moderation)
 
-The in-app **Admin** link (top-right) and `/admin` page are shown only to **staff**
-accounts. Promote your account once:
+The in-app **Admin** link (top-right, next to Favorites) and `/admin` page are
+shown only to **staff** accounts. The panel has two tabs: **Users & sites**
+(suspend/reinstate a user, unpublish or delete any site) and **Reports** (the
+moderation queue from visitors' "⚑ Report" on public sites — resolve, dismiss,
+or take the site down). Promote your account once:
 
 ```bash
 cd backend

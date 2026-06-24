@@ -129,10 +129,11 @@ export default function ExplorePage() {
             {user?.is_staff && (
               <Link
                 to="/admin"
-                title="Admin — users & sites"
-                className="rounded-lg bg-[#111827] px-3 py-1.5 font-semibold text-white hover:bg-black"
+                title="Admin — moderation, users & reports"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
               >
-                Admin
+                <span aria-hidden>🛡</span>
+                <span className="hidden sm:inline">Admin</span>
               </Link>
             )}
             <Link

@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import Profile, Site, SiteVersion, UploadedImage
+from .models import Profile, Report, Site, SiteVersion, UploadedImage
 from .validators import validate_and_clean_schema
 
 
@@ -99,7 +99,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'date_joined', 'is_staff', 'is_superuser',
-                  'display_name', 'avatar_url', 'site_count', 'sites')
+                  'is_active', 'display_name', 'avatar_url', 'site_count', 'sites')
 
     def get_display_name(self, obj):
         prof = getattr(obj, 'profile', None)
@@ -118,9 +118,41 @@ class AdminUserSerializer(serializers.ModelSerializer):
                 'id': s.id, 'title': s.title, 'slug': s.slug,
                 'published': s.published, 'view_count': s.view_count,
                 'category': s.category, 'updated_at': s.updated_at,
+                'open_report_count': sum(1 for r in s.reports.all() if r.status == 'open'),
             }
             for s in obj.sites.all()
         ]
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    """Write side: a user filing a report (reason + optional detail). The site
+    and reporter come from the URL + request, not the body."""
+
+    class Meta:
+        model = Report
+        fields = ('id', 'reason', 'detail', 'status', 'created_at')
+        read_only_fields = ('id', 'status', 'created_at')
+
+
+class AdminReportSerializer(serializers.ModelSerializer):
+    """Read side for the admin moderation queue: the report plus enough site +
+    reporter context to act on it without extra requests."""
+
+    reporter_username = serializers.SerializerMethodField()
+    site_title = serializers.CharField(source='site.title', read_only=True)
+    site_slug = serializers.CharField(source='site.slug', read_only=True)
+    site_published = serializers.BooleanField(source='site.published', read_only=True)
+    site_owner = serializers.CharField(source='site.owner.username', read_only=True)
+    reason_label = serializers.CharField(source='get_reason_display', read_only=True)
+
+    class Meta:
+        model = Report
+        fields = ('id', 'reason', 'reason_label', 'detail', 'status', 'created_at',
+                  'resolved_at', 'reporter_username', 'site', 'site_title',
+                  'site_slug', 'site_published', 'site_owner')
+
+    def get_reporter_username(self, obj):
+        return obj.reporter.username if obj.reporter else '(deleted)'
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -218,7 +250,7 @@ class PublicSiteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Site
-        fields = ('title', 'slug', 'schema', 'html', 'published', 'updated_at')
+        fields = ('id', 'title', 'slug', 'schema', 'html', 'published', 'updated_at')
 
 
 class SiteVersionSerializer(serializers.ModelSerializer):

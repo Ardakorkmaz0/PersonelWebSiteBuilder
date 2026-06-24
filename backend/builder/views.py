@@ -5,6 +5,13 @@ import urllib.request
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password as dj_validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
+from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
@@ -21,13 +28,15 @@ from rest_framework.views import APIView
 from django.db import transaction
 from django.db.models import Count, F
 
-from .models import Favorite, Profile, Site, SiteVersion, UploadedImage
+from .models import Favorite, Profile, Report, Site, SiteVersion, UploadedImage
 from .serializers import (
+    AdminReportSerializer,
     AdminUserSerializer,
     ExploreSiteSerializer,
     ProfileSerializer,
     PublicSiteSerializer,
     RegisterSerializer,
+    ReportSerializer,
     SiteListSerializer,
     SiteSerializer,
     SiteVersionSerializer,
@@ -180,6 +189,91 @@ class LoginView(ObtainAuthToken):
         return Response(
             {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
         )
+
+
+class PasswordResetRequestView(APIView):
+    """Step 1 of password reset: POST an email; if a matching active account
+    exists we email it a signed, time-limited reset link. ALWAYS returns 200 with
+    the same message (never reveals whether an email is registered — that would
+    be an account-enumeration oracle). Throttled under the `auth` scope."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    # Shown verbatim whether or not the email exists (no enumeration).
+    _OK = {'detail': 'If an account exists for that email, a reset link is on its way.'}
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Only usable accounts (active, with a real password) get a link.
+        user = (
+            User.objects.filter(email__iexact=email, is_active=True)
+            .exclude(password='')
+            .first()
+        )
+        if user and user.has_usable_password():
+            self._send_reset_email(user)
+        elif user and not user.has_usable_password():
+            # Google-only account — no password to reset. Still return the same
+            # generic message so we don't leak that the email exists.
+            pass
+        return Response(self._OK)
+
+    def _send_reset_email(self, user):
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        link = f'{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}'
+        send_mail(
+            subject='Reset your Sitebuilder password',
+            message=(
+                f'Hi {user.username},\n\n'
+                'We received a request to reset your Sitebuilder password. '
+                'Open the link below to choose a new one (it expires in a few '
+                f'days and can be used once):\n\n{link}\n\n'
+                "If you didn't request this, you can ignore this email."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+
+
+class PasswordResetConfirmView(APIView):
+    """Step 2: POST uid + token + new_password. Validates the signed token (one
+    use, time-limited via Django's default_token_generator) and the password
+    against AUTH_PASSWORD_VALIDATORS, then sets it. Throttled under `auth`."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        uidb64 = request.data.get('uid') or ''
+        token = request.data.get('token') or ''
+        new_password = request.data.get('new_password') or ''
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+        if user is None or not default_token_generator.check_token(user, token):
+            return Response(
+                {'detail': 'This reset link is invalid or has expired.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            dj_validate_password(new_password, user)
+        except DjangoValidationError as e:
+            return Response({'new_password': list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        # Invalidate existing API tokens so a leaked/old token can't outlive the
+        # reset; the user signs in fresh with the new password.
+        Token.objects.filter(user=user).delete()
+        return Response({'detail': 'Your password has been reset. You can now sign in.'})
 
 
 class MeView(APIView):
@@ -564,6 +658,34 @@ class CloneSiteView(APIView):
         return Response(SiteSerializer(copy).data, status=status.HTTP_201_CREATED)
 
 
+class ReportSiteView(APIView):
+    """A signed-in user flags a published site. One report per (site, reporter):
+    re-reporting updates the existing row rather than erroring, so the button is
+    idempotent. You can't report your own site."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, site_id):
+        try:
+            site = Site.objects.get(pk=site_id, published=True)
+        except Site.DoesNotExist:
+            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if site.owner_id == request.user.id:
+            return Response({'detail': "You can't report your own site."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        Report.objects.update_or_create(
+            site=site, reporter=request.user,
+            defaults={
+                'reason': serializer.validated_data.get('reason', 'other'),
+                'detail': serializer.validated_data.get('detail', ''),
+                'status': 'open',
+                'resolved_at': None,
+            },
+        )
+        return Response({'detail': 'Thanks — our team will review this site.'}, status=status.HTTP_201_CREATED)
+
+
 class AdminPagination(PageNumberPagination):
     page_size = 50
     page_size_query_param = 'page_size'
@@ -582,6 +704,90 @@ class AdminUsersView(ListAPIView):
         return (
             User.objects.all()
             .select_related('profile')
-            .prefetch_related('sites')
+            .prefetch_related('sites', 'sites__reports')
             .order_by('-date_joined')
         )
+
+
+class AdminReportsView(ListAPIView):
+    """Admin moderation queue. Defaults to open reports (?status=all|open|
+    resolved|dismissed). Admin-only, paginated."""
+
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminReportSerializer
+    pagination_class = AdminPagination
+
+    def get_queryset(self):
+        qs = Report.objects.select_related('site', 'site__owner', 'reporter')
+        status_filter = self.request.GET.get('status', 'open')
+        if status_filter != 'all':
+            qs = qs.filter(status=status_filter)
+        return qs.order_by('-created_at')
+
+
+class AdminReportResolveView(APIView):
+    """Admin marks a report resolved or dismissed."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, report_id):
+        action = request.data.get('action')
+        if action not in ('resolve', 'dismiss'):
+            return Response({'detail': "action must be 'resolve' or 'dismiss'."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            report = Report.objects.get(pk=report_id)
+        except Report.DoesNotExist:
+            return Response({'detail': 'Report not found.'}, status=status.HTTP_404_NOT_FOUND)
+        report.status = 'resolved' if action == 'resolve' else 'dismissed'
+        report.resolved_at = timezone.now()
+        report.save(update_fields=['status', 'resolved_at'])
+        return Response({'detail': 'Report updated.', 'status': report.status})
+
+
+class AdminUserSuspendView(APIView):
+    """Admin suspends / reinstates a user by toggling is_active. A suspended
+    user can't log in and their existing API tokens are revoked. Guards: you
+    can't suspend yourself or another staff/superuser account."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, user_id):
+        try:
+            target = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if target.id == request.user.id:
+            return Response({'detail': "You can't suspend your own account."}, status=status.HTTP_400_BAD_REQUEST)
+        if target.is_staff or target.is_superuser:
+            return Response({'detail': "You can't suspend another admin."}, status=status.HTTP_400_BAD_REQUEST)
+        suspend = bool(request.data.get('suspend', True))
+        target.is_active = not suspend
+        target.save(update_fields=['is_active'])
+        if suspend:
+            Token.objects.filter(user=target).delete()  # kick existing sessions
+        return Response({'detail': 'User updated.', 'is_active': target.is_active})
+
+
+class AdminSiteModerateView(APIView):
+    """Admin takes down a reported/abusive site: `unpublish` (reversible — pulls
+    it from Explore + the public URL but keeps the owner's draft) or `delete`
+    (hard removal). Admin-only."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, site_id):
+        action = request.data.get('action')
+        if action not in ('unpublish', 'delete'):
+            return Response({'detail': "action must be 'unpublish' or 'delete'."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            site = Site.objects.get(pk=site_id)
+        except Site.DoesNotExist:
+            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if action == 'delete':
+            site.delete()
+            return Response({'detail': 'Site deleted.', 'deleted': True})
+        site.published = False
+        site.save(update_fields=['published'])
+        # Resolve any open reports on a taken-down site.
+        Report.objects.filter(site=site, status='open').update(status='resolved', resolved_at=timezone.now())
+        return Response({'detail': 'Site unpublished.', 'published': False})

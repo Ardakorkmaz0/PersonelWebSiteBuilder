@@ -64,7 +64,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'avatar_url', 'display_name')
+        # `is_staff` lets the frontend show the Admin link to admins.
+        fields = ('id', 'username', 'avatar_url', 'display_name', 'is_staff')
 
     def get_avatar_url(self, obj):
         prof = getattr(obj, 'profile', None)
@@ -73,6 +74,41 @@ class UserSerializer(serializers.ModelSerializer):
     def get_display_name(self, obj):
         prof = getattr(obj, 'profile', None)
         return (prof.display_name if prof and prof.display_name else '') or obj.username
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """For the in-app admin panel: every user with their sites (admin-only)."""
+
+    display_name = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
+    site_count = serializers.SerializerMethodField()
+    sites = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'date_joined', 'is_staff', 'is_superuser',
+                  'display_name', 'avatar_url', 'site_count', 'sites')
+
+    def get_display_name(self, obj):
+        prof = getattr(obj, 'profile', None)
+        return (prof.display_name if prof and prof.display_name else '') or obj.username
+
+    def get_avatar_url(self, obj):
+        prof = getattr(obj, 'profile', None)
+        return _absolute_image_url(prof.avatar if prof else None, self.context)
+
+    def get_site_count(self, obj):
+        return obj.sites.count()
+
+    def get_sites(self, obj):
+        return [
+            {
+                'id': s.id, 'title': s.title, 'slug': s.slug,
+                'published': s.published, 'view_count': s.view_count,
+                'category': s.category, 'updated_at': s.updated_at,
+            }
+            for s in obj.sites.all()
+        ]
 
 
 class ProfileSerializer(serializers.ModelSerializer):

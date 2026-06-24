@@ -12,5 +12,9 @@ export const updateSite = (id, payload) =>
 
 export const deleteSite = (id) => client.delete(`/sites/${id}/`)
 
+// "Use this": clone a public site into your account as a fresh draft.
+export const cloneSite = (slug) =>
+  client.post(`/sites/clone/${slug}/`).then((r) => r.data)
+
 export const getPublicSite = (slug) =>
   client.get(`/public/sites/${slug}/`).then((r) => r.data)

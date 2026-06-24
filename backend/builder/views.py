@@ -13,7 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -22,6 +22,7 @@ from django.db.models import Count, F
 
 from .models import Favorite, Profile, Site, SiteVersion, UploadedImage
 from .serializers import (
+    AdminUserSerializer,
     ExploreSiteSerializer,
     ProfileSerializer,
     PublicSiteSerializer,
@@ -505,3 +506,44 @@ class FavoriteToggleView(APIView):
         if site:
             site.recompute_hot_score(save=True)
         return Response({'favorited': False})
+
+
+class CloneSiteView(APIView):
+    """"Use this" on a public site → copy it into the requester's account as a
+    fresh DRAFT they can edit. Any PUBLISHED site (or your own) is cloneable;
+    schema + html + category + tags are duplicated, a new slug is generated."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, slug):
+        try:
+            src = Site.objects.get(slug=slug)
+        except Site.DoesNotExist:
+            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not (src.published or src.owner_id == request.user.id):
+            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+        copy = Site.objects.create(
+            owner=request.user,
+            title=f'{src.title} (copy)'[:100],
+            schema=src.schema,
+            html=src.html,
+            category=src.category,
+            tags=src.tags,
+            published=False,
+        )
+        return Response(SiteSerializer(copy).data, status=status.HTTP_201_CREATED)
+
+
+class AdminUsersView(ListAPIView):
+    """In-app admin panel data: every user + their sites. Admin-only (is_staff)."""
+
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminUserSerializer
+
+    def get_queryset(self):
+        return (
+            User.objects.all()
+            .select_related('profile')
+            .prefetch_related('sites')
+            .order_by('-date_joined')
+        )

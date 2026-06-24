@@ -56,3 +56,53 @@ cd frontend
 npm install
 npm run dev                       # http://localhost:5173
 ```
+
+## Optional: Google sign-in, reCAPTCHA & Admin
+
+Google sign-in and the "I'm not a robot" check are **env-gated**: with no keys the
+app runs exactly as before (the Google button and the captcha simply don't show).
+Add the keys below to turn each on, then restart both servers.
+
+### Google sign-in
+
+1. Go to the **Google Cloud Console → APIs & Services → Credentials**
+   (<https://console.cloud.google.com/apis/credentials>).
+2. *Create credentials → OAuth client ID → Application type: **Web application***.
+   (First time, you'll be asked to configure the OAuth consent screen — pick
+   "External", fill the app name + your email, and save.)
+3. Under **Authorized JavaScript origins** add your frontend origin(s):
+   `http://localhost:5173` (and your production URL when you deploy). You do **not**
+   need a redirect URI — this uses the Google Identity Services token flow.
+4. Copy the **Client ID** (looks like `1234-abc.apps.googleusercontent.com`) and put
+   the **same value** in two places:
+   - `backend/.env` → `GOOGLE_OAUTH_CLIENT_ID=...`
+   - `frontend/.env` → `VITE_GOOGLE_CLIENT_ID=...`
+5. Restart the backend and `npm run dev`. A "Continue with Google" button now
+   appears on the Login/Register pages. (The backend verifies the Google ID token
+   with the `google-auth` package — already in `requirements.txt`.)
+
+### reCAPTCHA (the "I'm not a robot" box)
+
+1. Open the **reCAPTCHA admin** (<https://www.google.com/recaptcha/admin>).
+2. Register a site → choose **reCAPTCHA v2 → "I'm not a robot" Checkbox** → add the
+   domain `localhost` (and your production domain).
+3. Copy the two keys into:
+   - `frontend/.env` → `VITE_RECAPTCHA_SITE_KEY=<site key>`
+   - `backend/.env` → `RECAPTCHA_SECRET_KEY=<secret key>`
+4. Restart. The checkbox now appears on Register and is verified server-side.
+
+> The CSP already allows the Google/gstatic domains these scripts load from.
+> See `backend/.env.example` and `frontend/.env.example` for the exact variable names.
+
+### Admin panel (Users & their sites)
+
+The in-app **Admin** link (top-right) and `/admin` page are shown only to **staff**
+accounts. Promote your account once:
+
+```bash
+cd backend
+.venv\Scripts\python.exe manage.py shell -c "from django.contrib.auth.models import User; User.objects.filter(username='YOURNAME').update(is_staff=True)"
+```
+
+(or create a full superuser with `python manage.py createsuperuser`, which can also
+use Django's own admin at `/admin/` on the backend.)

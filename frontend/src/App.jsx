@@ -17,6 +17,7 @@ const PreviewPage = lazy(() => import('./pages/PreviewPage.jsx'))
 const CodeProjectPage = lazy(() => import('./pages/CodeProjectPage.jsx'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
 const FavoritesPage = lazy(() => import('./pages/FavoritesPage.jsx'))
+const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 
 function FullScreenLoading() {
   return (
@@ -70,6 +71,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <FavoritesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminPage />
               </ProtectedRoute>
             }
           />

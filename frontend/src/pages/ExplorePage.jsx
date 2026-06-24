@@ -126,6 +126,15 @@ export default function ExplorePage() {
             <span className="text-base font-bold tracking-tight text-[#111827]">Sitebuilder</span>
           </Link>
           <div className="flex items-center gap-3 text-sm">
+            {user?.is_staff && (
+              <Link
+                to="/admin"
+                title="Admin — users & sites"
+                className="rounded-lg bg-[#111827] px-3 py-1.5 font-semibold text-white hover:bg-black"
+              >
+                Admin
+              </Link>
+            )}
             <Link
               to="/favorites"
               title="Your favorites"

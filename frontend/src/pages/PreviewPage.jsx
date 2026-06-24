@@ -15,6 +15,7 @@ import {
 import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
 import { customCssBlock, safeCustomJs, themeVariablesCss } from '../utils/theme.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
+import PublicToolbar from '../components/preview/PublicToolbar.jsx'
 
 const MOBILE_BREAKPOINT = 768
 
@@ -308,6 +309,7 @@ export default function PreviewPage() {
     }
     return (
       <>
+        <PublicToolbar site={site} />
         {pages.length > 1 && (
           <nav className="fixed inset-x-0 top-0 z-[110] flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/85 px-3 py-2 backdrop-blur">
             {pages.map((p) => (
@@ -389,6 +391,7 @@ ${customCssBlock(site?.schema?.customCss)}`
     }
     return (
       <>
+        <PublicToolbar site={site} />
         {pages.length > 1 && (
           <nav className="fixed inset-x-0 top-0 z-[110] flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/80 px-3 py-2 backdrop-blur">
             {pages.map((p) => (
@@ -461,6 +464,7 @@ ${customCssBlock(site?.schema?.customCss)}`
   const fontHref = googleFontHrefForTheme(site?.schema?.theme)
   return (
     <div>
+      <PublicToolbar site={site} />
       {fontHref && (
         <>
           <link rel="preconnect" href="https://fonts.googleapis.com" crossOrigin="anonymous" />

@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { login } from '../api/auth.js'
+import { login, googleLogin } from '../api/auth.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
+import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -18,12 +20,23 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { token, user } = await login(username, password)
-      setAuth(token, user)
+      setAuth(token, user, remember)
       navigate('/')
     } catch (err) {
       setError(apiError(err, 'Invalid username or password.'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function onGoogle(credential) {
+    setError('')
+    try {
+      const { token, user } = await googleLogin(credential)
+      setAuth(token, user, remember)
+      navigate('/')
+    } catch (err) {
+      setError(apiError(err, 'Google sign-in failed.'))
     }
   }
 
@@ -86,6 +99,16 @@ export default function LoginPage() {
             />
           </label>
 
+          <label className="flex items-center gap-2 text-sm text-[#374151]">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 rounded border-[#d1d5db] text-[#4f46e5] focus:ring-[#4f46e5]"
+            />
+            Remember me
+          </label>
+
           <button
             type="submit"
             disabled={loading}
@@ -93,6 +116,9 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
+
+          {/* Google sign-in renders only when VITE_GOOGLE_CLIENT_ID is set. */}
+          <GoogleSignInButton onCredential={onGoogle} onError={setError} />
 
           <p className="text-center text-sm text-[#6b7280]">
             No account?{' '}

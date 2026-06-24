@@ -131,10 +131,19 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 8},
+    },
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
+
+# Optional Google sign-in + reCAPTCHA — both env-gated: when the key is unset the
+# feature is dormant (the frontend hides the button/checkbox, the backend skips
+# verification) so the app runs fine without any external setup.
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '').strip()
+RECAPTCHA_SECRET_KEY = os.getenv('RECAPTCHA_SECRET_KEY', '').strip()
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -201,12 +210,18 @@ CONTENT_SECURITY_POLICY = {
             'https://generativelanguage.googleapis.com',
             'https://api.groq.com',
             'https://openrouter.ai',
+            # Google sign-in (GIS) + reCAPTCHA
+            'https://accounts.google.com',
+            'https://www.googleapis.com',
         ),
         'img-src': ("'self'", 'data:', 'blob:', 'https:'),
-        'style-src': ("'self'", "'unsafe-inline'"),
-        'script-src': ("'self'", "'unsafe-inline'"),
+        'style-src': ("'self'", "'unsafe-inline'", 'https://accounts.google.com'),
+        'script-src': (
+            "'self'", "'unsafe-inline'",
+            'https://accounts.google.com', 'https://www.gstatic.com', 'https://www.google.com',
+        ),
         'font-src': ("'self'", 'data:', 'https://fonts.gstatic.com'),
-        'frame-src': ("'self'", 'blob:', 'data:'),
+        'frame-src': ("'self'", 'blob:', 'data:', 'https://accounts.google.com', 'https://www.google.com'),
         'object-src': ("'none'",),
         'base-uri': ("'self'",),
     },

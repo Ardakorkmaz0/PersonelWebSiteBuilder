@@ -1,4 +1,6 @@
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password as dj_validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
@@ -30,11 +32,20 @@ class RegisterSerializer(serializers.ModelSerializer):
             message='This username is already taken.',
         )],
     )
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
         fields = ('id', 'username', 'password')
+
+    def validate_password(self, value):
+        # Run Django's configured AUTH_PASSWORD_VALIDATORS (length, common,
+        # numeric, similarity) so weak passwords are rejected at registration.
+        try:
+            dj_validate_password(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
 
     def create(self, validated_data):
         return User.objects.create_user(

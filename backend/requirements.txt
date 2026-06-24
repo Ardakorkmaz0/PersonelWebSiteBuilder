@@ -2,6 +2,7 @@ Django==6.0.5
 djangorestframework==3.17.1
 django-cors-headers==4.9.0
 Pillow==12.2.0
+google-auth==2.41.1           # verifies Google ID tokens for Google sign-in (env-gated)
 
 # Configuration / production
 python-dotenv==1.2.2          # loads backend/.env

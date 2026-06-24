@@ -5,6 +5,7 @@ from .views import (
     ExploreView,
     FavoriteToggleView,
     FavoritesView,
+    GoogleLoginView,
     LocalAiProxyView,
     LocalAiStatusView,
     LoginView,
@@ -23,6 +24,7 @@ router.register(r'images', UploadedImageViewSet, basename='image')
 urlpatterns = [
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('auth/login/', LoginView.as_view(), name='login'),
+    path('auth/google/', GoogleLoginView.as_view(), name='google-login'),
     path('auth/me/', MeView.as_view(), name='me'),
     path('profile/', ProfileView.as_view(), name='profile'),
     path('explore/', ExploreView.as_view(), name='explore'),

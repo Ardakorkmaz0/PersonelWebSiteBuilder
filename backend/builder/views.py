@@ -1,6 +1,10 @@
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
+
+from django.conf import settings
+from django.contrib.auth.models import User
 
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
@@ -42,6 +46,26 @@ def _explore_response(sites, request):
     ctx = {'request': request, 'favorited_ids': _favorited_ids(request.user)}
     return Response(ExploreSiteSerializer(sites, many=True, context=ctx).data)
 
+
+def _verify_recaptcha(token):
+    """Env-gated 'I'm not a robot' check. When RECAPTCHA_SECRET_KEY is unset the
+    check is disabled (returns True). Otherwise verifies the v2 token with
+    Google; a missing/failed token returns False."""
+    secret = settings.RECAPTCHA_SECRET_KEY
+    if not secret:
+        return True
+    if not token:
+        return False
+    try:
+        data = urllib.parse.urlencode({'secret': secret, 'response': token}).encode('utf-8')
+        req = urllib.request.Request(
+            'https://www.google.com/recaptcha/api/siteverify', data=data, method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return bool(json.loads(resp.read().decode('utf-8')).get('success'))
+    except Exception:  # noqa: BLE001 - any failure → treat as not verified
+        return False
+
 # Default Ollama base URL. Users with LM Studio / a custom port pass their
 # own via the X-Local-Base-Url request header; we still default to Ollama
 # because that's the most common local runtime on Windows.
@@ -52,6 +76,11 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        if not _verify_recaptcha(request.data.get('recaptcha')):
+            return Response(
+                {'detail': 'Captcha verification failed. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -60,6 +89,58 @@ class RegisterView(APIView):
             {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
             status=status.HTTP_201_CREATED,
         )
+
+
+class GoogleLoginView(APIView):
+    """Env-gated Google sign-in. The SPA gets a Google ID token (credential) and
+    POSTs it here; we verify it against GOOGLE_OAUTH_CLIENT_ID and issue a DRF
+    token. Unset client id → 503 (the frontend hides the button anyway)."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        client_id = settings.GOOGLE_OAUTH_CLIENT_ID
+        if not client_id:
+            return Response(
+                {'detail': 'Google sign-in is not configured.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        credential = request.data.get('credential')
+        if not credential:
+            return Response({'detail': 'Missing Google credential.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from google.auth.transport import requests as google_requests
+            from google.oauth2 import id_token
+            info = id_token.verify_oauth2_token(credential, google_requests.Request(), client_id)
+        except Exception:  # noqa: BLE001 - bad/expired token, or lib missing
+            return Response({'detail': 'Invalid Google token.'}, status=status.HTTP_400_BAD_REQUEST)
+        email = (info.get('email') or '').strip().lower()
+        if not email:
+            return Response({'detail': 'Google account has no email.'}, status=status.HTTP_400_BAD_REQUEST)
+        user = self._get_or_create_user(email, info)
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response(
+            {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
+        )
+
+    def _get_or_create_user(self, email, info):
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None:
+            base = (email.split('@')[0] or 'user')[:140] or 'user'
+            username = base
+            i = 2
+            while User.objects.filter(username=username).exists():
+                username = f'{base}{i}'
+                i += 1
+            user = User.objects.create_user(username=username, email=email)
+            user.set_unusable_password()
+            user.save()
+        prof, _ = Profile.objects.get_or_create(user=user)
+        name = info.get('name')
+        if name and not prof.display_name:
+            prof.display_name = name[:80]
+            prof.save(update_fields=['display_name'])
+        return user
 
 
 class LoginView(ObtainAuthToken):

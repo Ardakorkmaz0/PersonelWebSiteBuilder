@@ -1,7 +1,16 @@
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
+
+
+def _avatar_upload_path(instance, filename):
+    """Profile avatars under media/avatars/<year>/<month>/<filename>."""
+    now = timezone.now()
+    return f'avatars/{now.year:04d}/{now.month:02d}/{filename}'
 
 
 def _image_upload_path(instance, filename):
@@ -50,6 +59,8 @@ class Site(models.Model):
     # iframe so their JavaScript runs isolated from the app/visitor session).
     html = models.TextField(blank=True, default='')
     published = models.BooleanField(default=False)
+    # Starred on the dashboard → sorted to the front. Per-site, per-owner.
+    favorite = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -175,3 +186,33 @@ class UploadedImage(models.Model):
 
     def __str__(self):
         return f'image#{self.pk} ({self.owner_id}, {self.file.name})'
+
+
+class Profile(models.Model):
+    """Per-user profile: avatar + display name + bio (Tweety-style).
+
+    A OneToOne to the auth User so it can grow without touching the core user
+    table. Auto-created for every user via the post_save signal below, so the
+    /api/profile/ endpoint can always assume one exists. Avatar bytes/MIME are
+    validated at the serializer layer (mirrors UploadedImage).
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='profile',
+    )
+    avatar = models.ImageField(upload_to=_avatar_upload_path, blank=True, null=True)
+    display_name = models.CharField(max_length=80, blank=True, default='')
+    bio = models.CharField(max_length=300, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'profile({self.user_id})'
+
+
+@receiver(post_save, sender=User)
+def _ensure_profile(sender, instance, created, **kwargs):
+    """Give every new user a Profile so the endpoint never 404s."""
+    if created:
+        Profile.objects.get_or_create(user=instance)

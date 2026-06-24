@@ -15,6 +15,7 @@ import ProtectedRoute from './routes/ProtectedRoute.jsx'
 const EditorPage = lazy(() => import('./pages/EditorPage.jsx'))
 const PreviewPage = lazy(() => import('./pages/PreviewPage.jsx'))
 const CodeProjectPage = lazy(() => import('./pages/CodeProjectPage.jsx'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
 
 function FullScreenLoading() {
   return (
@@ -52,6 +53,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <CodeProjectPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />

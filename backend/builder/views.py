@@ -6,15 +6,16 @@ from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.db import transaction
 
-from .models import Site, SiteVersion, UploadedImage
+from .models import Profile, Site, SiteVersion, UploadedImage
 from .serializers import (
+    ProfileSerializer,
     PublicSiteSerializer,
     RegisterSerializer,
     SiteListSerializer,
@@ -39,7 +40,7 @@ class RegisterView(APIView):
         user = serializer.save()
         token, _ = Token.objects.get_or_create(user=user)
         return Response(
-            {'token': token.key, 'user': UserSerializer(user).data},
+            {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
             status=status.HTTP_201_CREATED,
         )
 
@@ -53,14 +54,42 @@ class LoginView(ObtainAuthToken):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key, 'user': UserSerializer(user).data})
+        return Response(
+            {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
+        )
 
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(UserSerializer(request.user).data)
+        return Response(UserSerializer(request.user, context={'request': request}).data)
+
+
+class ProfileView(APIView):
+    """Read (GET) / update (PATCH) the current user's profile. Accepts JSON for
+    display_name/bio and multipart for the avatar — same parser set as the
+    image uploader."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def _profile(self, request):
+        prof, _ = Profile.objects.get_or_create(user=request.user)
+        return prof
+
+    def get(self, request):
+        prof = self._profile(request)
+        return Response(ProfileSerializer(prof, context={'request': request}).data)
+
+    def patch(self, request):
+        prof = self._profile(request)
+        serializer = ProfileSerializer(
+            prof, data=request.data, partial=True, context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class SiteViewSet(viewsets.ModelViewSet):

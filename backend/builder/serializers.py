@@ -2,8 +2,18 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import Site, SiteVersion, UploadedImage
+from .models import Profile, Site, SiteVersion, UploadedImage
 from .validators import validate_and_clean_schema
+
+
+def _absolute_image_url(image_field, context):
+    """Absolute URL for an ImageField (so the :5173 frontend loads it from the
+    :8000 backend, not its own origin). None when no file is set."""
+    if not image_field:
+        return None
+    request = context.get('request')
+    url = image_field.url
+    return request.build_absolute_uri(url) if request else url
 
 # Mirror sanitize.js / validators.py for image MIME types accepted in <img src>.
 ALLOWED_IMAGE_CONTENT_TYPES = {
@@ -34,9 +44,54 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """The user as the frontend header/auth store sees them — now carrying the
+    profile's avatar + display name so the header can show them without a
+    second request."""
+
+    avatar_url = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ('id', 'username')
+        fields = ('id', 'username', 'avatar_url', 'display_name')
+
+    def get_avatar_url(self, obj):
+        prof = getattr(obj, 'profile', None)
+        return _absolute_image_url(prof.avatar if prof else None, self.context)
+
+    def get_display_name(self, obj):
+        prof = getattr(obj, 'profile', None)
+        return (prof.display_name if prof and prof.display_name else '') or obj.username
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    """Read/update the current user's profile. `avatar` is the multipart write
+    field; `avatar_url` is the absolute read URL — same split as
+    UploadedImageSerializer."""
+
+    avatar_url = serializers.SerializerMethodField()
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = ('username', 'avatar', 'avatar_url', 'display_name', 'bio', 'updated_at')
+        read_only_fields = ('username', 'avatar_url', 'updated_at')
+        extra_kwargs = {'avatar': {'write_only': True, 'required': False}}
+
+    def get_avatar_url(self, obj):
+        return _absolute_image_url(obj.avatar, self.context)
+
+    def validate_avatar(self, file):
+        if file.size > MAX_IMAGE_BYTES:
+            raise serializers.ValidationError(
+                f'Image too large ({file.size // 1024} KB). Max 5 MB.',
+            )
+        ctype = (getattr(file, 'content_type', '') or '').lower()
+        if ctype and ctype not in ALLOWED_IMAGE_CONTENT_TYPES:
+            raise serializers.ValidationError(
+                f'Unsupported image type "{ctype}". Use PNG, JPG, GIF, WEBP, AVIF, or SVG.',
+            )
+        return file
 
 
 class SiteListSerializer(serializers.ModelSerializer):
@@ -44,14 +99,14 @@ class SiteListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Site
-        fields = ('id', 'title', 'slug', 'published', 'created_at', 'updated_at')
+        fields = ('id', 'title', 'slug', 'published', 'favorite', 'created_at', 'updated_at')
 
 
 class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'schema', 'html', 'published',
-                  'created_at', 'updated_at')
+                  'favorite', 'created_at', 'updated_at')
         read_only_fields = ('id', 'slug', 'created_at', 'updated_at')
 
     def validate_schema(self, value):

@@ -21,6 +21,13 @@ export const useAuthStore = create((set) => ({
     set({ token, user })
   },
 
+  // Refresh just the user (e.g. after a profile/avatar update) so the header
+  // and anything reading `user` reflect it without a re-login.
+  setUser: (user) => {
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
+    set({ user })
+  },
+
   logout: () => {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)

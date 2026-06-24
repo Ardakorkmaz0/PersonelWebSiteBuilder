@@ -2,6 +2,12 @@ import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { paletteItems } from '../registry.jsx'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
+import { FolderIcon, LayersIcon } from '../icons.jsx'
+
+const TABS = [
+  ['files', 'Files', FolderIcon],
+  ['components', 'Components', LayersIcon],
+]
 
 // Palette item with two interaction modes:
 //  - Component mode (default): dnd-kit draggable, dropped onto the canvas.
@@ -71,18 +77,18 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
     <aside className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[#e5e7eb] bg-[#f9fafb]">
       <div className="flex shrink-0 items-center border-b border-[#e5e7eb] bg-white">
         {filesPanel ? (
-          [['files', '📁 Files'], ['components', '🧱 Components']].map(([id, label]) => (
+          TABS.map(([id, label, TabIcon]) => (
             <button
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`flex-1 py-2 text-xs font-semibold ${
+              className={`flex flex-1 items-center justify-center gap-1.5 py-2 text-xs font-semibold ${
                 tab === id
                   ? 'border-b-2 border-[#4f46e5] text-[#4f46e5]'
                   : 'text-[#6b7280] hover:text-[#111827]'
               }`}
             >
-              {label}
+              <TabIcon size={15} /> {label}
             </button>
           ))
         ) : (

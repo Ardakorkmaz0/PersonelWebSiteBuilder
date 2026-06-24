@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import SitePreview from './SitePreview.jsx'
+import { StarIcon, EyeIcon } from '../icons.jsx'
 
 function Avatar({ url, name, size = 20 }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -30,11 +31,11 @@ export default function ExploreCard({ site, onToggleFav }) {
           <button
             onClick={() => onToggleFav(site)}
             title={site.is_favorited ? 'Unfavorite' : 'Favorite'}
-            className={`shrink-0 rounded-lg px-1.5 py-0.5 text-base leading-none transition hover:bg-[#f3f4f6] ${
+            className={`shrink-0 rounded-lg p-1.5 leading-none transition hover:bg-[#f3f4f6] ${
               site.is_favorited ? 'text-[#f59e0b]' : 'text-[#d1d5db] hover:text-[#9ca3af]'
             }`}
           >
-            {site.is_favorited ? '★' : '☆'}
+            <StarIcon size={17} filled={site.is_favorited} />
           </button>
         </div>
         <div className="mb-3 flex items-center gap-2 text-xs text-[#6b7280]">
@@ -47,8 +48,8 @@ export default function ExploreCard({ site, onToggleFav }) {
           )}
         </div>
         <div className="mt-auto flex items-center gap-4 text-xs text-[#9ca3af]">
-          <span title="Views">👁 {site.view_count}</span>
-          <span title="Favorites">★ {site.favorite_count}</span>
+          <span title="Views" className="flex items-center gap-1"><EyeIcon size={14} /> {site.view_count}</span>
+          <span title="Favorites" className="flex items-center gap-1"><StarIcon size={14} /> {site.favorite_count}</span>
           <Link to={`/site/${site.slug}`} className="ml-auto font-medium text-[#4f46e5] hover:underline">
             View →
           </Link>

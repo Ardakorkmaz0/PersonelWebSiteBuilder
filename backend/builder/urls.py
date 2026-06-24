@@ -22,6 +22,7 @@ from .views import (
     PublicSiteView,
     RegisterView,
     ReportSiteView,
+    SiteViewCountView,
     SiteViewSet,
     UploadedImageViewSet,
 )
@@ -50,6 +51,7 @@ urlpatterns = [
     path('admin/reports/', AdminReportsView.as_view(), name='admin-reports'),
     path('admin/reports/<int:report_id>/resolve/', AdminReportResolveView.as_view(), name='admin-report-resolve'),
     path('public/sites/<slug:slug>/', PublicSiteView.as_view(), name='public-site'),
+    path('public/sites/<slug:slug>/view/', SiteViewCountView.as_view(), name='public-site-view'),
     path('ai/local/status/', LocalAiStatusView.as_view(), name='local-ai-status'),
     path('ai/local/proxy/', LocalAiProxyView.as_view(), name='local-ai-proxy'),
     path('', include(router.urls)),

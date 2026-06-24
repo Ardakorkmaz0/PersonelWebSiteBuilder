@@ -6,7 +6,9 @@ import { listSites, createSite, deleteSite } from '../api/sites.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
+import { useScrollRestore } from '../utils/useScrollRestore.js'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
+import { SearchIcon, CheckIcon } from '../components/icons.jsx'
 
 export default function ProfilePage() {
   const setUser = useAuthStore((s) => s.setUser)
@@ -44,6 +46,9 @@ export default function ProfilePage() {
   }, [])
 
   const visibleSites = useMemo(() => orderSites(sites, query), [sites, query])
+
+  // Land back where you left off after opening a site and returning.
+  useScrollRestore(!loading && !sitesLoading)
 
   async function refreshHeader() {
     try {
@@ -189,7 +194,7 @@ export default function ProfilePage() {
               <button type="submit" disabled={saving} className="ms-btn ms-btn-primary px-5">
                 {saving ? 'Saving…' : 'Save profile'}
               </button>
-              {saved && <span className="text-sm text-[#15803d]">Saved ✓</span>}
+              {saved && <span className="flex items-center gap-1 text-sm text-[#15803d]"><CheckIcon size={15} /> Saved</span>}
             </div>
           </form>
         )}
@@ -214,7 +219,7 @@ export default function ProfilePage() {
 
           {sites.length > 0 && (
             <div className="relative mb-5 max-w-sm">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]">🔍</span>
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]"><SearchIcon size={16} /></span>
               <input
                 className="ms-input w-full pl-9"
                 placeholder="Search your sites…"

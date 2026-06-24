@@ -4,6 +4,7 @@ import { cloneSite, reportSite } from '../../api/sites.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { apiError } from '../../utils/errors.js'
 import { schemaToSingleHtml } from '../../utils/schemaToFiles.js'
+import { CodeIcon, SparklesIcon, FlagIcon } from '../icons.jsx'
 
 const REPORT_REASONS = [
   ['spam', 'Spam or misleading'],
@@ -89,26 +90,26 @@ export default function PublicToolbar({ site }) {
           type="button"
           onClick={() => setShowCode(true)}
           title="View this site's source code"
-          className="rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
+          className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
         >
-          {'</> Code'}
+          <CodeIcon size={14} /> Code
         </button>
         <button
           type="button"
           onClick={onUse}
           disabled={cloning}
           title="Copy this site into your account and edit it"
-          className="rounded-lg bg-[#4f46e5] px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-[#4338ca] disabled:opacity-60"
+          className="flex items-center gap-1.5 rounded-lg bg-[#4f46e5] px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-[#4338ca] disabled:opacity-60"
         >
-          {cloning ? 'Copying…' : '✦ Use this'}
+          <SparklesIcon size={14} /> {cloning ? 'Copying…' : 'Use this'}
         </button>
         <button
           type="button"
           onClick={onOpenReport}
           title="Report this site"
-          className="rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#b91c1c] shadow-lg backdrop-blur hover:bg-white"
+          className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#b91c1c] shadow-lg backdrop-blur hover:bg-white"
         >
-          ⚑ Report
+          <FlagIcon size={14} /> Report
         </button>
       </div>
 

@@ -895,11 +895,15 @@ export default function EditorPage() {
         {(dirty || htmlDirty) && <span className="shrink-0 whitespace-nowrap text-xs text-amber-500">Unsaved changes</span>}
         {justSaved && <span className="shrink-0 whitespace-nowrap text-xs text-[#15803d]">Saved &#10003;</span>}
 
-        {/* Actions pinned to the right edge (ml-auto). On a wide screen they sit
-            on one row, right-aligned; on a narrow window they wrap (still
-            right-aligned) rather than getting clipped, so Save/Publish stay
-            visible. Compact gaps keep them on one row for as long as possible. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        {/* Flexible spacer: on a wide screen it expands to pin the toolbar to the
+            right edge; the moment the toolbar can't fit and wraps to a second
+            row, the spacer collapses so the toolbar starts at the LEFT instead
+            of being right-aligned with a big empty gap before it. */}
+        <div className="grow shrink basis-0" aria-hidden />
+
+        {/* Action toolbar. Wraps as a left-aligned block (see spacer above) so
+            Save/Publish stay visible without leaving an awkward gap. */}
+        <div className="flex flex-wrap items-center gap-1.5">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}

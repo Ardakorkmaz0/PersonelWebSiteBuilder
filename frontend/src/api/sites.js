@@ -19,6 +19,10 @@ export const cloneSite = (slug) =>
 export const getPublicSite = (slug) =>
   client.get(`/public/sites/${slug}/`).then((r) => r.data)
 
+// Record one real view. The GET above is side-effect-free; this is what counts.
+export const countSiteView = (slug) =>
+  client.post(`/public/sites/${slug}/view/`).then((r) => r.data)
+
 // Flag a published site for moderation (one report per user per site).
 export const reportSite = (siteId, reason, detail = '') =>
   client.post(`/sites/${siteId}/report/`, { reason, detail }).then((r) => r.data)

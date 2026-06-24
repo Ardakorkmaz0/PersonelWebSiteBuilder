@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore.js'
 import { pageFileName } from '../../utils/pageFiles.js'
+import { FileIcon, FileCodeIcon, FolderIcon, LinkIcon, LayersIcon } from '../icons.jsx'
 
 // VS Code-style file explorer, shared by BOTH editor modes: every page is a
 // "file", optionally grouped under collapsible folders (page.folder).
@@ -83,8 +84,8 @@ export default function PageFilesPanel({
         } ${active ? 'bg-[#eef2ff]' : 'hover:bg-[#f3f4f6]'}`}
       >
         {active && <span className="absolute bottom-1 left-0 top-1 w-0.5 rounded-full bg-[#4f46e5]" />}
-        <span className="shrink-0 text-[11px]" aria-hidden>
-          {hasHtml ? '📄' : '📃'}
+        <span className="shrink-0 text-[#6b7280]">
+          {hasHtml ? <FileCodeIcon size={14} /> : <FileIcon size={14} />}
         </span>
         {editingId === page.id ? (
           <input
@@ -176,8 +177,8 @@ export default function PageFilesPanel({
   return (
     <div>
       {linkArmed && (
-        <div className="mb-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2 py-1.5 text-[11px] font-medium text-[#1e40af]">
-          🔗 Click a page to link the selected element to it.
+        <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2 py-1.5 text-[11px] font-medium text-[#1e40af]">
+          <LinkIcon size={13} /> Click a page to link the selected element to it.
         </div>
       )}
       <div className="mb-2 flex items-center justify-between">
@@ -197,9 +198,9 @@ export default function PageFilesPanel({
             type="button"
             onClick={() => setAddPrompt({ folder: `Folder ${folderCount + 1}` })}
             title="New page inside a new folder"
-            className="rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+            className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
           >
-            + 📁
+            + <FolderIcon size={13} />
           </button>
         </span>
       </div>
@@ -230,7 +231,7 @@ export default function PageFilesPanel({
                 className="flex w-full items-center gap-1.5 rounded-md py-1 pl-1 pr-2 text-left text-[12.5px] font-semibold text-[#374151] hover:bg-[#f3f4f6]"
               >
                 <span className="w-3 text-[10px] text-[#9ca3af]">{isCollapsed ? '▸' : '▾'}</span>
-                <span aria-hidden>📁</span>
+                <FolderIcon size={14} className="text-[#6b7280]" />
                 <span className="min-w-0 truncate">{folder}</span>
                 <span className="ml-auto text-[10px] font-normal text-[#9ca3af]">{items.length}</span>
               </button>
@@ -265,7 +266,7 @@ export default function PageFilesPanel({
                 onClick={() => createPage('empty')}
                 className="flex flex-col items-start gap-1 rounded-lg border border-[#e5e7eb] bg-white p-3 text-left hover:border-[#4f46e5] hover:bg-[#eef2ff]"
               >
-                <span className="text-xl" aria-hidden>🧩</span>
+                <LayersIcon size={20} className="text-[#4f46e5]" />
                 <span className="text-sm font-semibold text-[#111827]">Empty canvas</span>
                 <span className="text-[11px] leading-snug text-[#6b7280]">
                   Drag-and-drop components on a blank canvas.
@@ -276,7 +277,7 @@ export default function PageFilesPanel({
                 onClick={() => createPage('html')}
                 className="flex flex-col items-start gap-1 rounded-lg border border-[#e5e7eb] bg-white p-3 text-left hover:border-[#4f46e5] hover:bg-[#eef2ff]"
               >
-                <span className="text-xl" aria-hidden>📄</span>
+                <FileCodeIcon size={20} className="text-[#4f46e5]" />
                 <span className="text-sm font-semibold text-[#111827]">HTML page</span>
                 <span className="text-[11px] leading-snug text-[#6b7280]">
                   Upload, paste, or author a full HTML document.

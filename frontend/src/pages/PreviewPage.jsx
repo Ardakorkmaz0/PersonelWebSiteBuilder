@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { getPublicSite } from '../api/sites.js'
+import { getPublicSite, countSiteView } from '../api/sites.js'
 import { Renderer } from '../components/renderer/Renderer.jsx'
 import { canvasHeight } from '../components/renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
@@ -138,6 +138,18 @@ export default function PreviewPage() {
       document.removeEventListener('visibilitychange', onBack)
       window.removeEventListener('focus', onBack)
     }
+  }, [slug])
+
+  // Count exactly ONE view per slug per browser tab session. The sessionStorage
+  // guard makes this idempotent against React StrictMode's double-effect, the
+  // focus/visibility refetches above, and plain refreshes — so a single visit
+  // is a single view (the backend also skips the owner's own views).
+  useEffect(() => {
+    if (!slug) return
+    const key = `pwb-viewed:${slug}`
+    if (sessionStorage.getItem(key)) return
+    sessionStorage.setItem(key, '1')
+    countSiteView(slug).catch(() => sessionStorage.removeItem(key))
   }, [slug])
 
   // Pick the visible page from the URL hash (#<pageId>) so links/anchors work.

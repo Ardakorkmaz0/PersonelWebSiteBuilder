@@ -1,13 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore.js'
 import { linkedFilesFor } from '../../utils/htmlFiles.js'
+import { FileIcon, FileCodeIcon, PaletteIcon, CogIcon, ImageIcon, FolderIcon, FolderOpenIcon, LinkIcon } from '../icons.jsx'
 
 // VS Code-style explorer for the local "Code project" editor: the real folder
 // tree, already filtered to web files by projectFs. A modified (unsaved) file
 // shows a green dot + green name, just like git status M. Click a file to open
 // it in the workspace.
 
-const KIND_ICON = { html: '📄', css: '🎨', js: '⚙️', asset: '🖼️' }
+function KindIcon({ kind, size = 14, className = '' }) {
+  const I = kind === 'css' ? PaletteIcon
+    : kind === 'js' ? CogIcon
+    : kind === 'asset' ? ImageIcon
+    : kind === 'html' ? FileCodeIcon
+    : FileIcon
+  return <I size={size} className={className} />
+}
 
 function TreeNode({ node, depth, activePath, dirty, onOpen, collapsed, toggle }) {
   if (node.type === 'file') {
@@ -23,8 +31,8 @@ function TreeNode({ node, depth, activePath, dirty, onOpen, collapsed, toggle })
           active ? 'bg-[#eef2ff]' : 'hover:bg-[#f3f4f6]'
         }`}
       >
-        <span className="shrink-0 text-[11px]" aria-hidden>
-          {KIND_ICON[node.kind] || '📄'}
+        <span className="shrink-0 text-[#6b7280]">
+          <KindIcon kind={node.kind} />
         </span>
         <span
           className={`min-w-0 flex-1 truncate ${
@@ -70,7 +78,7 @@ function TreeNode({ node, depth, activePath, dirty, onOpen, collapsed, toggle })
         className="flex w-full items-center gap-1 rounded-md py-1 pr-2 text-left text-[12.5px] font-semibold text-[#374151] hover:bg-[#f3f4f6]"
       >
         <span className="w-3 text-[10px] text-[#9ca3af]">{isCollapsed ? '▸' : '▾'}</span>
-        <span aria-hidden>📁</span>
+        <FolderIcon size={14} className="text-[#6b7280]" />
         <span className={`min-w-0 truncate ${folderDirty ? 'text-[#15803d]' : ''}`}>{node.name}</span>
       </button>
       {!isCollapsed &&
@@ -120,8 +128,8 @@ export default function ProjectFilesPanel() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-1.5 px-1">
-        <span aria-hidden>📂</span>
+      <div className="mb-2 flex items-center gap-1.5 px-1 text-[#374151]">
+        <FolderOpenIcon size={15} />
         <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-[#374151]">
           {rootName}
         </h2>
@@ -129,8 +137,8 @@ export default function ProjectFilesPanel() {
 
       {linked.length > 0 && (
         <div className="mb-3 rounded-lg border border-[#e5e7eb] bg-white p-1.5">
-          <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-            🔗 Linked by this page
+          <div className="flex items-center gap-1 px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+            <LinkIcon size={11} /> Linked by this page
           </div>
           {linked.map((path) => {
             const f = files.get(path)
@@ -146,8 +154,8 @@ export default function ProjectFilesPanel() {
                   active ? 'bg-[#eef2ff]' : 'hover:bg-[#f3f4f6]'
                 }`}
               >
-                <span className="shrink-0 text-[11px]" aria-hidden>
-                  {KIND_ICON[f?.kind] || '📄'}
+                <span className="shrink-0 text-[#6b7280]">
+                  <KindIcon kind={f?.kind} />
                 </span>
                 <span
                   className={`min-w-0 flex-1 truncate ${

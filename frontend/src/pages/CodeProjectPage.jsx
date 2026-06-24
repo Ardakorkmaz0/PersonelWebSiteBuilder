@@ -16,6 +16,7 @@ import { assemblePreviewHtml, needsBuildToRender } from '../utils/htmlFiles.js'
 import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ProjectFilesPanel from '../components/editor/ProjectFilesPanel.jsx'
+import { FolderOpenIcon, CogIcon } from '../components/icons.jsx'
 import HtmlWorkspace from '../components/editor/HtmlWorkspace.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import CodeFileEditor from '../components/editor/CodeFileEditor.jsx'
@@ -314,7 +315,7 @@ export default function CodeProjectPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f3f4f6] p-6">
         <div className="ms-card w-full max-w-md p-8 text-center">
-          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-2xl">📂</div>
+          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-[#4f46e5]"><FolderOpenIcon size={24} /></div>
           <h1 className="text-lg font-bold text-[#111827]">Open a local project</h1>
           <p className="mt-1 text-sm text-[#6b7280]">
             Pick a folder on your computer. Only its web files (HTML, CSS, JS,
@@ -362,7 +363,7 @@ export default function CodeProjectPage() {
           <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
           <span>&larr;</span>
         </Link>
-        <span className="shrink-0 truncate text-sm font-semibold text-[#111827]">📂 {rootName}</span>
+        <span className="flex shrink-0 items-center gap-1.5 truncate text-sm font-semibold text-[#111827]"><FolderOpenIcon size={15} className="text-[#6b7280]" /> {rootName}</span>
         <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-[#475569]">
           Code Project
         </span>
@@ -394,9 +395,9 @@ export default function CodeProjectPage() {
               onClick={runDetect}
               disabled={detecting}
               title="Detect this project's dev server and fill the URL"
-              className="shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
             >
-              {detecting ? '…' : '⚙ Detect'}
+              {detecting ? '…' : <><CogIcon size={13} /> Detect</>}
             </button>
             {detectOpen && (
               <>
@@ -548,15 +549,15 @@ export default function CodeProjectPage() {
             <strong>{projectInfo.framework || 'App'} project.</strong>{' '}
             Its pages are built/served at runtime, so the static <em>View</em> stays blank or partial —
             here <strong>/code is a code editor + live preview</strong>. To see the real page: start your
-            dev server, click <strong>⚙ Detect</strong> to fill the URL, then <strong>Open live window</strong>
+            dev server, click <strong>Detect</strong> to fill the URL, then <strong>Open live window</strong>
             {' '}(it auto-reloads every Save). Editing CSS/JS &amp; the template markup still works great.
           </div>
           <button
             type="button"
             onClick={runDetect}
-            className="shrink-0 rounded-lg border border-[#fbbf24] bg-white px-2 py-1 font-medium text-[#92400e] hover:bg-[#fef3c7]"
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-[#fbbf24] bg-white px-2 py-1 font-medium text-[#92400e] hover:bg-[#fef3c7]"
           >
-            ⚙ Detect
+            <CogIcon size={13} /> Detect
           </button>
           <button
             type="button"

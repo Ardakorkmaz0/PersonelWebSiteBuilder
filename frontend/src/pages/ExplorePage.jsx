@@ -4,7 +4,15 @@ import { createSite } from '../api/sites.js'
 import { listExplore, addFavorite, removeFavorite } from '../api/explore.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
+import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
+import { ShieldIcon, StarIcon, FolderOpenIcon, GlobeIcon } from '../components/icons.jsx'
+
+// Module-level cache of the last feed state ({category, items, page, hasMore}),
+// kept across mounts so navigating into a site and back restores the whole
+// loaded feed (every "Load more" page) — which also gives the page its full
+// height so scroll restoration can land where you left off.
+let feedCache = null
 
 function HeaderAvatar({ user, size = 28 }) {
   const letter = (user?.display_name || user?.username || '?').trim().charAt(0).toUpperCase()
@@ -34,10 +42,11 @@ const CATEGORIES = [
 ]
 
 export default function ExplorePage() {
-  const [category, setCategory] = useState('')
+  const [category, setCategory] = useState(feedCache?.category ?? '')
   // { category, items, page, hasMore } tags the loaded list with its filter so
-  // "loading" is derived — no synchronous setState in the fetch effect.
-  const [data, setData] = useState({ category: null, items: [], page: 1, hasMore: false })
+  // "loading" is derived — no synchronous setState in the fetch effect. Seeded
+  // from the module cache so a back-navigation restores the loaded feed instantly.
+  const [data, setData] = useState(feedCache ?? { category: null, items: [], page: 1, hasMore: false })
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
@@ -50,12 +59,20 @@ export default function ExplorePage() {
   const loading = data.category !== category && !error
 
   useEffect(() => {
+    // Skip the fetch when we already hold this category's feed (fresh from the
+    // module cache on a back-navigation) — refetching would wipe the extra
+    // "Load more" pages and reset the scroll height.
+    if (data.category === category) return undefined
     let alive = true
     listExplore({ category, page: 1 })
       .then((d) => alive && setData({ category, items: d.results, page: 1, hasMore: !!d.next }))
       .catch((e) => alive && setError(apiError(e)))
     return () => { alive = false }
-  }, [category])
+  }, [category, data.category])
+
+  // Persist the feed for the next mount, and restore scroll once items render.
+  useEffect(() => { feedCache = data }, [data])
+  useScrollRestore(items.length > 0)
 
   const selectCategory = (c) => {
     setError('')
@@ -132,7 +149,7 @@ export default function ExplorePage() {
                 title="Admin — moderation, users & reports"
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
               >
-                <span aria-hidden>🛡</span>
+                <ShieldIcon size={16} />
                 <span className="hidden sm:inline">Admin</span>
               </Link>
             )}
@@ -141,7 +158,7 @@ export default function ExplorePage() {
               title="Your favorites"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-[#374151] hover:bg-[#f3f4f6]"
             >
-              <span className="text-[#f59e0b]">★</span>
+              <StarIcon size={16} className="text-[#f59e0b]" filled />
               <span className="hidden sm:inline">Favorites</span>
             </Link>
             <Link
@@ -177,8 +194,8 @@ export default function ExplorePage() {
           <button type="submit" disabled={creating || !title.trim()} className="ms-btn ms-btn-primary whitespace-nowrap px-5">
             {creating ? 'Creating…' : '+ Create site'}
           </button>
-          <Link to="/code" className="ms-btn flex items-center whitespace-nowrap px-5">
-            📂 Open local project
+          <Link to="/code" className="ms-btn flex items-center gap-2 whitespace-nowrap px-5">
+            <FolderOpenIcon size={16} /> Open local project
           </Link>
         </form>
 
@@ -210,7 +227,7 @@ export default function ExplorePage() {
           <p className="text-sm text-[#6b7280]">Loading…</p>
         ) : items.length === 0 ? (
           <div className="ms-card border-dashed py-16 text-center">
-            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-2xl">🌐</div>
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-[#4f46e5]"><GlobeIcon size={24} /></div>
             <p className="font-medium text-[#374151]">Nothing here yet</p>
             <p className="mt-1 text-sm text-[#6b7280]">
               {category ? 'No published sites in this category.' : 'Publish a site to share it here.'}

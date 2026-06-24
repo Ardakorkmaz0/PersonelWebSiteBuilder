@@ -538,14 +538,36 @@ class PublicSiteView(APIView):
                 {'detail': 'Site not found or not published.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        # Count real external views (published, not the owner previewing their
-        # own) — F() so concurrent views don't clobber each other — then refresh
-        # the denormalised hot_score so the feed reflects the new view.
-        if site.published and not is_owner:
-            Site.objects.filter(pk=site.pk).update(view_count=F('view_count') + 1)
-            site.refresh_from_db(fields=['view_count'])
-            site.recompute_hot_score(save=True)
+        # NOTE: this GET is side-effect-free on purpose. View counting lives in
+        # SiteViewCountView (a POST) so that thumbnail fetches (the Explore feed
+        # renders each card via this same endpoint) and React StrictMode / tab-
+        # refocus refetches don't inflate the count. The real page calls the POST
+        # once per browser session.
         return Response(PublicSiteSerializer(site).data)
+
+
+class SiteViewCountView(APIView):
+    """Record ONE real view of a published site. Separate from the GET (which is
+    side-effect-free) so thumbnails and refetches never inflate the count — the
+    public page POSTs here once per browser session. Owner self-views and
+    unpublished sites don't count. AllowAny: a token, when sent, just lets us
+    skip the owner's own views."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, slug):
+        is_owner = request.user.is_authenticated
+        qs = Site.objects.filter(slug=slug, published=True)
+        if is_owner:
+            qs = qs.exclude(owner_id=request.user.id)
+        # F() so concurrent views don't clobber each other; update() touches the
+        # row only when it actually qualifies (published, not the owner).
+        updated = qs.update(view_count=F('view_count') + 1)
+        if not updated:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        site = Site.objects.get(slug=slug)
+        site.recompute_hot_score(save=True)
+        return Response({'view_count': site.view_count})
 
 
 class ExplorePagination(PageNumberPagination):

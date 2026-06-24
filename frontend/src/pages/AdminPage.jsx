@@ -8,6 +8,7 @@ import {
   moderateSite,
 } from '../api/admin.js'
 import { apiError } from '../utils/errors.js'
+import { FlagIcon, EyeIcon, CheckIcon } from '../components/icons.jsx'
 
 function Avatar({ url, name, size = 36 }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -182,8 +183,8 @@ function UsersTab() {
                           <div className="flex items-center gap-2 font-medium text-[#111827]">
                             {s.title}
                             {s.open_report_count > 0 && (
-                              <span className="rounded-full bg-[#fee2e2] px-1.5 py-0.5 text-[10px] font-bold text-[#b91c1c]">
-                                ⚑ {s.open_report_count}
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#fee2e2] px-1.5 py-0.5 text-[10px] font-bold text-[#b91c1c]">
+                                <FlagIcon size={11} /> {s.open_report_count}
                               </span>
                             )}
                           </div>
@@ -198,7 +199,7 @@ function UsersTab() {
                             {s.published ? 'Published' : 'Draft'}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-xs text-[#9ca3af]">👁 {s.view_count}</td>
+                        <td className="px-3 py-2 text-xs text-[#9ca3af]"><span className="inline-flex items-center gap-1"><EyeIcon size={13} /> {s.view_count}</span></td>
                         <td className="px-3 py-2 text-right text-xs">
                           <div className="flex items-center justify-end gap-2">
                             {s.published && (
@@ -318,7 +319,7 @@ function ReportsTab() {
         <p className="text-sm text-[#6b7280]">Loading…</p>
       ) : rows.length === 0 ? (
         <div className="ms-card border-dashed py-16 text-center">
-          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#dcfce7] text-2xl">✓</div>
+          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#dcfce7] text-[#15803d]"><CheckIcon size={24} /></div>
           <p className="font-medium text-[#374151]">No {statusFilter === 'all' ? '' : statusFilter} reports</p>
           <p className="mt-1 text-sm text-[#6b7280]">The moderation queue is clear.</p>
         </div>

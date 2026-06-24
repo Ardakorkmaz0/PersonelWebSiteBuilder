@@ -128,19 +128,39 @@ class TestFavorites:
 
 @pytest.mark.django_db
 class TestViewCount:
-    def test_public_view_increments_for_non_owner(self, client, alice, bob):
+    def test_get_is_side_effect_free(self, client, alice, bob):
+        # The plain GET must NOT count — thumbnails + StrictMode/refocus refetch
+        # it, so counting here would inflate. Counting is the POST below.
         a, _ = alice
         _, btok = bob
         s = _site(a, 'Watched', published=True)
         _auth(client, btok)
         client.get(f'/api/public/sites/{s.slug}/')
         s.refresh_from_db()
+        assert s.view_count == 0
+
+    def test_view_post_increments_for_non_owner(self, client, alice, bob):
+        a, _ = alice
+        _, btok = bob
+        s = _site(a, 'Watched', published=True)
+        _auth(client, btok)
+        resp = client.post(f'/api/public/sites/{s.slug}/view/')
+        assert resp.status_code == 200 and resp.data['view_count'] == 1
+        s.refresh_from_db()
         assert s.view_count == 1
 
-    def test_owner_preview_does_not_increment(self, client, alice):
+    def test_view_post_does_not_count_owner(self, client, alice):
         a, atok = alice
         s = _site(a, 'Mine', published=True)
         _auth(client, atok)
-        client.get(f'/api/public/sites/{s.slug}/')
+        resp = client.post(f'/api/public/sites/{s.slug}/view/')
+        assert resp.status_code == 204
         s.refresh_from_db()
         assert s.view_count == 0
+
+    def test_view_post_anonymous_counts(self, client, alice):
+        a, _ = alice
+        s = _site(a, 'Pub', published=True)
+        client.post(f'/api/public/sites/{s.slug}/view/')
+        s.refresh_from_db()
+        assert s.view_count == 1

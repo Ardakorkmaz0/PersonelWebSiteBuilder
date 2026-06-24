@@ -83,6 +83,11 @@ function cssEscape(value) {
   return String(value).replace(/["\\]/g, '\\$&')
 }
 
+// Explore discovery categories (must match Site.CATEGORY_CHOICES on the server).
+const DISCOVERY_CATEGORIES = [
+  'portfolio', 'business', 'blog', 'landing', 'shop', 'personal', 'other',
+]
+
 // Slim vertical strip shown in place of a collapsed side rail — click to
 // reopen. Keeps a visible affordance so the panel never feels "lost".
 function CollapsedRail({ side, label, onOpen }) {
@@ -145,6 +150,9 @@ export default function EditorPage() {
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [published, setPublished] = useState(false)
+  // Discovery metadata (Explore category chips + free tags).
+  const [category, setCategory] = useState('other')
+  const [tags, setTags] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -313,6 +321,8 @@ export default function EditorPage() {
         setTitle(data.title)
         setSlug(data.slug)
         setPublished(data.published)
+        setCategory(data.category || 'other')
+        setTags(Array.isArray(data.tags) ? data.tags : [])
         // Per-page HTML from the schema; legacy single-document sites carry
         // their html at the site level — map it onto the first page.
         const map = {}
@@ -614,7 +624,7 @@ export default function EditorPage() {
           fileError = e?.message || String(e)
         }
       }
-      const data = await updateSite(id, { title: safeTitle, schema, html, published: nextPublished })
+      const data = await updateSite(id, { title: safeTitle, schema, html, published: nextPublished, category, tags })
       setPublished(data.published)
       setSlug(data.slug)
       setHtmlDirty(false)
@@ -861,6 +871,27 @@ export default function EditorPage() {
         >
           {currentPageIsHtml ? 'HTML Upload Mode' : 'Empty Mode'}
         </span>
+        {/* Discovery metadata for the Explore feed — category chip + free tags.
+            Used once the site is published; saved with the site. */}
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          title="Explore category (used when published)"
+          className="shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium capitalize text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+        >
+          {DISCOVERY_CATEGORIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <input
+          value={tags.join(', ')}
+          onChange={(e) =>
+            setTags(e.target.value.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 8))
+          }
+          placeholder="tags…"
+          title="Comma-separated tags for discovery"
+          className="w-28 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+        />
         {(dirty || htmlDirty) && <span className="shrink-0 whitespace-nowrap text-xs text-amber-500">Unsaved changes</span>}
         {justSaved && <span className="shrink-0 whitespace-nowrap text-xs text-[#15803d]">Saved &#10003;</span>}
 

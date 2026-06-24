@@ -108,8 +108,8 @@ class ExploreSiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'owner_username', 'owner_display_name',
-                  'owner_avatar_url', 'view_count', 'favorite_count',
-                  'is_favorited', 'updated_at')
+                  'owner_avatar_url', 'category', 'tags', 'view_count',
+                  'favorite_count', 'is_favorited', 'updated_at')
 
     def _profile(self, obj):
         return getattr(obj.owner, 'profile', None)
@@ -138,7 +138,7 @@ class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'schema', 'html', 'published',
-                  'view_count', 'created_at', 'updated_at')
+                  'category', 'tags', 'view_count', 'created_at', 'updated_at')
         read_only_fields = ('id', 'slug', 'view_count', 'created_at', 'updated_at')
 
     def validate_schema(self, value):

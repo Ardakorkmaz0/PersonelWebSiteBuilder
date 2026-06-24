@@ -6,6 +6,8 @@ from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import action
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -13,7 +15,6 @@ from rest_framework.views import APIView
 
 from django.db import transaction
 from django.db.models import Count, F
-from django.utils import timezone
 
 from .models import Favorite, Profile, Site, SiteVersion, UploadedImage
 from .serializers import (
@@ -332,41 +333,46 @@ class PublicSiteView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         # Count real external views (published, not the owner previewing their
-        # own) — F() so concurrent views don't clobber each other.
+        # own) — F() so concurrent views don't clobber each other — then refresh
+        # the denormalised hot_score so the feed reflects the new view.
         if site.published and not is_owner:
             Site.objects.filter(pk=site.pk).update(view_count=F('view_count') + 1)
+            site.refresh_from_db(fields=['view_count'])
+            site.recompute_hot_score(save=True)
         return Response(PublicSiteSerializer(site).data)
 
 
-class ExploreView(APIView):
-    """The Discover feed: every user's PUBLISHED sites, ranked. ?sort=top
-    (all-time popularity) or trending (popularity decayed by age, the default).
-    Anonymous-readable; a token just fills in is_favorited."""
+class ExplorePagination(PageNumberPagination):
+    page_size = 24
+    page_size_query_param = 'page_size'
+    max_page_size = 60
+
+
+class ExploreView(ListAPIView):
+    """The Discover feed: every user's PUBLISHED sites, one ranking — the
+    indexed `hot_score` (popularity + recency) — paginated. ?category=<slug>
+    narrows to a category. Anonymous-readable; a token fills in is_favorited."""
 
     permission_classes = [AllowAny]
+    serializer_class = ExploreSiteSerializer
+    pagination_class = ExplorePagination
 
-    def get(self, request):
-        sort = request.GET.get('sort', 'trending')
-        sites = list(
+    def get_queryset(self):
+        qs = (
             Site.objects.filter(published=True)
             .select_related('owner', 'owner__profile')
             .annotate(favorite_count=Count('favorited_by'))
+            .order_by('-hot_score', '-updated_at')
         )
+        category = self.request.GET.get('category')
+        if category:
+            qs = qs.filter(category=category)
+        return qs
 
-        def popularity(s):
-            return s.view_count + 5 * s.favorite_count
-
-        if sort == 'top':
-            sites.sort(key=lambda s: (popularity(s), s.updated_at), reverse=True)
-        else:
-            now = timezone.now()
-
-            def trending(s):
-                age_h = max(0.0, (now - s.updated_at).total_seconds() / 3600.0)
-                return (popularity(s) + 1) / ((age_h + 2) ** 1.5)
-
-            sites.sort(key=trending, reverse=True)
-        return _explore_response(sites[:60], request)
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['favorited_ids'] = _favorited_ids(self.request.user)
+        return ctx
 
 
 class FavoritesView(APIView):
@@ -409,8 +415,12 @@ class FavoriteToggleView(APIView):
         if site is None:
             return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
         Favorite.objects.get_or_create(user=request.user, site=site)
+        site.recompute_hot_score(save=True)
         return Response({'favorited': True}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, site_id):
         Favorite.objects.filter(user=request.user, site_id=site_id).delete()
+        site = Site.objects.filter(pk=site_id).first()
+        if site:
+            site.recompute_hot_score(save=True)
         return Response({'favorited': False})

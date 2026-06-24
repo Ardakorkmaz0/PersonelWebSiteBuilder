@@ -1,3 +1,5 @@
+import math
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import models
@@ -47,6 +49,18 @@ def default_schema():
 
 
 class Site(models.Model):
+    # YouTube-style discovery categories the creator picks; drives the Explore
+    # filter chips.
+    CATEGORY_CHOICES = [
+        ('portfolio', 'Portfolio'),
+        ('business', 'Business'),
+        ('blog', 'Blog'),
+        ('landing', 'Landing'),
+        ('shop', 'Shop'),
+        ('personal', 'Personal'),
+        ('other', 'Other'),
+    ]
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -59,21 +73,41 @@ class Site(models.Model):
     # iframe so their JavaScript runs isolated from the app/visitor session).
     html = models.TextField(blank=True, default='')
     published = models.BooleanField(default=False)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    tags = models.JSONField(default=list, blank=True)
     # How many times the public /site/<slug> page has been viewed (by anyone
-    # other than the owner). Drives the Explore "Top"/"Trending" ranking.
+    # other than the owner).
     view_count = models.PositiveIntegerField(default=0)
+    # Denormalised "hot" rank for the Explore feed — recomputed on the events
+    # that change it (save / view / favorite) so the feed read is a single
+    # indexed, paginated ORDER BY (scales). See recompute_hot_score().
+    hot_score = models.FloatField(default=0.0, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-updated_at']
+        indexes = [models.Index(fields=['published', '-hot_score'])]
 
     def __str__(self):
         return f'{self.title} ({self.slug})'
 
+    def recompute_hot_score(self, save=False):
+        """Reddit/HN-style hot score that's ABSOLUTE-time (no "now" at query
+        time), so ranking is a plain indexed ORDER BY: popularity on a log scale
+        + a creation-time term that lets newer sites surface. Cheap O(1)."""
+        fav = self.favorited_by.count() if self.pk else 0
+        popularity = (self.view_count or 0) + 5 * fav
+        created = self.created_at or timezone.now()
+        self.hot_score = math.log10(max(popularity, 1)) + created.timestamp() / 45000.0
+        if save and self.pk:
+            Site.objects.filter(pk=self.pk).update(hot_score=self.hot_score)
+        return self.hot_score
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = self._generate_unique_slug()
+        self.recompute_hot_score()
         super().save(*args, **kwargs)
 
     def _generate_unique_slug(self):

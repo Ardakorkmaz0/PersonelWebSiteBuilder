@@ -28,8 +28,10 @@ def _auth(client, token):
     client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
 
 
-def _site(owner, title, published=True, views=0):
-    return Site.objects.create(owner=owner, title=title, published=published, view_count=views)
+def _site(owner, title, published=True, views=0, category='other'):
+    return Site.objects.create(
+        owner=owner, title=title, published=published, view_count=views, category=category,
+    )
 
 
 @pytest.mark.django_db
@@ -43,19 +45,32 @@ class TestExplore:
 
         resp = client.get('/api/explore/')
         assert resp.status_code == 200
-        titles = {s['title'] for s in resp.data}
+        titles = {s['title'] for s in resp.data['results']}  # paginated
         assert titles == {'Alice Public', 'Bob Public'}  # no drafts
 
-    def test_top_sort_ranks_by_views_plus_favorites(self, client, alice, bob):
+    def test_ranked_by_hot_score(self, client, alice):
         a, _ = alice
-        b, btok = bob
-        low = _site(a, 'Low', views=1)
-        high = _site(a, 'High', views=50)
-        # give Low 1 favorite (×5) — still below High's 50 views
-        Favorite.objects.create(user=b, site=low)
-        resp = client.get('/api/explore/?sort=top')
-        order = [s['title'] for s in resp.data]
+        _site(a, 'Low', views=1)
+        _site(a, 'High', views=50)  # more views → higher hot_score → first
+        order = [s['title'] for s in client.get('/api/explore/').data['results']]
         assert order.index('High') < order.index('Low')
+
+    def test_category_filter(self, client, alice):
+        a, _ = alice
+        _site(a, 'Shop One', category='shop')
+        _site(a, 'Blog One', category='blog')
+        resp = client.get('/api/explore/?category=shop')
+        titles = [s['title'] for s in resp.data['results']]
+        assert titles == ['Shop One']
+
+    def test_paginated(self, client, alice):
+        a, _ = alice
+        for i in range(30):
+            _site(a, f'S{i}')
+        resp = client.get('/api/explore/')
+        assert resp.data['count'] == 30
+        assert len(resp.data['results']) == 24  # page size
+        assert resp.data['next']
 
     def test_card_carries_owner_and_counts(self, client, alice, bob):
         a, _ = alice
@@ -63,10 +78,11 @@ class TestExplore:
         s = _site(a, 'Owned', views=7)
         Favorite.objects.create(user=b, site=s)
         resp = client.get('/api/explore/')
-        card = next(c for c in resp.data if c['title'] == 'Owned')
+        card = next(c for c in resp.data['results'] if c['title'] == 'Owned')
         assert card['owner_username'] == 'alice'
         assert card['view_count'] == 7
         assert card['favorite_count'] == 1
+        assert card['category'] == 'other'
         assert card['is_favorited'] is False  # anonymous
 
 

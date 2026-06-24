@@ -1,8 +1,11 @@
 import client from './client.js'
 
-// The Discover feed of everyone's published sites. sort = 'trending' | 'top'.
-export const listExplore = (sort = 'trending') =>
-  client.get('/explore/', { params: { sort } }).then((r) => r.data)
+// The Discover feed of everyone's published sites — one ranked, paginated feed.
+// Returns { count, next, previous, results }. `category` narrows the feed.
+export const listExplore = ({ category = '', page = 1 } = {}) =>
+  client
+    .get('/explore/', { params: { category: category || undefined, page } })
+    .then((r) => r.data)
 
 // The current user's favorited sites (Favorites tab).
 export const listFavorites = () => client.get('/favorites/').then((r) => r.data)

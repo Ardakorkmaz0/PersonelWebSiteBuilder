@@ -2,6 +2,7 @@ import math
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -319,3 +320,54 @@ def _ensure_profile(sender, instance, created, **kwargs):
     """Give every new user a Profile so the endpoint never 404s."""
     if created:
         Profile.objects.get_or_create(user=instance)
+
+
+class SiteSettings(models.Model):
+    """Singleton (always pk=1) of the runtime-configurable feature settings the
+    superadmin edits from the in-app Settings page instead of redeploying env
+    vars. Precedence at read time is DB value (if set) → env var → default, so a
+    blank field here falls back to whatever the environment provides.
+
+    SECURITY: this row stores secrets (reCAPTCHA secret, SMTP password). Access is
+    restricted to superusers and the API never returns the secret values (it only
+    reports whether each is set). Boot-time infra (SECRET_KEY, DATABASE_URL,
+    ALLOWED_HOSTS, DEBUG) intentionally stays in env — it can't live in the DB the
+    app connects to."""
+
+    CACHE_KEY = 'pwb_site_settings'
+
+    # Public feature keys (safe to expose to the SPA).
+    google_oauth_client_id = models.CharField(max_length=255, blank=True, default='')
+    recaptcha_site_key = models.CharField(max_length=255, blank=True, default='')
+    # Secrets (never returned by the API).
+    recaptcha_secret_key = models.CharField(max_length=255, blank=True, default='')
+    email_host_password = models.CharField(max_length=255, blank=True, default='')
+    # Email (SMTP) — powers the password-reset mail.
+    email_host = models.CharField(max_length=255, blank=True, default='')
+    email_port = models.PositiveIntegerField(default=587)
+    email_host_user = models.CharField(max_length=255, blank=True, default='')
+    email_use_tls = models.BooleanField(default=True)
+    default_from_email = models.CharField(max_length=255, blank=True, default='')
+    # Where the SPA lives — used to build the password-reset link.
+    frontend_url = models.CharField(max_length=255, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Site settings'
+        verbose_name_plural = 'Site settings'
+
+    def __str__(self):
+        return 'Site settings'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # enforce singleton
+        super().save(*args, **kwargs)
+        cache.delete(self.CACHE_KEY)
+
+    @classmethod
+    def load(cls):
+        obj = cache.get(cls.CACHE_KEY)
+        if obj is None:
+            obj, _ = cls.objects.get_or_create(pk=1)
+            cache.set(cls.CACHE_KEY, obj, 60)
+        return obj

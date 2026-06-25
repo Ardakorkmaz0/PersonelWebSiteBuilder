@@ -65,11 +65,27 @@ turns on automatically when `DJANGO_DEBUG=False`. See **[DEPLOY.md](DEPLOY.md)**
 for the launch checklist (secrets, hosts, TLS, Redis for shared throttling) and
 the deferred items (email password-reset, S3 media, JWT) with how to wire each.
 
-## Optional: Google sign-in, reCAPTCHA & Admin
+## Settings page (no env edits needed)
+
+A **superuser** can configure Google sign-in, reCAPTCHA, email/SMTP and the
+frontend URL from inside the app — **Admin → Settings** (`/admin/settings`) — with
+no env edits or restart. Saved values take effect immediately. Each field is
+**optional and falls back to the matching env var** when left blank, so the
+env-based setup below still works and you can mix the two. Secrets (reCAPTCHA
+secret, SMTP password) are write-only: the page shows whether each is configured
+but never displays the stored value, and saving with the field blank keeps it.
+
+> Infrastructure that must exist before the app boots — `DJANGO_SECRET_KEY`,
+> `DATABASE_URL`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_DEBUG` — stays in env by design
+> (it can't live in the database the app connects to). Grant superuser with
+> `python manage.py createsuperuser` (or `is_superuser=True`).
+
+## Optional: Google sign-in, reCAPTCHA & Admin (env method)
 
 Google sign-in and the "I'm not a robot" check are **env-gated**: with no keys the
 app runs exactly as before (the Google button and the captcha simply don't show).
-Add the keys below to turn each on, then restart both servers.
+Add the keys below to turn each on, then restart both servers. (Or just use the
+**Settings page** above — same effect, no restart.)
 
 ### Google sign-in
 

@@ -6,8 +6,9 @@ import { apiError } from '../utils/errors.js'
 import { passwordStrength } from '../utils/passwordStrength.js'
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
 import Recaptcha from '../components/auth/Recaptcha.jsx'
+import { usePublicConfig } from '../utils/usePublicConfig.js'
 
-const RECAPTCHA_ON = !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
+const ENV_RECAPTCHA = !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
 
 export default function RegisterPage() {
   const [username, setUsername] = useState('')
@@ -18,12 +19,15 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
+  const cfg = usePublicConfig()
+  // reCAPTCHA is required when a site key is configured (runtime or env).
+  const recaptchaOn = !!(cfg?.recaptcha_site_key || ENV_RECAPTCHA)
 
   const strength = passwordStrength(password)
 
   async function onSubmit(e) {
     e.preventDefault()
-    if (RECAPTCHA_ON && !captcha) {
+    if (recaptchaOn && !captcha) {
       setError('Please confirm you are not a robot.')
       return
     }

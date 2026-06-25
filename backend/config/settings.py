@@ -144,6 +144,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # verification) so the app runs fine without any external setup.
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '').strip()
 RECAPTCHA_SECRET_KEY = os.getenv('RECAPTCHA_SECRET_KEY', '').strip()
+# Public reCAPTCHA site key — env fallback for the runtime SiteSettings value
+# (served to the SPA via /api/public/config/). Safe to expose.
+RECAPTCHA_SITE_KEY = os.getenv('RECAPTCHA_SITE_KEY', '').strip()
 
 # Email — used by the password-reset flow. Env-gated: set EMAIL_HOST (any SMTP:
 # Gmail app password, SendGrid, SES…) to send real mail. With no host, dev prints

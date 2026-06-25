@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
+import { usePublicConfig } from '../../utils/usePublicConfig.js'
 
-// Env-gated "I'm not a robot" (reCAPTCHA v2 checkbox). Renders NOTHING unless
-// VITE_RECAPTCHA_SITE_KEY is set, so registration works without any reCAPTCHA
-// setup; with the key the checkbox appears and yields a token for the server.
-const SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY
+// "I'm not a robot" (reCAPTCHA v2 checkbox). The site key comes from the runtime
+// SiteSettings (/api/public/config/) so a superadmin can enable it from the
+// Settings page; VITE_RECAPTCHA_SITE_KEY stays as a fallback. Renders NOTHING
+// until a site key is available, so registration works without it.
+const ENV_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || ''
 
 let scriptPromise = null
 function loadRecaptcha() {
@@ -23,11 +25,13 @@ function loadRecaptcha() {
 
 export default function Recaptcha({ onChange }) {
   const ref = useRef(null)
+  const cfg = usePublicConfig()
+  const siteKey = (cfg?.recaptcha_site_key || ENV_SITE_KEY) || ''
   const cbRef = useRef(onChange)
   useEffect(() => { cbRef.current = onChange })
 
   useEffect(() => {
-    if (!SITE_KEY) return undefined
+    if (!siteKey) return undefined
     let alive = true
     loadRecaptcha()
       .then(() => {
@@ -35,7 +39,7 @@ export default function Recaptcha({ onChange }) {
         window.grecaptcha.ready(() => {
           if (!alive || ref.current.childNodes.length) return
           window.grecaptcha.render(ref.current, {
-            sitekey: SITE_KEY,
+            sitekey: siteKey,
             callback: (token) => cbRef.current?.(token),
             'expired-callback': () => cbRef.current?.(''),
           })
@@ -43,8 +47,8 @@ export default function Recaptcha({ onChange }) {
       })
       .catch(() => {})
     return () => { alive = false }
-  }, [])
+  }, [siteKey])
 
-  if (!SITE_KEY) return null
+  if (!siteKey) return null
   return <div ref={ref} className="flex justify-center" />
 }

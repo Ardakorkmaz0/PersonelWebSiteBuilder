@@ -20,3 +20,10 @@ export const suspendUser = (userId, suspend) =>
 // Take down a site: 'unpublish' (reversible) or 'delete' (hard).
 export const moderateSite = (siteId, action) =>
   client.post(`/admin/sites/${siteId}/moderate/`, { action }).then((r) => r.data)
+
+// Runtime SiteSettings (superuser-only). GET masks secrets (returns *_set
+// booleans); PUT — blank secret fields keep the stored value.
+export const getSettings = () => client.get('/admin/settings/').then((r) => r.data)
+
+export const updateSettings = (payload) =>
+  client.put('/admin/settings/', payload).then((r) => r.data)

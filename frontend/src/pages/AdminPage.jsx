@@ -8,7 +8,8 @@ import {
   moderateSite,
 } from '../api/admin.js'
 import { apiError } from '../utils/errors.js'
-import { FlagIcon, EyeIcon, CheckIcon } from '../components/icons.jsx'
+import { useAuthStore } from '../store/authStore.js'
+import { FlagIcon, EyeIcon, CheckIcon, CogIcon } from '../components/icons.jsx'
 
 function Avatar({ url, name, size = 36 }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -389,6 +390,7 @@ function ReportsTab() {
 // ---------------------------------------------------------------------------
 export default function AdminPage() {
   const [tab, setTab] = useState('users')
+  const isSuperuser = useAuthStore((s) => s.user?.is_superuser)
 
   return (
     <div className="min-h-screen bg-[#f7f8fa]">
@@ -398,9 +400,20 @@ export default function AdminPage() {
             <span className="brand-mark">S</span>
             <span className="text-sm font-medium">&larr; Explore</span>
           </Link>
-          <span className="rounded-full bg-[#111827] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
-            Admin
-          </span>
+          <div className="flex items-center gap-3">
+            {isSuperuser && (
+              <Link
+                to="/admin/settings"
+                title="Server settings (Google, reCAPTCHA, email)"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+              >
+                <CogIcon size={15} /> Settings
+              </Link>
+            )}
+            <span className="rounded-full bg-[#111827] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+              Admin
+            </span>
+          </div>
         </div>
       </header>
 

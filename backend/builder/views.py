@@ -28,7 +28,8 @@ from rest_framework.views import APIView
 from django.db import transaction
 from django.db.models import Count, F
 
-from .models import Favorite, Profile, Report, Site, SiteVersion, UploadedImage
+from . import runtime_config
+from .models import Favorite, Profile, Report, Site, SiteSettings, SiteVersion, UploadedImage
 from .serializers import (
     AdminReportSerializer,
     AdminUserSerializer,
@@ -38,6 +39,7 @@ from .serializers import (
     RegisterSerializer,
     ReportSerializer,
     SiteListSerializer,
+    SiteSettingsSerializer,
     SiteSerializer,
     SiteVersionSerializer,
     UploadedImageSerializer,
@@ -62,7 +64,7 @@ def _verify_recaptcha(token):
     """Env-gated 'I'm not a robot' check. When RECAPTCHA_SECRET_KEY is unset the
     check is disabled (returns True). Otherwise verifies the v2 token with
     Google; a missing/failed token returns False."""
-    secret = settings.RECAPTCHA_SECRET_KEY
+    secret = runtime_config.recaptcha_secret_key()
     if not secret:
         return True
     if not token:
@@ -131,7 +133,7 @@ class GoogleLoginView(APIView):
     throttle_scope = 'auth'
 
     def post(self, request):
-        client_id = settings.GOOGLE_OAUTH_CLIENT_ID
+        client_id = runtime_config.google_client_id()
         if not client_id:
             return Response(
                 {'detail': 'Google sign-in is not configured.'},
@@ -225,7 +227,7 @@ class PasswordResetRequestView(APIView):
     def _send_reset_email(self, user):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        link = f'{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}'
+        link = f'{runtime_config.frontend_url()}/reset-password?uid={uid}&token={token}'
         send_mail(
             subject='Reset your Sitebuilder password',
             message=(
@@ -235,8 +237,11 @@ class PasswordResetRequestView(APIView):
                 f'days and can be used once):\n\n{link}\n\n'
                 "If you didn't request this, you can ignore this email."
             ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=runtime_config.default_from_email(),
             recipient_list=[user.email],
+            # Use the SMTP connection from the runtime settings when configured;
+            # None → Django's default backend (console in dev).
+            connection=runtime_config.email_connection(),
             fail_silently=True,
         )
 
@@ -570,6 +575,21 @@ class SiteViewCountView(APIView):
         return Response({'view_count': site.view_count})
 
 
+class PublicConfigView(APIView):
+    """Runtime public config for the SPA — the PUBLIC feature keys only (Google
+    client id, reCAPTCHA site key). The frontend reads this instead of build-time
+    env so the superadmin can flip features on from the Settings page without a
+    rebuild. No secrets here."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            'google_client_id': runtime_config.google_client_id(),
+            'recaptcha_site_key': runtime_config.recaptcha_site_key(),
+        })
+
+
 class ExplorePagination(PageNumberPagination):
     page_size = 24
     page_size_query_param = 'page_size'
@@ -706,6 +726,31 @@ class ReportSiteView(APIView):
             },
         )
         return Response({'detail': 'Thanks — our team will review this site.'}, status=status.HTTP_201_CREATED)
+
+
+class IsSuperUser(IsAdminUser):
+    """Stricter than IsAdminUser (is_staff): the runtime Settings page edits
+    secrets, so it's gated to superusers only."""
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_superuser)
+
+
+class AdminSettingsView(APIView):
+    """Read / update the runtime SiteSettings (Google, reCAPTCHA, SMTP, frontend
+    URL). Superuser-only; secrets are masked on read (see SiteSettingsSerializer)."""
+
+    permission_classes = [IsSuperUser]
+
+    def get(self, request):
+        return Response(SiteSettingsSerializer(SiteSettings.load()).data)
+
+    def put(self, request):
+        instance = SiteSettings.load()
+        serializer = SiteSettingsSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(SiteSettingsSerializer(SiteSettings.load()).data)
 
 
 class AdminPagination(PageNumberPagination):

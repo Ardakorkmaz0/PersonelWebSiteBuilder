@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import Profile, Report, Site, SiteVersion, UploadedImage
+from .models import Profile, Report, Site, SiteSettings, SiteVersion, UploadedImage
 from .validators import validate_and_clean_schema
 
 
@@ -76,8 +76,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        # `is_staff` lets the frontend show the Admin link to admins.
-        fields = ('id', 'username', 'avatar_url', 'display_name', 'is_staff')
+        # `is_staff` shows the Admin link; `is_superuser` shows the Settings link.
+        fields = ('id', 'username', 'avatar_url', 'display_name', 'is_staff', 'is_superuser')
 
     def get_avatar_url(self, obj):
         prof = getattr(obj, 'profile', None)
@@ -153,6 +153,47 @@ class AdminReportSerializer(serializers.ModelSerializer):
 
     def get_reporter_username(self, obj):
         return obj.reporter.username if obj.reporter else '(deleted)'
+
+
+class SiteSettingsSerializer(serializers.ModelSerializer):
+    """Superadmin-editable runtime settings. Secrets (reCAPTCHA secret, SMTP
+    password) are WRITE-ONLY — the API never returns them; instead it reports a
+    boolean `*_set` so the UI can show "configured" without leaking the value. On
+    update, a blank/omitted secret keeps the stored one (so saving the form
+    doesn't wipe a secret you didn't retype)."""
+
+    recaptcha_secret_key = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, trim_whitespace=False,
+    )
+    email_host_password = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, trim_whitespace=False,
+    )
+    recaptcha_secret_set = serializers.SerializerMethodField()
+    email_password_set = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SiteSettings
+        fields = (
+            'google_oauth_client_id', 'recaptcha_site_key', 'recaptcha_secret_key',
+            'email_host', 'email_port', 'email_host_user', 'email_host_password',
+            'email_use_tls', 'default_from_email', 'frontend_url',
+            'recaptcha_secret_set', 'email_password_set', 'updated_at',
+        )
+        read_only_fields = ('updated_at',)
+
+    def get_recaptcha_secret_set(self, obj):
+        return bool(obj.recaptcha_secret_key)
+
+    def get_email_password_set(self, obj):
+        return bool(obj.email_host_password)
+
+    def update(self, instance, validated_data):
+        # A blank/omitted secret means "leave it as-is" — never overwrite a stored
+        # secret with an empty string just because the form didn't resend it.
+        for secret in ('recaptcha_secret_key', 'email_host_password'):
+            if not (validated_data.get(secret) or '').strip():
+                validated_data.pop(secret, None)
+        return super().update(instance, validated_data)
 
 
 class ProfileSerializer(serializers.ModelSerializer):

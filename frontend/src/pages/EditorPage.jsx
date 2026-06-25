@@ -19,7 +19,7 @@ import {
 import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
-import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon } from '../components/icons.jsx'
+import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon, CogIcon, ClockIcon } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
@@ -165,6 +165,7 @@ export default function EditorPage() {
   const [templateOpen, setTemplateOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
   // HTML mode device frame (selector lives in the shared header).
   const [htmlDevice, setHtmlDevice] = useState('fit')
   const [htmlLandscape, setHtmlLandscape] = useState(false)
@@ -478,7 +479,7 @@ export default function EditorPage() {
         x = translated.left - rect.left
         y = translated.top - rect.top
       }
-      addComponent(data.type, x, y, over.id)
+      addComponent(data.type, x, y, over.id, data.preset)
       return
     }
 
@@ -491,7 +492,7 @@ export default function EditorPage() {
       x = translated.left - rect.left
       y = translated.top - rect.top
     }
-    addComponent(data.type, x, y)
+    addComponent(data.type, x, y, null, data.preset)
   }
 
   const HTML_HISTORY_CAP = 50
@@ -1203,35 +1204,49 @@ export default function EditorPage() {
           >
             ↷
           </button>
-          <button
-            type="button"
-            onClick={() => setHistoryOpen((o) => !o)}
-            disabled={saving}
-            title="See and restore older saves of this site"
-            className={`rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] disabled:opacity-60 ${
-              historyOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
-            }`}
-          >
-            History
-          </button>
-          <button
-            type="button"
-            onClick={() => setShortcutsOpen(true)}
-            title="Keyboard shortcuts (Ctrl+/)"
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
-          >
-            <KeyboardIcon size={15} /> Shortcuts
-          </button>
-          <button
-            type="button"
-            onClick={() => setNotesOpen((o) => !o)}
-            title="Work journal: calendar + per-day notes (what you did today)"
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
-              notesOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
-            }`}
-          >
-            <NoteIcon size={15} /> Notes
-          </button>
+          {/* History / Shortcuts / Notes live under one Tools menu so the
+              toolbar stays uncluttered. */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setToolsOpen((o) => !o)}
+              title="History, shortcuts & notes"
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
+                toolsOpen || historyOpen || notesOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
+              }`}
+            >
+              <CogIcon size={15} /> Tools &#9662;
+            </button>
+            {toolsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setToolsOpen(false)} />
+                <div className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => { setToolsOpen(false); setHistoryOpen(true) }}
+                    disabled={saving}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
+                  >
+                    <ClockIcon size={15} /> History
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setToolsOpen(false); setShortcutsOpen(true) }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
+                  >
+                    <KeyboardIcon size={15} /> Shortcuts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setToolsOpen(false); setNotesOpen((o) => !o) }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
+                  >
+                    <NoteIcon size={15} /> Notes
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={previewCurrentSite}

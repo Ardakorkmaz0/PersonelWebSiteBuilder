@@ -162,17 +162,16 @@ export const PlusIcon = (p) => (
 
 export const SaveIcon = (p) => (
   <Icon {...p}>
-    <path d="M5 4h11l3 3v13H5z" />
-    <path d="M8 4v5h7V4" />
-    <rect x="8" y="13" width="8" height="6" />
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <path d="M17 21v-8H7v8" />
+    <path d="M7 3v5h8" />
   </Icon>
 )
 
 export const NoteIcon = (p) => (
   <Icon {...p}>
-    <path d="M5 4h14v10l-5 5H5z" />
-    <path d="M14 19v-5h5" />
-    <path d="M8 8h8M8 11h5" />
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M8 8h8M8 12h8M8 16h5" />
   </Icon>
 )
 
@@ -180,7 +179,7 @@ export const LightbulbIcon = (p) => (
   <Icon {...p}>
     <path d="M9 18h6" />
     <path d="M10 21h4" />
-    <path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3z" />
+    <path d="M15.1 14c.2-1 .7-1.7 1.4-2.5A4.6 4.6 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.8 1.2 1.5 1.4 2.5" />
   </Icon>
 )
 
@@ -223,5 +222,12 @@ export const WarningIcon = (p) => (
     <path d="M12 3 2.5 20h19z" />
     <path d="M12 10v4" />
     <path d="M12 17.5h.01" />
+  </Icon>
+)
+
+export const ClockIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
   </Icon>
 )

@@ -6,49 +6,117 @@ export const COMPONENT_PRESETS = {
     { id: 'light', label: 'Light bar' },
     { id: 'accent', label: 'Accent bar' },
     { id: 'glass', label: 'Glass bar' },
+    { id: 'minimal', label: 'Minimal' },
+    { id: 'bordered', label: 'Bordered' },
+    { id: 'gradient', label: 'Gradient' },
   ],
   heading: [
     { id: 'display', label: 'Display' },
     { id: 'quiet', label: 'Quiet' },
     { id: 'centered', label: 'Centered' },
+    { id: 'accent', label: 'Accent' },
+    { id: 'eyebrow', label: 'Eyebrow' },
   ],
   text: [
     { id: 'body', label: 'Body copy' },
     { id: 'lead', label: 'Lead text' },
     { id: 'muted', label: 'Muted text' },
+    { id: 'small', label: 'Small print' },
+    { id: 'centered', label: 'Centered' },
   ],
   button: [
     { id: 'solid', label: 'Solid' },
     { id: 'outline', label: 'Outline' },
     { id: 'ghost', label: 'Ghost' },
     { id: 'sharp', label: 'Sharp' },
+    { id: 'gradient', label: 'Gradient' },
+    { id: 'dark', label: 'Dark' },
+    { id: 'soft', label: 'Soft' },
   ],
   linkbutton: [
     { id: 'plain', label: 'Plain link' },
     { id: 'pill', label: 'Soft pill' },
     { id: 'underline', label: 'Underline' },
+    { id: 'arrow', label: 'Accent' },
   ],
   image: [
     { id: 'rounded', label: 'Rounded' },
     { id: 'square', label: 'Square' },
     { id: 'framed', label: 'Framed' },
+    { id: 'circle', label: 'Circle' },
+    { id: 'shadow', label: 'Soft shadow' },
   ],
   section: [
     { id: 'soft', label: 'Soft band' },
     { id: 'dark', label: 'Dark band' },
     { id: 'accent', label: 'Accent band' },
+    { id: 'gradient', label: 'Gradient' },
+    { id: 'bordered', label: 'Bordered' },
   ],
   card: [
     { id: 'elevated', label: 'Elevated' },
     { id: 'flat', label: 'Flat' },
     { id: 'outline', label: 'Outline' },
     { id: 'soft', label: 'Soft' },
+    { id: 'gradient', label: 'Gradient' },
+    { id: 'dark', label: 'Dark' },
+  ],
+  list: [
+    { id: 'plain', label: 'Plain' },
+    { id: 'lead', label: 'Large' },
+    { id: 'muted', label: 'Muted' },
+    { id: 'card', label: 'Boxed' },
+  ],
+  quote: [
+    { id: 'plain', label: 'Plain' },
+    { id: 'soft', label: 'Soft box' },
+    { id: 'accent', label: 'Accent' },
+    { id: 'large', label: 'Large' },
+    { id: 'dark', label: 'Dark' },
+  ],
+  badge: [
+    { id: 'solid', label: 'Solid' },
+    { id: 'soft', label: 'Soft' },
+    { id: 'outline', label: 'Outline' },
+    { id: 'dark', label: 'Dark' },
+    { id: 'success', label: 'Success' },
+  ],
+  icon: [
+    { id: 'primary', label: 'Primary' },
+    { id: 'muted', label: 'Muted' },
+    { id: 'large', label: 'Large' },
+    { id: 'circle', label: 'Circle' },
+    { id: 'soft', label: 'Soft circle' },
+  ],
+  input: [
+    { id: 'name', label: 'Name field' },
+    { id: 'email', label: 'Email field' },
+    { id: 'rounded', label: 'Rounded' },
+    { id: 'filled', label: 'Filled' },
+    { id: 'underline', label: 'Underline' },
   ],
   divider: [
     { id: 'subtle', label: 'Subtle' },
     { id: 'accent', label: 'Accent' },
     { id: 'thick', label: 'Thick' },
   ],
+}
+
+// Some variants change PROPS, not just styles (e.g. an input's field look lives
+// in its props, and an email field needs a different inputType/placeholder).
+// componentPresetProps returns a props patch merged in at create time.
+export const COMPONENT_PRESET_PROPS = {
+  input: {
+    name: { label: 'Your name', placeholder: 'Jane Doe', inputType: 'text' },
+    email: { label: 'Email', placeholder: 'you@example.com', inputType: 'email' },
+    rounded: { fieldBorderRadius: '999px', fieldPadding: '12px 20px' },
+    filled: { fieldBackgroundColor: '#f1f5f9', fieldBorderColor: 'transparent' },
+    underline: { fieldBorderRadius: '0px', fieldBorderColor: 'transparent', fieldBackgroundColor: 'transparent', fieldBoxShadow: 'inset 0 -2px 0 #cbd5e1' },
+  },
+}
+
+export function componentPresetProps(type, presetId) {
+  return COMPONENT_PRESET_PROPS[type]?.[presetId] || null
 }
 
 export function presetsForType(type) {
@@ -79,6 +147,17 @@ export function componentPresetStyles(type, presetId, theme) {
         color: t.textColor,
         boxShadow: '0 12px 30px rgba(0,0,0,0.08)',
       },
+      minimal: { backgroundColor: transparent, color: t.textColor, boxShadow: none },
+      bordered: {
+        backgroundColor: t.surfaceColor,
+        color: t.textColor,
+        boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.12)',
+      },
+      gradient: {
+        backgroundImage: `linear-gradient(90deg, ${t.primaryColor}, ${t.headerColor})`,
+        color: '#ffffff',
+        boxShadow: none,
+      },
     },
     heading: {
       display: {
@@ -100,11 +179,18 @@ export function componentPresetStyles(type, presetId, theme) {
         textAlign: 'center',
         fontWeight: '700',
       },
+      accent: { color: t.primaryColor, fontFamily: t.fontFamily, fontSize: '44px', fontWeight: '700', lineHeight: '1.1' },
+      eyebrow: {
+        color: t.primaryColor, fontFamily: t.fontFamily, fontSize: '14px', fontWeight: '700',
+        textTransform: 'uppercase', letterSpacing: '1.5px',
+      },
     },
     text: {
       body: { color: t.textColor, fontFamily: t.fontFamily, fontSize: '18px', lineHeight: '1.6' },
       lead: { color: t.textColor, fontFamily: t.fontFamily, fontSize: '22px', lineHeight: '1.45' },
       muted: { color: t.mutedColor, fontFamily: t.fontFamily, fontSize: '17px', lineHeight: '1.6' },
+      small: { color: t.mutedColor, fontFamily: t.fontFamily, fontSize: '14px', lineHeight: '1.5' },
+      centered: { color: t.textColor, fontFamily: t.fontFamily, fontSize: '18px', lineHeight: '1.6', textAlign: 'center' },
     },
     button: {
       solid: {
@@ -140,6 +226,19 @@ export function componentPresetStyles(type, presetId, theme) {
         borderStyle: 'none',
         boxShadow: none,
       },
+      gradient: {
+        backgroundImage: `linear-gradient(90deg, ${t.primaryColor}, ${t.headerColor})`,
+        color: '#ffffff', borderRadius: t.buttonRadius, borderWidth: '0px', borderStyle: 'none',
+        boxShadow: '0 8px 20px rgba(0,0,0,0.18)',
+      },
+      dark: {
+        backgroundColor: t.headerColor, color: t.headerTextColor, borderRadius: t.buttonRadius,
+        borderWidth: '0px', borderStyle: 'none', boxShadow: none,
+      },
+      soft: {
+        backgroundColor: `${t.primaryColor}1a`, color: t.primaryColor, borderRadius: t.buttonRadius,
+        borderWidth: '0px', borderStyle: 'none', boxShadow: none,
+      },
     },
     linkbutton: {
       plain: {
@@ -163,6 +262,10 @@ export function componentPresetStyles(type, presetId, theme) {
         borderRadius: '0px',
         textDecoration: 'underline',
       },
+      arrow: {
+        color: t.primaryColor, backgroundColor: transparent, padding: '0px',
+        borderRadius: '0px', textDecoration: 'none', fontWeight: '600',
+      },
     },
     image: {
       rounded: { borderRadius: t.radius, borderWidth: '0px', borderStyle: 'none', boxShadow: none },
@@ -174,11 +277,21 @@ export function componentPresetStyles(type, presetId, theme) {
         borderColor: 'rgba(0,0,0,0.12)',
         boxShadow: t.shadow,
       },
+      circle: { borderRadius: '999px', borderWidth: '0px', borderStyle: 'none', boxShadow: none, objectFit: 'cover' },
+      shadow: { borderRadius: t.radius, borderWidth: '0px', borderStyle: 'none', boxShadow: '0 18px 40px rgba(0,0,0,0.18)' },
     },
     section: {
       soft: { backgroundColor: t.softColor, color: t.textColor, borderRadius: t.radius, boxShadow: none },
       dark: { backgroundColor: t.headerColor, color: t.headerTextColor, borderRadius: t.radius, boxShadow: none },
       accent: { backgroundColor: t.primaryColor, color: '#ffffff', borderRadius: t.radius, boxShadow: none },
+      gradient: {
+        backgroundImage: `linear-gradient(135deg, ${t.primaryColor}, ${t.headerColor})`,
+        color: '#ffffff', borderRadius: t.radius, boxShadow: none,
+      },
+      bordered: {
+        backgroundColor: t.surfaceColor, color: t.textColor, borderRadius: t.radius,
+        borderWidth: border, borderStyle: 'solid', borderColor: 'rgba(0,0,0,0.12)', boxShadow: none,
+      },
     },
     card: {
       elevated: {
@@ -214,6 +327,61 @@ export function componentPresetStyles(type, presetId, theme) {
         borderStyle: 'none',
         boxShadow: none,
       },
+      gradient: {
+        backgroundImage: `linear-gradient(135deg, ${t.primaryColor}, ${t.headerColor})`,
+        color: '#ffffff', borderRadius: t.radius, borderWidth: '0px', borderStyle: 'none', boxShadow: t.shadow,
+      },
+      dark: {
+        backgroundColor: t.headerColor, color: t.headerTextColor, borderRadius: t.radius,
+        borderWidth: '0px', borderStyle: 'none', boxShadow: t.shadow,
+      },
+    },
+    list: {
+      plain: { color: t.textColor, fontFamily: t.fontFamily, fontSize: '17px', lineHeight: '1.7' },
+      lead: { color: t.textColor, fontFamily: t.fontFamily, fontSize: '19px', lineHeight: '1.9' },
+      muted: { color: t.mutedColor, fontFamily: t.fontFamily, fontSize: '16px', lineHeight: '1.7' },
+      card: {
+        color: t.textColor, fontFamily: t.fontFamily, fontSize: '17px', lineHeight: '1.8',
+        backgroundColor: t.softColor, padding: '16px 20px', borderRadius: t.radius,
+      },
+    },
+    quote: {
+      plain: { color: t.textColor, fontFamily: t.fontFamily, fontSize: '20px', fontStyle: 'italic', lineHeight: '1.5' },
+      soft: {
+        color: t.textColor, fontFamily: t.fontFamily, fontSize: '20px', fontStyle: 'italic',
+        backgroundColor: t.softColor, padding: '20px 24px', borderRadius: t.radius, lineHeight: '1.5',
+      },
+      accent: { color: t.primaryColor, fontFamily: t.fontFamily, fontSize: '22px', fontStyle: 'italic', lineHeight: '1.5' },
+      large: { color: t.textColor, fontFamily: t.fontFamily, fontSize: '30px', fontWeight: '600', lineHeight: '1.3' },
+      dark: {
+        color: t.headerTextColor, fontFamily: t.fontFamily, fontSize: '20px', fontStyle: 'italic',
+        backgroundColor: t.headerColor, padding: '24px 28px', borderRadius: t.radius, lineHeight: '1.5',
+      },
+    },
+    badge: {
+      solid: { backgroundColor: t.primaryColor, color: '#ffffff', borderRadius: '999px', padding: '4px 12px', fontSize: '13px', fontWeight: '600' },
+      soft: { backgroundColor: t.softColor, color: t.textColor, borderRadius: '999px', padding: '4px 12px', fontSize: '13px', fontWeight: '600' },
+      outline: {
+        backgroundColor: transparent, color: t.primaryColor, borderRadius: '999px', padding: '4px 12px',
+        fontSize: '13px', fontWeight: '600', borderWidth: border, borderStyle: 'solid', borderColor: t.primaryColor,
+      },
+      dark: { backgroundColor: t.headerColor, color: t.headerTextColor, borderRadius: '999px', padding: '4px 12px', fontSize: '13px', fontWeight: '600' },
+      success: { backgroundColor: '#dcfce7', color: '#15803d', borderRadius: '999px', padding: '4px 12px', fontSize: '13px', fontWeight: '600' },
+    },
+    icon: {
+      primary: { color: t.primaryColor, fontSize: '32px' },
+      muted: { color: t.mutedColor, fontSize: '28px' },
+      large: { color: t.textColor, fontSize: '48px' },
+      circle: { color: '#ffffff', backgroundColor: t.primaryColor, borderRadius: '999px', padding: '14px', fontSize: '24px' },
+      soft: { color: t.primaryColor, backgroundColor: `${t.primaryColor}1a`, borderRadius: '999px', padding: '14px', fontSize: '24px' },
+    },
+    input: {
+      // Outer styles; the field look + email type come from componentPresetProps.
+      name: { fontFamily: t.fontFamily },
+      email: { fontFamily: t.fontFamily },
+      rounded: { fontFamily: t.fontFamily },
+      filled: { fontFamily: t.fontFamily },
+      underline: { fontFamily: t.fontFamily },
     },
     divider: {
       subtle: { backgroundColor: 'rgba(0,0,0,0.12)', opacity: '1' },

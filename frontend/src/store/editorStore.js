@@ -6,7 +6,7 @@ import {
   normalizeTheme,
   themedStyles,
 } from '../utils/theme.js'
-import { componentPresetStyles } from '../utils/componentPresets.js'
+import { componentPresetStyles, componentPresetProps } from '../utils/componentPresets.js'
 
 const HISTORY_LIMIT = 60
 const COALESCE_MS = 500
@@ -859,7 +859,7 @@ export const useEditorStore = create((set, get) => ({
   },
 
   // ---- Components (operate on the current page) --------------------------
-  addComponent: (type, x = 24, y = 24, parentId = null) => {
+  addComponent: (type, x = 24, y = 24, parentId = null, presetId = null) => {
     const def = registry[type]
     if (!def) return
     get().record('add')
@@ -870,7 +870,19 @@ export const useEditorStore = create((set, get) => ({
       const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
       const id = genId(type)
       const fullWidth = FULL_WIDTH_TYPES.has(type)
-      const styles = themedStyles(type, def.defaultStyles, state.schema.theme)
+      let styles = themedStyles(type, def.defaultStyles, state.schema.theme)
+      // A palette VARIANT carries a preset id — bake its styles in at creation so
+      // the component drops onto the canvas already styled.
+      let presetProps = null
+      if (presetId) {
+        const ps = componentPresetStyles(type, presetId, state.schema.theme)
+        if (ps) styles = { ...styles, ...ps }
+        presetProps = componentPresetProps(type, presetId)
+      }
+      const makeProps = () => {
+        const base = structuredClone(def.defaultProps)
+        return presetProps ? { ...base, ...presetProps } : base
+      }
       const kids = PARENT_TYPES.has(type) ? { children: [] } : {}
 
       // Dropping a palette item INTO a container: it becomes a flowing child.
@@ -881,7 +893,7 @@ export const useEditorStore = create((set, get) => ({
         const child = {
           id,
           type,
-          props: structuredClone(def.defaultProps),
+          props: makeProps(),
           styles,
           layout: clampLayout(
             {
@@ -917,7 +929,7 @@ export const useEditorStore = create((set, get) => ({
         const component = {
           id,
           type,
-          props: structuredClone(def.defaultProps),
+          props: makeProps(),
           styles,
           layout: {
             x: 0,
@@ -993,7 +1005,7 @@ export const useEditorStore = create((set, get) => ({
       const component = {
         id,
         type,
-        props: structuredClone(def.defaultProps),
+        props: makeProps(),
         styles,
         layout,
         mobileLayout,

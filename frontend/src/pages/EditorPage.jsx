@@ -189,6 +189,7 @@ export default function EditorPage() {
   // HTML-mode component placement: the palette item the user is about to drop
   // into the HTML document (null when not placing).
   const [pendingType, setPendingType] = useState(null)
+  const [pendingHtml, setPendingHtml] = useState(null)
   const jsonInputRef = useRef(null)
   const htmlInputRef = useRef(null)
   const folderInputRef = useRef(null)
@@ -1346,7 +1347,7 @@ export default function EditorPage() {
               {leftOpen ? (
                 <Sidebar
                   key="html-rail"
-                  onPickComponent={(type) => setPendingType(type)}
+                  onPickComponent={(type, html) => { setPendingType(type); setPendingHtml(html || null) }}
                   onCollapse={() => setLeftOpen(false)}
                   filesPanel={
                     <PageFilesPanel
@@ -1385,8 +1386,9 @@ export default function EditorPage() {
                   onOpenTemplates={() => setTemplateOpen(true)}
                   onImportFile={() => htmlInputRef.current?.click()}
                   pendingType={pendingType}
-                  onPlaced={() => setPendingType(null)}
-                  onCancelPlacement={() => setPendingType(null)}
+                  pendingHtml={pendingHtml}
+                  onPlaced={() => { setPendingType(null); setPendingHtml(null) }}
+                  onCancelPlacement={() => { setPendingType(null); setPendingHtml(null) }}
                 />
               </Suspense>
               {/* Right rail in HTML mode: element properties when something

@@ -4,8 +4,105 @@ import { paletteItems } from '../registry.jsx'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 import { presetsForType, componentPresetStyles } from '../../utils/componentPresets.js'
 import { BLOCKS } from '../../utils/blocks.js'
+import { htmlVariantsFor, HTML_BLOCKS } from '../../utils/htmlVariants.js'
 import { useEditorStore } from '../../store/editorStore.js'
 import { FolderIcon, LayersIcon, ImageIcon } from '../icons.jsx'
+
+// Types whose snippets are wide (full-width-ish) — previewed scaled-down from the
+// top-left; the rest are inline and shown a bit larger, centered.
+const WIDE_HTML = new Set(['navbar', 'section', 'card', 'image', 'list', 'input'])
+
+// Live, inert preview of a snippet's HTML, scaled to fit the palette swatch. The
+// HTML is our own trusted template string (no user input), rendered pointer-
+// events-none so it can't be interacted with in the palette.
+function HtmlPreview({ html, wide }) {
+  return (
+    <div className="grid h-[56px] w-full place-items-center overflow-hidden rounded-md bg-[#f8fafc]">
+      <div
+        style={{
+          transform: `scale(${wide ? 0.34 : 0.6})`,
+          transformOrigin: wide ? 'top left' : 'center',
+          width: wide ? '290%' : 'auto',
+          pointerEvents: 'none',
+        }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
+  )
+}
+
+// A draggable / click-to-place HTML variant. Both routes call onPick(type, html)
+// — click arms placement (then click in the page), drag inserts where dropped.
+function HtmlVariantSwatch({ type, variant, onPick, wide }) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_MIME, type)
+        e.dataTransfer.setData('text/plain', variant.label)
+        e.dataTransfer.effectAllowed = 'copy'
+        window.setTimeout(() => onPick(type, variant.html), 0)
+      }}
+      onClick={() => onPick(type, variant.html)}
+      title={`Click to place, or drag onto the page — ${variant.label}`}
+      className="cursor-pointer rounded-lg border border-[#e5e7eb] bg-white p-1.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing"
+    >
+      <HtmlPreview html={variant.html} wide={wide} />
+      <div className="mt-1 truncate text-center text-[10px] text-[#6b7280]">{variant.label}</div>
+    </div>
+  )
+}
+
+// HTML-mode component category: expands to the type's snippet variants.
+function HtmlPaletteCategory({ item, onPick, open, onToggle }) {
+  const variants = htmlVariantsFor(item.type)
+  const wide = WIDE_HTML.has(item.type)
+  return (
+    <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+      <button
+        type="button"
+        onClick={variants.length ? onToggle : () => onPick(item.type)}
+        className={`flex w-full items-center gap-3 px-3 py-2 text-sm select-none hover:bg-[#eef2ff] ${open ? 'bg-[#f5f5ff]' : ''}`}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-base text-[#374151]">
+          {item.icon}
+        </span>
+        <span className="flex-1 text-left font-medium text-[#374151]">{item.label}</span>
+        {variants.length > 0 && <span className="text-[11px] text-[#9ca3af]">{variants.length}</span>}
+        {variants.length > 0 && <span className="w-3 text-[10px] text-[#9ca3af]">{open ? '▾' : '▸'}</span>}
+      </button>
+      {open && variants.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 border-t border-[#f1f1f4] bg-[#fafafa] p-2">
+          {variants.map((v) => (
+            <HtmlVariantSwatch key={v.id} type={item.type} variant={v} onPick={onPick} wide={wide} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// A ready-made HTML section block (drag/click to place the whole section).
+function HtmlBlockCard({ block, onPick }) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_MIME, 'section')
+        e.dataTransfer.setData('text/plain', block.label)
+        e.dataTransfer.effectAllowed = 'copy'
+        window.setTimeout(() => onPick('section', block.html), 0)
+      }}
+      onClick={() => onPick('section', block.html)}
+      title={`Click to place, or drag onto the page — ${block.label} section`}
+      className="cursor-pointer rounded-lg border border-[#e5e7eb] bg-white p-2.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing"
+    >
+      <HtmlPreview html={block.html} wide />
+      <div className="mt-1.5 text-sm font-medium text-[#374151]">{block.label}</div>
+      <div className="truncate text-[11px] text-[#9ca3af]">{block.desc}</div>
+    </div>
+  )
+}
 
 // A draggable ready-made section block. Carries the BUILT component list (using
 // the live theme) so the drop just stamps it onto the canvas.
@@ -169,63 +266,6 @@ const TABS = [
   ['components', 'Components', LayersIcon],
 ]
 
-// Palette item with two interaction modes:
-//  - Component mode (default): dnd-kit draggable, dropped onto the canvas.
-//  - HTML mode (onPick set): native HTML5 draggable (so it can drop INTO the
-//    cross-document edit iframe) + click-to-place. Both routes set the same
-//    pendingType so HtmlWorkspace's placement flow handles the actual insert.
-function PaletteItem({ item, onPick }) {
-  // useDraggable is always called (rules of hooks); its listeners are only
-  // applied in component mode.
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `palette-${item.type}`,
-    data: { from: 'palette', type: item.type },
-  })
-  const htmlMode = !!onPick
-
-  if (htmlMode) {
-    return (
-      <div
-        draggable
-        onDragStart={(e) => {
-          // Native drag payload the edit iframe's drop handler checks for.
-          e.dataTransfer.setData(DRAG_MIME, item.type)
-          e.dataTransfer.setData('text/plain', item.label)
-          e.dataTransfer.effectAllowed = 'copy'
-          // Defer the state update one tick: Chrome cancels a native drag
-          // when React re-renders the dragged node in the same task as
-          // dragstart — which is exactly why dragging from the palette
-          // "did nothing" while clicking worked.
-          window.setTimeout(() => onPick(item.type), 0)
-        }}
-        onClick={() => onPick(item.type)}
-        title={`Click to place, or drag onto the page — ${item.label}`}
-        className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-sm select-none hover:border-[#4f46e5] hover:bg-[#eef2ff] active:cursor-grabbing"
-      >
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f3f4f6] text-base">
-          {item.icon}
-        </span>
-        <span className="font-medium text-[#374151]">{item.label}</span>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`flex cursor-grab items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-sm select-none hover:border-[#4f46e5] hover:bg-[#eef2ff] active:cursor-grabbing ${
-        isDragging ? 'opacity-40' : ''
-      }`}
-    >
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f3f4f6] text-base">
-        {item.icon}
-      </span>
-      <span className="font-medium text-[#374151]">{item.label}</span>
-    </div>
-  )
-}
 
 // Shared left rail for BOTH editor modes: VS Code-style Files | Components
 // tabs. `filesPanel` is the page/file explorer node rendered by the editor;
@@ -275,26 +315,33 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
           filesPanel
         ) : (
           <>
-            {/* Ready-made section blocks (component canvas only). */}
-            {!onPickComponent && (
-              <div className="mb-5">
-                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-                  Sections
-                </h2>
-                <div className="grid grid-cols-2 gap-2">
-                  {BLOCKS.map((b) => (
-                    <BlockCard key={b.id} block={b} theme={theme} />
-                  ))}
-                </div>
+            {/* Ready-made section blocks — HTML snippets in HTML mode, schema
+                blocks on the component canvas. */}
+            <div className="mb-5">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+                Sections
+              </h2>
+              <div className="grid grid-cols-2 gap-2">
+                {onPickComponent
+                  ? HTML_BLOCKS.map((b) => (
+                      <HtmlBlockCard key={b.id} block={b} onPick={onPickComponent} />
+                    ))
+                  : BLOCKS.map((b) => <BlockCard key={b.id} block={b} theme={theme} />)}
               </div>
-            )}
+            </div>
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
               Components
             </h2>
             <div className="space-y-2">
               {onPickComponent
                 ? paletteItems.map((item) => (
-                    <PaletteItem key={item.type} item={item} onPick={onPickComponent} />
+                    <HtmlPaletteCategory
+                      key={item.type}
+                      item={item}
+                      onPick={onPickComponent}
+                      open={openType === item.type}
+                      onToggle={() => setOpenType((t) => (t === item.type ? null : item.type))}
+                    />
                   ))
                 : paletteItems.map((item) => (
                     <PaletteCategory
@@ -307,9 +354,7 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
                   ))}
             </div>
             <p className="mt-4 text-xs leading-relaxed text-[#6b7280]">
-              {onPickComponent
-                ? 'Click a component, then click in the page where it should go — or drag it straight onto the spot.'
-                : 'Click a component to see its styles, then drag the one you want onto the canvas.'}
+              Click a component to open its styles, then click in the page (or drag) to place it.
             </p>
           </>
         )}

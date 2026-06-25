@@ -232,6 +232,7 @@ function HtmlWorkspace({
   onOpenTemplates,
   onImportFile,
   pendingType,
+  pendingHtml,
   onPlaced,
   onCancelPlacement,
   // Code-project mode: when set, the View document and Edit seed are produced
@@ -293,6 +294,10 @@ function HtmlWorkspace({
   // per load) always read the current value without re-binding.
   const pendingRef = useRef(pendingType)
   useEffect(() => { pendingRef.current = pendingType }, [pendingType])
+  // The exact HTML to insert for the pending item (a palette variant/block). When
+  // unset we fall back to the type's default snippet.
+  const pendingHtmlRef = useRef(pendingHtml)
+  useEffect(() => { pendingHtmlRef.current = pendingHtml }, [pendingHtml])
   // Latest edit tool for the load-time selection listener (bound once).
   const editToolRef = useRef(editTool)
   useEffect(() => { editToolRef.current = editTool }, [editTool])
@@ -608,7 +613,7 @@ function HtmlWorkspace({
       const rect = target.getBoundingClientRect()
       position = insertPositionForY(rect.top, rect.height, clientY)
     }
-    const node = insertSnippet(doc, componentToHtml(type), target, position)
+    const node = insertSnippet(doc, pendingHtmlRef.current || componentToHtml(type), target, position)
     // Commit a clean document first, then flash — the flash attribute is
     // stripped by serializeDocument anyway, but no reason to race it.
     removePlacementChrome(doc)

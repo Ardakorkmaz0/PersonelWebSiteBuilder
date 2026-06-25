@@ -146,6 +146,7 @@ export default function CodeProjectPage() {
   // switching files drops them automatically — no effect, no cascading render.
   const htmlSelection = sel && sel.path === activePath ? sel.info : null
   const pendingType = pending && pending.path === activePath ? pending.type : null
+  const pendingHtml = pending && pending.path === activePath ? pending.html : null
 
   // Build the View/Edit document for the open html from the LIVE files map, so
   // editing a linked CSS/JS re-renders the preview. Reads files at call time
@@ -574,7 +575,7 @@ export default function CodeProjectPage() {
             component palette, whose picks splice a block into the document. */}
         {leftOpen ? (
           <Sidebar
-            onPickComponent={isHtml ? (t) => setPending({ path: activePath, type: t }) : undefined}
+            onPickComponent={isHtml ? (t, html) => setPending({ path: activePath, type: t, html }) : undefined}
             onCollapse={() => setLeftOpen(false)}
             filesPanel={<ProjectFilesPanel />}
           />
@@ -605,6 +606,7 @@ export default function CodeProjectPage() {
               onRequestSave={() => saveFile(activeFile.path)}
               onElementSelect={onElementSelect}
               pendingType={pendingType}
+              pendingHtml={pendingHtml}
               onPlaced={() => setPending(null)}
               onCancelPlacement={() => setPending(null)}
             />

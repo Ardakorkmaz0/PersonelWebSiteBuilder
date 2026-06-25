@@ -118,6 +118,7 @@ export default function EditorPage() {
   const loadSchema = useEditorStore((s) => s.loadSchema)
   const importSchema = useEditorStore((s) => s.importSchema)
   const addComponent = useEditorStore((s) => s.addComponent)
+  const addBlock = useEditorStore((s) => s.addBlock)
   const viewport = useEditorStore((s) => s.viewport)
   const setViewport = useEditorStore((s) => s.setViewport)
   const setCanvasPreset = useEditorStore((s) => s.setCanvasPreset)
@@ -475,6 +476,19 @@ export default function EditorPage() {
     // Only palette drops add components; existing items move via FreeCanvasItem.
     if (!over || data?.from !== 'palette') return
     const translated = active.rect.current.translated
+
+    // A ready-made SECTION block — stamp the whole group onto the page at the
+    // drop point (blocks never nest into a container).
+    if (data.items) {
+      let by = 24
+      const canvasEl = document.getElementById('free-canvas')
+      if (canvasEl && translated) {
+        const rect = canvasEl.getBoundingClientRect()
+        by = translated.top - rect.top
+      }
+      addBlock(data.items, by)
+      return
+    }
 
     // Dropped onto a container (any droppable other than the page canvas) → add it
     // as a flowing child of that container instead of on the page.

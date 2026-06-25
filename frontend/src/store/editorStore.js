@@ -1024,6 +1024,56 @@ export const useEditorStore = create((set, get) => ({
     })
   },
 
+  // Drop a ready-made SECTION block — a list of pre-positioned, pre-styled
+  // components — onto the canvas at (x, y). Each item: { type, x, y (relative to
+  // the block top), w, h, preset?, props?, styles? }. Horizontal x is absolute
+  // (so sections stay laid out); vertical follows the drop point.
+  addBlock: (items, y = 24) => {
+    if (!Array.isArray(items) || !items.length) return
+    get().record('add-block')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const theme = state.schema.theme
+      const pcW = page.canvasWidth || CANVAS_WIDTH
+      const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
+      const baseY = Math.max(0, Math.round(y))
+      const built = items
+        .map((it) => {
+          const def = registry[it.type]
+          if (!def) return null
+          const id = genId(it.type)
+          let styles = themedStyles(it.type, def.defaultStyles, theme)
+          if (it.preset) {
+            const ps = componentPresetStyles(it.type, it.preset, theme)
+            if (ps) styles = { ...styles, ...ps }
+          }
+          if (it.styles) styles = { ...styles, ...it.styles }
+          const props = { ...structuredClone(def.defaultProps), ...(it.props || {}) }
+          const w = it.w ?? def.defaultSize?.w ?? 200
+          const h = it.h ?? def.defaultSize?.h ?? 80
+          return {
+            id,
+            type: it.type,
+            props,
+            styles,
+            layout: clampLayout({ x: Math.round(it.x ?? 0), y: baseY + Math.round(it.y ?? 0), w, h }, { maxX: pcW }),
+            mobileLayout: clampLayout(
+              { x: MOBILE_PAD, y: Math.round(it.y ?? 0), w: Math.min(w, mobileWidth - MOBILE_PAD * 2), h },
+              { maxX: mobileWidth },
+            ),
+            hidden: false,
+            hiddenMobile: false,
+            ...(PARENT_TYPES.has(it.type) ? { children: [] } : {}),
+          }
+        })
+        .filter(Boolean)
+      if (!built.length) return {}
+      const nextComps = [...page.components, ...built]
+      const schema = withComponents(state.schema, page.id, nextComps)
+      return { schema, selectedId: built[0].id, dirty: true }
+    })
+  },
+
   selectComponent: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
 
   // Shift-click: add/remove a component from the multi-selection. The primary

@@ -32,6 +32,7 @@ export const COMPONENT_PRESETS = {
     { id: 'gradient', label: 'Gradient' },
     { id: 'dark', label: 'Dark' },
     { id: 'soft', label: 'Soft' },
+    { id: 'glow', label: 'Glow' },
   ],
   linkbutton: [
     { id: 'plain', label: 'Plain link' },
@@ -60,6 +61,7 @@ export const COMPONENT_PRESETS = {
     { id: 'soft', label: 'Soft' },
     { id: 'gradient', label: 'Gradient' },
     { id: 'dark', label: 'Dark' },
+    { id: 'glass', label: 'Glass' },
   ],
   list: [
     { id: 'plain', label: 'Plain' },
@@ -239,6 +241,11 @@ export function componentPresetStyles(type, presetId, theme) {
         backgroundColor: `${t.primaryColor}1a`, color: t.primaryColor, borderRadius: t.buttonRadius,
         borderWidth: '0px', borderStyle: 'none', boxShadow: none,
       },
+      glow: {
+        backgroundImage: `linear-gradient(90deg, ${t.primaryColor}, ${t.headerColor})`,
+        color: '#ffffff', borderRadius: t.buttonRadius, borderWidth: '0px', borderStyle: 'none',
+        boxShadow: `0 10px 28px ${t.primaryColor}66`,
+      },
     },
     linkbutton: {
       plain: {
@@ -334,6 +341,11 @@ export function componentPresetStyles(type, presetId, theme) {
       dark: {
         backgroundColor: t.headerColor, color: t.headerTextColor, borderRadius: t.radius,
         borderWidth: '0px', borderStyle: 'none', boxShadow: t.shadow,
+      },
+      glass: {
+        backgroundColor: 'rgba(255,255,255,0.55)', color: t.textColor, borderRadius: t.radius,
+        borderWidth: border, borderStyle: 'solid', borderColor: 'rgba(255,255,255,0.6)',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.12)', backdropFilter: 'blur(10px)',
       },
     },
     list: {

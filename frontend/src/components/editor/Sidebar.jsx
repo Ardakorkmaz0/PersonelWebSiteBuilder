@@ -3,8 +3,75 @@ import { useDraggable } from '@dnd-kit/core'
 import { paletteItems } from '../registry.jsx'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 import { presetsForType, componentPresetStyles } from '../../utils/componentPresets.js'
+import { BLOCKS } from '../../utils/blocks.js'
 import { useEditorStore } from '../../store/editorStore.js'
 import { FolderIcon, LayersIcon, ImageIcon } from '../icons.jsx'
+
+// A draggable ready-made section block. Carries the BUILT component list (using
+// the live theme) so the drop just stamps it onto the canvas.
+function BlockCard({ block, theme }) {
+  const items = block.build(theme)
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `block-${block.id}`,
+    data: { from: 'palette', block: block.id, items },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      title={`Drag onto the canvas — ${block.label} section`}
+      className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-2.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
+    >
+      <BlockThumb block={block} theme={theme} />
+      <div className="mt-1.5 text-sm font-medium text-[#374151]">{block.label}</div>
+      <div className="truncate text-[11px] text-[#9ca3af]">{block.desc}</div>
+    </div>
+  )
+}
+
+// A tiny abstract wireframe preview per block so the palette reads at a glance.
+function BlockThumb({ block, theme }) {
+  const bar = (w, h, c, key, extra) => (
+    <div key={key} style={{ width: w, height: h, background: c, borderRadius: 3, ...extra }} />
+  )
+  const p = theme.primaryColor
+  const soft = theme.softColor
+  const muted = 'rgba(0,0,0,0.18)'
+  let inner
+  if (block.id === 'hero') {
+    inner = (
+      <div className="flex h-full flex-col items-center justify-center gap-1.5">
+        {bar(70, 8, muted, 'a')}{bar(50, 5, 'rgba(0,0,0,0.1)', 'b')}{bar(28, 9, p, 'c', { borderRadius: 5 })}
+      </div>
+    )
+  } else if (block.id === 'features' || block.id === 'stats' || block.id === 'pricing') {
+    inner = (
+      <div className="flex h-full items-center justify-center gap-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex flex-col items-center gap-1" style={{ width: 22 }}>
+            {block.id === 'pricing'
+              ? bar(22, 30, soft, 'c', { border: `1px solid ${i === 1 ? p : muted}` })
+              : <>{bar(12, 12, i === 1 ? p : muted, 'd', { borderRadius: 99 })}{bar(20, 4, muted, 'e')}</>}
+          </div>
+        ))}
+      </div>
+    )
+  } else if (block.id === 'cta') {
+    inner = (
+      <div className="flex h-full items-center justify-center" style={{ background: p, borderRadius: 4 }}>
+        <div className="flex flex-col items-center gap-1">{bar(60, 6, 'rgba(255,255,255,0.85)', 'a')}{bar(26, 8, '#fff', 'b', { borderRadius: 4 })}</div>
+      </div>
+    )
+  } else {
+    inner = (
+      <div className="flex h-full flex-col items-center justify-center gap-1.5" style={{ background: soft, borderRadius: 4 }}>
+        {bar(78, 5, muted, 'a')}{bar(60, 5, muted, 'b')}{bar(30, 4, 'rgba(0,0,0,0.1)', 'c')}
+      </div>
+    )
+  }
+  return <div className="h-[52px] w-full overflow-hidden rounded-md bg-[#f3f4f6] p-1">{inner}</div>
+}
 
 // Short sample shown inside each variant swatch so the drop target reads at a
 // glance which component it is.
@@ -208,6 +275,19 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
           filesPanel
         ) : (
           <>
+            {/* Ready-made section blocks (component canvas only). */}
+            {!onPickComponent && (
+              <div className="mb-5">
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+                  Sections
+                </h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {BLOCKS.map((b) => (
+                    <BlockCard key={b.id} block={b} theme={theme} />
+                  ))}
+                </div>
+              </div>
+            )}
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
               Components
             </h2>

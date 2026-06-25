@@ -19,6 +19,7 @@ import {
 import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
+import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
@@ -838,7 +839,11 @@ export default function EditorPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
+      {/* Single row always: never wrap; if the meta + toolbar exceed the width
+          (small window), the strip scrolls horizontally instead of stacking
+          onto a second line. The grow spacer below pins the toolbar right when
+          there IS room. */}
+      <header className="flex flex-nowrap items-center gap-x-1.5 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm [scrollbar-width:thin]">
         <Link to="/" title="Back to Sites" className="flex shrink-0 items-center gap-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
           <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
           <span>&larr;</span>
@@ -901,9 +906,9 @@ export default function EditorPage() {
             of being right-aligned with a big empty gap before it. */}
         <div className="grow shrink basis-0" aria-hidden />
 
-        {/* Action toolbar. Wraps as a left-aligned block (see spacer above) so
-            Save/Publish stay visible without leaving an awkward gap. */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        {/* Action toolbar — stays a single non-wrapping block pinned to the
+            right by the spacer; the header scrolls if the window is too narrow. */}
+        <div className="flex shrink-0 flex-nowrap items-center gap-1.5">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}
@@ -1150,7 +1155,7 @@ export default function EditorPage() {
                   }}
                   className="flex cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3]"
                 >
-                  💾 {localFile.name}
+                  <SaveIcon size={13} /> {localFile.name}
                 </span>
               ) : (
                 <button
@@ -1213,19 +1218,19 @@ export default function EditorPage() {
             type="button"
             onClick={() => setShortcutsOpen(true)}
             title="Keyboard shortcuts (Ctrl+/)"
-            className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
           >
-            ⌨ Shortcuts
+            <KeyboardIcon size={15} /> Shortcuts
           </button>
           <button
             type="button"
             onClick={() => setNotesOpen((o) => !o)}
             title="Work journal: calendar + per-day notes (what you did today)"
-            className={`rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
               notesOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
             }`}
           >
-            🗓 Notes
+            <NoteIcon size={15} /> Notes
           </button>
           <button
             type="button"
@@ -1426,13 +1431,13 @@ export default function EditorPage() {
                       type="button"
                       title="Connect a button/link to a target component or page"
                       onClick={() => setLinkMode(!linkMode)}
-                      className={`flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
                         linkMode
                           ? 'border-[#4f46e5] bg-[#4f46e5] text-white'
                           : 'border-[#d1d5db] text-[#374151] hover:bg-[#f3f4f6]'
                       }`}
                     >
-                      🔗 Link
+                      <LinkIcon size={13} /> Link
                     </button>
                   )}
                   <span className="ml-auto text-xs text-[#6b7280]">
@@ -1448,7 +1453,7 @@ export default function EditorPage() {
                 {/* Link-tool guidance banner (component mode). */}
                 {canvasMode === 'edit' && linkMode && (
                   <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
-                    <span aria-hidden>🔗</span>
+                    <LinkIcon size={13} aria-hidden />
                     <span>
                       {linkSourceId
                         ? 'Now click the target component — or click a PAGE in the left Files panel to link to another page.'

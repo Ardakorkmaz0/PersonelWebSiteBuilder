@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NoteIcon } from '../icons.jsx'
 
 // Work journal: a month calendar + per-day notes ("today I did X"). Lives in
 // localStorage (one journal across all sites), so it never touches the server
@@ -67,7 +68,7 @@ export default function NotesPanel({ open, onClose }) {
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between border-b border-[#e5e7eb] px-3 py-2">
-        <span className="text-sm font-bold text-[#111827]">🗓 Notes</span>
+        <span className="flex items-center gap-1.5 text-sm font-bold text-[#111827]"><NoteIcon size={15} /> Notes</span>
         <button
           type="button"
           onClick={onClose}

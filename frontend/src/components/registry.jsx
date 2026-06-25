@@ -30,6 +30,7 @@ import {
 } from './renderer/components.jsx'
 import { PRESET_IMAGES } from '../utils/presetImages.js'
 import { ICON_OPTIONS } from '../utils/icons.js'
+import { LinkIcon, ImageIcon } from './icons.jsx'
 
 export const registry = {
   navbar: {
@@ -143,7 +144,7 @@ export const registry = {
   linkbutton: {
     type: 'linkbutton',
     label: 'Link Button',
-    icon: '\u{1F517}',
+    icon: <LinkIcon size={16} />,
     Render: LinkButton,
     defaultSize: { w: 220, h: 44 },
     defaultProps: { text: 'Visit my GitHub', href: 'https://github.com' },
@@ -166,7 +167,7 @@ export const registry = {
   image: {
     type: 'image',
     label: 'Image',
-    icon: '\u{1F5BC}',
+    icon: <ImageIcon size={16} />,
     Render: Image,
     defaultSize: { w: 260, h: 170 },
     defaultProps: {

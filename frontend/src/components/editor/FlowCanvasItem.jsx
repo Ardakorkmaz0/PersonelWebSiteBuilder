@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore } from '../../store/editorStore.js'
+import { BanIcon } from '../icons.jsx'
 import {
   absoluteChildrenHeight,
   flowItemStyle,
@@ -78,7 +79,7 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
               : 'border-[#d1d5db] bg-[#f9fafb] text-[#9ca3af] hover:text-[#6b7280]'
           }`}
         >
-          <span aria-hidden>🚫</span>
+          <BanIcon size={13} aria-hidden />
           <span className="font-medium capitalize">{component.type}</span>
           <span>· hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}</span>
           <span className="ml-auto opacity-70">select to show</span>

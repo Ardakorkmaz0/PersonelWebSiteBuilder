@@ -16,7 +16,7 @@ import { assemblePreviewHtml, needsBuildToRender } from '../utils/htmlFiles.js'
 import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ProjectFilesPanel from '../components/editor/ProjectFilesPanel.jsx'
-import { FolderOpenIcon, CogIcon } from '../components/icons.jsx'
+import { FolderOpenIcon, CogIcon, LightbulbIcon, PaletteIcon } from '../components/icons.jsx'
 import HtmlWorkspace from '../components/editor/HtmlWorkspace.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import CodeFileEditor from '../components/editor/CodeFileEditor.jsx'
@@ -544,7 +544,7 @@ export default function CodeProjectPage() {
           so point the user at the real workflow before they hit a blank View. */}
       {projectInfo?.kind === 'app' && !bannerDismissed && (
         <div className="flex items-start gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2 text-xs text-[#92400e]">
-          <span aria-hidden className="mt-px">💡</span>
+          <LightbulbIcon size={14} aria-hidden className="mt-px shrink-0" />
           <div className="min-w-0 flex-1 leading-relaxed">
             <strong>{projectInfo.framework || 'App'} project.</strong>{' '}
             Its pages are built/served at runtime, so the static <em>View</em> stays blank or partial —
@@ -644,8 +644,8 @@ export default function CodeProjectPage() {
                         edit the real CSS instead of inline-styling the template. */}
                     {matchedCss.length > 0 && (
                       <div className="border-b border-[#e5e7eb] bg-[#f9fafb] p-3">
-                        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                          🎯 Styled by — open the CSS rule
+                        <div className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+                          <PaletteIcon size={11} /> Styled by — open the CSS rule
                         </div>
                         <div className="space-y-1">
                           {matchedCss.map((r) => (

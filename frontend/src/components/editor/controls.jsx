@@ -546,7 +546,7 @@ export function LinkTargetControl({ label, value, onChange, pages = [] }) {
         <option value="page">→ Go to page</option>
         <option value="top">↑ Top of this page</option>
         <option value="section"># Section on this page</option>
-        <option value="url">🔗 External URL</option>
+        <option value="url">External URL</option>
       </select>
       {kind === 'page' && (
         <select

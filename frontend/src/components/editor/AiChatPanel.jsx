@@ -25,16 +25,17 @@ const QUICK_FONTS = [
   'DM Sans', 'Montserrat', 'Lora', 'JetBrains Mono',
 ]
 const QUICK_SECTIONS = [
-  ['💳 Pricing', 'Add a 3-tier pricing section (middle tier highlighted as "Most popular") that matches the current design.'],
-  ['❓ FAQ', 'Add an FAQ section with 4 relevant questions using details/summary elements, matching the current design.'],
-  ['🖼 Gallery', 'Add a responsive gallery section with gradient placeholder tiles, matching the current design.'],
-  ['💬 Testimonials', 'Add a testimonials section with 3 quote cards, matching the current design.'],
-  ['📊 Stats', 'Add a row of 4 key statistics relevant to this site, matching the current design.'],
-  ['👥 Team', 'Add a team section with 4 member cards using initial avatars, matching the current design.'],
-  ['📰 Newsletter', 'Add a newsletter signup section with an email call-to-action, matching the current design.'],
-  ['✉️ Contact', 'Add a contact section with an email call-to-action card, matching the current design.'],
+  ['Pricing', 'Add a 3-tier pricing section (middle tier highlighted as "Most popular") that matches the current design.'],
+  ['FAQ', 'Add an FAQ section with 4 relevant questions using details/summary elements, matching the current design.'],
+  ['Gallery', 'Add a responsive gallery section with gradient placeholder tiles, matching the current design.'],
+  ['Testimonials', 'Add a testimonials section with 3 quote cards, matching the current design.'],
+  ['Stats', 'Add a row of 4 key statistics relevant to this site, matching the current design.'],
+  ['Team', 'Add a team section with 4 member cards using initial avatars, matching the current design.'],
+  ['Newsletter', 'Add a newsletter signup section with an email call-to-action, matching the current design.'],
+  ['Contact', 'Add a contact section with an email call-to-action card, matching the current design.'],
 ]
 import { useEditorStore } from '../../store/editorStore.js'
+import { LayersIcon, FileCodeIcon, PaletteIcon, PlusIcon } from '../icons.jsx'
 
 // Per-tab chat history persistence. Kept in localStorage so a refresh while
 // iterating with the assistant doesn't lose the back-and-forth — handy when
@@ -120,7 +121,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
     const logApplied = (how) =>
       setMessages((m) => [
         ...m,
-        { id: rand(), role: 'user', text: `🎨 Theme colors → ${label}` },
+        { id: rand(), role: 'user', text: `Theme colors → ${label}` },
         { id: rand(), role: 'assistant', text: how },
       ])
     // Component sites: colors live in the schema theme — set it directly.
@@ -147,7 +148,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       executeTool('updateTheme', { patch: { fontFamily: `'${f}', sans-serif` } })
       setMessages((m) => [
         ...m,
-        { id: rand(), role: 'user', text: `🔤 Font → ${f}` },
+        { id: rand(), role: 'user', text: `Font → ${f}` },
         { id: rand(), role: 'assistant', text: `Set the design theme's font to ${f} — applied instantly, no AI call.` },
       ])
       return
@@ -371,7 +372,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             setMessages((m) => [
               ...m,
               { id: rand(), role: 'assistant', text:
-                `I blocked this change: the model rewrote most of your page content (only ${Math.round(kept * 100)}% survived) while it was asked to restyle. Your site is untouched — try again, or use the 🎨 Theme colors button below for a safe, instant recolor.`,
+                `I blocked this change: the model rewrote most of your page content (only ${Math.round(kept * 100)}% survived) while it was asked to restyle. Your site is untouched — try again, or use the Theme colors button below for a safe, instant recolor.`,
                 allFailed: true,
               },
             ])
@@ -497,17 +498,17 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             title={isHtmlSite
               ? 'This site is an HTML document — the AI edits the HTML directly here.'
               : 'Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B'}
-            className={`px-2 py-0.5 transition ${effectiveAiMode === 'components' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'} disabled:cursor-not-allowed disabled:opacity-40`}
+            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'components' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'} disabled:cursor-not-allowed disabled:opacity-40`}
           >
-            🧱 Components
+            <LayersIcon size={11} /> Components
           </button>
           <button
             type="button"
             onClick={() => setAiMode('html')}
             title="Ask the model for a full HTML document — best on Llama 3.1 8B / gemma / phi"
-            className={`px-2 py-0.5 transition ${effectiveAiMode === 'html' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
+            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'html' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
           >
-            📄 HTML
+            <FileCodeIcon size={11} /> HTML
           </button>
         </div>
         <button
@@ -618,22 +619,22 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         <div className="border-t border-[#e5e7eb] bg-[#f9fafb] px-2 pb-1.5 pt-1.5">
           <div className="flex flex-wrap gap-1.5">
             {[
-              ['colors', '🎨 Theme colors'],
-              ['font', '🔤 Font'],
-              ...(isHtmlSite ? [['section', '➕ Add section']] : []),
-            ].map(([id, label]) => (
+              ['colors', 'Theme colors', PaletteIcon],
+              ['font', 'Font', null],
+              ...(isHtmlSite ? [['section', 'Add section', PlusIcon]] : []),
+            ].map(([id, label, QuickIcon]) => (
               <button
                 key={id}
                 type="button"
                 disabled={busy}
                 onClick={() => setQuickPanel(quickPanel === id ? null : id)}
-                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
+                className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
                   quickPanel === id
                     ? 'border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]'
                     : 'border-[#e5e7eb] bg-white text-[#6b7280] hover:border-[#d1d5db] hover:text-[#374151]'
                 }`}
               >
-                {label}
+                {QuickIcon && <QuickIcon size={12} />} {label}
               </button>
             ))}
           </div>

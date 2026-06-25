@@ -159,3 +159,69 @@ export const PlusIcon = (p) => (
     <path d="M12 5v14M5 12h14" />
   </Icon>
 )
+
+export const SaveIcon = (p) => (
+  <Icon {...p}>
+    <path d="M5 4h11l3 3v13H5z" />
+    <path d="M8 4v5h7V4" />
+    <rect x="8" y="13" width="8" height="6" />
+  </Icon>
+)
+
+export const NoteIcon = (p) => (
+  <Icon {...p}>
+    <path d="M5 4h14v10l-5 5H5z" />
+    <path d="M14 19v-5h5" />
+    <path d="M8 8h8M8 11h5" />
+  </Icon>
+)
+
+export const LightbulbIcon = (p) => (
+  <Icon {...p}>
+    <path d="M9 18h6" />
+    <path d="M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0 0 12 3z" />
+  </Icon>
+)
+
+export const PinIcon = (p) => (
+  <Icon {...p}>
+    <path d="M12 21s7-6.3 7-11a7 7 0 0 0-14 0c0 4.7 7 11 7 11z" />
+    <circle cx="12" cy="10" r="2.5" />
+  </Icon>
+)
+
+export const BanIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m6 6 12 12" />
+  </Icon>
+)
+
+export const KeyboardIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="6" width="18" height="12" rx="2" />
+    <path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8" />
+  </Icon>
+)
+
+export const EditIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 20h4l10-10-4-4L4 16z" />
+    <path d="m13.5 6.5 4 4" />
+  </Icon>
+)
+
+export const MoveIcon = (p) => (
+  <Icon {...p}>
+    <path d="M12 4v16M8 7l4-3 4 3M8 17l4 3 4-3" />
+  </Icon>
+)
+
+export const WarningIcon = (p) => (
+  <Icon {...p}>
+    <path d="M12 3 2.5 20h19z" />
+    <path d="M12 10v4" />
+    <path d="M12 17.5h.01" />
+  </Icon>
+)

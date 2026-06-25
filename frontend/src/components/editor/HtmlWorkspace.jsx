@@ -38,6 +38,7 @@ import {
 } from '../../utils/htmlElementEdit.js'
 import { componentToHtml } from '../../utils/componentToHtml.js'
 import { matchingCssRules } from '../../utils/htmlFiles.js'
+import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon } from '../icons.jsx'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
 // - View: real document in a sandboxed iframe with scripts enabled.
@@ -988,18 +989,18 @@ function HtmlWorkspace({
           {mode === 'edit' && !placing && !!String(html || '').trim() && (
             <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
               {[
-                ['text', '✎ Text', 'Click any text and type'],
-                ['rearrange', '⇅ Move', 'Drag a block to reorder it'],
-                ['link', '🔗 Link', 'Click a link, then click where it should go'],
-              ].map(([id, label, title]) => (
+                ['text', EditIcon, 'Text', 'Click any text and type'],
+                ['rearrange', MoveIcon, 'Move', 'Drag a block to reorder it'],
+                ['link', LinkIcon, 'Link', 'Click a link, then click where it should go'],
+              ].map(([id, ToolIcon, label, title]) => (
                 <button
                   key={id}
                   type="button"
                   title={title}
                   onClick={() => { setEditTool(id); setLinkHint(id === 'link' ? 'Click a LINK (nav item / button-link), then click its target.' : null) }}
-                  className={editTool === id ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}
+                  className={`flex items-center gap-1 ${editTool === id ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}`}
                 >
-                  {label}
+                  <ToolIcon size={13} /> {label}
                 </button>
               ))}
             </div>
@@ -1015,7 +1016,7 @@ function HtmlWorkspace({
                 setNonce((n) => n + 1)
                 onRequestSave?.()
               }}
-              title="Apply the source code and save — to the server AND the linked local file (💾 in the toolbar)"
+              title="Apply the source code and save — to the server AND the linked local file (the disk chip in the toolbar)"
               className="rounded-lg bg-[#4f46e5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca]"
             >
               Apply &amp; Save
@@ -1060,7 +1061,7 @@ function HtmlWorkspace({
             stay blank/partial in View; point the user at the real dev server. */}
         {mode === 'view' && viewNotice && (
           <div className="flex items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-1.5 text-xs text-[#92400e]">
-            <span aria-hidden>⚠️</span>
+            <WarningIcon size={14} aria-hidden className="shrink-0" />
             <span className="min-w-0 flex-1">{viewNotice}</span>
             <button
               type="button"
@@ -1075,7 +1076,7 @@ function HtmlWorkspace({
         {/* Link-tool guidance banner. */}
         {mode === 'edit' && editTool === 'link' && !placing && (
           <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
-            <span aria-hidden>🔗</span>
+            <LinkIcon size={13} aria-hidden />
             <span>{linkHint || 'Click a LINK (nav item / button-link), then click the element it should jump to.'}</span>
           </div>
         )}
@@ -1083,7 +1084,7 @@ function HtmlWorkspace({
         {/* Placement banner — shows the active component + how to cancel. */}
         {placing && (
           <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
-            <span aria-hidden>📍</span>
+            <PinIcon size={13} aria-hidden />
             <span>
               Click in the page to place the <strong>{pendingType}</strong>, or drag it onto the spot.
             </span>
@@ -1101,7 +1102,7 @@ function HtmlWorkspace({
           liveUrl ? (
             <main className="relative flex min-h-0 flex-1 flex-col bg-[#0b0b0b]">
               <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-[#fffbe6] px-4 py-1.5 text-xs text-[#7a5d00]">
-                <span aria-hidden>💡</span>
+                <LightbulbIcon size={14} aria-hidden className="shrink-0" />
                 <span className="truncate">
                   Embedded preview of <span className="font-mono">{liveUrl}</span>. Blank? Many servers
                   (Django) block embedding — click <strong>Open live window</strong>; it stays in sync
@@ -1141,8 +1142,8 @@ function HtmlWorkspace({
              editor looks identical whether a page has HTML yet or not. */
           <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6">
             <div className="ms-card w-full max-w-md p-8 text-center">
-              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-2xl">
-                📄
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-[#4f46e5]">
+                <FileCodeIcon size={24} />
               </div>
               <h2 className="text-base font-bold text-[#111827]">{fileName} is empty</h2>
               <p className="mt-1 text-sm text-[#6b7280]">

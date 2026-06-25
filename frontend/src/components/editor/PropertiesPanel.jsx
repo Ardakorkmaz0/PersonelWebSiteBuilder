@@ -38,6 +38,7 @@ import {
   LinksEditor,
   TabsEditorControl,
 } from './controls.jsx'
+import { PaletteIcon } from '../icons.jsx'
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
@@ -1159,9 +1160,9 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
             type="button"
             onClick={() => applyThemeToComponent(component.id)}
             title="Restyle this component with the active theme (colors, font, radius)"
-            className="rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
           >
-            🎨 Apply theme
+            <PaletteIcon size={14} /> Apply theme
           </button>
           <select
             value=""

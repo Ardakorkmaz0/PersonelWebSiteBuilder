@@ -166,6 +166,16 @@ export default function EditorPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
+  // The header scrolls horizontally (overflow-x-auto), which would clip an
+  // absolutely-positioned dropdown. So the Import/Tools menus are position:fixed,
+  // anchored to their trigger button's on-screen rect (computed on open).
+  const importBtnRef = useRef(null)
+  const toolsBtnRef = useRef(null)
+  const [menuPos, setMenuPos] = useState({})
+  const anchorMenu = (key, ref) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) setMenuPos((m) => ({ ...m, [key]: { top: Math.round(r.bottom + 6), right: Math.round(window.innerWidth - r.right) } }))
+  }
   // HTML mode device frame (selector lives in the shared header).
   const [htmlDevice, setHtmlDevice] = useState('fit')
   const [htmlLandscape, setHtmlLandscape] = useState(false)
@@ -1063,7 +1073,8 @@ export default function EditorPage() {
           />
           <div className="relative">
             <button
-              onClick={() => setImportOpen((o) => !o)}
+              ref={importBtnRef}
+              onClick={() => { anchorMenu('import', importBtnRef); setImportOpen((o) => !o) }}
               title="Open an HTML file, a project folder, or a project .json"
               className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
             >
@@ -1075,7 +1086,10 @@ export default function EditorPage() {
                   className="fixed inset-0 z-40"
                   onClick={() => setImportOpen(false)}
                 />
-                <div className="absolute right-0 z-50 mt-1 w-52 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg">
+                <div
+                  style={{ position: 'fixed', top: menuPos.import?.top, right: menuPos.import?.right }}
+                  className="z-50 w-52 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
+                >
                   <button
                     onClick={() => {
                       setImportOpen(false)
@@ -1209,7 +1223,8 @@ export default function EditorPage() {
           <div className="relative">
             <button
               type="button"
-              onClick={() => setToolsOpen((o) => !o)}
+              ref={toolsBtnRef}
+              onClick={() => { anchorMenu('tools', toolsBtnRef); setToolsOpen((o) => !o) }}
               title="History, shortcuts & notes"
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
                 toolsOpen || historyOpen || notesOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
@@ -1220,7 +1235,10 @@ export default function EditorPage() {
             {toolsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setToolsOpen(false)} />
-                <div className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg">
+                <div
+                  style={{ position: 'fixed', top: menuPos.tools?.top, right: menuPos.tools?.right }}
+                  className="z-50 w-44 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
+                >
                   <button
                     type="button"
                     onClick={() => { setToolsOpen(false); setHistoryOpen(true) }}

@@ -318,7 +318,13 @@ class SiteViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Site.objects.filter(owner=self.request.user)
+        # Annotate favorite_count so the profile's site list can show per-site
+        # stats (views are a stored field). Harmless for the detail/update
+        # serializers that don't expose it.
+        return (
+            Site.objects.filter(owner=self.request.user)
+            .annotate(favorite_count=Count('favorited_by'))
+        )
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -771,9 +777,43 @@ class AdminUsersView(ListAPIView):
         return (
             User.objects.all()
             .select_related('profile')
-            .prefetch_related('sites', 'sites__reports')
+            .prefetch_related('sites', 'sites__reports', 'sites__favorited_by')
             .order_by('-date_joined')
         )
+
+
+class AdminStatsView(APIView):
+    """Platform-wide stats for the admin dashboard header: totals + the top sites
+    by views. Admin-only. Cheap aggregate queries, no per-row work."""
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from django.db.models import Sum
+
+        sites = Site.objects.all()
+        agg = sites.aggregate(total_views=Sum('view_count'))
+        top = (
+            sites.filter(published=True)
+            .select_related('owner')
+            .annotate(fav=Count('favorited_by'))
+            .order_by('-view_count')[:5]
+        )
+        return Response({
+            'users': User.objects.count(),
+            'sites': sites.count(),
+            'published': sites.filter(published=True).count(),
+            'total_views': agg['total_views'] or 0,
+            'total_favorites': Favorite.objects.count(),
+            'top_sites': [
+                {
+                    'id': s.id, 'title': s.title, 'slug': s.slug,
+                    'owner': s.owner.username, 'view_count': s.view_count,
+                    'favorite_count': s.fav,
+                }
+                for s in top
+            ],
+        })
 
 
 class AdminReportsView(ListAPIView):

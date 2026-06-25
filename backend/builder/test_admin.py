@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from .models import Site
+from .models import Favorite, Site
 
 
 @pytest.fixture
@@ -91,3 +91,50 @@ class TestAdminPanel:
         _auth(client, atok)
         resp = client.get('/api/auth/me/')
         assert resp.data['is_staff'] is True
+
+    def test_admin_sites_include_favorite_count(self, client, admin, alice, bob):
+        a, _ = alice
+        s = Site.objects.create(owner=a, title='Watched', published=True)
+        Favorite.objects.create(user=bob[0], site=s)
+        _, atok = admin
+        _auth(client, atok)
+        rows = client.get('/api/admin/users/').data['results']
+        alice_row = next(r for r in rows if r['username'] == 'alice')
+        site_row = next(x for x in alice_row['sites'] if x['title'] == 'Watched')
+        assert site_row['favorite_count'] == 1
+
+
+@pytest.mark.django_db
+class TestAdminStats:
+    def test_non_admin_forbidden(self, client, bob):
+        _, btok = bob
+        _auth(client, btok)
+        assert client.get('/api/admin/stats/').status_code == 403
+
+    def test_platform_totals_and_top_sites(self, client, admin, alice, bob):
+        a, _ = alice
+        s1 = Site.objects.create(owner=a, title='Popular', published=True, view_count=50)
+        Site.objects.create(owner=a, title='Quiet', published=True, view_count=2)
+        Site.objects.create(owner=a, title='Draft', published=False, view_count=0)
+        Favorite.objects.create(user=bob[0], site=s1)
+        _, atok = admin
+        _auth(client, atok)
+        resp = client.get('/api/admin/stats/')
+        assert resp.status_code == 200
+        d = resp.data
+        assert d['sites'] == 3 and d['published'] == 2
+        assert d['total_views'] == 52 and d['total_favorites'] == 1
+        assert d['top_sites'][0]['title'] == 'Popular'
+        assert d['top_sites'][0]['favorite_count'] == 1
+
+
+@pytest.mark.django_db
+class TestOwnerSiteStats:
+    def test_own_site_list_includes_view_and_favorite_count(self, client, alice, bob):
+        a, atok = alice
+        s = Site.objects.create(owner=a, title='Mine', published=True, view_count=7)
+        Favorite.objects.create(user=bob[0], site=s)
+        _auth(client, atok)
+        rows = client.get('/api/sites/').data
+        row = next(r for r in rows if r['title'] == 'Mine')
+        assert row['view_count'] == 7 and row['favorite_count'] == 1

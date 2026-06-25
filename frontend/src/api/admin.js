@@ -6,6 +6,9 @@ import client from './client.js'
 export const listAdminUsers = (page = 1) =>
   client.get('/admin/users/', { params: { page } }).then((r) => r.data)
 
+// Platform-wide totals + top sites for the admin dashboard header.
+export const getAdminStats = () => client.get('/admin/stats/').then((r) => r.data)
+
 // Moderation queue (defaults to open reports). status: open|resolved|dismissed|all
 export const listReports = (status = 'open', page = 1) =>
   client.get('/admin/reports/', { params: { status, page } }).then((r) => r.data)

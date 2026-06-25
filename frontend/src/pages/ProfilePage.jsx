@@ -8,7 +8,7 @@ import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
-import { SearchIcon, CheckIcon } from '../components/icons.jsx'
+import { SearchIcon, CheckIcon, EyeIcon, StarIcon, GlobeIcon, FileIcon } from '../components/icons.jsx'
 
 export default function ProfilePage() {
   const setUser = useAuthStore((s) => s.setUser)
@@ -46,6 +46,14 @@ export default function ProfilePage() {
   }, [])
 
   const visibleSites = useMemo(() => orderSites(sites, query), [sites, query])
+
+  // Aggregate stats across ALL my sites (not just the filtered view).
+  const stats = useMemo(() => ({
+    total: sites.length,
+    published: sites.filter((s) => s.published).length,
+    views: sites.reduce((n, s) => n + (s.view_count || 0), 0),
+    favorites: sites.reduce((n, s) => n + (s.favorite_count || 0), 0),
+  }), [sites])
 
   // Land back where you left off after opening a site and returning.
   useScrollRestore(!loading && !sitesLoading)
@@ -217,6 +225,28 @@ export default function ProfilePage() {
             </form>
           </div>
 
+          {/* Aggregate stats across all my sites. */}
+          {sites.length > 0 && (
+            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                ['Sites', stats.total, <FileIcon key="f" size={16} />, '#4f46e5'],
+                ['Published', stats.published, <GlobeIcon key="g" size={16} />, '#15803d'],
+                ['Total views', stats.views, <EyeIcon key="e" size={16} />, '#0ea5e9'],
+                ['Favorites', stats.favorites, <StarIcon key="s" size={16} filled />, '#f59e0b'],
+              ].map(([label, value, icon, color]) => (
+                <div key={label} className="ms-card flex items-center gap-3 p-4">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg" style={{ background: `${color}1a`, color }}>
+                    {icon}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-lg font-bold leading-tight text-[#111827]">{value.toLocaleString()}</div>
+                    <div className="truncate text-xs text-[#6b7280]">{label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {sites.length > 0 && (
             <div className="relative mb-5 max-w-sm">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]"><SearchIcon size={16} /></span>
@@ -258,6 +288,10 @@ export default function ProfilePage() {
                       >
                         {site.published ? 'Published' : 'Draft'}
                       </span>
+                    </div>
+                    <div className="mb-3 flex items-center gap-4 text-xs text-[#9ca3af]">
+                      <span title="Views" className="flex items-center gap-1"><EyeIcon size={13} /> {(site.view_count || 0).toLocaleString()}</span>
+                      <span title="Favorites" className="flex items-center gap-1"><StarIcon size={13} /> {(site.favorite_count || 0).toLocaleString()}</span>
                     </div>
                     <div className="mt-auto flex items-center gap-3 text-sm">
                       <Link to={`/editor/${site.id}`} className="ms-btn ms-btn-primary">

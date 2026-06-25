@@ -113,10 +113,13 @@ class AdminUserSerializer(serializers.ModelSerializer):
         return obj.sites.count()
 
     def get_sites(self, obj):
+        # favorited_by + reports are prefetched by the view, so counting in
+        # Python here stays a fixed number of queries (no N+1).
         return [
             {
                 'id': s.id, 'title': s.title, 'slug': s.slug,
                 'published': s.published, 'view_count': s.view_count,
+                'favorite_count': len(s.favorited_by.all()),
                 'category': s.category, 'updated_at': s.updated_at,
                 'open_report_count': sum(1 for r in s.reports.all() if r.status == 'open'),
             }
@@ -259,11 +262,16 @@ class ExploreSiteSerializer(serializers.ModelSerializer):
 
 
 class SiteListSerializer(serializers.ModelSerializer):
-    """Lightweight representation for the dashboard list (no schema)."""
+    """Lightweight representation for the dashboard list (no schema). Carries the
+    per-site stats (views + favorites) the profile shows; favorite_count is
+    annotated by the viewset, defaulting to 0 for unannotated callers."""
+
+    favorite_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Site
-        fields = ('id', 'title', 'slug', 'published', 'view_count', 'created_at', 'updated_at')
+        fields = ('id', 'title', 'slug', 'published', 'category', 'view_count',
+                  'favorite_count', 'created_at', 'updated_at')
 
 
 class SiteSerializer(serializers.ModelSerializer):

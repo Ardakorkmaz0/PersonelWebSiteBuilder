@@ -6,10 +6,11 @@ import {
   resolveReport,
   suspendUser,
   moderateSite,
+  getAdminStats,
 } from '../api/admin.js'
 import { apiError } from '../utils/errors.js'
 import { useAuthStore } from '../store/authStore.js'
-import { FlagIcon, EyeIcon, CheckIcon, CogIcon } from '../components/icons.jsx'
+import { FlagIcon, EyeIcon, StarIcon, CheckIcon, CogIcon, GlobeIcon, FileIcon } from '../components/icons.jsx'
 
 function Avatar({ url, name, size = 36 }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -31,6 +32,63 @@ function Avatar({ url, name, size = 36 }) {
 function readPage(d) {
   if (Array.isArray(d)) return { rows: d, count: d.length, hasMore: false }
   return { rows: d.results || [], count: d.count ?? (d.results || []).length, hasMore: !!d.next }
+}
+
+// ---------------------------------------------------------------------------
+// Platform stats header (totals + top sites)
+// ---------------------------------------------------------------------------
+function StatsHeader() {
+  const [stats, setStats] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    getAdminStats().then((d) => alive && setStats(d)).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  if (!stats) return null
+  const cards = [
+    ['Users', stats.users, null, '#4f46e5'],
+    ['Sites', stats.sites, <FileIcon key="f" size={16} />, '#6366f1'],
+    ['Published', stats.published, <GlobeIcon key="g" size={16} />, '#15803d'],
+    ['Total views', stats.total_views, <EyeIcon key="e" size={16} />, '#0ea5e9'],
+    ['Favorites', stats.total_favorites, <StarIcon key="s" size={16} filled />, '#f59e0b'],
+  ]
+
+  return (
+    <div className="mb-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {cards.map(([label, value, icon, color]) => (
+          <div key={label} className="ms-card flex items-center gap-3 p-4">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg" style={{ background: `${color}1a`, color }}>
+              {icon || <FileIcon size={16} />}
+            </span>
+            <div className="min-w-0">
+              <div className="text-lg font-bold leading-tight text-[#111827]">{(value || 0).toLocaleString()}</div>
+              <div className="truncate text-xs text-[#6b7280]">{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {stats.top_sites?.length > 0 && (
+        <div className="ms-card mt-3 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">Top sites by views</div>
+          <div className="space-y-1.5">
+            {stats.top_sites.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-3 text-sm">
+                <span className="w-4 shrink-0 text-right text-xs font-bold text-[#9ca3af]">{i + 1}</span>
+                <Link to={`/site/${s.slug}`} className="min-w-0 flex-1 truncate font-medium text-[#111827] hover:text-[#4f46e5] hover:underline">{s.title}</Link>
+                <span className="shrink-0 text-xs text-[#9ca3af]">@{s.owner}</span>
+                <span className="flex shrink-0 items-center gap-1 text-xs text-[#9ca3af]"><EyeIcon size={12} /> {s.view_count.toLocaleString()}</span>
+                <span className="flex shrink-0 items-center gap-1 text-xs text-[#9ca3af]"><StarIcon size={12} /> {s.favorite_count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +178,7 @@ function UsersTab() {
 
   return (
     <>
+      <StatsHeader />
       {users && (
         <p className="mb-6 text-sm text-[#6b7280]">
           {count} user{count !== 1 ? 's' : ''}
@@ -200,7 +259,12 @@ function UsersTab() {
                             {s.published ? 'Published' : 'Draft'}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-xs text-[#9ca3af]"><span className="inline-flex items-center gap-1"><EyeIcon size={13} /> {s.view_count}</span></td>
+                        <td className="px-3 py-2 text-xs text-[#9ca3af]">
+                          <span className="inline-flex items-center gap-3">
+                            <span className="inline-flex items-center gap-1" title="Views"><EyeIcon size={13} /> {(s.view_count || 0).toLocaleString()}</span>
+                            <span className="inline-flex items-center gap-1" title="Favorites"><StarIcon size={13} /> {(s.favorite_count || 0).toLocaleString()}</span>
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-right text-xs">
                           <div className="flex items-center justify-end gap-2">
                             {s.published && (

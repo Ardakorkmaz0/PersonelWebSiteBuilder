@@ -79,11 +79,6 @@ function nestedFirstCollision(args) {
   })
 }
 
-function cssEscape(value) {
-  if (window.CSS?.escape) return window.CSS.escape(String(value))
-  return String(value).replace(/["\\]/g, '\\$&')
-}
-
 // Explore discovery categories (must match Site.CATEGORY_CHOICES on the server).
 const DISCOVERY_CATEGORIES = [
   'portfolio', 'business', 'blog', 'landing', 'shop', 'personal', 'other',
@@ -478,36 +473,6 @@ export default function EditorPage() {
     if (!over || data?.from !== 'palette') return
     const translated = active.rect.current.translated
 
-    // A ready-made SECTION block — stamp the whole group onto the page at the
-    // drop point (blocks never nest into a container).
-    if (data.items) {
-      let by = 24
-      const canvasEl = document.getElementById('free-canvas')
-      if (canvasEl && translated) {
-        const rect = canvasEl.getBoundingClientRect()
-        by = translated.top - rect.top
-      }
-      addBlock(data.items, by)
-      return
-    }
-
-    // Dropped onto a container (any droppable other than the page canvas) → add it
-    // as a flowing child of that container instead of on the page.
-    if (over.id && over.id !== 'canvas') {
-      let x = 12
-      let y = 12
-      const targetEl = document.querySelector(
-        `[data-builder-droppable-id="${cssEscape(over.id)}"]`,
-      )
-      if (targetEl && translated) {
-        const rect = targetEl.getBoundingClientRect()
-        x = translated.left - rect.left
-        y = translated.top - rect.top
-      }
-      addComponent(data.type, x, y, over.id, data.preset)
-      return
-    }
-
     // Drop position relative to the canvas, from the dragged preview's rect.
     let x = 24
     let y = 24
@@ -517,7 +482,16 @@ export default function EditorPage() {
       x = translated.left - rect.left
       y = translated.top - rect.top
     }
-    addComponent(data.type, x, y, null, data.preset)
+
+    // Unified library: every palette item carries its HTML snippet. On the free
+    // canvas it drops as ONE editable `html` component sized to fit the snippet.
+    if (data.html) {
+      addBlock([{ type: 'html', x: Math.max(0, x), y: 0, w: data.w || 360, h: data.h || 120, props: { code: data.html } }], y)
+      return
+    }
+
+    // Legacy schema-component drop (kept for safety; the unified palette uses html).
+    if (data.type) addComponent(data.type, x, y, null, data.preset)
   }
 
   const HTML_HISTORY_CAP = 50

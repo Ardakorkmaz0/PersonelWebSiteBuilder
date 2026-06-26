@@ -36,15 +36,17 @@ function htmlSize(type) { return HTML_SIZE[type] || [380, 110] }
 // HTML is our own trusted template string (no user input), rendered pointer-
 // events-none so it can't be interacted with in the palette.
 function HtmlPreview({ html, wide }) {
+  // Wide snippets render at a FIXED width then scale down centered, so the whole
+  // element shows (a percentage width + top-left origin left navbars/sections
+  // looking empty). Inline snippets just scale a touch from their natural size.
   return (
-    <div className="grid h-[56px] w-full place-items-center overflow-hidden rounded-md bg-[#f8fafc]">
+    <div className="flex h-[56px] w-full items-center justify-center overflow-hidden rounded-md bg-[#f8fafc]">
       <div
-        style={{
-          transform: `scale(${wide ? 0.34 : 0.6})`,
-          transformOrigin: wide ? 'top left' : 'center',
-          width: wide ? '290%' : 'auto',
-          pointerEvents: 'none',
-        }}
+        style={
+          wide
+            ? { width: 380, transform: 'scale(0.26)', transformOrigin: 'center', flexShrink: 0, pointerEvents: 'none' }
+            : { transform: 'scale(0.58)', transformOrigin: 'center', pointerEvents: 'none' }
+        }
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>

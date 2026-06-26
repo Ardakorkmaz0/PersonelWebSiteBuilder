@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { canvasHeight, flowCanvasHeight, flowGap, flowSidePad } from '../renderer/layout.js'
@@ -21,8 +22,16 @@ export default function Canvas() {
   const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
   const mobileFold = page.mobileFold || 0
   const select = useEditorStore((s) => s.selectComponent)
+  const selectMany = useEditorStore((s) => s.selectMany)
   const linkMode = useEditorStore((s) => s.linkMode)
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' })
+  // Marquee (rubber-band) selection: drag a box on the empty canvas to select
+  // every component it touches, then align/distribute them. Works in both the PC
+  // and Mobile breakpoints (it reads the active viewport's layout).
+  const canvasElRef = useRef(null)
+  const marqueeRef = useRef(null)
+  const [marquee, setMarquee] = useState(null)
+  const setCanvasRef = (el) => { canvasElRef.current = el; setNodeRef(el) }
   // The theme's font is what the published page paints in; reflect it on the
   // canvas root so brand-new components inherit it immediately AND the empty
   // canvas already previews the right typography. Inline inheritance only
@@ -65,11 +74,65 @@ export default function Canvas() {
     })
     .filter(Boolean)
 
+  function startMarquee(e) {
+    // Only a plain left-drag on the bare canvas (not on a component, which stops
+    // its own pointerdown) begins a marquee. A click that doesn't move just
+    // deselects, exactly like before.
+    if (flowMode || e.button !== 0 || e.target !== canvasElRef.current) {
+      select(null)
+      return
+    }
+    const rect = canvasElRef.current.getBoundingClientRect()
+    const startX = e.clientX - rect.left
+    const startY = e.clientY - rect.top
+    marqueeRef.current = { startX, startY, curX: startX, curY: startY, moved: false }
+
+    const onMove = (ev) => {
+      const m = marqueeRef.current
+      if (!m) return
+      m.curX = ev.clientX - rect.left
+      m.curY = ev.clientY - rect.top
+      if (!m.moved && Math.abs(m.curX - m.startX) + Math.abs(m.curY - m.startY) < 5) return
+      m.moved = true
+      setMarquee({
+        x1: Math.min(m.startX, m.curX), y1: Math.min(m.startY, m.curY),
+        x2: Math.max(m.startX, m.curX), y2: Math.max(m.startY, m.curY),
+      })
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      const m = marqueeRef.current
+      marqueeRef.current = null
+      setMarquee(null)
+      if (!m || !m.moved) { select(null); return }
+      const x1 = Math.min(m.startX, m.curX)
+      const y1 = Math.min(m.startY, m.curY)
+      const x2 = Math.max(m.startX, m.curX)
+      const y2 = Math.max(m.startY, m.curY)
+      const ids = components
+        .filter((c) => {
+          if (c.hidden || (isMobile && c.hiddenMobile)) return false
+          const L = (isMobile ? c.mobileLayout || c.layout : c.layout) || {}
+          const bx = L.x || 0
+          const by = L.y || 0
+          const bw = L.w || 0
+          const bh = L.h || 0
+          // Box intersection (any overlap counts).
+          return !(bx > x2 || bx + bw < x1 || by > y2 || by + bh < y1)
+        })
+        .map((c) => c.id)
+      selectMany(ids)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
   const canvas = (
     <div
       id="free-canvas"
-      ref={setNodeRef}
-      onPointerDown={() => select(null)}
+      ref={setCanvasRef}
+      onPointerDown={startMarquee}
       style={{
         position: 'relative',
         width: canvasW,
@@ -123,6 +186,21 @@ export default function Canvas() {
         ) : (
           <FreeCanvasItem key={component.id} component={component} />
         ),
+      )}
+
+      {/* Rubber-band selection box. */}
+      {marquee && (
+        <div
+          className="pointer-events-none absolute rounded-sm border border-[#4f46e5]"
+          style={{
+            left: marquee.x1,
+            top: marquee.y1,
+            width: marquee.x2 - marquee.x1,
+            height: marquee.y2 - marquee.y1,
+            backgroundColor: 'rgba(79,70,229,0.12)',
+            zIndex: 50,
+          }}
+        />
       )}
 
       {fold > 0 && (

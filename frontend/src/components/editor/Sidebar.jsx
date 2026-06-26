@@ -82,8 +82,10 @@ function HtmlPaletteCategory({ item, onPick, open, onToggle }) {
   )
 }
 
-// A ready-made HTML section block (drag/click to place the whole section).
-function HtmlBlockCard({ block, onPick }) {
+// A ready-made HTML section block (drag/click to place the whole section). Uses
+// the abstract wireframe thumb — a live render of a full-width section in a tiny
+// box just shows empty padding, so the wireframe reads far better.
+function HtmlBlockCard({ block, onPick, theme }) {
   return (
     <div
       draggable
@@ -97,7 +99,7 @@ function HtmlBlockCard({ block, onPick }) {
       title={`Click to place, or drag onto the page — ${block.label} section`}
       className="cursor-pointer rounded-lg border border-[#e5e7eb] bg-white p-2.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing"
     >
-      <HtmlPreview html={block.html} wide />
+      <BlockThumb block={block} theme={theme} />
       <div className="mt-1.5 text-sm font-medium text-[#374151]">{block.label}</div>
       <div className="truncate text-[11px] text-[#9ca3af]">{block.desc}</div>
     </div>
@@ -324,7 +326,7 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
               <div className="grid grid-cols-2 gap-2">
                 {onPickComponent
                   ? HTML_BLOCKS.map((b) => (
-                      <HtmlBlockCard key={b.id} block={b} onPick={onPickComponent} />
+                      <HtmlBlockCard key={b.id} block={b} onPick={onPickComponent} theme={theme} />
                     ))
                   : BLOCKS.map((b) => <BlockCard key={b.id} block={b} theme={theme} />)}
               </div>

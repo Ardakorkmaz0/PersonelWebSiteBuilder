@@ -30,6 +30,8 @@ import { applyThemeToDocument } from '../utils/htmlTheme.js'
 import { Renderer } from '../components/renderer/Renderer.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
+import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
+import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../utils/htmlRuntime.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
@@ -65,6 +67,14 @@ function PanelFallback() {
   )
 }
 
+function hasFixedComponent(components) {
+  for (const component of components || []) {
+    if (component?.props?.scrollBehavior === 'fixed') return true
+    if (hasFixedComponent(component?.children)) return true
+  }
+  return false
+}
+
 function nestedFirstCollision(args) {
   const pointerHits = pointerWithin(args)
   const hits = pointerHits.length ? pointerHits : rectIntersection(args)
@@ -77,6 +87,12 @@ function nestedFirstCollision(args) {
     const areaB = br ? br.width * br.height : Number.MAX_SAFE_INTEGER
     return areaA - areaB || (b.data?.value || 0) - (a.data?.value || 0)
   })
+}
+
+function findDroppableElement(id) {
+  const wanted = String(id)
+  return [...document.querySelectorAll('[data-builder-droppable-id]')]
+    .find((el) => el.getAttribute('data-builder-droppable-id') === wanted)
 }
 
 // Explore discovery categories (must match Site.CATEGORY_CHOICES on the server).
@@ -130,6 +146,8 @@ export default function EditorPage() {
   const markSaved = useEditorStore((s) => s.markSaved)
   const dirty = useEditorStore((s) => s.dirty)
   const theme = useEditorStore((s) => s.schema.theme)
+  const customCss = useEditorStore((s) => s.schema.customCss)
+  const customJs = useEditorStore((s) => s.schema.customJs)
   const setPageMode = useEditorStore((s) => s.setPageMode)
   // Component-canvas link tool (Empty mode mirror of the HTML link tool).
   const linkMode = useEditorStore((s) => s.linkMode)
@@ -473,6 +491,21 @@ export default function EditorPage() {
     if (!over || data?.from !== 'palette') return
     const translated = active.rect.current.translated
 
+    // Dropped onto a native container/tab panel: keep it as a child of that
+    // structure. For tabs, the store tags it with the currently active tab.
+    if (over.id && over.id !== 'canvas' && data.type) {
+      let x = 12
+      let y = 12
+      const targetEl = findDroppableElement(over.id)
+      if (targetEl && translated) {
+        const rect = targetEl.getBoundingClientRect()
+        x = translated.left - rect.left
+        y = translated.top - rect.top
+      }
+      addComponent(data.type, Math.max(0, x), Math.max(0, y), over.id, data.preset, { w: data.w, h: data.h })
+      return
+    }
+
     // Drop position relative to the canvas, from the dragged preview's rect.
     let x = 24
     let y = 24
@@ -483,15 +516,15 @@ export default function EditorPage() {
       y = translated.top - rect.top
     }
 
-    // Unified library: every palette item carries its HTML snippet. On the free
-    // canvas it drops as ONE editable `html` component sized to fit the snippet.
+    // Most visual palette variants carry an HTML snippet. On the free canvas it
+    // drops as ONE editable `html` component sized to fit the snippet.
     if (data.html) {
       addBlock([{ type: 'html', x: Math.max(0, x), y: 0, w: data.w || 360, h: data.h || 120, props: { code: data.html } }], y)
       return
     }
 
     // Legacy schema-component drop (kept for safety; the unified palette uses html).
-    if (data.type) addComponent(data.type, x, y, null, data.preset)
+    if (data.type) addComponent(data.type, x, y, null, data.preset, { w: data.w, h: data.h })
   }
 
   const HTML_HISTORY_CAP = 50
@@ -831,6 +864,19 @@ export default function EditorPage() {
 
   const currentPageIndex = Math.max(0, storePages.findIndex((p) => p.id === currentPageId))
   const currentPage = storePages[currentPageIndex] || storePages[0]
+  const componentViewNeedsIframe = hasFixedComponent(currentPage?.components)
+  const componentViewHtml =
+    componentViewNeedsIframe && currentPage
+      ? schemaToSingleHtml(
+          {
+            theme,
+            customCss,
+            customJs,
+            pages: [currentPage],
+          },
+          title || currentPage.name || 'My Site',
+        )
+      : ''
   const sizePresets = viewport === 'mobile' ? MOBILE_CANVAS_PRESETS : PC_CANVAS_PRESETS
   const curW = viewport === 'mobile' ? mobileW : pcWidth
   const curFold = viewport === 'mobile' ? mobileFold : pcFold
@@ -1494,24 +1540,39 @@ export default function EditorPage() {
                 {canvasMode === 'edit' ? (
                   <Canvas />
                 ) : canvasMode === 'view' ? (
-                  <main className="min-h-0 flex-1 overflow-auto bg-gray-100 p-8">
-                    <div
-                      className="mx-auto bg-white shadow"
-                      style={{ width: viewport === 'mobile' ? mobileW : pcWidth }}
-                    >
-                      <Renderer
-                        components={currentPage.components || []}
-                        background={
-                          viewport === 'mobile'
-                            ? currentPage.backgroundMobile || currentPage.background || '#ffffff'
-                            : currentPage.background || '#ffffff'
-                        }
-                        viewport={viewport}
-                        width={viewport === 'mobile' ? mobileW : pcWidth}
-                        flowMode={!!currentPage.flowMode}
+                  componentViewNeedsIframe ? (
+                    <main className="min-h-0 flex-1 overflow-auto bg-gray-100 p-8">
+                      <iframe
+                        key={`${currentPage.id}-${viewport}-fixed-preview`}
+                        title={`${currentPage.name || 'Page'} preview`}
+                        srcDoc={componentViewHtml}
+                        sandbox={PUBLIC_HTML_SANDBOX}
+                        allow={HTML_ALLOW}
+                        allowFullScreen
+                        className="mx-auto block h-full min-h-[640px] border-0 bg-white shadow"
+                        style={{ width: viewport === 'mobile' ? mobileW : pcWidth }}
                       />
-                    </div>
-                  </main>
+                    </main>
+                  ) : (
+                    <main className="min-h-0 flex-1 overflow-auto bg-gray-100 p-8">
+                      <div
+                        className="mx-auto bg-white shadow"
+                        style={{ width: viewport === 'mobile' ? mobileW : pcWidth }}
+                      >
+                        <Renderer
+                          components={currentPage.components || []}
+                          background={
+                            viewport === 'mobile'
+                              ? currentPage.backgroundMobile || currentPage.background || '#ffffff'
+                              : currentPage.background || '#ffffff'
+                          }
+                          viewport={viewport}
+                          width={viewport === 'mobile' ? mobileW : pcWidth}
+                          flowMode={!!currentPage.flowMode}
+                        />
+                      </div>
+                    </main>
+                  )
                 ) : (
                   <div className="min-h-0 flex-1 bg-white">
                     <Suspense fallback={<PanelFallback />}>

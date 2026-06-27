@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore } from '../../store/editorStore.js'
-import { BanIcon } from '../icons.jsx'
+import { BanIcon, TrashIcon } from '../icons.jsx'
 import {
   absoluteChildrenHeight,
   flowItemStyle,
@@ -14,17 +14,52 @@ import { sanitizeStyles } from '../../utils/sanitize.js'
 
 const ACCENT = '#4f46e5'
 const MIN = 20
-const HANDLE_SIZE = 8
-const HANDLE_INSET = 3
+const HANDLE_SIZE = 10
+const HANDLE_OFFSET = HANDLE_SIZE / 2
+const FRAME_OUTSET = 2
 const FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
 
 // Resize handles for flow mode. Width (E) controls how the block packs in its row;
 // Height (S) sets the box height; SE does both. Full-bleed blocks only expose
 // height. Width only matters on PC (mobile blocks are full-width), but HEIGHT is
 // editable on mobile too so the spacing can be tuned there like on PC.
-const WIDTH_HANDLE = ['e', { top: '50%', right: HANDLE_INSET, marginTop: -HANDLE_SIZE / 2 }, 'ew-resize']
-const HEIGHT_HANDLE = ['s', { bottom: HANDLE_INSET, left: '50%', marginLeft: -HANDLE_SIZE / 2 }, 'ns-resize']
-const CORNER_HANDLE = ['se', { bottom: HANDLE_INSET, right: HANDLE_INSET }, 'nwse-resize']
+function edgeOutsets(rect, amount) {
+  const maxW = rect.maxW || 0
+  const maxH = rect.maxH || 0
+  return {
+    top: rect.y <= amount ? 0 : -amount,
+    left: rect.x <= amount ? 0 : -amount,
+    right: maxW && rect.x + rect.w >= maxW - amount ? 0 : -amount,
+    bottom: maxH && rect.y + rect.h >= maxH - amount ? 0 : -amount,
+  }
+}
+
+function freeResizeHandles(rect) {
+  const edge = edgeOutsets(rect, HANDLE_OFFSET)
+  return [
+    ['nw', { top: edge.top, left: edge.left }, 'nwse-resize'],
+    ['n', { top: edge.top, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
+    ['ne', { top: edge.top, right: edge.right }, 'nesw-resize'],
+    ['e', { top: '50%', right: edge.right, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
+    ['se', { bottom: edge.bottom, right: edge.right }, 'nwse-resize'],
+    ['s', { bottom: edge.bottom, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
+    ['sw', { bottom: edge.bottom, left: edge.left }, 'nesw-resize'],
+    ['w', { top: '50%', left: edge.left, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
+  ]
+}
+
+function flowResizeHandles({ full, viewport }) {
+  const horizontal = full ? 0 : -HANDLE_OFFSET
+  const bottom = -HANDLE_OFFSET
+  const handles = [
+    ['s', { bottom, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
+  ]
+  if (!full && viewport === 'pc') {
+    handles.unshift(['e', { top: '50%', right: horizontal, marginTop: -HANDLE_OFFSET }, 'ew-resize'])
+    handles.push(['se', { bottom, right: horizontal }, 'nwse-resize'])
+  }
+  return handles
+}
 
 export default function FlowCanvasItem({ component, canvasWidth, parentDirection = 'row' }) {
   const selectedId = useEditorStore((s) => s.selectedId)
@@ -37,6 +72,7 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
   const hidden = isHidden(component, viewport)
   const fixedHeight = FIXED_HEIGHT_TYPES.has(component.type)
   const full = isFlowFullWidth(component)
+  const canShowInlineDelete = Math.round(component.layout?.w || 240) >= 34 && Math.round(component.layout?.h || 80) >= 30
 
   function startResize(e, dir) {
     e.stopPropagation()
@@ -90,13 +126,16 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
     )
   }
 
-  const handles = isSelected
-    ? full
-      ? [HEIGHT_HANDLE]
-      : viewport === 'pc'
-        ? [WIDTH_HANDLE, HEIGHT_HANDLE, CORNER_HANDLE]
-        : [HEIGHT_HANDLE]
-    : []
+  const horizontalFrameOutset = full || viewport !== 'pc' || parentDirection === 'column'
+    ? 0
+    : -FRAME_OUTSET
+  const frameOutsets = {
+    top: -FRAME_OUTSET,
+    right: horizontalFrameOutset,
+    bottom: -FRAME_OUTSET,
+    left: horizontalFrameOutset,
+  }
+  const handles = isSelected ? flowResizeHandles({ full, viewport }) : []
 
   return (
     <div
@@ -107,7 +146,6 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
       style={{
         ...flowItemStyle(component, viewport, canvasWidth, { parentDirection }),
         cursor: 'pointer',
-        boxShadow: isSelected ? `inset 0 0 0 1.5px ${ACCENT}` : undefined,
         zIndex: isSelected ? 20 : 1,
       }}
       className={isSelected ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'}
@@ -130,18 +168,40 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
       )}
 
       {isSelected && (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            remove(component.id)
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: frameOutsets.top,
+            right: frameOutsets.right,
+            bottom: frameOutsets.bottom,
+            left: frameOutsets.left,
+            border: `2px solid ${ACCENT}`,
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
+            boxSizing: 'border-box',
+            pointerEvents: 'none',
+            zIndex: 28,
           }}
-          style={{ position: 'absolute', top: 2, right: 2, zIndex: 30 }}
-          className="rounded-lg bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
-        >
-          Delete
-        </button>
+        />
+      )}
+
+      {isSelected && (
+        canShowInlineDelete && (
+          <button
+            type="button"
+            aria-label="Delete component"
+            title="Delete"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              remove(component.id)
+            }}
+            style={{ position: 'absolute', top: 3, right: 3, zIndex: 30 }}
+            className="flex h-6 w-6 items-center justify-center rounded-md bg-[#a4262c] text-white shadow"
+          >
+            <TrashIcon size={13} />
+          </button>
+        )
       )}
 
       {handles.map(([dir, pos, cursor]) => (
@@ -154,8 +214,8 @@ export default function FlowCanvasItem({ component, canvasWidth, parentDirection
             height: HANDLE_SIZE,
             background: ACCENT,
             border: '1px solid #ffffff',
-            borderRadius: 999,
-            boxShadow: '0 1px 4px rgba(15,23,42,0.18)',
+            borderRadius: 2,
+            boxShadow: '0 1px 5px rgba(15,23,42,0.22)',
             zIndex: 30,
             cursor,
             ...pos,
@@ -196,6 +256,7 @@ export function ContainerEditor({ component }) {
   const kids = Array.isArray(component.children) ? component.children : []
   const designW = Math.max(1, Math.round(component.layout?.w || 600))
   const designH = absoluteChildrenHeight(kids, Math.round(component.layout?.h || 160))
+  const boundsH = Math.max(1, Math.round(component.layout?.h || designH))
   const { setNodeRef, isOver } = useDroppable({ id: component.id })
   const userStyles = sanitizeStyles(component.styles)
   const { ref, scale, scaledHeight } = useFitToWidth(designW, designH)
@@ -235,14 +296,16 @@ export function ContainerEditor({ component }) {
             Drop components here
           </div>
         ) : (
-          kids.map((c) => <TabsCanvasItem key={c.id} component={c} />)
+          kids.map((c) => (
+            <TabsCanvasItem key={c.id} component={c} bounds={{ w: designW, h: boundsH }} />
+          ))
         )}
       </div>
     </div>
   )
 }
 
-function TabsCanvasItem({ component }) {
+function TabsCanvasItem({ component, bounds }) {
   const selectedId = useEditorStore((s) => s.selectedId)
   const viewport = useEditorStore((s) => s.viewport)
   const select = useEditorStore((s) => s.selectComponent)
@@ -255,6 +318,17 @@ function TabsCanvasItem({ component }) {
   const y = Math.round(l.y || 0)
   const w = Math.max(MIN, Math.round(l.w || 200))
   const h = Math.max(MIN, Math.round(l.h || 80))
+  const chromeRect = {
+    x,
+    y,
+    w,
+    h,
+    maxW: bounds?.w,
+    maxH: bounds?.h,
+  }
+  const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
+  const handles = freeResizeHandles(chromeRect)
+  const canShowInlineDelete = w >= 34 && h >= 30
 
   function startMove(e) {
     if (e.button !== 0) return
@@ -323,7 +397,6 @@ function TabsCanvasItem({ component }) {
         cursor: 'move',
         zIndex: isSelected ? 20 : 1,
         opacity: hidden ? 0.35 : 1,
-        boxShadow: isSelected ? `inset 0 0 0 1.5px ${ACCENT}` : undefined,
       }}
       className={isSelected ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'}
     >
@@ -352,28 +425,38 @@ function TabsCanvasItem({ component }) {
 
       {isSelected && (
         <>
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              remove(component.id)
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: frameOutsets.top,
+              right: frameOutsets.right,
+              bottom: frameOutsets.bottom,
+              left: frameOutsets.left,
+              border: `2px solid ${ACCENT}`,
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
+              boxSizing: 'border-box',
+              pointerEvents: 'none',
+              zIndex: 28,
             }}
-            style={{ position: 'absolute', top: 2, right: 2, zIndex: 30 }}
-            className="rounded-lg bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
-          >
-            Delete
-          </button>
-          {[
-            ['nw', { top: HANDLE_INSET, left: HANDLE_INSET }, 'nwse-resize'],
-            ['n', { top: HANDLE_INSET, left: '50%', marginLeft: -HANDLE_SIZE / 2 }, 'ns-resize'],
-            ['ne', { top: HANDLE_INSET, right: HANDLE_INSET }, 'nesw-resize'],
-            ['e', { top: '50%', right: HANDLE_INSET, marginTop: -HANDLE_SIZE / 2 }, 'ew-resize'],
-            ['se', { bottom: HANDLE_INSET, right: HANDLE_INSET }, 'nwse-resize'],
-            ['s', { bottom: HANDLE_INSET, left: '50%', marginLeft: -HANDLE_SIZE / 2 }, 'ns-resize'],
-            ['sw', { bottom: HANDLE_INSET, left: HANDLE_INSET }, 'nesw-resize'],
-            ['w', { top: '50%', left: HANDLE_INSET, marginTop: -HANDLE_SIZE / 2 }, 'ew-resize'],
-          ].map(([dir, pos, cursor]) => (
+          />
+          {canShowInlineDelete && (
+            <button
+              type="button"
+              aria-label="Delete component"
+              title="Delete"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                remove(component.id)
+              }}
+              style={{ position: 'absolute', top: 3, right: 3, zIndex: 30 }}
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-[#a4262c] text-white shadow"
+            >
+              <TrashIcon size={13} />
+            </button>
+          )}
+          {handles.map(([dir, pos, cursor]) => (
             <div
               key={dir}
               onPointerDown={(e) => startResize(e, dir)}
@@ -383,8 +466,8 @@ function TabsCanvasItem({ component }) {
                 height: HANDLE_SIZE,
                 background: ACCENT,
                 border: '1px solid #ffffff',
-                borderRadius: 999,
-                boxShadow: '0 1px 4px rgba(15,23,42,0.18)',
+                borderRadius: 2,
+                boxShadow: '0 1px 5px rgba(15,23,42,0.22)',
                 zIndex: 30,
                 cursor,
                 ...pos,
@@ -413,11 +496,40 @@ export function TabsEditor({ component }) {
   const panelKids = kids.filter((c) => (c.tabId || tabsList[0].id) === activeId)
   const designW = Math.max(1, Math.round(component.layout?.w || 600))
   const designH = absoluteChildrenHeight(panelKids, 120)
+  const boundsH = Math.max(1, Math.round(component.layout?.h || designH))
   const { setNodeRef, isOver } = useDroppable({ id: component.id })
   const { ref: panelRef, scale, scaledHeight } = useFitToWidth(designW, designH)
   const setPanelRefs = (el) => {
     panelRef.current = el
     setNodeRef(el)
+  }
+  const tablistStyle = {
+    ...TAB_STYLES.tablist,
+    gap: p.tabGap || TAB_STYLES.tablist.gap,
+    background: p.tablistBackgroundColor || 'transparent',
+    borderBottom: `1px solid ${p.tablistBorderColor || '#e5e7eb'}`,
+    padding: p.tablistPadding || TAB_STYLES.tablist.padding,
+  }
+  const tabBaseStyle = {
+    ...TAB_STYLES.tab,
+    background: p.tabBackgroundColor || 'transparent',
+    color: p.tabTextColor || TAB_STYLES.tab.color,
+    borderRadius: p.tabBorderRadius || 0,
+    padding: p.tabPadding || TAB_STYLES.tab.padding,
+  }
+  const tabActiveStyle = {
+    ...TAB_STYLES.tabActive,
+    background: p.activeTabBackgroundColor || p.tabBackgroundColor || 'transparent',
+    color: p.activeTabColor || TAB_STYLES.tabActive.color,
+    borderBottomColor: p.activeTabBorderColor || TAB_STYLES.tabActive.borderBottomColor,
+  }
+  const panelStyle = {
+    ...TAB_STYLES.panel,
+    background: p.panelBackgroundColor || 'transparent',
+    border: `1px solid ${p.panelBorderColor || 'transparent'}`,
+    borderRadius: p.panelBorderRadius || 0,
+    padding: p.panelPadding || 0,
+    boxSizing: 'border-box',
   }
   return (
     <div
@@ -430,7 +542,7 @@ export function TabsEditor({ component }) {
         flexDirection: 'column',
       }}
     >
-      <div role="tablist" style={TAB_STYLES.tablist}>
+      <div role="tablist" style={tablistStyle}>
         {tabsList.map((t) => {
           const sel = t.id === activeId
           return (
@@ -443,11 +555,7 @@ export function TabsEditor({ component }) {
               }}
               onPointerUp={(e) => {
                 e.stopPropagation()
-                console.log('[TabsEditor] pointerUp', { tabId: t.id, sel, componentId: component.id })
-                if (!sel) {
-                  console.log('[TabsEditor] calling setActiveTab', component.id, t.id)
-                  setActiveTab(component.id, t.id)
-                }
+                if (!sel) setActiveTab(component.id, t.id)
               }}
               onClick={(e) => {
                 e.stopPropagation()
@@ -455,8 +563,8 @@ export function TabsEditor({ component }) {
                 if (!sel) setActiveTab(component.id, t.id)
               }}
               style={{
-                ...TAB_STYLES.tab,
-                ...(sel ? TAB_STYLES.tabActive : null),
+                ...tabBaseStyle,
+                ...(sel ? tabActiveStyle : null),
               }}
             >
               {t.label || 'Tab'}
@@ -469,7 +577,7 @@ export function TabsEditor({ component }) {
         data-builder-droppable-id={component.id}
         data-builder-fit-scale={scale}
         style={{
-          ...TAB_STYLES.panel,
+          ...panelStyle,
           position: 'relative',
           minHeight: scaledHeight,
           overflowX: 'clip',
@@ -494,7 +602,9 @@ export function TabsEditor({ component }) {
               Drop components here
             </div>
           ) : (
-            panelKids.map((c) => <TabsCanvasItem key={c.id} component={c} />)
+            panelKids.map((c) => (
+              <TabsCanvasItem key={c.id} component={c} bounds={{ w: designW, h: boundsH }} />
+            ))
           )}
         </div>
       </div>

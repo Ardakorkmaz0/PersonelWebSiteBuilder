@@ -19,6 +19,52 @@ const FLOW_MAX_HEIGHT = {
   section: 220,
 }
 
+function isVerticalNavbar(component) {
+  return component?.type === 'navbar' && component.props?.navLayout === 'vertical'
+}
+
+function numericProp(value, fallback = 0) {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.round(n) : fallback
+}
+
+function pinInset(prop, value) {
+  return { [prop]: numericProp(value, 0) }
+}
+
+export function pinnedLayoutStyle(component, baseStyle = {}) {
+  const props = component?.props || {}
+  const mode = props.scrollBehavior
+  if (mode !== 'fixed' && mode !== 'sticky') return baseStyle
+
+  const pinY = props.pinY === 'bottom' ? 'bottom' : 'top'
+  const pinX = ['right', 'center'].includes(props.pinX) ? props.pinX : 'left'
+  const fallbackY = pinY === 'bottom' ? baseStyle.bottom : baseStyle.top
+  const fallbackX = pinX === 'right' ? baseStyle.right : pinX === 'center' ? 0 : baseStyle.left
+  const offsetY = numericProp(props.pinOffsetY, numericProp(fallbackY, 0))
+  const offsetX = numericProp(props.pinOffsetX, numericProp(fallbackX, 0))
+  const zIndex = numericProp(props.pinZIndex, mode === 'fixed' ? 100 : 20)
+  const pinned = {
+    ...baseStyle,
+    position: mode,
+    zIndex,
+    top: undefined,
+    right: undefined,
+    bottom: undefined,
+    left: undefined,
+  }
+
+  Object.assign(pinned, pinInset(pinY, offsetY))
+  if (pinX === 'center') {
+    pinned.left = `calc(50% + ${offsetX}px)`
+    pinned.transform = 'translateX(-50%)'
+  } else {
+    Object.assign(pinned, pinInset(pinX, offsetX))
+  }
+
+  return pinned
+}
+
 export function layoutFor(component, viewport) {
   if (viewport === 'mobile') return component.mobileLayout || component.layout
   return component.layout
@@ -48,7 +94,7 @@ export function absoluteChildrenHeight(components, minHeight = 120) {
 }
 
 export function isFlowFullWidth(component) {
-  return FLOW_FULL_WIDTH_TYPES.has(component?.type)
+  return FLOW_FULL_WIDTH_TYPES.has(component?.type) && !isVerticalNavbar(component)
 }
 
 export function flowGap(viewport = 'pc') {
@@ -147,10 +193,10 @@ function flowBoxHeight(component, viewport = 'pc') {
   const l = component.layout || {}
   const base = Math.max(4, Math.round(l.h || 80))
   if (FLOW_FIXED_HEIGHT_TYPES.has(component?.type)) return base
-  if (component?.type === 'navbar' && viewport === 'mobile') {
+  if (component?.type === 'navbar' && viewport === 'mobile' && !isVerticalNavbar(component)) {
     return Math.max(88, Math.min(base, 120))
   }
-  const max = FLOW_MAX_HEIGHT[component?.type]
+  const max = isVerticalNavbar(component) ? null : FLOW_MAX_HEIGHT[component?.type]
   return max ? Math.min(base, max) : base
 }
 

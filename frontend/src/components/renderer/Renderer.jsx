@@ -18,6 +18,7 @@ import {
   flowSidePad,
   isHidden,
   layoutFor,
+  pinnedLayoutStyle,
 } from './layout.js'
 
 function TabsRender({ component, style, viewport }) {
@@ -240,6 +241,7 @@ export function Renderer({
   viewport = 'pc',
   flowMode = false,
   fluid = false,
+  containFixed = false,
 }) {
   const list = Array.isArray(components) ? components : []
   const canvasW = width || (viewport === 'mobile' ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH)
@@ -257,6 +259,8 @@ export function Renderer({
           boxSizing: 'border-box',
           margin: '0 auto',
           background,
+          transform: containFixed ? 'translateZ(0)' : undefined,
+          isolation: containFixed ? 'isolate' : undefined,
           display: 'flex',
           flexDirection: 'row',
           flexWrap: 'wrap',
@@ -270,7 +274,7 @@ export function Renderer({
           if (isHidden(c, viewport)) return null
           return (
             // id lets in-page links (#componentId) scroll to this component.
-            <div key={c.id} id={c.id} style={flowItemStyle(c, viewport, canvasW)}>
+            <div key={c.id} id={c.id} style={pinnedLayoutStyle(c, flowItemStyle(c, viewport, canvasW))}>
               <RenderComponent component={c} flowMode viewport={viewport} />
             </div>
           )
@@ -287,23 +291,26 @@ export function Renderer({
         minHeight: canvasHeight(list, viewport),
         margin: '0 auto',
         background,
+        transform: containFixed ? 'translateZ(0)' : undefined,
+        isolation: containFixed ? 'isolate' : undefined,
       }}
     >
       {list.map((c) => {
         if (isHidden(c, viewport)) return null
         const l = layoutFor(c, viewport) || {}
+        const baseStyle = {
+          position: 'absolute',
+          left: l.x || 0,
+          top: l.y || 0,
+          width: l.w || 200,
+          height: l.h || 80,
+        }
         return (
           <div
             key={c.id}
             // id lets in-page links (#componentId) scroll to this component.
             id={c.id}
-            style={{
-              position: 'absolute',
-              left: l.x || 0,
-              top: l.y || 0,
-              width: l.w || 200,
-              height: l.h || 80,
-            }}
+            style={pinnedLayoutStyle(c, baseStyle)}
           >
             <RenderComponent component={c} viewport={viewport} />
           </div>

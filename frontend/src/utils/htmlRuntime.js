@@ -248,6 +248,9 @@ export function builderInteractiveTags() {
 export function withBuilderInteractiveHtml(html) {
   const inject = builderInteractiveTags()
   let out = String(html || '')
+  if (/<style[^>]*data-pwb-embed-reset/i.test(out) && /<\/head>/i.test(out)) {
+    return out.replace(/<\/head>/i, inject + '</head>')
+  }
   if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, inject + '</body>')
   if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
   return out + inject

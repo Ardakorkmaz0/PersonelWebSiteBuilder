@@ -38,33 +38,53 @@ function InlineIcon({ name }) {
 export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
   const links = Array.isArray(props.links) ? props.links : []
   const isMobile = viewport === 'mobile'
+  const layout = props.navLayout || 'horizontal'
+  const vertical = layout === 'vertical'
+  const centered = layout === 'centered'
+  const twoRow = layout === 'twoRow'
+  const stacked = isMobile || vertical || centered || twoRow
+  const linkColumn = isMobile || vertical
   return (
     // The bar keeps its (possibly full-bleed) background; the inner row is capped
     // at `contentWidth` (the Max width) and centered — like a real site header.
-    <nav style={{ ...style, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+    <nav
+      style={{
+        ...style,
+        display: 'flex',
+        justifyContent: vertical ? 'flex-start' : 'center',
+        alignItems: vertical ? 'stretch' : 'center',
+        overflow: vertical ? 'visible' : style?.overflow,
+      }}
+    >
       <div
         style={{
           display: 'flex',
           width: '100%',
-          maxWidth: contentWidth || undefined,
+          height: vertical ? '100%' : undefined,
+          maxWidth: vertical ? undefined : contentWidth || undefined,
           marginLeft: 'auto',
           marginRight: 'auto',
           // On mobile, stack the brand over the links (left-aligned, tight) instead
           // of spreading them edge-to-edge, which looks cramped on a phone.
-          flexDirection: isMobile ? 'column' : 'row',
-          alignItems: isMobile ? 'flex-start' : 'center',
-          justifyContent: isMobile ? 'flex-start' : 'space-between',
-          gap: isMobile ? '10px' : '16px',
+          flexDirection: stacked ? 'column' : 'row',
+          alignItems: centered ? 'center' : stacked ? 'flex-start' : 'center',
+          justifyContent: stacked ? 'flex-start' : 'space-between',
+          gap: isMobile ? '10px' : vertical ? '14px' : twoRow ? '10px' : '16px',
           flexWrap: 'wrap',
+          textAlign: centered ? 'center' : undefined,
         }}
       >
         <span style={{ fontWeight: 'bold', fontSize: '18px' }}>{props.brand}</span>
         <div
           style={{
             display: 'flex',
-            gap: isMobile ? '16px' : '20px',
+            flexDirection: linkColumn ? 'column' : 'row',
+            alignItems: centered ? 'center' : linkColumn ? 'stretch' : 'center',
+            justifyContent: centered ? 'center' : undefined,
+            gap: linkColumn ? '6px' : isMobile ? '16px' : '20px',
             rowGap: '6px',
             flexWrap: 'wrap',
+            width: linkColumn || twoRow ? '100%' : undefined,
           }}
         >
           {links.map((link, i) => {
@@ -73,7 +93,16 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
               <a
                 key={i}
                 href={href || undefined}
-                style={{ color: 'inherit', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                style={{
+                  color: 'inherit',
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                  display: vertical ? 'block' : undefined,
+                  width: vertical ? '100%' : undefined,
+                  padding: vertical ? '10px 12px' : undefined,
+                  borderRadius: vertical ? '8px' : undefined,
+                  boxSizing: vertical ? 'border-box' : undefined,
+                }}
                 {...linkAttrs(href)}
               >
                 {link.label}

@@ -98,6 +98,17 @@ describe('withBuilderInteractiveHtml', () => {
     expect(out).toContain('<h1>Hi</h1>')
   })
 
+  it('keeps HTML embed runtime tags out of <body> so single-snippet sizing still works', () => {
+    const html = '<html><head><style data-pwb-embed-reset></style></head><body><section>Hi</section></body></html>'
+    const out = withBuilderInteractiveHtml(html)
+    const headEnd = out.indexOf('</head>')
+    const bodyStart = out.indexOf('<body>')
+    const inject = out.indexOf('data-builder-interactive')
+    expect(inject).toBeGreaterThan(-1)
+    expect(inject).toBeLessThan(headEnd)
+    expect(inject).toBeLessThan(bodyStart)
+  })
+
   it('falls back to </head> when there is no body close tag', () => {
     const html = '<html><head><title>x</title></head><h1>Hi</h1>'
     const out = withBuilderInteractiveHtml(html)

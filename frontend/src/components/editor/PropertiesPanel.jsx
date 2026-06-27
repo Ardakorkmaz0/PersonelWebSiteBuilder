@@ -499,21 +499,22 @@ const ADVANCED_STYLE_KEYS = [
 
 const PROPERTIES_MODE_KEY = 'pwb_properties_mode'
 
-const BASIC_STYLE_KEYS = new Set([
-  'color',
-  'backgroundColor',
-  'backgroundImage',
-  'fontSize',
-  'fontWeight',
-  'lineHeight',
-  'textAlign',
-  'textDecoration',
-  'padding',
-  'borderRadius',
-  'boxShadow',
-  'opacity',
-  'objectFit',
-])
+const SCROLL_BEHAVIOR_OPTIONS = [
+  ['normal', 'Normal'],
+  ['sticky', 'Sticky while scrolling'],
+  ['fixed', 'Fixed on screen'],
+]
+
+const PIN_Y_OPTIONS = [
+  ['top', 'Top'],
+  ['bottom', 'Bottom'],
+]
+
+const PIN_X_OPTIONS = [
+  ['left', 'Left'],
+  ['center', 'Center'],
+  ['right', 'Right'],
+]
 
 const STYLE_GROUPS = [
   {
@@ -675,14 +676,8 @@ function groupedStyles(keys) {
 }
 
 function visibleStyleGroups(keys, mode) {
-  const groups = groupedStyles(keys)
-  if (mode === 'extended') return groups
-  return groups
-    .map((group) => ({
-      ...group,
-      keys: group.keys.filter((key) => BASIC_STYLE_KEYS.has(key)),
-    }))
-    .filter((group) => group.keys.length)
+  if (mode !== 'extended') return []
+  return groupedStyles(keys)
 }
 
 export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }) {
@@ -953,6 +948,27 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const def = registry[component.type]
   const layout = component[layoutKey] || component.layout
   const componentPresets = presetsForType(component.type)
+  const scrollBehavior = component.props?.scrollBehavior || 'normal'
+  const setScrollBehavior = (mode) => {
+    const next = mode || 'normal'
+    const currentLayout = component[layoutKey] || component.layout || {}
+    const enteringPinnedMode = scrollBehavior === 'normal' && next !== 'normal'
+    const defaultPinX = isFlow && !isAbsoluteNested ? 'center' : 'left'
+    const defaultPinOffsetX = isFlow && !isAbsoluteNested ? 0 : Math.round(currentLayout.x || 0)
+    const defaultPinOffsetY = isFlow && !isAbsoluteNested ? 16 : Math.round(currentLayout.y || 0)
+    updateProps(component.id, {
+      scrollBehavior: next,
+      ...(next === 'normal'
+        ? {}
+        : {
+            pinY: enteringPinnedMode ? 'top' : component.props?.pinY || 'top',
+            pinX: enteringPinnedMode ? defaultPinX : component.props?.pinX || defaultPinX,
+            pinOffsetY: enteringPinnedMode ? defaultPinOffsetY : component.props?.pinOffsetY ?? 0,
+            pinOffsetX: enteringPinnedMode ? defaultPinOffsetX : component.props?.pinOffsetX ?? 0,
+            pinZIndex: component.props?.pinZIndex ?? (next === 'fixed' ? 100 : 20),
+          }),
+    })
+  }
   const contentSection = (def.editableProps || []).length > 0 ? (
     <section className="space-y-3">
       <SectionTitle>Content</SectionTitle>
@@ -1085,11 +1101,61 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           </div>
         </section>
 
+        <section className="space-y-3">
+          <SectionTitle>Scroll</SectionTitle>
+          <LabeledSelect
+            label="Behavior"
+            value={scrollBehavior}
+            onChange={setScrollBehavior}
+            options={SCROLL_BEHAVIOR_OPTIONS}
+          />
+          {scrollBehavior !== 'normal' && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <LabeledSelect
+                  label="Vertical edge"
+                  value={component.props?.pinY || 'top'}
+                  onChange={(v) => updateProps(component.id, { pinY: v })}
+                  options={PIN_Y_OPTIONS}
+                />
+                <LabeledSelect
+                  label="Horizontal edge"
+                  value={component.props?.pinX || 'left'}
+                  onChange={(v) => updateProps(component.id, { pinX: v })}
+                  options={PIN_X_OPTIONS}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <LabeledNumber
+                  label="Y offset"
+                  value={component.props?.pinOffsetY ?? 0}
+                  onChange={(v) => updateProps(component.id, { pinOffsetY: v })}
+                />
+                <LabeledNumber
+                  label="X offset"
+                  value={component.props?.pinOffsetX ?? 0}
+                  onChange={(v) => updateProps(component.id, { pinOffsetX: v })}
+                />
+                <LabeledNumber
+                  label="Layer"
+                  value={component.props?.pinZIndex ?? (scrollBehavior === 'fixed' ? 100 : 20)}
+                  onChange={(v) => updateProps(component.id, { pinZIndex: v })}
+                />
+              </div>
+              {extendedMode && (
+                <p className="text-[11px] leading-snug text-[#9ca3af]">
+                  Sticky keeps the item in the page flow until it reaches the edge. Fixed pins it to the browser viewport.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+
         {/* Align & Distribute. Live snap guides still help while dragging; these
             give precise, one-click control. One selection aligns to the
             artboard; a multi-selection (shift-click on the canvas) aligns the
             items to each other and can distribute equal gaps. */}
-        {showPositionControls && extendedMode && (
+        {showPositionControls && (
           <section className="space-y-2">
             <SectionTitle>
               Align &amp; Distribute
@@ -1097,11 +1163,13 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                 <span className="ml-1 font-normal normal-case text-[#9ca3af]">({selectedIds.length} selected)</span>
               )}
             </SectionTitle>
-            <p className="text-[11px] leading-snug text-[#9ca3af]">
-              {selectedIds.length > 1
-                ? 'Aligns the selected items to each other.'
-                : 'Aligns this item to the artboard. Shift-click on the canvas to select more.'}
-            </p>
+            {extendedMode && (
+              <p className="text-[11px] leading-snug text-[#9ca3af]">
+                {selectedIds.length > 1
+                  ? 'Aligns the selected items to each other.'
+                  : 'Aligns this item to the artboard. Shift-click on the canvas to select more.'}
+              </p>
+            )}
             <div className="grid grid-cols-3 gap-1.5">
               {[
                 ['left', 'Left'],
@@ -1188,100 +1256,78 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
       </div>
 
       <div className="space-y-2 border-t border-[#e5e7eb] p-4">
-        {extendedMode ? (
-          <>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => duplicateComponent(component.id)}
-                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-              >
-                Duplicate
-              </button>
-              <button
-                type="button"
-                onClick={() => bringToFront(component.id)}
-                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-              >
-                {isFlow ? 'Move to end' : 'To front'}
-              </button>
-              <button
-                type="button"
-                onClick={() => sendToBack(component.id)}
-                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-              >
-                {isFlow ? 'Move to start' : 'To back'}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => moveBackward(component.id)}
-                title={isFlow ? 'Move one step earlier in the order' : 'Bring one step backward'}
-                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-              >
-                {isFlow ? 'Move before' : 'Backward'}
-              </button>
-              <button
-                type="button"
-                onClick={() => moveForward(component.id)}
-                title={isFlow ? 'Move one step later in the order' : 'Bring one step forward'}
-                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-              >
-                {isFlow ? 'Move next' : 'Forward'}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => applyThemeToComponent(component.id)}
-                title="Restyle this component with the active theme (colors, font, radius)"
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
-              >
-                <PaletteIcon size={14} /> Apply theme
-              </button>
-              <select
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) copyComponentToPage(component.id, e.target.value)
-                  e.target.value = ''
-                }}
-                disabled={schema.pages.length < 2}
-                title="Copy this component (with all its properties) onto another page"
-                className="rounded-lg border border-[#d1d5db] bg-white px-1.5 py-1.5 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none disabled:opacity-40"
-              >
-                <option value="" disabled>
-                  Copy to page...
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => duplicateComponent(component.id)}
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+          >
+            Duplicate
+          </button>
+          <button
+            type="button"
+            onClick={() => bringToFront(component.id)}
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+          >
+            {isFlow ? 'Move end' : 'Front'}
+          </button>
+          <button
+            type="button"
+            onClick={() => sendToBack(component.id)}
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+          >
+            {isFlow ? 'Move start' : 'Back'}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => moveBackward(component.id)}
+            title={isFlow ? 'Move one step earlier in the order' : 'Bring one step backward'}
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+          >
+            {isFlow ? 'Before' : 'Backward'}
+          </button>
+          <button
+            type="button"
+            onClick={() => moveForward(component.id)}
+            title={isFlow ? 'Move one step later in the order' : 'Bring one step forward'}
+            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+          >
+            {isFlow ? 'Next' : 'Forward'}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => applyThemeToComponent(component.id)}
+            title="Restyle this component with the active theme"
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+          >
+            <PaletteIcon size={14} /> Theme
+          </button>
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) copyComponentToPage(component.id, e.target.value)
+              e.target.value = ''
+            }}
+            disabled={schema.pages.length < 2}
+            title="Copy this component onto another page"
+            className="rounded-lg border border-[#d1d5db] bg-white px-1.5 py-1.5 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none disabled:opacity-40"
+          >
+            <option value="" disabled>
+              Copy page...
+            </option>
+            {schema.pages
+              .filter((p) => p.id !== page.id)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
-                {schema.pages
-                  .filter((p) => p.id !== page.id)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          </>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => duplicateComponent(component.id)}
-              className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-            >
-              Duplicate
-            </button>
-            <button
-              type="button"
-              onClick={() => applyThemeToComponent(component.id)}
-              title="Restyle this component with the active theme"
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
-            >
-              <PaletteIcon size={14} /> Theme
-            </button>
-          </div>
-        )}
+              ))}
+          </select>
+        </div>
         <button
           type="button"
           onClick={() => removeComponent(component.id)}

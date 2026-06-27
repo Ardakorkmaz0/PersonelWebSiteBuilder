@@ -142,6 +142,33 @@ class TestValidateAndCleanSchema:
         href = clean['pages'][0]['components'][0]['props']['href']
         assert href == ''
 
+    def test_shared_fixed_position_props_are_preserved(self):
+        clean = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [{
+                    'id': 'btn1', 'type': 'button',
+                    'props': {
+                        'text': 'Pinned',
+                        'scrollBehavior': 'fixed',
+                        'pinY': 'bottom',
+                        'pinX': 'right',
+                        'pinOffsetY': 18,
+                        'pinOffsetX': 24,
+                        'pinZIndex': 200,
+                    },
+                    'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 100, 'h': 40},
+                }],
+            }],
+        })
+        props = clean['pages'][0]['components'][0]['props']
+        assert props['scrollBehavior'] == 'fixed'
+        assert props['pinY'] == 'bottom'
+        assert props['pinX'] == 'right'
+        assert props['pinOffsetY'] == 18
+        assert props['pinOffsetX'] == 24
+        assert props['pinZIndex'] == 200
+
     def test_navbar_links_each_sanitized(self):
         clean = validate_and_clean_schema({
             'pages': [{

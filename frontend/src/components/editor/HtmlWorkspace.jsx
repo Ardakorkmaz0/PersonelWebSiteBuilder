@@ -64,6 +64,21 @@ function setDocumentDesignMode(doc, value) {
   }
 }
 
+function activateBuilderTab(root, tabId) {
+  if (!root || !tabId) return
+  root.querySelectorAll('[role="tab"][data-builder-tab]').forEach((tab) => {
+    tab.setAttribute('aria-selected', tab.getAttribute('data-builder-tab') === tabId ? 'true' : 'false')
+  })
+  root.querySelectorAll('[role="tabpanel"][data-builder-panel]').forEach((panel) => {
+    if (panel.getAttribute('data-builder-panel') === tabId) {
+      panel.removeAttribute('hidden')
+      panel.style.display = ''
+    } else {
+      panel.setAttribute('hidden', '')
+    }
+  })
+}
+
 // Draw a persistent connector ARROW for EVERY in-document link→target binding
 // (anchor href="#id" whose id resolves in the same doc). Replaces any prior
 // layer, so a rebound link drops its old line immediately. Cross-page links
@@ -865,6 +880,14 @@ function HtmlWorkspace({
   function attachSelectionListeners(doc) {
     doc.addEventListener('click', (e) => {
       if (pendingRef.current || editToolRef.current !== 'text') return // owned by another tool
+      const tab = e.target?.closest?.('[data-builder-tabs] [role="tab"][data-builder-tab]')
+      if (tab) {
+        e.preventDefault()
+        e.stopPropagation()
+        activateBuilderTab(tab.closest('[data-builder-tabs]'), tab.getAttribute('data-builder-tab'))
+        clearSelection()
+        return
+      }
       const el = resolveSelectableElement(e.target, doc.body)
       selectedRef.current = el
       setSelectedElement(doc, el)

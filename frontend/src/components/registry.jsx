@@ -48,6 +48,7 @@ export const registry = {
         { label: 'About', href: '#about' },
         { label: 'Contact', href: '#contact' },
       ],
+      navLayout: 'horizontal',
     },
     defaultStyles: {
       backgroundColor: '#1d1d1f',
@@ -57,6 +58,17 @@ export const registry = {
     editableProps: [
       { key: 'brand', label: 'Brand', control: 'text' },
       { key: 'links', label: 'Links', control: 'links' },
+      {
+        key: 'navLayout',
+        label: 'Layout',
+        control: 'select',
+        options: [
+          ['horizontal', 'Horizontal'],
+          ['centered', 'Centered'],
+          ['twoRow', 'Two row'],
+          ['vertical', 'Vertical'],
+        ],
+      },
     ],
     editableStyles: [
       'backgroundColor', 'backgroundImage', 'color', 'fontSize', 'fontWeight',

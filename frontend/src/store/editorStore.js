@@ -859,17 +859,22 @@ export const useEditorStore = create((set, get) => ({
   },
 
   // ---- Components (operate on the current page) --------------------------
-  addComponent: (type, x = 24, y = 24, parentId = null, presetId = null) => {
+  addComponent: (type, x = 24, y = 24, parentId = null, presetId = null, initialSize = null) => {
     const def = registry[type]
     if (!def) return
     get().record('add')
     set((state) => {
       const page = selectCurrentPage(state)
-      const size = def.defaultSize || { w: 200, h: 80 }
+      const defaultSize = def.defaultSize || { w: 200, h: 80 }
+      const customW = Number(initialSize?.w)
+      const customH = Number(initialSize?.h)
+      const size = {
+        w: Number.isFinite(customW) && customW > 0 ? Math.round(customW) : defaultSize.w,
+        h: Number.isFinite(customH) && customH > 0 ? Math.round(customH) : defaultSize.h,
+      }
       const comps = page.components
       const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
       const id = genId(type)
-      const fullWidth = FULL_WIDTH_TYPES.has(type)
       let styles = themedStyles(type, def.defaultStyles, state.schema.theme)
       // A palette VARIANT carries a preset id — bake its styles in at creation so
       // the component drops onto the canvas already styled.
@@ -879,6 +884,8 @@ export const useEditorStore = create((set, get) => ({
         if (ps) styles = { ...styles, ...ps }
         presetProps = componentPresetProps(type, presetId)
       }
+      const verticalNavbar = type === 'navbar' && presetProps?.navLayout === 'vertical'
+      const fullWidth = FULL_WIDTH_TYPES.has(type) && !verticalNavbar
       const makeProps = () => {
         const base = structuredClone(def.defaultProps)
         return presetProps ? { ...base, ...presetProps } : base
@@ -899,7 +906,7 @@ export const useEditorStore = create((set, get) => ({
             {
               x: Math.max(0, Math.round(x)),
               y: Math.max(0, Math.round(y)),
-              w: fullWidth ? page.canvasWidth || CANVAS_WIDTH : size.w,
+              w: fullWidth ? parentW || page.canvasWidth || CANVAS_WIDTH : size.w,
               h: size.h,
             },
             { maxX: parentW, maxY: parentH },

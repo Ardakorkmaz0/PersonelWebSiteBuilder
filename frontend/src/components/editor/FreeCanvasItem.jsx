@@ -2,23 +2,39 @@ import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, TabsEditor } from './FlowCanvasItem.jsx'
 import { snapDraggedRect } from '../../utils/snapping.js'
+import { TrashIcon } from '../icons.jsx'
 
 const MIN = 20
 const ACCENT = '#4f46e5'
-const HANDLE_SIZE = 8
-const HANDLE_INSET = 3
+const HANDLE_SIZE = 10
+const HANDLE_OFFSET = HANDLE_SIZE / 2
+const FRAME_OUTSET = 2
+
+function edgeOutsets(rect, amount) {
+  const maxW = rect.maxW || 0
+  const maxH = rect.maxH || 0
+  return {
+    top: rect.y <= amount ? 0 : -amount,
+    left: rect.x <= amount ? 0 : -amount,
+    right: maxW && rect.x + rect.w >= maxW - amount ? 0 : -amount,
+    bottom: maxH && rect.y + rect.h >= maxH - amount ? 0 : -amount,
+  }
+}
 
 // [direction, absolute-position style, cursor]
-const HANDLES = [
-  ['nw', { top: HANDLE_INSET, left: HANDLE_INSET }, 'nwse-resize'],
-  ['n', { top: HANDLE_INSET, left: '50%', marginLeft: -HANDLE_SIZE / 2 }, 'ns-resize'],
-  ['ne', { top: HANDLE_INSET, right: HANDLE_INSET }, 'nesw-resize'],
-  ['e', { top: '50%', right: HANDLE_INSET, marginTop: -HANDLE_SIZE / 2 }, 'ew-resize'],
-  ['se', { bottom: HANDLE_INSET, right: HANDLE_INSET }, 'nwse-resize'],
-  ['s', { bottom: HANDLE_INSET, left: '50%', marginLeft: -HANDLE_SIZE / 2 }, 'ns-resize'],
-  ['sw', { bottom: HANDLE_INSET, left: HANDLE_INSET }, 'nesw-resize'],
-  ['w', { top: '50%', left: HANDLE_INSET, marginTop: -HANDLE_SIZE / 2 }, 'ew-resize'],
-]
+function resizeHandles(rect) {
+  const edge = edgeOutsets(rect, HANDLE_OFFSET)
+  return [
+    ['nw', { top: edge.top, left: edge.left }, 'nwse-resize'],
+    ['n', { top: edge.top, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
+    ['ne', { top: edge.top, right: edge.right }, 'nesw-resize'],
+    ['e', { top: '50%', right: edge.right, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
+    ['se', { bottom: edge.bottom, right: edge.right }, 'nwse-resize'],
+    ['s', { bottom: edge.bottom, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
+    ['sw', { bottom: edge.bottom, left: edge.left }, 'nesw-resize'],
+    ['w', { top: '50%', left: edge.left, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
+  ]
+}
 
 export default function FreeCanvasItem({ component }) {
   const selectedId = useEditorStore((s) => s.selectedId)
@@ -49,6 +65,17 @@ export default function FreeCanvasItem({ component }) {
       ? component.mobileLayout || component.layout
       : component.layout
   const { x, y, w, h } = layout
+  const page = useEditorStore(selectCurrentPage)
+  const chromeRect = {
+    x,
+    y,
+    w,
+    h,
+    maxW: viewport === 'mobile' ? page.mobileWidth || 390 : page.canvasWidth || 1000,
+  }
+  const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
+  const handles = resizeHandles(chromeRect)
+  const canShowInlineDelete = w >= 34 && h >= 30
   const hidden =
     viewport === 'mobile' ? component.hiddenMobile : component.hidden
 
@@ -175,11 +202,6 @@ export default function FreeCanvasItem({ component }) {
         opacity: hidden ? 0.35 : 1,
         // Armed link source stays a solid blue ring (with a light wash) until
         // the next click picks the target — same affordance as HTML mode.
-        boxShadow: isLinkSource
-          ? `inset 0 0 0 2px ${ACCENT}, 0 0 0 1px rgba(255,255,255,0.9)`
-          : isSelected
-            ? `inset 0 0 0 1.5px ${ACCENT}`
-            : undefined,
         background: isLinkSource ? 'rgba(79, 70, 229, 0.10)' : undefined,
       }}
       className={
@@ -209,21 +231,43 @@ export default function FreeCanvasItem({ component }) {
         </span>
       )}
 
+      {(isSelected || isLinkSource) && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: frameOutsets.top,
+            right: frameOutsets.right,
+            bottom: frameOutsets.bottom,
+            left: frameOutsets.left,
+            border: `${isLinkSource ? 3 : 2}px solid ${ACCENT}`,
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
+            boxSizing: 'border-box',
+            pointerEvents: 'none',
+            zIndex: 28,
+          }}
+        />
+      )}
+
       {isPrimarySingle && !linkMode && (
         <>
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              remove(component.id)
-            }}
-            style={{ position: 'absolute', top: 2, right: 2, zIndex: 30 }}
-            className="rounded-lg bg-[#a4262c] px-2 py-0.5 text-xs font-medium text-white shadow"
-          >
-            Delete
-          </button>
-          {HANDLES.map(([dir, pos, cursor]) => (
+          {canShowInlineDelete && (
+            <button
+              type="button"
+              aria-label="Delete component"
+              title="Delete"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                remove(component.id)
+              }}
+              style={{ position: 'absolute', top: 3, right: 3, zIndex: 30 }}
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-[#a4262c] text-white shadow"
+            >
+              <TrashIcon size={13} />
+            </button>
+          )}
+          {handles.map(([dir, pos, cursor]) => (
             <div
               key={dir}
               onPointerDown={(e) => startResize(e, dir)}
@@ -233,8 +277,8 @@ export default function FreeCanvasItem({ component }) {
                 height: HANDLE_SIZE,
                 background: ACCENT,
                 border: '1px solid #ffffff',
-                borderRadius: 999,
-                boxShadow: '0 1px 4px rgba(15,23,42,0.18)',
+                borderRadius: 2,
+                boxShadow: '0 1px 5px rgba(15,23,42,0.22)',
                 zIndex: 30,
                 cursor,
                 ...pos,

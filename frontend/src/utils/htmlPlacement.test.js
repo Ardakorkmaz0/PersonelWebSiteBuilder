@@ -159,6 +159,7 @@ describe('placement chrome + serializeDocument', () => {
     expect(document.querySelectorAll('style[data-pwb-edit-chrome]').length).toBe(1)
     const editChrome = document.querySelector('style[data-pwb-edit-chrome]')
     expect(editChrome.textContent).toContain('box-shadow: inset')
+    expect(editChrome.textContent).toContain('data-builder-tabs')
     expect(editChrome.textContent).not.toContain('outline-offset')
     const out = serializeDocument(document)
     expect(out).not.toContain('data-pwb-edit-chrome')

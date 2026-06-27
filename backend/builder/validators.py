@@ -288,6 +288,24 @@ def _num(value, default, lo, hi):
     return round(max(lo, min(hi, n)))
 
 
+def sanitize_shared_props(props):
+    if not isinstance(props, dict):
+        return {}
+    mode = props.get('scrollBehavior')
+    if mode not in ('fixed', 'sticky'):
+        return {}
+    pin_y = props.get('pinY')
+    pin_x = props.get('pinX')
+    return {
+        'scrollBehavior': mode,
+        'pinY': pin_y if pin_y in ('top', 'bottom') else 'top',
+        'pinX': pin_x if pin_x in ('left', 'center', 'right') else 'left',
+        'pinOffsetY': _num(props.get('pinOffsetY'), 0, -20000, 20000),
+        'pinOffsetX': _num(props.get('pinOffsetX'), 0, -20000, 20000),
+        'pinZIndex': _num(props.get('pinZIndex'), 100 if mode == 'fixed' else 20, 0, 2147483647),
+    }
+
+
 def sanitize_layout(layout):
     """Free-canvas position and size, clamped to sane bounds."""
     if not isinstance(layout, dict):
@@ -309,10 +327,12 @@ def sanitize_component(comp, depth=0):
     cid = comp.get('id')
     if not isinstance(cid, str) or not cid:
         raise serializers.ValidationError('Each component needs a non-empty string id.')
+    clean_props = sanitize_props(ctype, comp.get('props'))
+    clean_props.update(sanitize_shared_props(comp.get('props')))
     clean = {
         'id': cid,
         'type': ctype,
-        'props': sanitize_props(ctype, comp.get('props')),
+        'props': clean_props,
         'styles': sanitize_styles(comp.get('styles')),
         'layout': sanitize_layout(comp.get('layout')),
         # Separate mobile breakpoint position/size and per-breakpoint visibility.

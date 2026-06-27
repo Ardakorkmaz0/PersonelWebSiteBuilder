@@ -141,6 +141,31 @@ export function ensureEditHintChrome(doc) {
     }
     /* Code-project EDIT: server-side template tags ({% … %} / {{ … }}) shown as
        small, muted, non-editable chips so the canvas stays tidy. */
+    [data-builder-tabs] [role="tab"] {
+      appearance: none;
+      background: var(--builder-tab-bg, transparent);
+      border: 0;
+      border-bottom: 2px solid transparent;
+      padding: var(--builder-tab-padding, 8px 14px);
+      font: inherit;
+      font-weight: 500;
+      color: var(--builder-tab-color, #6b7280);
+      cursor: pointer;
+      margin-bottom: -1px;
+      border-radius: var(--builder-tab-radius, 0);
+    }
+    [data-builder-tabs] [role="tab"][aria-selected="true"] {
+      background: var(--builder-tab-active-bg, var(--builder-tab-bg, transparent));
+      color: var(--builder-tab-active-color, #1d1d1f);
+      border-bottom-color: var(--builder-tab-active-border, #2563eb);
+    }
+    [data-builder-tabs] [role="tabpanel"][hidden] {
+      display: none !important;
+    }
+    [data-builder-tabs] [role="tab"]:hover {
+      box-shadow: none;
+      cursor: pointer;
+    }
     [data-pwb-tt] {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 0.72em;

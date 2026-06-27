@@ -64,10 +64,9 @@ function ResponsiveSite({ page }) {
   const designW = isMobileView
     ? page.mobileWidth || MOBILE_CANVAS_WIDTH
     : page.canvasWidth || CANVAS_WIDTH
-  // Absolute mode: scale the design to FILL the viewport width (no side margins) —
-  // scaling up on screens wider than the design and down on narrower ones. The
-  // desktop/mobile layouts switch at 768px.
-  const scale = width / designW
+  // Absolute mode mirrors the editor canvas: keep the active artboard at 1x on
+  // roomy screens, and only scale down when the viewport is narrower.
+  const scale = Math.min(1, width / designW)
   const left = Math.max(0, (width - designW * scale) / 2)
   const height = canvasHeight(components, viewport) * scale
 
@@ -232,7 +231,17 @@ export default function PreviewPage() {
     }
     return (site?.schema?.pages || []).some((p) => walk(p?.components))
   }, [site?.schema?.pages])
-  const useIframe = hasCustomJs || hasHtmlEmbed
+  const hasPinnedFixed = useMemo(() => {
+    const walk = (arr) => {
+      for (const c of arr || []) {
+        if (c?.props?.scrollBehavior === 'fixed') return true
+        if (Array.isArray(c?.children) && walk(c.children)) return true
+      }
+      return false
+    }
+    return (site?.schema?.pages || []).some((p) => walk(p?.components))
+  }, [site?.schema?.pages])
+  const useIframe = hasCustomJs || hasHtmlEmbed || hasPinnedFixed
   const staticMode = searchParams.get('mode') === 'static'
   const iframeHtml = useMemo(() => {
     if (!useIframe || !current?.id) return ''

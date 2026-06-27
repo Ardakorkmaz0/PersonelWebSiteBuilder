@@ -9,8 +9,13 @@ import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { googleFontLinkTag } from './googleFonts.js'
+import { pinnedLayoutStyle } from '../components/renderer/layout.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
+
+function isFullWidthComponent(c) {
+  return FULL_WIDTH.has(c?.type) && !(c?.type === 'navbar' && c.props?.navLayout === 'vertical')
+}
 // Visual styles we keep on elements; layout/box metrics come from the flow.
 const DROP_STYLES = new Set([
   'width', 'height', 'maxWidth', 'minHeight', 'display', 'gap', 'objectFit',
@@ -78,6 +83,9 @@ function styleAttr(component, extra = '') {
   const parts = Object.entries(clean)
     .filter(([k]) => !DROP_STYLES.has(k))
     .map(([k, v]) => `${kebab(k)}:${cssVal(v)}`)
+  Object.entries(pinnedLayoutStyle(component, {}))
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .forEach(([k, v]) => parts.push(`${kebab(k)}:${cssVal(v)}`))
   if (extra) parts.push(extra)
   return parts.length ? ` style="${parts.join(';')}"` : ''
 }
@@ -140,6 +148,7 @@ function iconA11yAttrs(props = {}) {
 
 function navbar(c) {
   const p = c.props || {}
+  const layout = ['vertical', 'centered', 'twoRow'].includes(p.navLayout) ? p.navLayout : 'horizontal'
   const links = (Array.isArray(p.links) ? p.links : [])
     .map((l) => {
       const href = sanitizeUrl(l.href)
@@ -147,7 +156,7 @@ function navbar(c) {
     })
     .join('\n          ')
   return `<header class="rh-navbar"${styleAttr(c)}>
-      <div class="rh-container rh-nav-inner">
+      <div class="rh-container rh-nav-inner rh-nav-${layout}">
         <span class="rh-brand">${esc(p.brand)}</span>
         <nav class="rh-links">\n          ${links}\n        </nav>
       </div>
@@ -353,7 +362,7 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
       inline = []
     }
     for (const c of row) {
-      if (!FULL_WIDTH.has(c.type)) {
+      if (!isFullWidthComponent(c)) {
         inline.push(c)
         continue
       }
@@ -392,6 +401,13 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
       .rh-nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 0; }
       .rh-brand { font-weight: 700; font-size: 18px; }
       .rh-links { display: flex; gap: 22px; flex-wrap: wrap; }
+      .rh-nav-vertical { height: 100%; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 14px; }
+      .rh-nav-vertical .rh-links { width: 100%; flex-direction: column; align-items: stretch; gap: 6px; }
+      .rh-nav-vertical .rh-links a { display: block; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; }
+      .rh-nav-centered { flex-direction: column; justify-content: flex-start; text-align: center; gap: 10px; }
+      .rh-nav-centered .rh-links { justify-content: center; }
+      .rh-nav-twoRow { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 10px; }
+      .rh-nav-twoRow .rh-links { width: 100%; }
       .rh-btn { display: inline-flex; align-items: center; justify-content: center; padding: 12px 24px; text-align: center; }
       .rh-card { align-self: stretch; padding: 24px; }
       .rh-card-title { margin: 0 0 8px; font-size: 20px; font-weight: 600; }

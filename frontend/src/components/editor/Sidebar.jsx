@@ -14,10 +14,10 @@ function variantsForType(type) {
   return vs.length ? vs : [{ id: 'default', label: 'Default', html: componentToHtml(type) }]
 }
 
-// ONE library powers BOTH editor modes. A palette item carries its HTML snippet;
-// in HTML-upload mode it's inserted as raw HTML, on the free canvas it's dropped
-// as an editable `html` component (HtmlEmbed). So the palette is identical in
-// both modes.
+// ONE visual library powers both editor modes. Most palette variants still drop
+// as editable HTML embeds on the free canvas, but structural widgets that need
+// editor-owned children stay native there.
+const NATIVE_CANVAS_TYPES = new Set(['tabs', 'navbar'])
 
 // Types whose snippets are wide (full-width-ish) — previewed scaled-down from the
 // top-left; the rest are inline and shown a bit larger, centered.
@@ -26,13 +26,42 @@ const WIDE_HTML = new Set(['navbar', 'section', 'card', 'image', 'list', 'input'
 // Sensible starting size (w,h) for the `html` component a snippet drops as on the
 // free canvas — the user resizes from there.
 const HTML_SIZE = {
-  navbar: [1000, 84], section: [1000, 360], card: [360, 320], image: [480, 300],
-  list: [420, 160], input: [440, 96], button: [220, 56], linkbutton: [240, 50],
+  navbar: [1000, 84], section: [1000, 240], card: [360, 320], image: [480, 300],
+  list: [420, 112], input: [440, 96], button: [220, 56], linkbutton: [240, 50],
   badge: [170, 44], heading: [620, 84], text: [560, 120], quote: [560, 130], divider: [560, 44],
   select: [360, 90], alert: [520, 110], accordion: [620, 220], tabs: [620, 220],
-  container: [560, 150], icon: [90, 90], html: [560, 180], spacer: [560, 60],
+  container: [560, 150], icon: [90, 90], html: [560, 150], spacer: [560, 60],
 }
-function htmlSize(type) { return HTML_SIZE[type] || [380, 110] }
+
+const HTML_VARIANT_SIZE = {
+  navbar: {
+    centered: [640, 110],
+    sticky: [720, 86],
+    search: [720, 86],
+    tworow: [1000, 116],
+    vertical: [220, 320],
+    'vertical-light': [220, 320],
+  },
+  html: {
+    blank: [560, 150],
+    'css-card': [420, 180],
+  },
+  list: {
+    check: [420, 112],
+    bulleted: [420, 104],
+    numbered: [420, 104],
+  },
+  section: {
+    soft: [1000, 220],
+    gradient: [1000, 250],
+    split: [1000, 460],
+  },
+}
+
+function htmlSize(type, variant) {
+  const id = typeof variant === 'string' ? variant : variant?.id
+  return HTML_VARIANT_SIZE[type]?.[id] || HTML_SIZE[type] || [380, 110]
+}
 
 const CUSTOM_BLOCKS_KEY = 'pwb_custom_blocks'
 const DEFAULT_CUSTOM_HTML = `<section style="padding:64px 32px;background:#f8fafc;font-family:inherit;"><div style="max-width:860px;margin:0 auto;text-align:center;"><p style="margin:0 0 10px;color:#2563eb;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Custom block</p><h2 style="margin:0 0 12px;color:#0f172a;font-size:36px;line-height:1.1;">Build your own section</h2><p style="margin:0 auto;max-width:560px;color:#64748b;font-size:18px;line-height:1.6;">Paste HTML, inline CSS, or a small embed here and save it as a reusable block.</p></div></section>`
@@ -132,14 +161,18 @@ function PalettePreviewPanel({ preview, onClose }) {
 // One variant swatch, dual-mode:
 //  - HTML-upload mode (`onPick` set): native drag + click → onPick(type, html)
 //    (click arms placement, drag drops the raw HTML into the page iframe).
-//  - Free canvas (no `onPick`): dnd-kit draggable carrying the HTML + a size, so
-//    onDragEnd drops it as an editable `html` component.
+//  - Free canvas (no `onPick`): most variants carry HTML + size and become an
+//    editable HtmlEmbed; structural widgets can carry native component data.
 function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
-  const [w, h] = htmlSize(type)
+  const [w, h] = htmlSize(type, variant)
+  const nativeCanvas = !onPick && NATIVE_CANVAS_TYPES.has(type)
+  const preset = variant.id === 'default' ? null : variant.id
   // Hook is always called (rules of hooks); listeners used only on the canvas.
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `palette-${type}-${variant.id}`,
-    data: { from: 'palette', html: variant.html, w, h, label: variant.label },
+    data: nativeCanvas
+      ? { from: 'palette', type, preset, w, h, label: variant.label }
+      : { from: 'palette', type, preset, html: variant.html, w, h, label: variant.label },
   })
   const preview = (
     <>
@@ -197,7 +230,7 @@ function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
         onClick={() => {
           onToggle()
           if (!onPick && firstVariant) {
-            const [w, h] = htmlSize(item.type)
+            const [w, h] = htmlSize(item.type, firstVariant)
             onInspect?.({
               type: item.label,
               label: firstVariant.label,

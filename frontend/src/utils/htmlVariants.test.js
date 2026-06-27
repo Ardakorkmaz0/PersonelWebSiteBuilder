@@ -22,4 +22,13 @@ describe('htmlVariants', () => {
       expect(htmlVariantsFor(type).length).toBeGreaterThan(0)
     }
   })
+
+  it('ships interactive tabs snippets for View/export runtime', () => {
+    for (const variant of htmlVariantsFor('tabs')) {
+      expect(variant.html).toContain('data-builder-tabs')
+      expect(variant.html).toContain('role="tab"')
+      expect(variant.html).toContain('role="tabpanel"')
+      expect(variant.html).toContain('data-builder-panel')
+    }
+  })
 })

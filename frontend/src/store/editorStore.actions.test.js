@@ -89,6 +89,66 @@ describe('per-page mode', () => {
   })
 })
 
+describe('native tabs drops', () => {
+  it('creates palette tab presets as native tabs with matching labels', () => {
+    freshTwoPageSchema()
+    s().addComponent('tabs', 0, 0, null, 'simple')
+    const tabs = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(tabs.type).toBe('tabs')
+    expect(tabs.props.activeId).toBe('overview')
+    expect(tabs.props.tabs.map((t) => t.label)).toEqual(['Overview', 'Details', 'FAQ'])
+  })
+
+  it('stores nested children on the currently active tab', () => {
+    freshTwoPageSchema()
+    s().addComponent('tabs', 0, 0, null, 'simple')
+    const tabs = selectCurrentPage(useEditorStore.getState()).components[0]
+    s().setActiveTab(tabs.id, 'details')
+    s().addComponent('heading', 20, 30, tabs.id)
+    const updated = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(updated.children).toHaveLength(1)
+    expect(updated.children[0].type).toBe('heading')
+    expect(updated.children[0].tabId).toBe('details')
+  })
+})
+
+describe('native navbar drops', () => {
+  it('creates vertical navbar presets with editable links and compact size', () => {
+    freshTwoPageSchema()
+    s().addComponent('navbar', 0, 0, null, 'vertical', { w: 220, h: 320 })
+    const nav = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(nav.type).toBe('navbar')
+    expect(nav.props.navLayout).toBe('vertical')
+    expect(nav.props.links.map((l) => l.label)).toEqual(['Dashboard', 'Projects', 'Team', 'Settings'])
+    expect(nav.layout).toMatchObject({ w: 220, h: 320 })
+  })
+})
+
+describe('component scroll behavior', () => {
+  it('stores fixed positioning props on any component', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 10, 10)
+    const id = selectCurrentPage(useEditorStore.getState()).components[0].id
+    s().updateProps(id, {
+      scrollBehavior: 'fixed',
+      pinY: 'bottom',
+      pinX: 'right',
+      pinOffsetY: 18,
+      pinOffsetX: 24,
+      pinZIndex: 120,
+    })
+    const button = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(button.props).toMatchObject({
+      scrollBehavior: 'fixed',
+      pinY: 'bottom',
+      pinX: 'right',
+      pinOffsetY: 18,
+      pinOffsetX: 24,
+      pinZIndex: 120,
+    })
+  })
+})
+
 describe('component link tool', () => {
   it('arms a link-capable source then binds it to a target component', () => {
     freshTwoPageSchema()

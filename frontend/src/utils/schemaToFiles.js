@@ -19,11 +19,38 @@ import {
   flowGap,
   flowItemStyle,
   flowSidePad,
+  pinnedLayoutStyle,
 } from '../components/renderer/layout.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
 const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
+
+function isVerticalNavbar(c) {
+  return c?.type === 'navbar' && c.props?.navLayout === 'vertical'
+}
+
+function isFixedComponent(c) {
+  return c?.props?.scrollBehavior === 'fixed'
+}
+
+function absoluteWrapperStyle(c, layoutKey = 'layout') {
+  const l = c?.[layoutKey] || c?.layout || {}
+  return {
+    position: 'absolute',
+    left: Math.round(l.x || 0),
+    top: Math.round(l.y || 0),
+    width: Math.round(l.w || 200),
+    height: Math.round(l.h || 80),
+  }
+}
+
+function wrapperStyle(c, viewport, canvasWidth, flowMode, layoutKey = 'layout') {
+  const base = flowMode
+    ? flowItemStyle(c, viewport, canvasWidth)
+    : absoluteWrapperStyle(c, layoutKey)
+  return pinnedLayoutStyle(c, base)
+}
 
 function esc(s) {
   return String(s ?? '').replace(
@@ -294,6 +321,7 @@ function innerHtml(c) {
   switch (c.type) {
     case 'navbar': {
       const links = Array.isArray(p.links) ? p.links : []
+      const layout = ['vertical', 'centered', 'twoRow'].includes(p.navLayout) ? p.navLayout : 'horizontal'
       const items = links
         .map((l) => {
           const href = sanitizeUrl(l.href)
@@ -303,7 +331,7 @@ function innerHtml(c) {
           return `<a href="${esc(href || '#')}"${ext}>${esc(l.label)}</a>`
         })
         .join('\n        ')
-      return `<div class="nav-inner">\n        <span class="brand">${esc(p.brand)}</span>\n        <div class="links">\n          ${items}\n        </div>\n      </div>`
+      return `<div class="nav-inner nav-${layout}">\n        <span class="brand">${esc(p.brand)}</span>\n        <div class="links">\n          ${items}\n        </div>\n      </div>`
     }
     case 'heading': {
       const lvl = ['h1', 'h2', 'h3'].includes(p.level) ? p.level : 'h2'
@@ -390,23 +418,23 @@ ${pageBody(page)}
 </html>`
 }
 
-function pageBody(page) {
+function pageBody(page, { fixed = 'all' } = {}) {
   const comps = Array.isArray(page.components) ? page.components : []
   const canvasW = page.canvasWidth || CANVAS_WIDTH
   return comps
+    .filter((c) => {
+      const isFixed = isFixedComponent(c)
+      if (fixed === 'only') return isFixed
+      if (fixed === 'exclude') return !isFixed
+      return true
+    })
     .map((c) => {
       if (['container', 'tabs', 'select', 'alert', 'accordion', 'html'].includes(c.type)) {
         // Wrap inlineNode types in an outer that mirrors the React Renderer
         // layout: flow mode → flowItemStyle (flex); non-flow → absolute. Without
         // this, top-level container/tabs floated at intrinsic size and the
         // iframe preview looked broken next to the non-Custom-JS path.
-        let wrap
-        if (page.flowMode) {
-          wrap = styleObjectBlock(flowItemStyle(c, 'pc', canvasW))
-        } else {
-          const l = c.layout || {}
-          wrap = `position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px`
-        }
+        const wrap = styleObjectBlock(wrapperStyle(c, 'pc', canvasW, page.flowMode))
         return `      <div id="${esc(c.id)}" style="${wrap}">${linkWrap(c, inlineNode(c))}</div>`
       }
       const tag = tagFor(c.type)
@@ -421,6 +449,7 @@ function pageBody(page) {
 
 function pageMinHeight(comps, key, fallback) {
   const bottom = (comps || []).reduce((max, c) => {
+    if (isFixedComponent(c)) return max
     const l = (key === 'mobileLayout' ? c.mobileLayout : c.layout) || {}
     return Math.max(max, (l.y || 0) + (l.h || 0))
   }, 0)
@@ -438,6 +467,13 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
 .nav-inner { display: flex; width: 100%; margin-left: auto; margin-right: auto; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .links { display: flex; gap: 20px; row-gap: 6px; flex-wrap: wrap; }
 .links a { color: inherit; text-decoration: none; }
+.nav-vertical { height: 100%; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 14px; }
+.nav-vertical .links { width: 100%; flex-direction: column; align-items: stretch; gap: 6px; }
+.nav-vertical .links a { display: block; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; }
+.nav-centered { flex-direction: column; justify-content: flex-start; text-align: center; gap: 10px; }
+.nav-centered .links { justify-content: center; }
+.nav-twoRow { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 10px; }
+.nav-twoRow .links { width: 100%; }
 .section-inner { width: 100%; margin-left: auto; margin-right: auto; }
 .m0 { margin: 0; font-size: inherit; font-weight: inherit; font-family: inherit; letter-spacing: inherit; line-height: 1.15; overflow-wrap: break-word; word-break: break-word; }
 .card-title { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
@@ -453,16 +489,15 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
       css += `.p-${page.id} { width: ${w}px; min-height: ${pageMinHeight(comps, 'layout', 600)}px; background: ${cssValue(page.background || '#ffffff')}; }\n`
     }
     for (const c of comps) {
-      const l = c.layout || {}
       const hide = c.hidden ? ' display:none;' : ''
       if (page.flowMode) {
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
-        css += `.c-${c.id} { ${styleObjectBlock(flowItemStyle(c, 'pc', w))} overflow:${fixed ? 'hidden' : 'visible'}; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
-        if (FLOW_FULL_WIDTH_TYPES.has(c.type)) {
+        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, true))} overflow:${fixed ? 'hidden' : 'visible'}; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+        if (FLOW_FULL_WIDTH_TYPES.has(c.type) && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner, .c-${c.id} > .section-inner { max-width:${Math.round(c.layout?.w || w)}px; }\n`
         }
       } else {
-        css += `.c-${c.id} { position:absolute; left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false))} ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
       }
     }
   }
@@ -477,13 +512,12 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
       css += `  .p-${page.id} { width: ${mw}px; min-height: ${pageMinHeight(comps, 'mobileLayout', 400)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; }\n`
     }
     for (const c of comps) {
-      const l = c.mobileLayout || c.layout || {}
       const hide = c.hiddenMobile ? ' display:none;' : ''
       if (page.flowMode) {
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
-        css += `  .c-${c.id} { ${styleObjectBlock(flowItemStyle(c, 'mobile', mw))} overflow:${fixed ? 'hidden' : 'visible'};${hide} }\n`
+        css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, true))} overflow:${fixed ? 'hidden' : 'visible'};${hide} }\n`
       } else {
-        css += `  .c-${c.id} { left:${l.x || 0}px; top:${l.y || 0}px; width:${l.w || 0}px; height:${l.h || 0}px;${hide} }\n`
+        css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, false, 'mobileLayout'))}${hide} }\n`
       }
     }
   }
@@ -546,6 +580,7 @@ function schemaToScaledHtml(page, title = 'My Site', schema = {}) {
     },
     { includeCustomCss: false },
   )
+  const fixedBody = pageBody(page, { fixed: 'only' })
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -559,8 +594,10 @@ ${css}
       html, body { width: 100%; min-height: 100%; overflow-x: hidden; }
       body { background: ${desktopBg}; }
       .export-viewport { width: 100%; min-height: 100vh; overflow: hidden; background: ${desktopBg}; }
-      .export-stage { position: relative; width: 100%; overflow: hidden; background: inherit; }
-      .export-stage .page { margin: 0; transform-origin: top left; }
+      .export-stage { position: relative; display: flex; justify-content: center; width: 100%; overflow: hidden; background: inherit; }
+      .export-stage .page { flex: 0 0 auto; margin: 0; transform-origin: top center; }
+      .export-fixed { position: fixed; left: 0; top: 0; width: ${desktopW}px; height: 100vh; transform: scale(1); transform-origin: top left; pointer-events: none; z-index: 2147483000; }
+      .export-fixed > * { pointer-events: auto; }
 ${customCssBlock(schema?.customCss)}
     </style>
   </head>
@@ -568,9 +605,10 @@ ${customCssBlock(schema?.customCss)}
     <div class="export-viewport">
       <div class="export-stage">
         <div class="page p-${page.id}">
-${pageBody(page)}
+${pageBody(page, { fixed: 'exclude' })}
         </div>
       </div>
+${fixedBody ? `      <div class="export-fixed">\n${fixedBody}\n      </div>` : ''}
     </div>
     <script>
       (function () {
@@ -578,16 +616,25 @@ ${pageBody(page)}
         var viewport = document.querySelector('.export-viewport');
         var stage = document.querySelector('.export-stage');
         var page = document.querySelector('.page');
+        var fixedLayer = document.querySelector('.export-fixed');
         function applyLayout() {
           var screenW = Math.max(1, window.innerWidth || document.documentElement.clientWidth || cfg.desktop.w);
+          var screenH = Math.max(1, window.innerHeight || document.documentElement.clientHeight || cfg.desktop.h);
           var mode = screenW <= cfg.breakpoint ? cfg.mobile : cfg.desktop;
-          var scale = screenW / mode.w;
+          var scale = Math.min(1, screenW / mode.w);
+          var left = Math.max(0, (screenW - mode.w * scale) / 2);
           document.body.style.background = mode.bg;
           viewport.style.background = mode.bg;
           stage.style.height = Math.ceil(mode.h * scale) + 'px';
           page.style.width = mode.w + 'px';
           page.style.minHeight = mode.h + 'px';
           page.style.transform = 'scale(' + scale + ')';
+          if (fixedLayer) {
+            fixedLayer.style.left = Math.round(left) + 'px';
+            fixedLayer.style.width = mode.w + 'px';
+            fixedLayer.style.height = Math.ceil(screenH / scale) + 'px';
+            fixedLayer.style.transform = 'scale(' + scale + ')';
+          }
         }
         window.addEventListener('resize', applyLayout);
         applyLayout();

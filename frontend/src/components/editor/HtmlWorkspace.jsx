@@ -197,11 +197,9 @@ function scrollOnceScript(index) {
     var el = document.body && document.body.children[${Number(index)}]
     if (!el) return
     try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch (e) { el.scrollIntoView() }
-    var prev = el.style.outline
-    var prevOffset = el.style.outlineOffset
-    el.style.outline = '3px solid #2563eb'
-    el.style.outlineOffset = '2px'
-    setTimeout(function () { el.style.outline = prev; el.style.outlineOffset = prevOffset }, 1600)
+    var prev = el.style.boxShadow
+    el.style.boxShadow = 'inset 0 0 0 3px #2563eb'
+    setTimeout(function () { el.style.boxShadow = prev }, 1600)
   }
   if (document.readyState === 'complete') go()
   else window.addEventListener('load', go)
@@ -1180,7 +1178,7 @@ function HtmlWorkspace({
               // can no longer leave the preview stuck at half width.
               <div
                 className="h-full w-full overflow-hidden bg-white"
-                style={{ outline: placing ? '2px solid #2563eb' : 'none' }}
+                style={{ boxShadow: placing ? 'inset 0 0 0 2px #2563eb' : 'none' }}
               >
                 {stageIframe}
               </div>
@@ -1194,9 +1192,10 @@ function HtmlWorkspace({
                     position: 'relative',
                     transform: `scale(${scale})`,
                     transformOrigin: 'top left',
-                    boxShadow: '0 1px 6px rgba(0,0,0,0.15)',
                     border: '1px solid #d1d5db',
-                    outline: placing ? '2px solid #2563eb' : 'none',
+                    boxShadow: placing
+                      ? '0 1px 6px rgba(0,0,0,0.15), inset 0 0 0 2px #2563eb'
+                      : '0 1px 6px rgba(0,0,0,0.15)',
                   }}
                 >
                   {stageIframe}

@@ -36,6 +36,7 @@ import {
   LabeledCheckbox,
   LinkTargetControl,
   LinksEditor,
+  HtmlContentControl,
   TabsEditorControl,
 } from './controls.jsx'
 import { PaletteIcon } from '../icons.jsx'
@@ -496,6 +497,24 @@ const ADVANCED_STYLE_KEYS = [
   'cursor', 'overflow',
 ]
 
+const PROPERTIES_MODE_KEY = 'pwb_properties_mode'
+
+const BASIC_STYLE_KEYS = new Set([
+  'color',
+  'backgroundColor',
+  'backgroundImage',
+  'fontSize',
+  'fontWeight',
+  'lineHeight',
+  'textAlign',
+  'textDecoration',
+  'padding',
+  'borderRadius',
+  'boxShadow',
+  'opacity',
+  'objectFit',
+])
+
 const STYLE_GROUPS = [
   {
     title: 'Typography',
@@ -544,6 +563,9 @@ function PropControl({ field, value, onChange, extras, pages = [] }) {
   if (field.key === 'href') {
     return <LinkTargetControl label={field.label} value={value} onChange={onChange} pages={pages} />
   }
+  if (field.control === 'link') {
+    return <LinkTargetControl label={field.label} value={value} onChange={onChange} pages={pages} />
+  }
   if (field.control === 'textarea') {
     return <LabeledTextarea label={field.label} value={value} onChange={onChange} />
   }
@@ -568,6 +590,9 @@ function PropControl({ field, value, onChange, extras, pages = [] }) {
   }
   if (field.control === 'links') {
     return <LinksEditor label={field.label} value={value} onChange={onChange} pages={pages} />
+  }
+  if (field.control === 'htmlContent') {
+    return <HtmlContentControl label={field.label} value={value} onChange={onChange} pages={pages} />
   }
   if (field.control === 'tabs') {
     return (
@@ -649,6 +674,17 @@ function groupedStyles(keys) {
   return groups
 }
 
+function visibleStyleGroups(keys, mode) {
+  const groups = groupedStyles(keys)
+  if (mode === 'extended') return groups
+  return groups
+    .map((group) => ({
+      ...group,
+      keys: group.keys.filter((key) => BASIC_STYLE_KEYS.has(key)),
+    }))
+    .filter((group) => group.keys.length)
+}
+
 export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }) {
   const selectedId = useEditorStore((s) => s.selectedId)
   const schema = useEditorStore((s) => s.schema)
@@ -680,6 +716,13 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const setTabsChildren = useEditorStore((s) => s.setTabsChildren)
   const applyThemeToComponent = useEditorStore((s) => s.applyThemeToComponent)
   const copyComponentToPage = useEditorStore((s) => s.copyComponentToPage)
+  const [propertiesMode, setPropertiesModeState] = useState(() => {
+    try {
+      return localStorage.getItem(PROPERTIES_MODE_KEY) === 'extended' ? 'extended' : 'basic'
+    } catch {
+      return 'basic'
+    }
+  })
 
   const isMobile = viewport === 'mobile'
   const isFlow = !!page.flowMode
@@ -693,6 +736,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
     ? page.backgroundMobile || page.background || '#ffffff'
     : page.background || '#ffffff'
   const theme = schema.theme || DEFAULT_THEME
+  const extendedMode = propertiesMode === 'extended'
+  const setPropertiesMode = (mode) => {
+    setPropertiesModeState(mode)
+    try { localStorage.setItem(PROPERTIES_MODE_KEY, mode) } catch { /* ignore */ }
+  }
 
   if (!component) {
     return (
@@ -905,12 +953,70 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const def = registry[component.type]
   const layout = component[layoutKey] || component.layout
   const componentPresets = presetsForType(component.type)
+  const contentSection = (def.editableProps || []).length > 0 ? (
+    <section className="space-y-3">
+      <SectionTitle>Content</SectionTitle>
+      {def.editableProps.map((field) => (
+        <PropControl
+          key={`${field.key}-${field.control || 'text'}-${field.label}`}
+          field={field}
+          value={component.props[field.sourceKey || field.key]}
+          pages={schema.pages}
+          onChange={(val) => updateProps(component.id, { [field.sourceKey || field.key]: val })}
+          extras={
+            component.type === 'tabs' && field.control === 'tabs'
+              ? {
+                  activeId: component.props.activeId,
+                  onActiveChange: (id) => setActiveTab(component.id, id),
+                  children: component.children || [],
+                  onChildrenChange: (next) => setTabsChildren(component.id, next),
+                }
+              : undefined
+          }
+        />
+      ))}
+    </section>
+  ) : null
+  const linkSection = LINKABLE_TYPES.has(component.type) ? (
+    <section className="space-y-3">
+      <SectionTitle>Link</SectionTitle>
+      <LinkTargetControl
+        label="Wrap in a link"
+        value={component.props.href}
+        pages={schema.pages}
+        onChange={(val) => updateProps(component.id, { href: val })}
+      />
+    </section>
+  ) : null
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-[#e5e7eb] px-4 py-3">
-        <h2 className="text-sm font-semibold text-[#111827]">{def.label}</h2>
-        <p className="text-xs text-[#6b7280]">{component.id}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-[#111827]">{def.label}</h2>
+            <p className="truncate text-xs text-[#6b7280]">{component.id}</p>
+          </div>
+          <div className="grid shrink-0 grid-cols-2 rounded-lg border border-[#d1d5db] bg-white p-0.5">
+            {[
+              ['basic', 'Basic'],
+              ['extended', 'Extend'],
+            ].map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setPropertiesMode(mode)}
+                className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+                  propertiesMode === mode
+                    ? 'bg-[#4f46e5] text-white'
+                    : 'text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
@@ -929,6 +1035,9 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           )}
         </div>
 
+        {contentSection}
+        {linkSection}
+
         {componentPresets.length > 0 && (
           <section className="space-y-3">
             <SectionTitle>Presets</SectionTitle>
@@ -943,13 +1052,13 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
 
         <section className="space-y-3">
           <SectionTitle>
-            {showPositionControls ? 'Position & Size' : 'Layout Size'}
+            {showPositionControls ? (extendedMode ? 'Position & Size' : 'Size') : 'Layout Size'}
             <span className="ml-1 font-normal normal-case text-[#9ca3af]">
               ({isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC'})
             </span>
           </SectionTitle>
           <div className="grid grid-cols-2 gap-2">
-            {showPositionControls && (
+            {showPositionControls && extendedMode && (
               <>
                 <LabeledNumber
                   label="X"
@@ -980,7 +1089,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
             give precise, one-click control. One selection aligns to the
             artboard; a multi-selection (shift-click on the canvas) aligns the
             items to each other and can distribute equal gaps. */}
-        {showPositionControls && (
+        {showPositionControls && extendedMode && (
           <section className="space-y-2">
             <SectionTitle>
               Align &amp; Distribute
@@ -1049,44 +1158,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           />
         </section>
 
-        {(def.editableProps || []).length > 0 && (
-          <section className="space-y-3">
-            <SectionTitle>Content</SectionTitle>
-            {def.editableProps.map((field) => (
-              <PropControl
-                key={field.key}
-                field={field}
-                value={component.props[field.key]}
-                pages={schema.pages}
-                onChange={(val) => updateProps(component.id, { [field.key]: val })}
-                extras={
-                  component.type === 'tabs' && field.control === 'tabs'
-                    ? {
-                        activeId: component.props.activeId,
-                        onActiveChange: (id) => setActiveTab(component.id, id),
-                        children: component.children || [],
-                        onChildrenChange: (next) => setTabsChildren(component.id, next),
-                      }
-                    : undefined
-                }
-              />
-            ))}
-          </section>
-        )}
-
-        {LINKABLE_TYPES.has(component.type) && (
-          <section className="space-y-3">
-            <SectionTitle>Link</SectionTitle>
-            <LinkTargetControl
-              label="Wrap in a link"
-              value={component.props.href}
-              pages={schema.pages}
-              onChange={(val) => updateProps(component.id, { href: val })}
-            />
-          </section>
-        )}
-
-        {groupedStyles(def.editableStyles || []).map((group) => (
+        {visibleStyleGroups(def.editableStyles || [], propertiesMode).map((group) => (
           <section key={group.title} className="space-y-3">
             <SectionTitle>{group.title}</SectionTitle>
             {group.keys.map((styleKey) => (
@@ -1100,92 +1172,116 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           </section>
         ))}
 
-        <section className="space-y-3">
-          <SectionTitle>Advanced CSS</SectionTitle>
-          {ADVANCED_STYLE_KEYS.map((styleKey) => (
-            <StyleControl
-              key={styleKey}
-              styleKey={styleKey}
-              value={component.styles[styleKey]}
-              onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
-            />
-          ))}
-        </section>
+        {extendedMode && (
+          <section className="space-y-3">
+            <SectionTitle>Advanced CSS</SectionTitle>
+            {ADVANCED_STYLE_KEYS.map((styleKey) => (
+              <StyleControl
+                key={styleKey}
+                styleKey={styleKey}
+                value={component.styles[styleKey]}
+                onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
+              />
+            ))}
+          </section>
+        )}
       </div>
 
       <div className="space-y-2 border-t border-[#e5e7eb] p-4">
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => duplicateComponent(component.id)}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            Duplicate
-          </button>
-          <button
-            type="button"
-            onClick={() => bringToFront(component.id)}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            {isFlow ? 'Move to end' : 'To front'}
-          </button>
-          <button
-            type="button"
-            onClick={() => sendToBack(component.id)}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            {isFlow ? 'Move to start' : 'To back'}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => moveBackward(component.id)}
-            title={isFlow ? 'Move one step earlier in the order' : 'Bring one step backward'}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            {isFlow ? 'Move before' : 'Backward'}
-          </button>
-          <button
-            type="button"
-            onClick={() => moveForward(component.id)}
-            title={isFlow ? 'Move one step later in the order' : 'Bring one step forward'}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            {isFlow ? 'Move next' : 'Forward'}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => applyThemeToComponent(component.id)}
-            title="Restyle this component with the active theme (colors, font, radius)"
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
-          >
-            <PaletteIcon size={14} /> Apply theme
-          </button>
-          <select
-            value=""
-            onChange={(e) => {
-              if (e.target.value) copyComponentToPage(component.id, e.target.value)
-              e.target.value = ''
-            }}
-            disabled={schema.pages.length < 2}
-            title="Copy this component (with all its properties) onto another page"
-            className="rounded-lg border border-[#d1d5db] bg-white px-1.5 py-1.5 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none disabled:opacity-40"
-          >
-            <option value="" disabled>
-              Copy to page…
-            </option>
-            {schema.pages
-              .filter((p) => p.id !== page.id)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+        {extendedMode ? (
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => duplicateComponent(component.id)}
+                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+              >
+                Duplicate
+              </button>
+              <button
+                type="button"
+                onClick={() => bringToFront(component.id)}
+                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+              >
+                {isFlow ? 'Move to end' : 'To front'}
+              </button>
+              <button
+                type="button"
+                onClick={() => sendToBack(component.id)}
+                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+              >
+                {isFlow ? 'Move to start' : 'To back'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => moveBackward(component.id)}
+                title={isFlow ? 'Move one step earlier in the order' : 'Bring one step backward'}
+                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+              >
+                {isFlow ? 'Move before' : 'Backward'}
+              </button>
+              <button
+                type="button"
+                onClick={() => moveForward(component.id)}
+                title={isFlow ? 'Move one step later in the order' : 'Bring one step forward'}
+                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+              >
+                {isFlow ? 'Move next' : 'Forward'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => applyThemeToComponent(component.id)}
+                title="Restyle this component with the active theme (colors, font, radius)"
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+              >
+                <PaletteIcon size={14} /> Apply theme
+              </button>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) copyComponentToPage(component.id, e.target.value)
+                  e.target.value = ''
+                }}
+                disabled={schema.pages.length < 2}
+                title="Copy this component (with all its properties) onto another page"
+                className="rounded-lg border border-[#d1d5db] bg-white px-1.5 py-1.5 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none disabled:opacity-40"
+              >
+                <option value="" disabled>
+                  Copy to page...
                 </option>
-              ))}
-          </select>
-        </div>
+                {schema.pages
+                  .filter((p) => p.id !== page.id)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => duplicateComponent(component.id)}
+              className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+            >
+              Duplicate
+            </button>
+            <button
+              type="button"
+              onClick={() => applyThemeToComponent(component.id)}
+              title="Restyle this component with the active theme"
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+            >
+              <PaletteIcon size={14} /> Theme
+            </button>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => removeComponent(component.id)}

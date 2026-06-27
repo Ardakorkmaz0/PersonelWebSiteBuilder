@@ -2,7 +2,7 @@ export const FULL_BLEED_TYPES = ['navbar', 'section', 'divider']
 
 // Components that can optionally be wrapped in a link (like plain HTML).
 export const LINKABLE_TYPES = new Set([
-  'heading', 'text', 'image', 'card', 'badge', 'icon',
+  'heading', 'text', 'image', 'card', 'list', 'quote', 'badge', 'icon', 'alert',
 ])
 
 // Types we never wrap in an <a> when they carry an href: the ones that ARE
@@ -11,6 +11,7 @@ export const LINKABLE_TYPES = new Set([
 // (tabs/container/accordion/select/input/html). Everything else is linkable.
 export const NON_WRAP_LINK_TYPES = new Set([
   'button', 'linkbutton', 'navbar', 'tabs', 'container', 'accordion', 'select', 'input', 'html',
+  'section',
 ])
 
 // Shared tab-strip styles used by the editor and live renderer so the visual

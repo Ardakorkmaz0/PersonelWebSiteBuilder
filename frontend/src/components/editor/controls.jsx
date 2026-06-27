@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PRESET_IMAGES } from '../../utils/presetImages.js'
 import { deleteImage, listImages, uploadImage } from '../../api/images.js'
+import {
+  listHtmlContentFields,
+  updateHtmlHrefAtPath,
+  updateHtmlTextAtPath,
+} from '../../utils/htmlQuickEdit.js'
 
 // Small, reusable form controls used by the PropertiesPanel:
 // square 2px corners, neutral borders, blue focus.
@@ -633,6 +638,64 @@ export function LinksEditor({ label, value, onChange, pages = [] }) {
           + Add link
         </button>
       </div>
+    </div>
+  )
+}
+
+export function HtmlContentControl({ label, value, onChange, pages = [] }) {
+  const code = typeof value === 'string' ? value : ''
+  const fields = useMemo(() => listHtmlContentFields(code), [code])
+  const hasFields = fields.texts.length > 0 || fields.links.length > 0
+
+  return (
+    <div>
+      <span className={labelCls}>{label}</span>
+      {!hasFields ? (
+        <p className="rounded-lg border border-dashed border-[#d1d5db] bg-white p-2 text-xs leading-relaxed text-[#6b7280]">
+          No simple text or links found. Use the HTML / CSS / JS editor below.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {fields.texts.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">Text</div>
+              {fields.texts.map((field) => (
+                <LabeledTextarea
+                  key={`text-${field.path}`}
+                  label={field.label}
+                  value={field.text}
+                  rows={2}
+                  onChange={(text) => onChange(updateHtmlTextAtPath(code, field.path, text))}
+                />
+              ))}
+              {fields.textOverflow > 0 && (
+                <p className="text-[11px] text-[#9ca3af]">
+                  {fields.textOverflow} more text fields are available in the code editor.
+                </p>
+              )}
+            </div>
+          )}
+          {fields.links.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">Links</div>
+              {fields.links.map((field) => (
+                <LinkTargetControl
+                  key={`link-${field.path}`}
+                  label={field.label}
+                  value={field.href}
+                  pages={pages}
+                  onChange={(href) => onChange(updateHtmlHrefAtPath(code, field.path, href))}
+                />
+              ))}
+              {fields.linkOverflow > 0 && (
+                <p className="text-[11px] text-[#9ca3af]">
+                  {fields.linkOverflow} more links are available in the code editor.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { iconSvg } from './icons.js'
 import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
+import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { googleFontLinkTag } from './googleFonts.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
@@ -106,6 +107,37 @@ function linkAttrs(href) {
   return /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''
 }
 
+function iconTextHtml(props = {}) {
+  const icon = props.icon ? `<span aria-hidden="true" style="display:inline-flex;line-height:0">${iconSvg(props.icon)}</span>` : ''
+  return `${icon}<span>${esc(props.text)}</span>`
+}
+
+function safeInlineCss(value, fallback = '') {
+  return String(value || fallback).replace(/[;{}<]/g, '').trim()
+}
+
+function sectionInnerHtml(props = {}, styles = {}) {
+  const href = sanitizeUrl(props.buttonHref)
+  const color = safeInlineCss(styles.color, '#1d1d1f')
+  const bg = safeInlineCss(styles.backgroundColor, '#ffffff')
+  return `<div class="rh-container">${
+    props.eyebrow
+      ? `<p style="margin:0 0 10px;font-size:.78em;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.72">${esc(props.eyebrow)}</p>`
+      : ''
+  }${props.heading ? `<h2 class="rh-m0">${esc(props.heading)}</h2>` : ''}${
+    props.text ? `<p class="rh-m0" style="margin-top:${props.heading ? '12px' : '0'};line-height:1.6;opacity:.78">${esc(props.text)}</p>` : ''
+  }${
+    props.buttonText
+      ? `<a href="${esc(href || '#')}"${linkAttrs(href)} style="display:inline-flex;align-items:center;justify-content:center;margin-top:20px;padding:.72em 1.2em;border-radius:.65em;background:${color};color:${bg};text-decoration:none;font-weight:700">${esc(props.buttonText)}</a>`
+      : ''
+  }</div>`
+}
+
+function iconA11yAttrs(props = {}) {
+  const label = String(props.label || '').trim()
+  return label ? ` role="img" aria-label="${esc(label)}" title="${esc(label)}"` : ''
+}
+
 function navbar(c) {
   const p = c.props || {}
   const links = (Array.isArray(p.links) ? p.links : [])
@@ -125,11 +157,11 @@ function navbar(c) {
 function section(c) {
   const p = c.props || {}
   return `<section class="rh-section"${styleAttr(c)}>
-      <div class="rh-container">${p.heading ? `<h2 class="rh-m0">${esc(p.heading)}</h2>` : ''}</div>
+      ${sectionInnerHtml(p, c.styles || {})}
     </section>`
 }
 
-const LINKABLE = new Set(['heading', 'text', 'image', 'card', 'badge', 'icon'])
+const LINKABLE = new Set(['heading', 'text', 'image', 'card', 'list', 'quote', 'badge', 'icon', 'alert'])
 
 // One element inside a row, optionally wrapped in a link (display:contents keeps
 // the flex layout intact). `multi` = the row has more than one item, so columns
@@ -157,7 +189,7 @@ function itemEl(c, multi, colOverride) {
     case 'button':
     case 'linkbutton': {
       const href = sanitizeUrl(p.href)
-      return `<a class="rh-item rh-btn" href="${esc(href || '#')}"${linkAttrs(href)}${styleAttr(c, colOverride || 'flex:0 0 auto')}>${esc(p.text)}</a>`
+      return `<a class="rh-item rh-btn" href="${esc(href || '#')}"${linkAttrs(href)}${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:.45em')}>${iconTextHtml(p)}</a>`
     }
     case 'image': {
       const src = sanitizeImageSrc(p.src)
@@ -188,7 +220,7 @@ function itemEl(c, multi, colOverride) {
     case 'badge':
       return `<span class="rh-item"${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center')}>${esc(p.text)}</span>`
     case 'icon':
-      return `<span class="rh-item"${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center;line-height:0')}>${iconSvg(p.name)}</span>`
+      return `<span class="rh-item"${iconA11yAttrs(p)}${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center;line-height:0')}>${iconSvg(p.name)}</span>`
     case 'input': {
       const t = ['text', 'email', 'number', 'tel', 'url'].includes(p.inputType) ? p.inputType : 'text'
       return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px;min-width:0`)}>${
@@ -242,13 +274,10 @@ function itemEl(c, multi, colOverride) {
 function htmlEmbed(c, cls, col) {
   const p = c.props || {}
   const code = typeof p.code === 'string' ? p.code : ''
-  const looksFull = /^\s*<!DOCTYPE|<html[\s>]/i.test(code)
-  const doc = looksFull
-    ? code
-    : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
+  const doc = htmlEmbedDocument(code)
   const h = Math.max(40, Math.round(c.layout?.h || 240))
   const safeDoc = withBuilderInteractiveHtml(doc).replace(/"/g, '&quot;')
-  return `<iframe class="${cls}" srcdoc="${safeDoc}" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy"${styleAttr(c, `${col};width:100%;height:${h}px;border:0;background:transparent`)}></iframe>`
+  return `<iframe class="${cls}" srcdoc="${safeDoc}" scrolling="no" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy"${styleAttr(c, `${col};width:100%;height:${h}px;border:0;background:transparent;overflow:hidden`)}></iframe>`
 }
 
 // Render a `tabs` widget as a tab strip + one panel per tab. The runtime JS

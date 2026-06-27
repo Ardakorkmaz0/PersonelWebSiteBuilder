@@ -5,7 +5,7 @@ import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 import { htmlVariantsFor, HTML_BLOCKS } from '../../utils/htmlVariants.js'
 import { componentToHtml } from '../../utils/componentToHtml.js'
 import { useEditorStore } from '../../store/editorStore.js'
-import { FolderIcon, LayersIcon } from '../icons.jsx'
+import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon } from '../icons.jsx'
 
 // Variants for a type, with a synthesized "Default" snippet for the types that
 // have no curated variants yet (so every component is still placeable).
@@ -21,7 +21,7 @@ function variantsForType(type) {
 
 // Types whose snippets are wide (full-width-ish) — previewed scaled-down from the
 // top-left; the rest are inline and shown a bit larger, centered.
-const WIDE_HTML = new Set(['navbar', 'section', 'card', 'image', 'list', 'input'])
+const WIDE_HTML = new Set(['navbar', 'section', 'card', 'image', 'list', 'input', 'select', 'alert', 'accordion', 'tabs', 'container', 'html', 'spacer'])
 
 // Sensible starting size (w,h) for the `html` component a snippet drops as on the
 // free canvas — the user resizes from there.
@@ -29,8 +29,40 @@ const HTML_SIZE = {
   navbar: [1000, 84], section: [1000, 360], card: [360, 320], image: [480, 300],
   list: [420, 160], input: [440, 96], button: [220, 56], linkbutton: [240, 50],
   badge: [170, 44], heading: [620, 84], text: [560, 120], quote: [560, 130], divider: [560, 44],
+  select: [360, 90], alert: [520, 110], accordion: [620, 220], tabs: [620, 220],
+  container: [560, 150], icon: [90, 90], html: [560, 180], spacer: [560, 60],
 }
 function htmlSize(type) { return HTML_SIZE[type] || [380, 110] }
+
+const CUSTOM_BLOCKS_KEY = 'pwb_custom_blocks'
+const DEFAULT_CUSTOM_HTML = `<section style="padding:64px 32px;background:#f8fafc;font-family:inherit;"><div style="max-width:860px;margin:0 auto;text-align:center;"><p style="margin:0 0 10px;color:#2563eb;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Custom block</p><h2 style="margin:0 0 12px;color:#0f172a;font-size:36px;line-height:1.1;">Build your own section</h2><p style="margin:0 auto;max-width:560px;color:#64748b;font-size:18px;line-height:1.6;">Paste HTML, inline CSS, or a small embed here and save it as a reusable block.</p></div></section>`
+
+function readCustomBlocks() {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CUSTOM_BLOCKS_KEY) || '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((block) => block && typeof block.html === 'string' && block.html.trim())
+      .map((block, index) => ({
+        id: typeof block.id === 'string' ? block.id : `custom-${index}`,
+        label: typeof block.label === 'string' && block.label.trim() ? block.label.trim() : 'Custom block',
+        desc: typeof block.desc === 'string' && block.desc.trim() ? block.desc.trim() : 'Saved custom HTML',
+        html: block.html,
+      }))
+  } catch {
+    return []
+  }
+}
+
+function writeCustomBlocks(blocks) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(CUSTOM_BLOCKS_KEY, JSON.stringify(blocks.slice(0, 24)))
+  } catch {
+    // Ignore storage quota/private-mode errors; placing the block should still work.
+  }
+}
 
 // Live, inert preview of a snippet's HTML, scaled to fit the palette swatch. The
 // HTML is our own trusted template string (no user input), rendered pointer-
@@ -53,12 +85,56 @@ function HtmlPreview({ html, wide }) {
   )
 }
 
+function previewSrcDoc(html, wide) {
+  const body = wide
+    ? `<div class="stage stage-wide">${html}</div>`
+    : `<div class="stage stage-inline">${html}</div>`
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111827;overflow:hidden}body{padding:12px}.stage-wide{width:920px;transform:scale(.2);transform-origin:top left}.stage-inline{min-height:108px;display:grid;place-items:center}img,video,svg,canvas{max-width:100%;height:auto}</style></head><body>${body}</body></html>`
+}
+
+function DetailPreview({ html, wide }) {
+  return (
+    <iframe
+      title="Palette preview"
+      sandbox=""
+      srcDoc={previewSrcDoc(html, wide)}
+      className="h-[132px] w-full rounded-md bg-white"
+    />
+  )
+}
+
+function PalettePreviewPanel({ preview, onClose }) {
+  if (!preview) return null
+  return (
+    <div className="shrink-0 border-t border-[#e5e7eb] bg-white p-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#4f46e5]">Preview</div>
+          <div className="truncate text-sm font-semibold text-[#111827]">{preview.label}</div>
+          {preview.desc && <div className="truncate text-[11px] text-[#6b7280]">{preview.desc}</div>}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Close preview"
+          className="rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
+        >
+          x
+        </button>
+      </div>
+      <div className="overflow-hidden rounded-md bg-[#f8fafc]">
+        <DetailPreview html={preview.html} wide={preview.wide} />
+      </div>
+    </div>
+  )
+}
+
 // One variant swatch, dual-mode:
 //  - HTML-upload mode (`onPick` set): native drag + click → onPick(type, html)
 //    (click arms placement, drag drops the raw HTML into the page iframe).
 //  - Free canvas (no `onPick`): dnd-kit draggable carrying the HTML + a size, so
 //    onDragEnd drops it as an editable `html` component.
-function VariantSwatch({ type, variant, onPick, wide }) {
+function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
   const [w, h] = htmlSize(type)
   // Hook is always called (rules of hooks); listeners used only on the canvas.
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
@@ -94,6 +170,13 @@ function VariantSwatch({ type, variant, onPick, wide }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      onClick={() => onInspect?.({
+        type,
+        label: variant.label,
+        html: variant.html,
+        wide,
+        size: `${w} x ${h}`,
+      })}
       title={`Drag onto the canvas — ${variant.label}`}
       className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-1.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
     >
@@ -103,14 +186,28 @@ function VariantSwatch({ type, variant, onPick, wide }) {
 }
 
 // A component category: click the row to reveal its variants. Same in both modes.
-function PaletteCategory({ item, onPick, open, onToggle }) {
+function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
   const variants = variantsForType(item.type)
   const wide = WIDE_HTML.has(item.type)
+  const firstVariant = variants[0]
   return (
     <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
       <button
         type="button"
-        onClick={onToggle}
+        onClick={() => {
+          onToggle()
+          if (!onPick && firstVariant) {
+            const [w, h] = htmlSize(item.type)
+            onInspect?.({
+              type: item.label,
+              label: firstVariant.label,
+              desc: item.label,
+              html: firstVariant.html,
+              wide,
+              size: `${w} x ${h}`,
+            })
+          }
+        }}
         className={`flex w-full items-center gap-3 px-3 py-2 text-sm select-none hover:bg-[#eef2ff] ${open ? 'bg-[#f5f5ff]' : ''}`}
       >
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-base text-[#374151]">
@@ -123,7 +220,7 @@ function PaletteCategory({ item, onPick, open, onToggle }) {
       {open && variants.length > 0 && (
         <div className="grid grid-cols-2 gap-2 border-t border-[#f1f1f4] bg-[#fafafa] p-2">
           {variants.map((v) => (
-            <VariantSwatch key={v.id} type={item.type} variant={v} onPick={onPick} wide={wide} />
+            <VariantSwatch key={v.id} type={item.type} variant={v} onPick={onPick} onInspect={onInspect} wide={wide} />
           ))}
         </div>
       )}
@@ -133,7 +230,7 @@ function PaletteCategory({ item, onPick, open, onToggle }) {
 
 // A ready-made section block, dual-mode (same library as the variants). HTML mode
 // inserts the raw section HTML; the free canvas drops it as one `html` component.
-function BlockCard({ block, onPick, theme }) {
+function BlockCard({ block, onPick, onInspect, theme }) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `block-${block.id}`,
     data: { from: 'palette', html: block.html, w: 1000, h: 380, label: block.label },
@@ -168,10 +265,114 @@ function BlockCard({ block, onPick, theme }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      onClick={() => onInspect?.({
+        type: 'Section',
+        label: block.label,
+        desc: block.desc,
+        html: block.html,
+        wide: true,
+        size: '1000 x 380',
+      })}
       title={`Drag onto the canvas — ${block.label} section`}
       className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-2.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
     >
       {inner}
+    </div>
+  )
+}
+
+function CustomBlockPanel({ onPick, onInspect, theme }) {
+  const addBlock = useEditorStore((s) => s.addBlock)
+  const [open, setOpen] = useState(false)
+  const [label, setLabel] = useState('Custom block')
+  const [html, setHtml] = useState(DEFAULT_CUSTOM_HTML)
+  const [saved, setSaved] = useState(() => readCustomBlocks())
+  const hasHtml = html.trim().length > 0
+
+  const placeCustom = (customHtml = html) => {
+    const cleanHtml = customHtml.trim()
+    if (!cleanHtml) return
+    if (onPick) {
+      onPick('section', cleanHtml)
+      return
+    }
+    addBlock([{ type: 'html', x: 24, y: 0, w: 1000, h: 360, props: { code: cleanHtml } }], 24)
+  }
+
+  const saveCustom = () => {
+    const cleanHtml = html.trim()
+    if (!cleanHtml) return
+    const nextBlock = {
+      id: `custom-${Date.now()}`,
+      label: label.trim() || 'Custom block',
+      desc: 'Saved custom HTML',
+      html: cleanHtml,
+    }
+    const next = [nextBlock, ...saved].slice(0, 24)
+    setSaved(next)
+    writeCustomBlocks(next)
+  }
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className={`flex w-full items-center gap-3 px-3 py-2 text-sm select-none hover:bg-[#eef2ff] ${open ? 'bg-[#f5f5ff]' : ''}`}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-[#374151]">
+          <CodeIcon size={15} />
+        </span>
+        <span className="flex-1 text-left font-medium text-[#374151]">Custom HTML</span>
+        {saved.length > 0 && <span className="text-[11px] text-[#9ca3af]">{saved.length}</span>}
+        <span className="w-3 text-[10px] text-[#9ca3af]">{open ? '-' : '+'}</span>
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-[#f1f1f4] bg-[#fafafa] p-2">
+          <input
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            placeholder="Block name"
+            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-2 text-xs text-[#374151] outline-none focus:border-[#4f46e5]"
+          />
+          <textarea
+            value={html}
+            onChange={(event) => setHtml(event.target.value)}
+            spellCheck={false}
+            rows={7}
+            placeholder="<section>...</section>"
+            className="w-full resize-y rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-2 font-mono text-[11px] leading-relaxed text-[#374151] outline-none focus:border-[#4f46e5]"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => placeCustom()}
+              disabled={!hasHtml}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#4f46e5] px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <PlusIcon size={13} /> Place
+            </button>
+            <button
+              type="button"
+              onClick={saveCustom}
+              disabled={!hasHtml}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-2 text-xs font-semibold text-[#374151] transition hover:border-[#4f46e5] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <SaveIcon size={13} /> Save
+            </button>
+          </div>
+          {saved.length > 0 && (
+            <div className="pt-1">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">Saved snippets</div>
+              <div className="grid grid-cols-2 gap-2">
+                {saved.map((block) => (
+                  <BlockCard key={block.id} block={block} onPick={onPick} onInspect={onInspect} theme={theme} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -232,6 +433,7 @@ const TABS = [
 export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
   const [tab, setTab] = useState(filesPanel ? 'files' : 'components')
   const [openType, setOpenType] = useState(null)
+  const [preview, setPreview] = useState(null)
   const theme = useEditorStore((s) => s.schema.theme)
   return (
     <aside className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[#e5e7eb] bg-[#f9fafb]">
@@ -280,9 +482,10 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 {HTML_BLOCKS.map((b) => (
-                  <BlockCard key={b.id} block={b} onPick={onPickComponent} theme={theme} />
+                  <BlockCard key={b.id} block={b} onPick={onPickComponent} onInspect={setPreview} theme={theme} />
                 ))}
               </div>
+              <CustomBlockPanel onPick={onPickComponent} onInspect={setPreview} theme={theme} />
             </div>
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
               Components
@@ -293,17 +496,21 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
                   key={item.type}
                   item={item}
                   onPick={onPickComponent}
+                  onInspect={setPreview}
                   open={openType === item.type}
                   onToggle={() => setOpenType((t) => (t === item.type ? null : item.type))}
                 />
               ))}
             </div>
             <p className="mt-4 text-xs leading-relaxed text-[#6b7280]">
-              Click a component to see its styles, then {onPickComponent ? 'click in the page (or drag) to place it' : 'drag one onto the canvas'}.
+              {onPickComponent ? 'Click in the page or drag to place.' : 'Click for preview, drag onto the canvas.'}
             </p>
           </>
         )}
       </div>
+      {!(filesPanel && tab === 'files') && (
+        <PalettePreviewPanel preview={preview} onClose={() => setPreview(null)} />
+      )}
     </aside>
   )
 }

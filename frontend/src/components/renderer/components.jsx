@@ -6,11 +6,33 @@ import { sanitizeUrl, sanitizeImageSrc } from '../../utils/sanitize.js'
 import { ICONS } from '../../utils/icons.js'
 import { ALERT_VARIANTS } from './constants.js'
 import { withBuilderInteractiveHtml } from '../../utils/htmlRuntime.js'
+import { htmlEmbedDocument } from '../../utils/htmlEmbedDocument.js'
 
 function linkAttrs(href) {
   return /^https?:\/\//i.test(href)
     ? { target: '_blank', rel: 'noopener noreferrer' }
     : {}
+}
+
+function InlineIcon({ name }) {
+  const d = name ? ICONS[name] : null
+  if (!d) return null
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="1em"
+      height="1em"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flexShrink: 0 }}
+    >
+      <path d={d} />
+    </svg>
+  )
 }
 
 export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
@@ -104,13 +126,15 @@ export function Button({ props, style }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: props.icon ? '0.45em' : undefined,
         textDecoration: 'none',
         cursor: 'pointer',
         ...style,
       }}
       {...linkAttrs(href)}
     >
-      {props.text}
+      <InlineIcon name={props.icon} />
+      <span>{props.text}</span>
     </a>
   )
 }
@@ -124,11 +148,13 @@ export function LinkButton({ props, style }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: props.icon ? '0.45em' : undefined,
         ...style,
       }}
       {...linkAttrs(href)}
     >
-      {props.text}
+      <InlineIcon name={props.icon} />
+      <span>{props.text}</span>
     </a>
   )
 }
@@ -153,6 +179,9 @@ export function Image({ props, style }) {
 }
 
 export function Section({ props, style, contentWidth }) {
+  const href = sanitizeUrl(props.buttonHref)
+  const sectionColor = style?.color || '#1d1d1f'
+  const sectionBg = style?.backgroundColor || '#ffffff'
   return (
     <section style={{ ...style, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
       <div
@@ -163,7 +192,33 @@ export function Section({ props, style, contentWidth }) {
           marginRight: 'auto',
         }}
       >
+        {props.eyebrow ? (
+          <p style={{ margin: '0 0 10px', fontSize: '0.78em', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.72 }}>
+            {props.eyebrow}
+          </p>
+        ) : null}
         {props.heading ? <h2 style={headingTagStyle}>{props.heading}</h2> : null}
+        {props.text ? <p style={{ margin: props.heading ? '12px 0 0' : 0, lineHeight: 1.6, opacity: 0.78 }}>{props.text}</p> : null}
+        {props.buttonText ? (
+          <a
+            href={href || undefined}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: '20px',
+              padding: '0.72em 1.2em',
+              borderRadius: '0.65em',
+              background: sectionColor,
+              color: sectionBg,
+              textDecoration: 'none',
+              fontWeight: 700,
+            }}
+            {...linkAttrs(href)}
+          >
+            {props.buttonText}
+          </a>
+        ) : null}
       </div>
     </section>
   )
@@ -231,8 +286,14 @@ export function Badge({ props, style }) {
 
 export function Icon({ props, style }) {
   const d = ICONS[props.name] || ICONS.star
+  const label = props.label || ''
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0, fontSize: '32px', ...style }}>
+    <span
+      role={label ? 'img' : undefined}
+      aria-label={label || undefined}
+      title={label || undefined}
+      style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0, fontSize: '32px', ...style }}
+    >
       <svg
         viewBox="0 0 24 24"
         width="1em"
@@ -376,11 +437,7 @@ export function Tabs({ style }) {
 // `allow-scripts` keeps an opaque origin so the embed can't read parent storage.
 export function HtmlEmbed({ props, style }) {
   const code = typeof props.code === 'string' ? props.code : ''
-  // Wrap fragments in a minimal document so users can paste a body snippet.
-  const looksFull = /^\s*<!DOCTYPE|<html[\s>]/i.test(code)
-  const baseHtml = looksFull
-    ? code
-    : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
+  const baseHtml = htmlEmbedDocument(code)
   // Inject the same anchor-interceptor / tabs handler the rest of the site
   // uses. Without it, an `<a href="#">` inside the user's snippet navigates the
   // sandboxed iframe to `about:srcdoc#` — which, in an iframe sandboxed without
@@ -391,14 +448,16 @@ export function HtmlEmbed({ props, style }) {
     <iframe
       title="Embedded HTML"
       srcDoc={srcDoc}
+      scrolling="no"
       sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
       style={{
+        ...style,
         display: 'block',
         width: '100%',
         height: '100%',
         border: '0',
         background: 'transparent',
-        ...style,
+        overflow: 'hidden',
       }}
     />
   )

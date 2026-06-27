@@ -102,9 +102,9 @@ export function ensurePlacementChrome(doc) {
   const style = doc.createElement('style')
   style.setAttribute(CHROME_STYLE_ATTR, '')
   style.textContent = `
-    [${HOVER_ATTR}] { outline: 2px dashed #2563eb !important; outline-offset: 2px !important; cursor: copy !important; }
-    [${FLASH_ATTR}] { outline: 3px solid #2563eb !important; outline-offset: 2px !important; transition: outline-color 0.3s; }
-    [${LINK_SRC_ATTR}] { outline: 3px solid #2563eb !important; outline-offset: 2px !important; background: rgba(37, 99, 235, 0.10) !important; }
+    [${HOVER_ATTR}] { box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.72) !important; cursor: copy !important; }
+    [${FLASH_ATTR}] { box-shadow: inset 0 0 0 3px #2563eb !important; transition: box-shadow 0.3s; }
+    [${LINK_SRC_ATTR}] { box-shadow: inset 0 0 0 3px #2563eb !important; background: rgba(37, 99, 235, 0.10) !important; }
   `
   ;(doc.head || doc.documentElement).appendChild(style)
 }
@@ -133,13 +133,11 @@ export function ensureEditHintChrome(doc) {
     h1:hover, h2:hover, h3:hover, h4:hover, h5:hover, h6:hover, p:hover,
     li:hover, a:hover, span:hover, button:hover, blockquote:hover,
     figcaption:hover, td:hover, th:hover, label:hover {
-      outline: 1px dashed rgba(37, 99, 235, 0.45);
-      outline-offset: 2px;
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.45);
       cursor: text;
     }
     [${SELECTED_ATTR}] {
-      outline: 2px solid #2563eb !important;
-      outline-offset: 2px !important;
+      box-shadow: inset 0 0 0 2px #2563eb !important;
     }
     /* Code-project EDIT: server-side template tags ({% … %} / {{ … }}) shown as
        small, muted, non-editable chips so the canvas stays tidy. */

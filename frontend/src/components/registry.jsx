@@ -32,6 +32,8 @@ import { PRESET_IMAGES } from '../utils/presetImages.js'
 import { ICON_OPTIONS } from '../utils/icons.js'
 import { LinkIcon, ImageIcon } from './icons.jsx'
 
+const OPTIONAL_ICON_OPTIONS = [['', 'None'], ...ICON_OPTIONS]
+
 export const registry = {
   navbar: {
     type: 'navbar',
@@ -122,7 +124,7 @@ export const registry = {
     icon: '■',
     Render: Button,
     defaultSize: { w: 180, h: 48 },
-    defaultProps: { text: 'Contact Me', href: '#contact' },
+    defaultProps: { text: 'Contact Me', href: '#contact', icon: '' },
     defaultStyles: {
       backgroundColor: '#0071e3',
       color: '#ffffff',
@@ -133,6 +135,7 @@ export const registry = {
     editableProps: [
       { key: 'text', label: 'Button text', control: 'text' },
       { key: 'href', label: 'Link (href)', control: 'text' },
+      { key: 'icon', label: 'Icon', control: 'select', options: OPTIONAL_ICON_OPTIONS },
     ],
     editableStyles: [
       'backgroundColor', 'backgroundImage', 'color', 'fontSize', 'fontWeight',
@@ -147,7 +150,7 @@ export const registry = {
     icon: <LinkIcon size={16} />,
     Render: LinkButton,
     defaultSize: { w: 220, h: 44 },
-    defaultProps: { text: 'Visit my GitHub', href: 'https://github.com' },
+    defaultProps: { text: 'Visit my GitHub', href: 'https://github.com', icon: '' },
     defaultStyles: {
       color: '#0071e3',
       fontSize: '17px',
@@ -156,6 +159,7 @@ export const registry = {
     editableProps: [
       { key: 'text', label: 'Link text', control: 'text' },
       { key: 'href', label: 'Link (href)', control: 'text' },
+      { key: 'icon', label: 'Icon', control: 'select', options: OPTIONAL_ICON_OPTIONS },
     ],
     editableStyles: [
       'color', 'backgroundColor', 'fontSize', 'fontWeight', 'fontFamily',
@@ -191,14 +195,26 @@ export const registry = {
     icon: '▬',
     Render: Section,
     defaultSize: { w: 1000, h: 280 },
-    defaultProps: { heading: 'Section title' },
+    defaultProps: {
+      eyebrow: '',
+      heading: 'Section title',
+      text: 'A short paragraph that introduces what this section is about.',
+      buttonText: '',
+      buttonHref: '#top',
+    },
     defaultStyles: {
       backgroundColor: '#f5f5f7',
       color: '#1d1d1f',
       padding: '40px',
       textAlign: 'center',
     },
-    editableProps: [{ key: 'heading', label: 'Heading', control: 'text' }],
+    editableProps: [
+      { key: 'eyebrow', label: 'Eyebrow', control: 'text' },
+      { key: 'heading', label: 'Heading', control: 'text' },
+      { key: 'text', label: 'Text', control: 'textarea' },
+      { key: 'buttonText', label: 'Button text', control: 'text' },
+      { key: 'buttonHref', label: 'Button link', control: 'link' },
+    ],
     editableStyles: [
       'backgroundColor', 'backgroundImage', 'color', 'fontSize', 'fontFamily',
       'textAlign', 'textTransform', 'padding', 'borderRadius', 'boxShadow',
@@ -310,10 +326,11 @@ export const registry = {
     icon: '★',
     Render: Icon,
     defaultSize: { w: 48, h: 48 },
-    defaultProps: { name: 'star' },
+    defaultProps: { name: 'star', label: '' },
     defaultStyles: { fontSize: '40px', color: '#2563eb' },
     editableProps: [
       { key: 'name', label: 'Icon', control: 'select', options: ICON_OPTIONS },
+      { key: 'label', label: 'Accessible label', control: 'text' },
     ],
     editableStyles: ['color', 'fontSize', 'opacity'],
   },
@@ -540,6 +557,7 @@ export const registry = {
     },
     defaultStyles: { borderRadius: '12px', overflow: 'hidden' },
     editableProps: [
+      { key: 'code', label: 'Text & links', control: 'htmlContent' },
       { key: 'code', label: 'HTML / CSS / JS', control: 'code' },
     ],
     editableStyles: [

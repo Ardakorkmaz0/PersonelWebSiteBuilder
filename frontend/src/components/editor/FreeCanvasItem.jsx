@@ -5,17 +5,19 @@ import { snapDraggedRect } from '../../utils/snapping.js'
 
 const MIN = 20
 const ACCENT = '#4f46e5'
+const HANDLE_SIZE = 8
+const HANDLE_INSET = 3
 
 // [direction, absolute-position style, cursor]
 const HANDLES = [
-  ['nw', { top: -5, left: -5 }, 'nwse-resize'],
-  ['n', { top: -5, left: '50%', marginLeft: -5 }, 'ns-resize'],
-  ['ne', { top: -5, right: -5 }, 'nesw-resize'],
-  ['e', { top: '50%', right: -5, marginTop: -5 }, 'ew-resize'],
-  ['se', { bottom: -5, right: -5 }, 'nwse-resize'],
-  ['s', { bottom: -5, left: '50%', marginLeft: -5 }, 'ns-resize'],
-  ['sw', { bottom: -5, left: -5 }, 'nesw-resize'],
-  ['w', { top: '50%', left: -5, marginTop: -5 }, 'ew-resize'],
+  ['nw', { top: HANDLE_INSET, left: HANDLE_INSET }, 'nwse-resize'],
+  ['n', { top: HANDLE_INSET, left: '50%', marginLeft: -HANDLE_SIZE / 2 }, 'ns-resize'],
+  ['ne', { top: HANDLE_INSET, right: HANDLE_INSET }, 'nesw-resize'],
+  ['e', { top: '50%', right: HANDLE_INSET, marginTop: -HANDLE_SIZE / 2 }, 'ew-resize'],
+  ['se', { bottom: HANDLE_INSET, right: HANDLE_INSET }, 'nwse-resize'],
+  ['s', { bottom: HANDLE_INSET, left: '50%', marginLeft: -HANDLE_SIZE / 2 }, 'ns-resize'],
+  ['sw', { bottom: HANDLE_INSET, left: HANDLE_INSET }, 'nesw-resize'],
+  ['w', { top: '50%', left: HANDLE_INSET, marginTop: -HANDLE_SIZE / 2 }, 'ew-resize'],
 ]
 
 export default function FreeCanvasItem({ component }) {
@@ -173,16 +175,15 @@ export default function FreeCanvasItem({ component }) {
         opacity: hidden ? 0.35 : 1,
         // Armed link source stays a solid blue ring (with a light wash) until
         // the next click picks the target — same affordance as HTML mode.
-        outline: isLinkSource
-          ? `3px solid ${ACCENT}`
+        boxShadow: isLinkSource
+          ? `inset 0 0 0 2px ${ACCENT}, 0 0 0 1px rgba(255,255,255,0.9)`
           : isSelected
-            ? `2px solid ${ACCENT}`
+            ? `inset 0 0 0 1.5px ${ACCENT}`
             : undefined,
-        outlineOffset: isLinkSource || isSelected ? '2px' : undefined,
         background: isLinkSource ? 'rgba(79, 70, 229, 0.10)' : undefined,
       }}
       className={
-        isSelected || linkMode ? '' : 'hover:outline hover:outline-1 hover:outline-[#a6b7d6]'
+        isSelected || linkMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'
       }
     >
       {component.type === 'container' ? (
@@ -228,11 +229,12 @@ export default function FreeCanvasItem({ component }) {
               onPointerDown={(e) => startResize(e, dir)}
               style={{
                 position: 'absolute',
-                width: 10,
-                height: 10,
+                width: HANDLE_SIZE,
+                height: HANDLE_SIZE,
                 background: ACCENT,
                 border: '1px solid #ffffff',
-                borderRadius: 0,
+                borderRadius: 999,
+                boxShadow: '0 1px 4px rgba(15,23,42,0.18)',
                 zIndex: 30,
                 cursor,
                 ...pos,

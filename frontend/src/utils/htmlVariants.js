@@ -54,7 +54,7 @@ const cards = [
   ['horizontal', 'Horizontal', `<div style="display:flex;gap:16px;align-items:center;padding:16px;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.08);font-family:inherit;max-width:420px;"><img src="https://picsum.photos/seed/11/200/200" alt="" style="width:84px;height:84px;border-radius:12px;object-fit:cover;flex-shrink:0;" /><div><h3 style="margin:0 0 4px;font-size:18px;">Card title</h3><p style="margin:0;color:#64748b;font-size:14px;line-height:1.5;">A compact horizontal card, great for lists.</p></div></div>`],
   ['stat', 'Stat', `<div style="padding:24px;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.06);font-family:inherit;max-width:220px;"><div style="font-size:14px;color:#64748b;margin-bottom:6px;">Revenue</div><div style="font-size:34px;font-weight:800;color:#0f172a;">$48.2k</div><div style="font-size:13px;color:#16a34a;font-weight:600;margin-top:4px;">▲ 12% this month</div></div>`],
   ['pricing', 'Pricing', `<div style="padding:28px;border-radius:18px;background:#fff;border:2px solid #6366f1;box-shadow:0 16px 40px rgba(99,102,241,0.2);font-family:inherit;text-align:center;max-width:260px;"><div style="font-size:13px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:1px;">Pro</div><div style="font-size:40px;font-weight:800;color:#0f172a;margin:6px 0 14px;">$12<span style="font-size:15px;color:#94a3b8;font-weight:500;">/mo</span></div><a href="#" style="display:block;padding:11px;border-radius:10px;background:linear-gradient(90deg,#6366f1,#a855f7);color:#fff;text-decoration:none;font-weight:600;">Choose</a></div>`],
-  ['glass', 'Glass', `<div style="padding:26px;border-radius:18px;background:rgba(255,255,255,0.55);border:1px solid rgba(255,255,255,0.6);box-shadow:0 12px 40px rgba(0,0,0,0.12);backdrop-filter:blur(12px);font-family:inherit;max-width:320px;"><h3 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Glassmorphism</h3><p style="margin:0;color:#475569;line-height:1.6;">A frosted-glass card that pops on a colorful background.</p></div>`],
+  ['glass', 'Glass', `<div style="box-sizing:border-box;padding:24px;border-radius:16px;background:rgba(255,255,255,0.55);border:1px solid rgba(255,255,255,0.55);box-shadow:0 10px 28px rgba(15,23,42,0.1);backdrop-filter:blur(12px);font-family:inherit;max-width:320px;"><h3 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Glassmorphism</h3><p style="margin:0;color:#475569;line-height:1.6;">A frosted-glass card that pops on a colorful background.</p></div>`],
 ]
 
 const badges = [
@@ -104,6 +104,60 @@ const inputs = [
   ['inline', 'Inline + button', `<div style="display:flex;gap:8px;font-family:inherit;max-width:420px;"><input type="email" placeholder="Your email" style="flex:1;padding:12px 16px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px;box-sizing:border-box;" /><a href="#" style="padding:12px 22px;background:#2563eb;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;white-space:nowrap;">Subscribe</a></div>`],
 ]
 
+const linkbuttons = [
+  ['arrow', 'Arrow link', `<a href="#" style="display:inline-flex;align-items:center;gap:8px;color:#2563eb;text-decoration:none;font-weight:700;font-family:inherit;">Read more <span aria-hidden="true">&rarr;</span></a>`],
+  ['underline', 'Underline', `<a href="#" style="display:inline-block;color:#111827;text-decoration:none;border-bottom:2px solid #111827;font-weight:700;font-family:inherit;padding-bottom:3px;">View project</a>`],
+  ['pill', 'Small pill', `<a href="#" style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:#f1f5f9;color:#0f172a;text-decoration:none;font-weight:700;font-family:inherit;">Open link <span aria-hidden="true">&rarr;</span></a>`],
+]
+
+const selects = [
+  ['default', 'Default', `<label style="display:block;font-size:14px;font-weight:700;color:#1e293b;font-family:inherit;">Plan<select style="display:block;width:100%;margin-top:6px;padding:11px 14px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:15px;font-family:inherit;box-sizing:border-box;"><option>Starter</option><option>Pro</option><option>Team</option></select></label>`],
+  ['soft', 'Soft', `<select style="width:100%;padding:12px 16px;border:1px solid #dbeafe;border-radius:12px;background:#eff6ff;color:#1d4ed8;font-size:15px;font-weight:600;font-family:inherit;box-sizing:border-box;"><option>Choose a category</option><option>Design</option><option>Development</option><option>Marketing</option></select>`],
+  ['inline', 'Inline filter', `<div style="display:flex;align-items:center;gap:10px;font-family:inherit;"><span style="font-size:14px;font-weight:700;color:#475569;">Filter</span><select style="padding:9px 36px 9px 12px;border:1px solid #e2e8f0;border-radius:999px;background:#fff;color:#0f172a;font-size:14px;"><option>Newest</option><option>Popular</option><option>Featured</option></select></div>`],
+]
+
+const alerts = [
+  ['info', 'Info', `<div style="display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border-radius:12px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;font-family:inherit;"><strong style="font-size:14px;">Info</strong><span style="font-size:14px;line-height:1.5;">This is an informational message for visitors.</span></div>`],
+  ['success', 'Success', `<div style="display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border-radius:12px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;font-family:inherit;"><strong style="font-size:14px;">Success</strong><span style="font-size:14px;line-height:1.5;">Everything is ready to go.</span></div>`],
+  ['warning', 'Warning', `<div style="display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border-radius:12px;background:#fffbeb;color:#92400e;border:1px solid #fde68a;font-family:inherit;"><strong style="font-size:14px;">Note</strong><span style="font-size:14px;line-height:1.5;">Add a short warning or reminder here.</span></div>`],
+  ['dark', 'Dark', `<div style="padding:15px 18px;border-radius:14px;background:#111827;color:#e5e7eb;font-family:inherit;box-shadow:0 12px 30px rgba(15,23,42,0.22);"><strong style="display:block;margin-bottom:3px;color:#fff;">Announcement</strong><span style="font-size:14px;line-height:1.5;color:#cbd5e1;">A compact message with stronger visual weight.</span></div>`],
+]
+
+const accordions = [
+  ['clean', 'Clean FAQ', `<div style="font-family:inherit;max-width:680px;display:grid;gap:10px;"><details style="border:1px solid #e5e7eb;border-radius:12px;background:#fff;padding:14px 16px;"><summary style="cursor:pointer;font-weight:700;color:#0f172a;">What is included?</summary><p style="margin:10px 0 0;color:#64748b;line-height:1.6;">Everything you need to describe the offer clearly.</p></details><details style="border:1px solid #e5e7eb;border-radius:12px;background:#fff;padding:14px 16px;"><summary style="cursor:pointer;font-weight:700;color:#0f172a;">Can I customize it?</summary><p style="margin:10px 0 0;color:#64748b;line-height:1.6;">Yes, change the text, spacing, colors and layout.</p></details></div>`],
+  ['boxed', 'Boxed FAQ', `<div style="font-family:inherit;max-width:680px;"><details open style="margin-bottom:10px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:16px 18px;"><summary style="cursor:pointer;font-weight:700;color:#0f172a;">First question</summary><p style="margin:10px 0 0;color:#64748b;line-height:1.6;">A short answer that expands inside the card.</p></details><details style="border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:16px 18px;"><summary style="cursor:pointer;font-weight:700;color:#0f172a;">Second question</summary><p style="margin:10px 0 0;color:#64748b;line-height:1.6;">Another answer goes here.</p></details></div>`],
+  ['dark', 'Dark FAQ', `<div style="font-family:inherit;max-width:680px;background:#0f172a;padding:16px;border-radius:16px;display:grid;gap:10px;"><details open style="border:1px solid rgba(255,255,255,0.14);border-radius:12px;padding:14px 16px;color:#fff;"><summary style="cursor:pointer;font-weight:700;">Why choose this?</summary><p style="margin:10px 0 0;color:#cbd5e1;line-height:1.6;">Because the answer is direct, compact and easy to scan.</p></details><details style="border:1px solid rgba(255,255,255,0.14);border-radius:12px;padding:14px 16px;color:#fff;"><summary style="cursor:pointer;font-weight:700;">How does it work?</summary><p style="margin:10px 0 0;color:#cbd5e1;line-height:1.6;">Write a useful answer here.</p></details></div>`],
+]
+
+const tabs = [
+  ['simple', 'Simple tabs', `<div style="font-family:inherit;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;background:#fff;"><div style="display:flex;gap:0;background:#f8fafc;border-bottom:1px solid #e2e8f0;"><button style="flex:1;padding:13px 16px;border:0;background:#fff;color:#2563eb;font-weight:700;border-bottom:2px solid #2563eb;">Overview</button><button style="flex:1;padding:13px 16px;border:0;background:transparent;color:#64748b;font-weight:600;">Details</button><button style="flex:1;padding:13px 16px;border:0;background:transparent;color:#64748b;font-weight:600;">FAQ</button></div><div style="padding:20px;color:#475569;line-height:1.6;">Tab content goes here. Edit labels and content after placing.</div></div>`],
+  ['pills', 'Pill tabs', `<div style="font-family:inherit;"><div style="display:inline-flex;gap:6px;padding:5px;border-radius:999px;background:#f1f5f9;"><button style="border:0;border-radius:999px;background:#2563eb;color:#fff;padding:9px 16px;font-weight:700;">Work</button><button style="border:0;border-radius:999px;background:transparent;color:#64748b;padding:9px 16px;font-weight:700;">About</button><button style="border:0;border-radius:999px;background:transparent;color:#64748b;padding:9px 16px;font-weight:700;">Contact</button></div><p style="margin:16px 0 0;color:#475569;line-height:1.6;">Use pill tabs for compact content switching.</p></div>`],
+]
+
+const containers = [
+  ['dashed', 'Drop zone', `<div style="box-sizing:border-box;min-height:100%;padding:24px;border:2px dashed #cbd5e1;border-radius:14px;background:#f8fafc;color:#64748b;font-family:inherit;text-align:center;">Drop content here</div>`],
+  ['surface', 'Surface', `<div style="box-sizing:border-box;min-height:100%;padding:24px;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,0.07);font-family:inherit;"><h3 style="margin:0 0 8px;color:#0f172a;">Surface container</h3><p style="margin:0;color:#64748b;line-height:1.6;">Use this as a styled wrapper for grouped content.</p></div>`],
+  ['glass', 'Glass panel', `<div style="box-sizing:border-box;min-height:100%;padding:24px;border:1px solid rgba(255,255,255,0.5);border-radius:16px;background:rgba(255,255,255,0.45);backdrop-filter:blur(12px);box-shadow:0 10px 28px rgba(15,23,42,0.1);font-family:inherit;"><h3 style="margin:0 0 8px;color:#0f172a;">Glass panel</h3><p style="margin:0;color:#475569;line-height:1.6;">A translucent wrapper for visual sections.</p></div>`],
+]
+
+const icons = [
+  ['circle', 'Circle', `<span style="display:inline-grid;place-items:center;width:48px;height:48px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:22px;font-weight:800;font-family:system-ui;">*</span>`],
+  ['square', 'Square', `<span style="display:inline-grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#0f172a;color:#fff;font-size:22px;font-weight:800;font-family:system-ui;">+</span>`],
+  ['outline', 'Outline', `<span style="display:inline-grid;place-items:center;width:48px;height:48px;border-radius:14px;border:2px solid #2563eb;color:#2563eb;font-size:22px;font-weight:800;font-family:system-ui;">i</span>`],
+  ['gradient', 'Gradient', `<span style="display:inline-grid;place-items:center;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#ec4899);color:#fff;font-size:22px;font-weight:800;font-family:system-ui;box-shadow:0 12px 28px rgba(99,102,241,0.3);">+</span>`],
+]
+
+const htmlEmbeds = [
+  ['blank', 'Blank custom', `<div style="display:grid;place-items:center;min-height:140px;border:1px dashed #cbd5e1;border-radius:14px;background:#f8fafc;color:#64748b;font-family:inherit;">Paste custom HTML here</div>`],
+  ['css-card', 'CSS card', `<style>.custom-card{padding:26px;border-radius:18px;background:linear-gradient(135deg,#111827,#312e81);color:white;font-family:system-ui;box-shadow:0 18px 45px rgba(49,46,129,.35)}.custom-card p{color:#c7d2fe;line-height:1.6}</style><div class="custom-card"><h3 style="margin:0 0 8px;">Custom CSS block</h3><p style="margin:0;">Edit the markup and styles from the properties panel.</p></div>`],
+]
+
+const spacers = [
+  ['sm', 'Small gap', `<div style="height:24px;"></div>`],
+  ['md', 'Medium gap', `<div style="height:56px;"></div>`],
+  ['lg', 'Large gap', `<div style="height:96px;"></div>`],
+]
+
 const sections = [
   ['soft', 'Soft band', `<section style="padding:60px 32px;background:#f8fafc;text-align:center;font-family:inherit;"><h2 style="margin:0 0 12px;font-size:34px;color:#0f172a;">Section title</h2><p style="margin:0 auto;max-width:560px;color:#64748b;font-size:18px;line-height:1.6;">A short paragraph that introduces what this section is about.</p></section>`],
   ['gradient', 'Gradient', `<section style="padding:72px 32px;background:linear-gradient(135deg,#4f46e5,#9333ea);color:#fff;text-align:center;font-family:inherit;"><h2 style="margin:0 0 12px;font-size:36px;">A standout section</h2><p style="margin:0 auto;max-width:560px;color:rgba(255,255,255,0.85);font-size:18px;line-height:1.6;">Use a gradient band to break up the page and draw the eye.</p></section>`],
@@ -122,6 +176,7 @@ function toEntries(list) {
 
 export const HTML_VARIANTS = {
   button: toEntries(buttons),
+  linkbutton: toEntries(linkbuttons),
   navbar: toEntries(navbars),
   card: toEntries(cards),
   badge: toEntries(badges),
@@ -131,6 +186,14 @@ export const HTML_VARIANTS = {
   quote: toEntries(quotes),
   list: toEntries(lists),
   input: toEntries(inputs),
+  select: toEntries(selects),
+  alert: toEntries(alerts),
+  accordion: toEntries(accordions),
+  tabs: toEntries(tabs),
+  container: toEntries(containers),
+  icon: toEntries(icons),
+  html: toEntries(htmlEmbeds),
+  spacer: toEntries(spacers),
   section: toEntries(sections),
   divider: toEntries(dividers),
 }
@@ -157,21 +220,48 @@ const footer = `<footer style="padding:40px 32px;background:#0f172a;color:#cbd5e
 
 const heroSplit = `<section style="display:flex;flex-wrap:wrap;align-items:center;gap:40px;padding:64px 32px;max-width:1080px;margin:0 auto;font-family:inherit;"><div style="flex:1;min-width:280px;"><h1 style="margin:0 0 16px;font-size:46px;font-weight:800;line-height:1.1;color:#0f172a;">Build it your way</h1><p style="margin:0 0 24px;font-size:19px;color:#64748b;line-height:1.6;">A split hero with the message on one side and a visual on the other.</p><a href="#" style="padding:13px 28px;background:#2563eb;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;">Get started</a></div><img src="https://picsum.photos/seed/20/640/440" alt="" style="flex:1;min-width:280px;border-radius:18px;max-width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.15);" /></section>`
 
-const faq = `<section style="padding:64px 32px;max-width:760px;margin:0 auto;font-family:inherit;"><h2 style="margin:0 0 24px;font-size:32px;text-align:center;color:#0f172a;">Frequently asked questions</h2>${[['Is there a free plan?', 'Yes — start for free and upgrade whenever you are ready.'], ['Can I cancel anytime?', 'Absolutely, no contracts and no hidden fees.'], ['Do you offer support?', 'Friendly humans are available whenever you get stuck.']].map(([q, a]) => `<details style="border-bottom:1px solid #e5e7eb;padding:16px 0;"><summary style="cursor:pointer;font-weight:600;font-size:17px;color:#0f172a;">${q}</summary><p style="margin:10px 0 0;color:#64748b;line-height:1.6;">${a}</p></details>`).join('')}</section>`
+const faq = `<section style="padding:64px 32px;max-width:760px;margin:0 auto;font-family:inherit;"><h2 style="margin:0 0 24px;font-size:32px;text-align:center;color:#0f172a;">Frequently asked questions</h2><div style="display:grid;gap:10px;">${[['Is there a free plan?', 'Yes — start for free and upgrade whenever you are ready.'], ['Can I cancel anytime?', 'Absolutely, no contracts and no hidden fees.'], ['Do you offer support?', 'Friendly humans are available whenever you get stuck.']].map(([q, a]) => `<details style="border:1px solid #e5e7eb;border-radius:12px;background:#fff;padding:14px 16px;"><summary style="cursor:pointer;font-weight:600;font-size:17px;color:#0f172a;">${q}</summary><p style="margin:10px 0 0;color:#64748b;line-height:1.6;">${a}</p></details>`).join('')}</div></section>`
 
 const logos = `<section style="padding:48px 32px;text-align:center;font-family:inherit;"><p style="margin:0 0 22px;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;font-weight:600;">Trusted by teams at</p><div style="display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:center;opacity:0.6;font-weight:800;font-size:22px;color:#475569;">${['Acme', 'Globex', 'Umbra', 'Soylent', 'Initech'].map((n) => `<span>${n}</span>`).join('')}</div></section>`
 
 const contact = `<section style="padding:64px 32px;max-width:560px;margin:0 auto;font-family:inherit;"><h2 style="margin:0 0 8px;font-size:32px;text-align:center;color:#0f172a;">Get in touch</h2><p style="margin:0 0 28px;text-align:center;color:#64748b;">We usually reply within a day.</p><div style="display:flex;flex-direction:column;gap:14px;"><input placeholder="Your name" style="padding:13px 16px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px;font-family:inherit;" /><input placeholder="Email" style="padding:13px 16px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px;font-family:inherit;" /><textarea placeholder="Message" rows="4" style="padding:13px 16px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px;font-family:inherit;resize:vertical;"></textarea><a href="#" style="padding:14px;background:#2563eb;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;text-align:center;">Send message</a></div></section>`
 
+const about = `<section style="padding:72px 32px;max-width:1080px;margin:0 auto;font-family:inherit;"><div style="display:grid;grid-template-columns:minmax(260px,0.9fr) minmax(280px,1.1fr);gap:46px;align-items:center;"><div style="aspect-ratio:1/1;border-radius:24px;background:linear-gradient(135deg,#dbeafe,#818cf8);box-shadow:0 24px 60px rgba(79,70,229,0.18);"></div><div><p style="margin:0 0 10px;color:#2563eb;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">About</p><h2 style="margin:0 0 14px;font-size:38px;color:#0f172a;line-height:1.1;">A short story with a clear point of view.</h2><p style="margin:0;color:#64748b;font-size:18px;line-height:1.7;">Use this section to explain who you are, what you make, and why visitors should trust you.</p></div></div></section>`
+
+const services = `<section style="padding:72px 32px;background:#f8fafc;font-family:inherit;"><div style="max-width:1080px;margin:0 auto;"><p style="margin:0 0 10px;color:#2563eb;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">Services</p><h2 style="margin:0 0 28px;font-size:38px;color:#0f172a;">What I can help with</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;">${[['Strategy', 'Clarify goals and shape the right plan.'], ['Design', 'Turn the idea into a polished visual system.'], ['Build', 'Ship responsive pages that feel fast and clean.'], ['Improve', 'Iterate with real feedback and measurable outcomes.']].map(([h, p]) => `<div style="padding:22px;border-radius:16px;background:#fff;border:1px solid #e2e8f0;"><h3 style="margin:0 0 8px;color:#0f172a;font-size:18px;">${h}</h3><p style="margin:0;color:#64748b;line-height:1.6;">${p}</p></div>`).join('')}</div></div></section>`
+
+const process = `<section style="padding:72px 32px;max-width:960px;margin:0 auto;font-family:inherit;"><p style="margin:0 0 10px;color:#2563eb;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;text-align:center;">Process</p><h2 style="margin:0 0 34px;font-size:38px;color:#0f172a;text-align:center;">From idea to launch</h2><div style="display:grid;gap:18px;">${[['01', 'Discover', 'Define audience, goals and content priorities.'], ['02', 'Design', 'Build the visual direction and responsive structure.'], ['03', 'Launch', 'Polish, publish and keep improving after release.']].map(([n, h, p]) => `<div style="display:grid;grid-template-columns:70px 1fr;gap:18px;align-items:start;padding:22px;border-radius:16px;border:1px solid #e2e8f0;background:#fff;"><div style="font-size:28px;font-weight:900;color:#2563eb;">${n}</div><div><h3 style="margin:0 0 6px;color:#0f172a;font-size:20px;">${h}</h3><p style="margin:0;color:#64748b;line-height:1.6;">${p}</p></div></div>`).join('')}</div></section>`
+
+const team = `<section style="padding:72px 32px;background:#f8fafc;font-family:inherit;"><div style="max-width:1080px;margin:0 auto;text-align:center;"><p style="margin:0 0 10px;color:#2563eb;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">Team</p><h2 style="margin:0 0 34px;font-size:38px;color:#0f172a;">People behind the work</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px;">${['Avery Stone', 'Mina Park', 'Leo Carter', 'Nora Wells'].map((n, i) => `<div style="padding:22px;border-radius:18px;background:#fff;border:1px solid #e2e8f0;"><div style="width:78px;height:78px;border-radius:999px;background:linear-gradient(${120 + i * 30}deg,#93c5fd,#c084fc);margin:0 auto 14px;"></div><h3 style="margin:0 0 4px;color:#0f172a;font-size:18px;">${n}</h3><p style="margin:0;color:#64748b;font-size:14px;">Creative partner</p></div>`).join('')}</div></div></section>`
+
+const gallery = `<section style="padding:72px 32px;max-width:1120px;margin:0 auto;font-family:inherit;"><p style="margin:0 0 10px;color:#2563eb;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">Gallery</p><h2 style="margin:0 0 28px;font-size:38px;color:#0f172a;">A visual sample wall</h2><div style="columns:3 230px;column-gap:18px;">${[1,2,3,4,5,6,7,8].map((n) => `<div style="break-inside:avoid;margin-bottom:18px;aspect-ratio:${n % 3 === 0 ? '4/5' : n % 2 === 0 ? '1/1' : '4/3'};border-radius:18px;background:linear-gradient(${90 + n * 28}deg,#dbeafe,#6366f1);"></div>`).join('')}</div></section>`
+
+const portfolio = `<section style="padding:72px 32px;background:#f8fafc;font-family:inherit;"><div style="max-width:1120px;margin:0 auto;"><p style="margin:0 0 10px;color:#2563eb;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">Work</p><h2 style="margin:0 0 28px;font-size:38px;color:#0f172a;">Selected projects</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px;">${['Brand refresh', 'Product launch', 'Editorial site', 'Design system'].map((h, i) => `<article style="overflow:hidden;border-radius:18px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 12px 28px rgba(15,23,42,0.06);"><div style="aspect-ratio:16/10;background:linear-gradient(${120 + i * 35}deg,#bfdbfe,#7c3aed);"></div><div style="padding:20px;"><span style="font-size:12px;font-weight:800;color:#2563eb;text-transform:uppercase;letter-spacing:1px;">Case study</span><h3 style="margin:8px 0 6px;color:#0f172a;font-size:20px;">${h}</h3><p style="margin:0;color:#64748b;line-height:1.6;">A short result-focused description goes here.</p></div></article>`).join('')}</div></div></section>`
+
+const newsletter = `<section style="padding:72px 32px;font-family:inherit;"><div style="max-width:760px;margin:0 auto;text-align:center;padding:42px 28px;border-radius:24px;background:#0f172a;color:#fff;"><p style="margin:0 0 10px;color:#93c5fd;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">Newsletter</p><h2 style="margin:0 0 12px;font-size:36px;line-height:1.1;">Get the next update.</h2><p style="margin:0 auto 24px;max-width:520px;color:#cbd5e1;line-height:1.6;">A short promise about what subscribers will receive.</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;"><input type="email" placeholder="Email address" style="min-width:240px;padding:13px 16px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.08);color:#fff;font-size:15px;" /><a href="#" style="padding:13px 22px;border-radius:12px;background:#fff;color:#0f172a;text-decoration:none;font-weight:800;">Subscribe</a></div></div></section>`
+
+const blogPosts = `<section style="padding:72px 32px;max-width:1080px;margin:0 auto;font-family:inherit;"><p style="margin:0 0 10px;color:#2563eb;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">Articles</p><h2 style="margin:0 0 28px;font-size:38px;color:#0f172a;">Latest writing</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">${[['Design', 'Designing for clarity'], ['Build', 'Small systems that scale'], ['Notes', 'What changed this month']].map(([tag, h]) => `<article style="padding:24px;border-radius:18px;background:#fff;border:1px solid #e2e8f0;"><span style="display:inline-block;margin-bottom:14px;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:800;">${tag}</span><h3 style="margin:0 0 8px;color:#0f172a;font-size:21px;">${h}</h3><p style="margin:0;color:#64748b;line-height:1.6;">A concise excerpt that makes people want to read more.</p></article>`).join('')}</div></section>`
+
+const video = `<section style="padding:72px 32px;background:#0f172a;color:#fff;font-family:inherit;"><div style="max-width:1000px;margin:0 auto;text-align:center;"><p style="margin:0 0 10px;color:#93c5fd;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;font-size:13px;">Watch</p><h2 style="margin:0 0 24px;font-size:38px;">Show the product in motion</h2><div style="aspect-ratio:16/9;border-radius:22px;background:linear-gradient(135deg,#1e293b,#4338ca);display:grid;place-items:center;box-shadow:0 28px 70px rgba(0,0,0,0.35);"><span style="display:grid;place-items:center;width:74px;height:74px;border-radius:999px;background:#fff;color:#0f172a;font-size:22px;font-weight:900;">Play</span></div></div></section>`
+
 export const HTML_BLOCKS = [
   { id: 'hero', label: 'Hero', desc: 'Headline, subtitle & buttons', html: hero },
   { id: 'hero-split', label: 'Split hero', desc: 'Text + image side by side', html: heroSplit },
+  { id: 'about', label: 'About', desc: 'Story + visual block', html: about },
   { id: 'features', label: 'Features', desc: '3-column feature row', html: features },
+  { id: 'services', label: 'Services', desc: '4 service cards', html: services },
+  { id: 'process', label: 'Process', desc: 'Step-by-step timeline', html: process },
   { id: 'stats', label: 'Stats', desc: 'Row of key numbers', html: stats },
   { id: 'pricing', label: 'Pricing', desc: '3 pricing cards', html: pricing },
+  { id: 'portfolio', label: 'Portfolio', desc: 'Project grid', html: portfolio },
+  { id: 'gallery', label: 'Gallery', desc: 'Masonry image wall', html: gallery },
+  { id: 'team', label: 'Team', desc: 'People cards', html: team },
   { id: 'logos', label: 'Logo cloud', desc: 'Trusted-by logos', html: logos },
   { id: 'testimonial', label: 'Testimonial', desc: 'Quote + author', html: testimonial },
+  { id: 'blog', label: 'Blog posts', desc: 'Article cards', html: blogPosts },
   { id: 'faq', label: 'FAQ', desc: 'Expandable questions', html: faq },
+  { id: 'newsletter', label: 'Newsletter', desc: 'Email signup', html: newsletter },
+  { id: 'video', label: 'Video', desc: 'Media feature block', html: video },
   { id: 'contact', label: 'Contact', desc: 'Contact form', html: contact },
   { id: 'cta', label: 'Call to action', desc: 'Gradient banner', html: cta },
   { id: 'footer', label: 'Footer', desc: 'Links + copyright', html: footer },

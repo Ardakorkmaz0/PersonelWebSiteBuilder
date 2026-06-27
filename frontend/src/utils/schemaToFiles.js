@@ -10,6 +10,7 @@ import { iconSvg } from './icons.js'
 import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
+import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { googleFontLinkTag } from './googleFonts.js'
 import { CANVAS_WIDTH } from '../components/registry.jsx'
 import {
@@ -91,6 +92,37 @@ function controlFieldCss(props = {}) {
   ].join(';')
 }
 
+function iconTextHtml(props = {}) {
+  const icon = props.icon ? `<span aria-hidden="true" style="display:inline-flex;line-height:0">${iconSvg(props.icon)}</span>` : ''
+  return `${icon}<span>${esc(props.text)}</span>`
+}
+
+function linkAttrs(href) {
+  return /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''
+}
+
+function sectionInnerHtml(props = {}, styles = {}) {
+  const href = sanitizeUrl(props.buttonHref)
+  const color = safeCssProp(styles.color, '#1d1d1f')
+  const bg = safeCssProp(styles.backgroundColor, '#ffffff')
+  return `<div class="section-inner">${
+    props.eyebrow
+      ? `<p style="margin:0 0 10px;font-size:.78em;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.72">${esc(props.eyebrow)}</p>`
+      : ''
+  }${props.heading ? `<h2 class="m0">${esc(props.heading)}</h2>` : ''}${
+    props.text ? `<p class="m0" style="margin-top:${props.heading ? '12px' : '0'};line-height:1.6;opacity:.78">${esc(props.text)}</p>` : ''
+  }${
+    props.buttonText
+      ? `<a href="${esc(href || '#')}"${linkAttrs(href)} style="display:inline-flex;align-items:center;justify-content:center;margin-top:20px;padding:.72em 1.2em;border-radius:.65em;background:${color};color:${bg};text-decoration:none;font-weight:700">${esc(props.buttonText)}</a>`
+      : ''
+  }</div>`
+}
+
+function iconA11yAttrs(props = {}) {
+  const label = String(props.label || '').trim()
+  return label ? ` role="img" aria-label="${esc(label)}" title="${esc(label)}"` : ''
+}
+
 function tabsCssVars(props = {}) {
   return [
     `--builder-tab-bg:${safeCssProp(props.tabBackgroundColor, 'transparent')}`,
@@ -124,7 +156,7 @@ function baseRules(type) {
       return 'display:flex; flex-direction:column; justify-content:flex-start;'
     case 'button':
     case 'linkbutton':
-      return 'display:flex; align-items:center; justify-content:center; text-decoration:none;'
+      return 'display:flex; align-items:center; justify-content:center; gap:.45em; text-decoration:none;'
     case 'image':
       return 'display:block; object-fit:cover;'
     case 'quote':
@@ -144,7 +176,7 @@ function baseRules(type) {
 // link. ANY component is linkable except anchors/interactive types — mirrors
 // the live renderer's NON_WRAP_LINK_TYPES so export matches preview.
 const NON_WRAP_LINK = new Set([
-  'button', 'linkbutton', 'navbar', 'tabs', 'container', 'accordion', 'select', 'input', 'html',
+  'button', 'linkbutton', 'navbar', 'section', 'tabs', 'container', 'accordion', 'select', 'input', 'html',
 ])
 
 function linkWrap(c, html) {
@@ -229,16 +261,13 @@ function inlineNode(c) {
   }
   if (c.type === 'html') {
     const code = typeof p.code === 'string' ? p.code : ''
-    const looksFull = /^\s*<!DOCTYPE|<html[\s>]/i.test(code)
-    const doc = looksFull
-      ? code
-      : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:transparent;font-family:inherit;color:inherit}</style></head><body>${code}</body></html>`
+    const doc = htmlEmbedDocument(code)
     const h = Math.max(40, Math.round(c.layout?.h || 240))
     // withBuilderInteractiveHtml layers on the anchor-interceptor so `<a href="#">`
     // inside the user's snippet scrolls instead of navigating the sandboxed
     // iframe to `about:srcdoc#` (which whites it out without allow-same-origin).
     const safe = withBuilderInteractiveHtml(doc).replace(/"/g, '&quot;')
-    return `<iframe srcdoc="${safe}" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy" style="display:block;width:100%;height:${h}px;border:0;background:transparent;${styleStr}"></iframe>`
+    return `<iframe srcdoc="${safe}" scrolling="no" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy" style="display:block;width:100%;height:${h}px;border:0;background:transparent;${styleStr};overflow:hidden"></iframe>`
   }
   const tag = tagFor(c.type)
   const base = baseRules(c.type)
@@ -246,7 +275,7 @@ function inlineNode(c) {
     const src = sanitizeImageSrc(p.src)
     return `<img src="${esc(src)}" alt="${esc(p.alt)}" style="${base} ${styleStr} max-width:100%;" />`
   }
-  return `<${tag} style="${base} ${styleStr}">${innerHtml(c)}</${tag}>`
+  return `<${tag}${c.type === 'icon' ? iconA11yAttrs(p) : ''} style="${base} ${styleStr}">${innerHtml(c)}</${tag}>`
 }
 
 function tagFor(type) {
@@ -284,9 +313,9 @@ function innerHtml(c) {
       return `<p class="m0">${esc(p.text)}</p>`
     case 'button':
     case 'linkbutton':
-      return esc(p.text)
+      return iconTextHtml(p)
     case 'section':
-      return `<div class="section-inner">${p.heading ? `<h2 class="m0">${esc(p.heading)}</h2>` : ''}</div>`
+      return sectionInnerHtml(p, c.styles || {})
     case 'card':
       return `${p.title ? `<h3 class="card-title">${esc(p.title)}</h3>` : ''}${
         p.text ? `\n      <p class="m0">${esc(p.text)}</p>` : ''
@@ -334,6 +363,9 @@ function openTag(c) {
   if (tag === 'img') {
     const src = sanitizeImageSrc((c.props || {}).src)
     return `<img${idAttr} class="${cls}" src="${esc(src)}" alt="${esc((c.props || {}).alt)}" />`
+  }
+  if (c.type === 'icon') {
+    return `<${tag}${idAttr} class="${cls}"${iconA11yAttrs(c.props || {})}>`
   }
   return `<${tag}${idAttr} class="${cls}">`
 }

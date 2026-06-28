@@ -20,8 +20,9 @@ import {
   layoutFor,
   pinnedLayoutStyle,
 } from './layout.js'
+import { componentBoxScale, scaleBoxStyles, scaleCssValue, scaledPx } from './scale.js'
 
-function TabsRender({ component, style, viewport }) {
+function TabsRender({ component, style, viewport, boxScale = 1, editorPreview = false }) {
   const p = component.props || {}
   const tabs = Array.isArray(p.tabs) && p.tabs.length
     ? p.tabs.filter((t) => t && t.id)
@@ -37,17 +38,17 @@ function TabsRender({ component, style, viewport }) {
   const kids = Array.isArray(component.children) ? component.children : []
   const tablistStyle = {
     ...TAB_STYLES.tablist,
-    gap: p.tabGap || TAB_STYLES.tablist.gap,
+    gap: scaleCssValue(p.tabGap || TAB_STYLES.tablist.gap, boxScale),
     background: p.tablistBackgroundColor || 'transparent',
-    borderBottom: `1px solid ${p.tablistBorderColor || '#e5e7eb'}`,
-    padding: p.tablistPadding || TAB_STYLES.tablist.padding,
+    borderBottom: `${scaledPx(1, boxScale)} solid ${p.tablistBorderColor || '#e5e7eb'}`,
+    padding: scaleCssValue(p.tablistPadding || TAB_STYLES.tablist.padding, boxScale),
   }
   const tabBaseStyle = {
     ...TAB_STYLES.tab,
     background: p.tabBackgroundColor || 'transparent',
     color: p.tabTextColor || TAB_STYLES.tab.color,
-    borderRadius: p.tabBorderRadius || 0,
-    padding: p.tabPadding || TAB_STYLES.tab.padding,
+    borderRadius: scaleCssValue(p.tabBorderRadius || 0, boxScale),
+    padding: scaleCssValue(p.tabPadding || TAB_STYLES.tab.padding, boxScale),
   }
   const tabActiveStyle = {
     ...TAB_STYLES.tabActive,
@@ -58,16 +59,16 @@ function TabsRender({ component, style, viewport }) {
   const panelStyle = {
     ...TAB_STYLES.panel,
     background: p.panelBackgroundColor || 'transparent',
-    border: `1px solid ${p.panelBorderColor || 'transparent'}`,
-    borderRadius: p.panelBorderRadius || 0,
-    padding: p.panelPadding || 0,
+    border: `${scaledPx(1, boxScale)} solid ${p.panelBorderColor || 'transparent'}`,
+    borderRadius: scaleCssValue(p.panelBorderRadius || 0, boxScale),
+    padding: scaleCssValue(p.panelPadding || 0, boxScale),
     boxSizing: 'border-box',
   }
 
   return (
     <div
       data-builder-tabs={component.id}
-      style={{ ...style, display: 'flex', flexDirection: 'column', overflow: 'visible' }}
+      style={{ fontSize: scaledPx(16, boxScale), ...style, display: 'flex', flexDirection: 'column', overflow: 'visible' }}
     >
       <div role="tablist" style={tablistStyle}>
         {tabs.map((t) => {
@@ -129,7 +130,7 @@ function TabsRender({ component, style, viewport }) {
                     height: l.h || 80,
                   }}
                 >
-                  <RenderComponent component={c} viewport={viewport} />
+                  <RenderComponent component={c} viewport={viewport} editorPreview={editorPreview} />
                 </div>
                 )
               })(),
@@ -141,17 +142,23 @@ function TabsRender({ component, style, viewport }) {
   )
 }
 
-export function RenderComponent({ component, flowMode = false, viewport = 'pc' }) {
+export function RenderComponent({
+  component,
+  flowMode = false,
+  viewport = 'pc',
+  editorPreview = false,
+}) {
   const def = registry[component.type]
   if (!def) return null
   const Comp = def.Render
   const fixedFlow = flowMode && ['image', 'divider', 'spacer'].includes(component.type)
+  const boxScale = componentBoxScale(component, def, viewport, flowMode)
   const style = {
     width: '100%',
     ...(flowMode ? (fixedFlow ? { height: '100%' } : { minHeight: '100%' }) : { height: '100%' }),
     boxSizing: 'border-box',
     overflow: flowMode ? 'visible' : 'hidden',
-    ...sanitizeStyles(component.styles),
+    ...scaleBoxStyles(sanitizeStyles(component.styles), boxScale),
   }
 
   // Tabs: header strip + one panel per tab. In the public renderer (no
@@ -159,7 +166,15 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
   // so the static JS shim can toggle them. The editor passes `designActiveId`
   // to drive selection from React state.
   if (component.type === 'tabs') {
-    return <TabsRender component={component} style={style} viewport={viewport} />
+    return (
+      <TabsRender
+        component={component}
+        style={style}
+        viewport={viewport}
+        boxScale={boxScale}
+        editorPreview={editorPreview}
+      />
+    )
   }
 
   // A container is a nested mini-canvas: children keep their own x/y/w/h inside
@@ -191,7 +206,7 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
                 height: l.h || 80,
               }}
             >
-              <RenderComponent component={c} viewport={viewport} />
+              <RenderComponent component={c} viewport={viewport} editorPreview={editorPreview} />
             </div>
           )
         })}
@@ -212,6 +227,8 @@ export function RenderComponent({ component, flowMode = false, viewport = 'pc' }
       style={style}
       viewport={viewport}
       contentWidth={contentWidth}
+      boxScale={boxScale}
+      editorPreview={editorPreview}
     />
   )
   // Optional link wrapper: `display:contents` keeps the layout identical while

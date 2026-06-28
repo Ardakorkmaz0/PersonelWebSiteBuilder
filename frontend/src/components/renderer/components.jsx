@@ -7,6 +7,8 @@ import { ICONS } from '../../utils/icons.js'
 import { ALERT_VARIANTS } from './constants.js'
 import { withBuilderInteractiveHtml } from '../../utils/htmlRuntime.js'
 import { htmlEmbedDocument } from '../../utils/htmlEmbedDocument.js'
+import { htmlEmbedDocumentOptions } from '../../utils/htmlSnippetSizing.js'
+import { scaleCssValue, scaledPx } from './scale.js'
 
 function linkAttrs(href) {
   return /^https?:\/\//i.test(href)
@@ -35,7 +37,7 @@ function InlineIcon({ name }) {
   )
 }
 
-export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
+export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale = 1 }) {
   const links = Array.isArray(props.links) ? props.links : []
   const isMobile = viewport === 'mobile'
   const layout = props.navLayout || 'horizontal'
@@ -49,6 +51,7 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
     // at `contentWidth` (the Max width) and centered — like a real site header.
     <nav
       style={{
+        fontSize: scaledPx(16, boxScale),
         ...style,
         display: 'flex',
         justifyContent: vertical ? 'flex-start' : 'center',
@@ -69,20 +72,20 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
           flexDirection: stacked ? 'column' : 'row',
           alignItems: centered ? 'center' : stacked ? 'flex-start' : 'center',
           justifyContent: stacked ? 'flex-start' : 'space-between',
-          gap: isMobile ? '10px' : vertical ? '14px' : twoRow ? '10px' : '16px',
+          gap: scaledPx(isMobile ? 10 : vertical ? 14 : twoRow ? 10 : 16, boxScale),
           flexWrap: 'wrap',
           textAlign: centered ? 'center' : undefined,
         }}
       >
-        <span style={{ fontWeight: 'bold', fontSize: '18px' }}>{props.brand}</span>
+        <span style={{ fontWeight: 'bold', fontSize: '1.125em' }}>{props.brand}</span>
         <div
           style={{
             display: 'flex',
             flexDirection: linkColumn ? 'column' : 'row',
             alignItems: centered ? 'center' : linkColumn ? 'stretch' : 'center',
             justifyContent: centered ? 'center' : undefined,
-            gap: linkColumn ? '6px' : isMobile ? '16px' : '20px',
-            rowGap: '6px',
+            gap: scaledPx(linkColumn ? 6 : isMobile ? 16 : 20, boxScale),
+            rowGap: scaledPx(6, boxScale),
             flexWrap: 'wrap',
             width: linkColumn || twoRow ? '100%' : undefined,
           }}
@@ -99,8 +102,8 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth }) {
                   whiteSpace: 'nowrap',
                   display: vertical ? 'block' : undefined,
                   width: vertical ? '100%' : undefined,
-                  padding: vertical ? '10px 12px' : undefined,
-                  borderRadius: vertical ? '8px' : undefined,
+                  padding: vertical ? `${scaledPx(10, boxScale)} ${scaledPx(12, boxScale)}` : undefined,
+                  borderRadius: vertical ? scaledPx(8, boxScale) : undefined,
                   boxSizing: vertical ? 'border-box' : undefined,
                 }}
                 {...linkAttrs(href)}
@@ -207,12 +210,12 @@ export function Image({ props, style }) {
   )
 }
 
-export function Section({ props, style, contentWidth }) {
+export function Section({ props, style, contentWidth, boxScale = 1 }) {
   const href = sanitizeUrl(props.buttonHref)
   const sectionColor = style?.color || '#1d1d1f'
   const sectionBg = style?.backgroundColor || '#ffffff'
   return (
-    <section style={{ ...style, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+    <section style={{ fontSize: scaledPx(16, boxScale), ...style, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
       <div
         style={{
           width: '100%',
@@ -222,12 +225,12 @@ export function Section({ props, style, contentWidth }) {
         }}
       >
         {props.eyebrow ? (
-          <p style={{ margin: '0 0 10px', fontSize: '0.78em', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.72 }}>
+          <p style={{ margin: `0 0 ${scaledPx(10, boxScale)}`, fontSize: '0.78em', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.72 }}>
             {props.eyebrow}
           </p>
         ) : null}
         {props.heading ? <h2 style={headingTagStyle}>{props.heading}</h2> : null}
-        {props.text ? <p style={{ margin: props.heading ? '12px 0 0' : 0, lineHeight: 1.6, opacity: 0.78 }}>{props.text}</p> : null}
+        {props.text ? <p style={{ margin: props.heading ? `${scaledPx(12, boxScale)} 0 0` : 0, lineHeight: 1.6, opacity: 0.78 }}>{props.text}</p> : null}
         {props.buttonText ? (
           <a
             href={href || undefined}
@@ -235,7 +238,7 @@ export function Section({ props, style, contentWidth }) {
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginTop: '20px',
+              marginTop: scaledPx(20, boxScale),
               padding: '0.72em 1.2em',
               borderRadius: '0.65em',
               background: sectionColor,
@@ -253,11 +256,11 @@ export function Section({ props, style, contentWidth }) {
   )
 }
 
-export function Card({ props, style }) {
+export function Card({ props, style, boxScale = 1 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', ...style }}>
+    <div style={{ fontSize: scaledPx(16, boxScale), display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', ...style }}>
       {props.title ? (
-        <h3 style={{ margin: '0 0 8px', fontSize: '20px', fontWeight: 600 }}>
+        <h3 style={{ margin: `0 0 ${scaledPx(8, boxScale)}`, fontSize: '1.25em', fontWeight: 600 }}>
           {props.title}
         </h3>
       ) : null}
@@ -266,7 +269,7 @@ export function Card({ props, style }) {
   )
 }
 
-export function List({ props, style }) {
+export function List({ props, style, boxScale = 1 }) {
   const items = String(props.text || '')
     .split('\n')
     .map((s) => s.trim())
@@ -275,7 +278,7 @@ export function List({ props, style }) {
   return (
     <Tag style={{ margin: 0, paddingLeft: '1.4em', ...style }}>
       {items.map((it, i) => (
-        <li key={i} style={{ marginBottom: '6px' }}>
+        <li key={i} style={{ marginBottom: scaledPx(6, boxScale) }}>
           {it}
         </li>
       ))}
@@ -283,13 +286,13 @@ export function List({ props, style }) {
   )
 }
 
-export function Quote({ props, style }) {
+export function Quote({ props, style, boxScale = 1 }) {
   return (
     <blockquote
       style={{
         margin: 0,
-        borderLeft: '4px solid currentColor',
-        paddingLeft: '18px',
+        borderLeft: `${scaledPx(4, boxScale)} solid currentColor`,
+        paddingLeft: scaledPx(18, boxScale),
         fontStyle: 'italic',
         overflowWrap: 'break-word',
         ...style,
@@ -297,7 +300,7 @@ export function Quote({ props, style }) {
     >
       <p style={{ margin: 0 }}>{props.text}</p>
       {props.author ? (
-        <footer style={{ marginTop: '8px', fontStyle: 'normal', fontSize: '0.85em', opacity: 0.7 }}>
+        <footer style={{ marginTop: scaledPx(8, boxScale), fontStyle: 'normal', fontSize: '0.85em', opacity: 0.7 }}>
           — {props.author}
         </footer>
       ) : null}
@@ -313,7 +316,7 @@ export function Badge({ props, style }) {
   )
 }
 
-export function Icon({ props, style }) {
+export function Icon({ props, style, boxScale = 1 }) {
   const d = ICONS[props.name] || ICONS.star
   const label = props.label || ''
   return (
@@ -321,7 +324,14 @@ export function Icon({ props, style }) {
       role={label ? 'img' : undefined}
       aria-label={label || undefined}
       title={label || undefined}
-      style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0, fontSize: '32px', ...style }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        lineHeight: 0,
+        fontSize: scaledPx(32, boxScale),
+        ...style,
+      }}
     >
       <svg
         viewBox="0 0 24 24"
@@ -339,15 +349,15 @@ export function Icon({ props, style }) {
   )
 }
 
-function controlFieldStyle(props) {
+function controlFieldStyle(props, boxScale = 1) {
   return {
     width: '100%',
-    height: props.fieldHeight || '44px',
-    padding: props.fieldPadding || '10px 12px',
-    borderWidth: props.fieldBorderWidth || '1px',
+    height: scaleCssValue(props.fieldHeight || '44px', boxScale),
+    padding: scaleCssValue(props.fieldPadding || '10px 12px', boxScale),
+    borderWidth: scaleCssValue(props.fieldBorderWidth || '1px', boxScale),
     borderStyle: 'solid',
     borderColor: props.fieldBorderColor || '#cbd5e1',
-    borderRadius: props.fieldBorderRadius || '8px',
+    borderRadius: scaleCssValue(props.fieldBorderRadius || '8px', boxScale),
     font: 'inherit',
     color: props.fieldColor || 'inherit',
     background: props.fieldBackgroundColor || '#fff',
@@ -357,33 +367,33 @@ function controlFieldStyle(props) {
   }
 }
 
-export function Input({ props, style }) {
+export function Input({ props, style, boxScale = 1 }) {
   const type = ['text', 'email', 'number', 'tel', 'url'].includes(props.inputType)
     ? props.inputType
     : 'text'
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, ...style }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: scaledPx(6, boxScale), minWidth: 0, ...style }}>
       {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
       <input
         type={type}
         placeholder={props.placeholder || ''}
-        style={controlFieldStyle(props)}
+        style={controlFieldStyle(props, boxScale)}
       />
     </label>
   )
 }
 
-export function Select({ props, style }) {
+export function Select({ props, style, boxScale = 1 }) {
   const opts = String(props.options || '')
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean)
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, ...style }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: scaledPx(6, boxScale), minWidth: 0, ...style }}>
       {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
       <select
         defaultValue={props.placeholder ? '' : opts[0] || ''}
-        style={controlFieldStyle(props)}
+        style={controlFieldStyle(props, boxScale)}
       >
         {props.placeholder ? (
           <option value="" disabled>
@@ -400,7 +410,7 @@ export function Select({ props, style }) {
   )
 }
 
-export function Alert({ props, style }) {
+export function Alert({ props, style, boxScale = 1 }) {
   const v = ALERT_VARIANTS[props.variant] || ALERT_VARIANTS.info
   const d = ICONS[props.icon] || ICONS.check
   return (
@@ -408,19 +418,20 @@ export function Alert({ props, style }) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        padding: '12px 16px',
-        borderRadius: '10px',
-        border: `1px solid ${v.border}`,
+        gap: scaledPx(10, boxScale),
+        padding: `${scaledPx(12, boxScale)} ${scaledPx(16, boxScale)}`,
+        borderRadius: scaledPx(10, boxScale),
+        border: `${scaledPx(1, boxScale)} solid ${v.border}`,
         background: v.bg,
         color: v.color,
+        fontSize: scaledPx(16, boxScale),
         ...style,
       }}
     >
       <svg
         viewBox="0 0 24 24"
-        width="20"
-        height="20"
+        width={scaleCssValue('20px', boxScale)}
+        height={scaleCssValue('20px', boxScale)}
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
@@ -435,13 +446,13 @@ export function Alert({ props, style }) {
   )
 }
 
-export function Accordion({ props, style }) {
+export function Accordion({ props, style, boxScale = 1 }) {
   return (
-    <details style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '2px 16px', ...style }}>
-      <summary style={{ cursor: 'pointer', fontWeight: 600, padding: '12px 0' }}>
+    <details style={{ border: `${scaledPx(1, boxScale)} solid #e5e7eb`, borderRadius: scaledPx(10, boxScale), padding: `${scaledPx(2, boxScale)} ${scaledPx(16, boxScale)}`, ...style }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 600, padding: `${scaledPx(12, boxScale)} 0` }}>
         {props.title}
       </summary>
-      <div style={{ paddingBottom: '14px', color: '#4b5563', overflowWrap: 'break-word' }}>
+      <div style={{ paddingBottom: scaledPx(14, boxScale), color: '#4b5563', overflowWrap: 'break-word' }}>
         {props.text}
       </div>
     </details>
@@ -464,9 +475,9 @@ export function Tabs({ style }) {
 // it can't reach the editor or other components on the page. The iframe runs
 // allow-scripts + allow-same-origin only when explicitly needed; the default
 // `allow-scripts` keeps an opaque origin so the embed can't read parent storage.
-export function HtmlEmbed({ props, style }) {
+export function HtmlEmbed({ props, style, boxScale = 1, editorPreview = false }) {
   const code = typeof props.code === 'string' ? props.code : ''
-  const baseHtml = htmlEmbedDocument(code)
+  const baseHtml = htmlEmbedDocument(code, htmlEmbedDocumentOptions({ type: 'html', props }, boxScale))
   // Inject the same anchor-interceptor / tabs handler the rest of the site
   // uses. Without it, an `<a href="#">` inside the user's snippet navigates the
   // sandboxed iframe to `about:srcdoc#` — which, in an iframe sandboxed without
@@ -478,6 +489,7 @@ export function HtmlEmbed({ props, style }) {
       title="Embedded HTML"
       srcDoc={srcDoc}
       scrolling="no"
+      tabIndex={editorPreview ? -1 : undefined}
       sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
       style={{
         ...style,
@@ -485,8 +497,10 @@ export function HtmlEmbed({ props, style }) {
         width: '100%',
         height: '100%',
         border: '0',
-        background: 'transparent',
+        backgroundColor: style?.backgroundColor || 'transparent',
         overflow: 'hidden',
+        pointerEvents: editorPreview ? 'none' : style?.pointerEvents,
+        userSelect: editorPreview ? 'none' : style?.userSelect,
       }}
     />
   )

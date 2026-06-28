@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { paletteItems } from '../registry.jsx'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 import { htmlVariantsFor, HTML_BLOCKS } from '../../utils/htmlVariants.js'
+import { htmlSnippetSize } from '../../utils/htmlSnippetSizing.js'
 import { componentToHtml } from '../../utils/componentToHtml.js'
 import { useEditorStore } from '../../store/editorStore.js'
 import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon } from '../icons.jsx'
@@ -23,44 +24,10 @@ const NATIVE_CANVAS_TYPES = new Set(['tabs', 'navbar'])
 // top-left; the rest are inline and shown a bit larger, centered.
 const WIDE_HTML = new Set(['navbar', 'section', 'card', 'image', 'list', 'input', 'select', 'alert', 'accordion', 'tabs', 'container', 'html', 'spacer'])
 
-// Sensible starting size (w,h) for the `html` component a snippet drops as on the
-// free canvas — the user resizes from there.
-const HTML_SIZE = {
-  navbar: [1000, 84], section: [1000, 240], card: [360, 320], image: [480, 300],
-  list: [420, 112], input: [440, 96], button: [220, 56], linkbutton: [240, 50],
-  badge: [170, 44], heading: [620, 84], text: [560, 120], quote: [560, 130], divider: [560, 44],
-  select: [360, 90], alert: [520, 110], accordion: [620, 220], tabs: [620, 220],
-  container: [560, 150], icon: [90, 90], html: [560, 150], spacer: [560, 60],
-}
-
-const HTML_VARIANT_SIZE = {
-  navbar: {
-    centered: [640, 110],
-    sticky: [720, 86],
-    search: [720, 86],
-    tworow: [1000, 116],
-    vertical: [220, 320],
-    'vertical-light': [220, 320],
-  },
-  html: {
-    blank: [560, 150],
-    'css-card': [420, 180],
-  },
-  list: {
-    check: [420, 112],
-    bulleted: [420, 104],
-    numbered: [420, 104],
-  },
-  section: {
-    soft: [1000, 220],
-    gradient: [1000, 250],
-    split: [1000, 460],
-  },
-}
-
 function htmlSize(type, variant) {
   const id = typeof variant === 'string' ? variant : variant?.id
-  return HTML_VARIANT_SIZE[type]?.[id] || HTML_SIZE[type] || [380, 110]
+  const size = htmlSnippetSize(type, id)
+  return [size.w, size.h]
 }
 
 const CUSTOM_BLOCKS_KEY = 'pwb_custom_blocks'
@@ -167,6 +134,13 @@ function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
   const [w, h] = htmlSize(type, variant)
   const nativeCanvas = !onPick && NATIVE_CANVAS_TYPES.has(type)
   const preset = variant.id === 'default' ? null : variant.id
+  const inspect = () => onInspect?.({
+    type,
+    label: variant.label,
+    html: variant.html,
+    wide,
+    size: `${w} x ${h}`,
+  })
   // Hook is always called (rules of hooks); listeners used only on the canvas.
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `palette-${type}-${variant.id}`,
@@ -185,12 +159,17 @@ function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
       <div
         draggable
         onDragStart={(e) => {
+          inspect()
           e.dataTransfer.setData(DRAG_MIME, type)
           e.dataTransfer.setData('text/plain', variant.label)
           e.dataTransfer.effectAllowed = 'copy'
           window.setTimeout(() => onPick(type, variant.html), 0)
         }}
-        onClick={() => onPick(type, variant.html)}
+        onMouseEnter={inspect}
+        onClick={() => {
+          inspect()
+          onPick(type, variant.html)
+        }}
         title={`Click to place, or drag onto the page — ${variant.label}`}
         className="cursor-pointer rounded-lg border border-[#e5e7eb] bg-white p-1.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing"
       >
@@ -203,13 +182,8 @@ function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      onClick={() => onInspect?.({
-        type,
-        label: variant.label,
-        html: variant.html,
-        wide,
-        size: `${w} x ${h}`,
-      })}
+      onMouseEnter={inspect}
+      onClick={inspect}
       title={`Drag onto the canvas — ${variant.label}`}
       className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-1.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
     >
@@ -229,7 +203,7 @@ function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
         type="button"
         onClick={() => {
           onToggle()
-          if (!onPick && firstVariant) {
+          if (firstVariant) {
             const [w, h] = htmlSize(item.type, firstVariant)
             onInspect?.({
               type: item.label,
@@ -264,6 +238,14 @@ function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
 // A ready-made section block, dual-mode (same library as the variants). HTML mode
 // inserts the raw section HTML; the free canvas drops it as one `html` component.
 function BlockCard({ block, onPick, onInspect, theme }) {
+  const inspect = () => onInspect?.({
+    type: 'Section',
+    label: block.label,
+    desc: block.desc,
+    html: block.html,
+    wide: true,
+    size: '1000 x 380',
+  })
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `block-${block.id}`,
     data: { from: 'palette', html: block.html, w: 1000, h: 380, label: block.label },
@@ -280,12 +262,17 @@ function BlockCard({ block, onPick, onInspect, theme }) {
       <div
         draggable
         onDragStart={(e) => {
+          inspect()
           e.dataTransfer.setData(DRAG_MIME, 'section')
           e.dataTransfer.setData('text/plain', block.label)
           e.dataTransfer.effectAllowed = 'copy'
           window.setTimeout(() => onPick('section', block.html), 0)
         }}
-        onClick={() => onPick('section', block.html)}
+        onMouseEnter={inspect}
+        onClick={() => {
+          inspect()
+          onPick('section', block.html)
+        }}
         title={`Click to place, or drag onto the page — ${block.label} section`}
         className="cursor-pointer rounded-lg border border-[#e5e7eb] bg-white p-2.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing"
       >
@@ -298,14 +285,8 @@ function BlockCard({ block, onPick, onInspect, theme }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      onClick={() => onInspect?.({
-        type: 'Section',
-        label: block.label,
-        desc: block.desc,
-        html: block.html,
-        wide: true,
-        size: '1000 x 380',
-      })}
+      onMouseEnter={inspect}
+      onClick={inspect}
       title={`Drag onto the canvas — ${block.label} section`}
       className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-2.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
     >

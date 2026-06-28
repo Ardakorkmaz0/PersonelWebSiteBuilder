@@ -67,6 +67,92 @@ function mapPage(schema, id, updater) {
 // page's roots.
 const PARENT_TYPES = new Set(['container', 'tabs'])
 const hasKids = (c) => PARENT_TYPES.has(c.type) && Array.isArray(c.children)
+const TEXT_BRUSH_TYPES = new Set(['heading', 'text', 'list', 'quote', 'icon', 'linkbutton'])
+const FIELD_BRUSH_TYPES = new Set(['input', 'select'])
+
+function brushBorderStyles(component, color, fallbackWidth = '2px') {
+  return {
+    borderColor: color,
+    borderStyle: component.styles?.borderStyle || 'solid',
+    borderWidth: component.styles?.borderWidth || fallbackWidth,
+  }
+}
+
+function brushFillPatch(component, color) {
+  const type = component?.type
+  if (FIELD_BRUSH_TYPES.has(type)) {
+    return { styles: {}, props: { fieldBackgroundColor: color } }
+  }
+  if (type === 'tabs') {
+    return {
+      styles: { backgroundColor: color },
+      props: {
+        panelBackgroundColor: color,
+        tabBackgroundColor: color,
+        activeTabBackgroundColor: color,
+      },
+    }
+  }
+  return { styles: { backgroundColor: color }, props: {} }
+}
+
+function brushTextPatch(component, color) {
+  const type = component?.type
+  if (FIELD_BRUSH_TYPES.has(type)) return { styles: {}, props: { fieldColor: color } }
+  if (type === 'tabs') {
+    return {
+      styles: { color },
+      props: {
+        tabTextColor: color,
+        activeTabColor: color,
+      },
+    }
+  }
+  return { styles: { color }, props: {} }
+}
+
+function brushBorderPatch(component, color) {
+  const type = component?.type
+  if (FIELD_BRUSH_TYPES.has(type)) return { styles: {}, props: { fieldBorderColor: color } }
+  if (type === 'tabs') {
+    return {
+      styles: brushBorderStyles(component, color),
+      props: {
+        panelBorderColor: color,
+        tablistBorderColor: color,
+        activeTabBorderColor: color,
+      },
+    }
+  }
+  return {
+    styles: brushBorderStyles(
+      component,
+      color,
+      type === 'image' ? '4px' : type === 'html' ? '3px' : '2px',
+    ),
+    props: {},
+  }
+}
+
+function brushPatchForComponent(component, color, target = 'smart') {
+  const type = component?.type
+  if (target === 'fill') return brushFillPatch(component, color)
+  if (target === 'text') return brushTextPatch(component, color)
+  if (target === 'border') return brushBorderPatch(component, color)
+
+  if (TEXT_BRUSH_TYPES.has(type)) return brushTextPatch(component, color)
+  if (FIELD_BRUSH_TYPES.has(type)) {
+    return {
+      styles: {},
+      props: {
+        fieldBackgroundColor: color,
+        fieldBorderColor: color,
+      },
+    }
+  }
+  if (type === 'image' || type === 'html') return brushBorderPatch(component, color)
+  return brushFillPatch(component, color)
+}
 
 function mapTree(components, id, fn) {
   return components.map((c) => {
@@ -1507,6 +1593,34 @@ export const useEditorStore = create((set, get) => ({
         styles: { ...c.styles, ...patch },
       }))
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
+    })
+  },
+
+  paintComponent: (id, color, targetMode = 'smart') => {
+    const safeColor =
+      typeof color === 'string' && color.trim() ? color.trim() : '#4f46e5'
+    const safeTarget = ['smart', 'fill', 'text', 'border'].includes(targetMode)
+      ? targetMode
+      : 'smart'
+    get().record('brush-' + safeTarget + '-' + id)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const target = findInTree(page.components, id)
+      if (!target) return {}
+      const components = mapTree(page.components, id, (c) => {
+        const patch = brushPatchForComponent(c, safeColor, safeTarget)
+        return {
+          ...c,
+          props: { ...c.props, ...patch.props },
+          styles: { ...c.styles, ...patch.styles },
+        }
+      })
+      return {
+        schema: withComponents(state.schema, page.id, components),
+        selectedId: id,
+        selectedIds: [id],
+        dirty: true,
+      }
     })
   },
 

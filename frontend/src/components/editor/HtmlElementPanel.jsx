@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   LabeledColor,
   LabeledNumber,
@@ -58,6 +59,8 @@ const ALIGN_OPTIONS_FLEX = [
   ['flex-end', 'End'],
 ]
 
+const HTML_ELEMENT_MODE_KEY = 'pwb_html_element_properties_mode'
+
 function SectionTitle({ children }) {
   return (
     <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-[#6b7280] first:mt-0">
@@ -81,16 +84,47 @@ export default function HtmlElementPanel({
   onDelete,
   onClose,
 }) {
+  const [propertiesMode, setPropertiesModeState] = useState(() => {
+    try {
+      return localStorage.getItem(HTML_ELEMENT_MODE_KEY) === 'extended' ? 'extended' : 'basic'
+    } catch {
+      return 'basic'
+    }
+  })
+  const extendedMode = propertiesMode === 'extended'
+  const setPropertiesMode = (mode) => {
+    setPropertiesModeState(mode)
+    try { localStorage.setItem(HTML_ELEMENT_MODE_KEY, mode) } catch { /* ignore */ }
+  }
   if (!info) return null
   const label = TAG_LABELS[info.tag] || `<${info.tag}>`
   return (
     <div className="p-3">
-      <div className="mb-1 flex items-center justify-between">
+      <div className="mb-1 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-[#111827]">{label}</div>
           <div className="max-w-[200px] truncate text-xs text-[#9ca3af]" title={info.classes}>
             &lt;{info.tag}&gt;{info.classes ? ` .${info.classes.split(' ').join(' .')}` : ''}
           </div>
+        </div>
+        <div className="grid shrink-0 grid-cols-2 rounded-lg border border-[#d1d5db] bg-white p-0.5">
+          {[
+            ['basic', 'Basic'],
+            ['extended', 'Extend'],
+          ].map(([mode, text]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setPropertiesMode(mode)}
+              className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+                propertiesMode === mode
+                  ? 'bg-[#4f46e5] text-white'
+                  : 'text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]'
+              }`}
+            >
+              {text}
+            </button>
+          ))}
         </div>
         <button
           type="button"
@@ -212,7 +246,7 @@ export default function HtmlElementPanel({
         />
       </div>
 
-      <SectionTitle>Size &amp; spacing</SectionTitle>
+      <SectionTitle>{extendedMode ? 'Size & spacing' : 'Size'}</SectionTitle>
       <div className="space-y-2">
         <LabeledNumber
           label="Width (px, 0 = auto)"
@@ -224,24 +258,30 @@ export default function HtmlElementPanel({
           value={info.height}
           onChange={(v) => onChange({ height: v })}
         />
-        <LabeledNumber
-          label="Margin top (px)"
-          value={info.marginTop}
-          onChange={(v) => onChange({ marginTop: v })}
-        />
-        <LabeledNumber
-          label="Margin bottom (px)"
-          value={info.marginBottom}
-          onChange={(v) => onChange({ marginBottom: v })}
-        />
-        <LabeledSelect
-          label="Display"
-          value={info.display}
-          onChange={(v) => onChange({ display: v })}
-          options={DISPLAY_OPTIONS}
-        />
+        {extendedMode && (
+          <>
+            <LabeledNumber
+              label="Margin top (px)"
+              value={info.marginTop}
+              onChange={(v) => onChange({ marginTop: v })}
+            />
+            <LabeledNumber
+              label="Margin bottom (px)"
+              value={info.marginBottom}
+              onChange={(v) => onChange({ marginBottom: v })}
+            />
+            <LabeledSelect
+              label="Display"
+              value={info.display}
+              onChange={(v) => onChange({ display: v })}
+              options={DISPLAY_OPTIONS}
+            />
+          </>
+        )}
       </div>
 
+      {extendedMode && (
+        <>
       <SectionTitle>Border</SectionTitle>
       <div className="space-y-2">
         <LabeledNumber
@@ -282,6 +322,9 @@ export default function HtmlElementPanel({
           arrange the element’s direct children (e.g. a navbar’s links).
         </p>
       </div>
+
+        </>
+      )}
 
       <SectionTitle>Arrange</SectionTitle>
       <div className="grid grid-cols-2 gap-2">

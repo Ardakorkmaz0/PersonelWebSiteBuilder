@@ -149,6 +149,52 @@ describe('component scroll behavior', () => {
   })
 })
 
+describe('brush tool', () => {
+  it('paints block backgrounds and text colors by component type', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 10, 10)
+    s().addComponent('text', 10, 80)
+    const comps = selectCurrentPage(useEditorStore.getState()).components
+    const buttonId = comps[0].id
+    const textId = comps[1].id
+
+    s().paintComponent(buttonId, '#ff0000')
+    s().paintComponent(textId, '#00ff00')
+
+    const updated = selectCurrentPage(useEditorStore.getState()).components
+    expect(updated.find((c) => c.id === buttonId).styles.backgroundColor).toBe('#ff0000')
+    expect(updated.find((c) => c.id === textId).styles.color).toBe('#00ff00')
+  })
+
+  it('paints form controls through editable field props', () => {
+    freshTwoPageSchema()
+    s().addComponent('select', 10, 10)
+    const selectId = selectCurrentPage(useEditorStore.getState()).components[0].id
+
+    s().paintComponent(selectId, '#123456')
+
+    const select = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(select.props.fieldBackgroundColor).toBe('#123456')
+    expect(select.props.fieldBorderColor).toBe('#123456')
+  })
+
+  it('supports explicit fill, text, and border targets', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 10, 10)
+    const buttonId = selectCurrentPage(useEditorStore.getState()).components[0].id
+
+    s().paintComponent(buttonId, '#111111', 'fill')
+    s().paintComponent(buttonId, '#222222', 'text')
+    s().paintComponent(buttonId, '#333333', 'border')
+
+    const button = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(button.styles.backgroundColor).toBe('#111111')
+    expect(button.styles.color).toBe('#222222')
+    expect(button.styles.borderColor).toBe('#333333')
+    expect(button.styles.borderStyle).toBe('solid')
+  })
+})
+
 describe('component link tool', () => {
   it('arms a link-capable source then binds it to a target component', () => {
     freshTwoPageSchema()

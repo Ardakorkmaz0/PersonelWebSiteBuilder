@@ -6,12 +6,18 @@ import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import FreeCanvasItem from './FreeCanvasItem.jsx'
 import FlowCanvasItem from './FlowCanvasItem.jsx'
 import { DEFAULT_THEME } from '../../utils/theme.js'
+import { BRUSH_CURSOR } from './brushCursor.js'
 
 // One editable free canvas, rendered at the active breakpoint's chosen artboard
 // width. PC edits each component's `layout`; Mobile edits its `mobileLayout` on a
 // true device-width phone canvas (1:1, no scaling) — independent designs. The
 // "fold" guide (if set) marks the visible screen height for the chosen device.
-export default function Canvas() {
+export default function Canvas({
+  brushMode = false,
+  brushColor = '#4f46e5',
+  brushTarget = 'smart',
+  onBrushUse = () => {},
+}) {
   const page = useEditorStore(selectCurrentPage)
   const components = page.components
   const viewport = useEditorStore((s) => s.viewport)
@@ -24,6 +30,7 @@ export default function Canvas() {
   const select = useEditorStore((s) => s.selectComponent)
   const selectMany = useEditorStore((s) => s.selectMany)
   const linkMode = useEditorStore((s) => s.linkMode)
+  const setPageBackground = useEditorStore((s) => s.setPageBackground)
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' })
   // Marquee (rubber-band) selection: drag a box on the empty canvas to select
   // every component it touches, then align/distribute them. Works in both the PC
@@ -75,6 +82,15 @@ export default function Canvas() {
     .filter(Boolean)
 
   function startMarquee(e) {
+    if (brushMode) {
+      if (e.button !== 0) return
+      if (e.target === canvasElRef.current && (brushTarget === 'smart' || brushTarget === 'fill')) {
+        e.preventDefault()
+        setPageBackground(brushColor)
+        onBrushUse(brushColor)
+      }
+      return
+    }
     // Only a plain left-drag on the bare canvas (not on a component, which stops
     // its own pointerdown) begins a marquee. A click that doesn't move just
     // deselects, exactly like before.
@@ -140,6 +156,7 @@ export default function Canvas() {
         // backgroundColor (not the `background` shorthand) so it can coexist with
         // the grid overlay's backgroundImage/backgroundSize without React warning.
         backgroundColor: background,
+        cursor: brushMode ? BRUSH_CURSOR : undefined,
         fontFamily: themeFontFamily,
         // Clip selection chrome (resize handles, outline) and any off-artboard
         // content at the canvas edge so you can't scroll into empty space beside
@@ -182,9 +199,24 @@ export default function Canvas() {
       )}
       {components.map((component) =>
         flowMode ? (
-          <FlowCanvasItem key={component.id} component={component} canvasWidth={canvasW} />
+          <FlowCanvasItem
+            key={component.id}
+            component={component}
+            canvasWidth={canvasW}
+            brushMode={brushMode}
+            brushColor={brushColor}
+            brushTarget={brushTarget}
+            onBrushUse={onBrushUse}
+          />
         ) : (
-          <FreeCanvasItem key={component.id} component={component} />
+          <FreeCanvasItem
+            key={component.id}
+            component={component}
+            brushMode={brushMode}
+            brushColor={brushColor}
+            brushTarget={brushTarget}
+            onBrushUse={onBrushUse}
+          />
         ),
       )}
 

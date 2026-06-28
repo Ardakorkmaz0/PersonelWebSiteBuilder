@@ -3,11 +3,14 @@ import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, TabsEditor } from './FlowCanvasItem.jsx'
 import { snapDraggedRect } from '../../utils/snapping.js'
 import { TrashIcon } from '../icons.jsx'
+import { BRUSH_CURSOR } from './brushCursor.js'
 
 const MIN = 20
 const ACCENT = '#4f46e5'
 const HANDLE_SIZE = 10
 const HANDLE_OFFSET = HANDLE_SIZE / 2
+const EDGE_HIT_SIZE = 14
+const EDGE_HIT_OFFSET = EDGE_HIT_SIZE / 2
 const FRAME_OUTSET = 2
 
 function edgeOutsets(rect, amount) {
@@ -36,7 +39,23 @@ function resizeHandles(rect) {
   ]
 }
 
-export default function FreeCanvasItem({ component }) {
+function resizeEdgeHitZones(rect) {
+  const edge = edgeOutsets(rect, EDGE_HIT_OFFSET)
+  return [
+    ['n', { top: edge.top, left: 0, right: 0, height: EDGE_HIT_SIZE }, 'ns-resize'],
+    ['e', { top: 0, right: edge.right, bottom: 0, width: EDGE_HIT_SIZE }, 'ew-resize'],
+    ['s', { bottom: edge.bottom, left: 0, right: 0, height: EDGE_HIT_SIZE }, 'ns-resize'],
+    ['w', { top: 0, left: edge.left, bottom: 0, width: EDGE_HIT_SIZE }, 'ew-resize'],
+  ]
+}
+
+export default function FreeCanvasItem({
+  component,
+  brushMode = false,
+  brushColor = '#4f46e5',
+  brushTarget = 'smart',
+  onBrushUse = () => {},
+}) {
   const selectedId = useEditorStore((s) => s.selectedId)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const viewport = useEditorStore((s) => s.viewport)
@@ -47,6 +66,7 @@ export default function FreeCanvasItem({ component }) {
   const setDragGuides = useEditorStore((s) => s.setDragGuides)
   const clearDragGuides = useEditorStore((s) => s.clearDragGuides)
   const remove = useEditorStore((s) => s.removeComponent)
+  const paintComponent = useEditorStore((s) => s.paintComponent)
 
   // Component-canvas link tool: when armed, a click picks this component as the
   // link source or target instead of selecting/moving it.
@@ -58,7 +78,7 @@ export default function FreeCanvasItem({ component }) {
   const isSelected = selectedIds.includes(component.id)
   // Resize handles + Delete only on a SOLE selection — a multi-selection just
   // gets the outline (handles on every item would be noise).
-  const isPrimarySingle = selectedIds.length <= 1 && selectedId === component.id
+  const isPrimarySingle = !brushMode && selectedIds.length <= 1 && selectedId === component.id
   // Edit the layout of the active breakpoint only.
   const layout =
     viewport === 'mobile'
@@ -75,12 +95,20 @@ export default function FreeCanvasItem({ component }) {
   }
   const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
   const handles = resizeHandles(chromeRect)
+  const edgeHitZones = resizeEdgeHitZones(chromeRect)
   const canShowInlineDelete = w >= 34 && h >= 30
   const hidden =
     viewport === 'mobile' ? component.hiddenMobile : component.hidden
 
   function startMove(e) {
     if (e.button !== 0) return
+    if (brushMode) {
+      e.stopPropagation()
+      e.preventDefault()
+      paintComponent(component.id, brushColor, brushTarget)
+      onBrushUse(brushColor)
+      return
+    }
     // Link tool owns the pointer — don't drag/select while arming a link.
     if (linkMode) { e.stopPropagation(); return }
     e.stopPropagation()
@@ -197,7 +225,7 @@ export default function FreeCanvasItem({ component }) {
         top: y,
         width: w,
         height: h,
-        cursor: linkMode ? 'crosshair' : 'move',
+        cursor: brushMode ? BRUSH_CURSOR : linkMode ? 'crosshair' : 'move',
         zIndex: isSelected || isLinkSource ? 20 : 1,
         opacity: hidden ? 0.35 : 1,
         // Armed link source stays a solid blue ring (with a light wash) until
@@ -205,20 +233,32 @@ export default function FreeCanvasItem({ component }) {
         background: isLinkSource ? 'rgba(79, 70, 229, 0.10)' : undefined,
       }}
       className={
-        isSelected || linkMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'
+        isSelected || linkMode || brushMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'
       }
     >
       {component.type === 'container' ? (
-        <div className="h-full w-full overflow-hidden">
-          <ContainerEditor component={component} />
+        <div className="h-full w-full overflow-visible">
+          <ContainerEditor
+            component={component}
+            brushMode={brushMode}
+            brushColor={brushColor}
+            brushTarget={brushTarget}
+            onBrushUse={onBrushUse}
+          />
         </div>
       ) : component.type === 'tabs' ? (
-        <div className="h-full w-full overflow-hidden">
-          <TabsEditor component={component} />
+        <div className="h-full w-full overflow-visible">
+          <TabsEditor
+            component={component}
+            brushMode={brushMode}
+            brushColor={brushColor}
+            brushTarget={brushTarget}
+            onBrushUse={onBrushUse}
+          />
         </div>
       ) : (
-        <div className="pointer-events-none h-full w-full select-none overflow-hidden">
-          <RenderComponent component={component} viewport={viewport} />
+        <div className="pointer-events-none h-full w-full select-none overflow-visible">
+          <RenderComponent component={component} viewport={viewport} editorPreview />
         </div>
       )}
 
@@ -231,7 +271,7 @@ export default function FreeCanvasItem({ component }) {
         </span>
       )}
 
-      {(isSelected || isLinkSource) && (
+      {((isSelected && !brushMode) || isLinkSource) && (
         <div
           aria-hidden="true"
           style={{
@@ -251,6 +291,20 @@ export default function FreeCanvasItem({ component }) {
 
       {isPrimarySingle && !linkMode && (
         <>
+          {edgeHitZones.map(([dir, pos, cursor]) => (
+            <div
+              key={`edge-${dir}`}
+              aria-hidden="true"
+              onPointerDown={(e) => startResize(e, dir)}
+              style={{
+                position: 'absolute',
+                zIndex: 29,
+                cursor,
+                touchAction: 'none',
+                ...pos,
+              }}
+            />
+          ))}
           {canShowInlineDelete && (
             <button
               type="button"

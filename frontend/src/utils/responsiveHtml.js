@@ -8,6 +8,7 @@ import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
+import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
 import { pinnedLayoutStyle } from '../components/renderer/layout.js'
 
@@ -283,7 +284,7 @@ function itemEl(c, multi, colOverride) {
 function htmlEmbed(c, cls, col) {
   const p = c.props || {}
   const code = typeof p.code === 'string' ? p.code : ''
-  const doc = htmlEmbedDocument(code)
+  const doc = htmlEmbedDocument(code, htmlEmbedDocumentOptions(c))
   const h = Math.max(40, Math.round(c.layout?.h || 240))
   const safeDoc = withBuilderInteractiveHtml(doc).replace(/"/g, '&quot;')
   return `<iframe class="${cls}" srcdoc="${safeDoc}" scrolling="no" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy"${styleAttr(c, `${col};width:100%;height:${h}px;border:0;background:transparent;overflow:hidden`)}></iframe>`

@@ -223,6 +223,96 @@ function scrollOnceScript(index) {
 
 // Editor-only extras appended to the view srcDoc (kept out of saved HTML —
 // saving reads the html prop / edit DOM, never the view document).
+const HTML_RESIZE_OVERLAY_ATTR = 'data-pwb-resize-overlay'
+const HTML_RESIZE_MIN = 20
+const HTML_RESIZE_EDGE = 14
+const HTML_RESIZE_HANDLE = 10
+const HTML_RESIZE_HANDLE_OFFSET = HTML_RESIZE_HANDLE / 2
+
+const HTML_RESIZE_PARTS = [
+  ['n', 'edge', 'top:-7px;left:0;right:0;height:14px;cursor:ns-resize'],
+  ['e', 'edge', 'top:0;right:-7px;bottom:0;width:14px;cursor:ew-resize'],
+  ['s', 'edge', 'bottom:-7px;left:0;right:0;height:14px;cursor:ns-resize'],
+  ['w', 'edge', 'top:0;left:-7px;bottom:0;width:14px;cursor:ew-resize'],
+  ['nw', 'handle', `top:-${HTML_RESIZE_HANDLE_OFFSET}px;left:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:nwse-resize`],
+  ['n', 'handle', `top:-${HTML_RESIZE_HANDLE_OFFSET}px;left:50%;margin-left:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:ns-resize`],
+  ['ne', 'handle', `top:-${HTML_RESIZE_HANDLE_OFFSET}px;right:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:nesw-resize`],
+  ['e', 'handle', `top:50%;right:-${HTML_RESIZE_HANDLE_OFFSET}px;margin-top:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:ew-resize`],
+  ['se', 'handle', `bottom:-${HTML_RESIZE_HANDLE_OFFSET}px;right:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:nwse-resize`],
+  ['s', 'handle', `bottom:-${HTML_RESIZE_HANDLE_OFFSET}px;left:50%;margin-left:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:ns-resize`],
+  ['sw', 'handle', `bottom:-${HTML_RESIZE_HANDLE_OFFSET}px;left:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:nesw-resize`],
+  ['w', 'handle', `top:50%;left:-${HTML_RESIZE_HANDLE_OFFSET}px;margin-top:-${HTML_RESIZE_HANDLE_OFFSET}px;cursor:ew-resize`],
+]
+
+function removeSelectionResizeChrome(doc) {
+  doc?.querySelectorAll?.(`[${HTML_RESIZE_OVERLAY_ATTR}]`).forEach((el) => el.remove())
+}
+
+function updateSelectionResizeChrome(doc, el) {
+  const overlay = doc?.querySelector?.(`[${HTML_RESIZE_OVERLAY_ATTR}]`)
+  if (!overlay) return
+  if (!el || !el.isConnected || el === doc.body || el === doc.documentElement) {
+    overlay.remove()
+    return
+  }
+  const rect = el.getBoundingClientRect()
+  if (!rect.width && !rect.height) {
+    overlay.style.display = 'none'
+    return
+  }
+  overlay.style.display = 'block'
+  overlay.style.left = `${Math.round(rect.left)}px`
+  overlay.style.top = `${Math.round(rect.top)}px`
+  overlay.style.width = `${Math.max(1, Math.round(rect.width))}px`
+  overlay.style.height = `${Math.max(1, Math.round(rect.height))}px`
+}
+
+function installSelectionResizeChrome(doc, el, onStartResize) {
+  removeSelectionResizeChrome(doc)
+  if (!doc?.body || !el || !el.isConnected) return
+  const overlay = doc.createElement('div')
+  overlay.setAttribute(HTML_RESIZE_OVERLAY_ATTR, '')
+  overlay.setAttribute('data-pwb-chrome', '')
+  overlay.setAttribute('contenteditable', 'false')
+  overlay.setAttribute(
+    'style',
+    [
+      'position:fixed',
+      'box-sizing:border-box',
+      'pointer-events:none',
+      'border:2px solid #2563eb',
+      'box-shadow:0 0 0 1px rgba(255,255,255,0.9)',
+      'z-index:2147483646',
+    ].join(';'),
+  )
+  for (const [dir, kind, placement] of HTML_RESIZE_PARTS) {
+    const part = doc.createElement('div')
+    part.setAttribute('data-pwb-resize-dir', dir)
+    part.setAttribute('data-pwb-resize-kind', kind)
+    part.setAttribute(
+      'style',
+      [
+        'position:absolute',
+        'box-sizing:border-box',
+        'pointer-events:auto',
+        'touch-action:none',
+        kind === 'handle'
+          ? `width:${HTML_RESIZE_HANDLE}px;height:${HTML_RESIZE_HANDLE}px;background:#2563eb;border:1px solid #fff;border-radius:2px;box-shadow:0 1px 5px rgba(15,23,42,0.22)`
+          : `min-width:${HTML_RESIZE_EDGE}px;min-height:${HTML_RESIZE_EDGE}px;background:transparent`,
+        placement,
+      ].join(';'),
+    )
+    part.addEventListener('pointerdown', (e) => onStartResize(e, dir), true)
+    part.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }, true)
+    overlay.appendChild(part)
+  }
+  doc.body.appendChild(overlay)
+  updateSelectionResizeChrome(doc, el)
+}
+
 function withViewExtras(html, scrollIndex) {
   let inject = ANCHOR_REPORTER_SCRIPT
   if (scrollIndex != null && scrollIndex >= 0) inject += scrollOnceScript(scrollIndex)
@@ -337,9 +427,68 @@ function HtmlWorkspace({
     selectedRef.current = null
     try {
       const doc = iframeRef.current?.contentDocument
-      if (doc) setSelectedElement(doc, null)
+      if (doc) {
+        setSelectedElement(doc, null)
+        removeSelectionResizeChrome(doc)
+      }
     } catch { /* iframe gone */ }
     onElementSelect?.(null)
+  }, [onElementSelect])
+
+  const startSelectedElementResize = useCallback((e, dir) => {
+    if (e.button !== undefined && e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const doc = iframeRef.current?.contentDocument
+    const win = doc?.defaultView
+    const el = selectedRef.current
+    if (!doc?.body || !win || !el?.isConnected) return
+    const rect = el.getBoundingClientRect()
+    const cs = win.getComputedStyle(el)
+    const px = (value) => Number.parseFloat(value) || 0
+    const widthInset = Math.max(0, rect.width - px(cs.width))
+    const heightInset = Math.max(0, rect.height - px(cs.height))
+    const startFontSize = Math.max(1, px(cs.fontSize))
+    const start = {
+      x: e.clientX,
+      y: e.clientY,
+      outerW: Math.max(HTML_RESIZE_MIN, rect.width),
+      outerH: Math.max(HTML_RESIZE_MIN, rect.height),
+    }
+
+    function onMove(ev) {
+      const dx = ev.clientX - start.x
+      const dy = ev.clientY - start.y
+      let nextOuterW = start.outerW
+      let nextOuterH = start.outerH
+      if (dir.includes('e')) nextOuterW = start.outerW + dx
+      if (dir.includes('w')) nextOuterW = start.outerW - dx
+      if (dir.includes('s')) nextOuterH = start.outerH + dy
+      if (dir.includes('n')) nextOuterH = start.outerH - dy
+      const nextW = Math.max(HTML_RESIZE_MIN, Math.round(nextOuterW - widthInset))
+      const nextH = Math.max(HTML_RESIZE_MIN, Math.round(nextOuterH - heightInset))
+      const fontScale = Math.sqrt(
+        (Math.max(HTML_RESIZE_MIN, nextOuterW) * Math.max(HTML_RESIZE_MIN, nextOuterH)) /
+        (start.outerW * start.outerH),
+      )
+      if (dir.includes('e') || dir.includes('w')) el.style.setProperty('width', `${nextW}px`, 'important')
+      if (dir.includes('s') || dir.includes('n')) el.style.setProperty('height', `${nextH}px`, 'important')
+      if (Number.isFinite(fontScale)) {
+        el.style.setProperty('font-size', `${Math.max(1, Math.round(startFontSize * fontScale))}px`, 'important')
+      }
+      updateSelectionResizeChrome(doc, el)
+    }
+
+    function onUp() {
+      win.removeEventListener('pointermove', onMove)
+      win.removeEventListener('pointerup', onUp)
+      updateSelectionResizeChrome(doc, el)
+      onCommitRef.current?.(serializeDocument(doc))
+      onElementSelect?.(describeElement(el))
+    }
+
+    win.addEventListener('pointermove', onMove)
+    win.addEventListener('pointerup', onUp)
   }, [onElementSelect])
   // Topmost visible body-child index reported by the view iframe (it has an
   // opaque origin, so it tells us via postMessage). null = unknown.
@@ -524,12 +673,14 @@ function HtmlWorkspace({
     const next = result === null ? null : result || el
     selectedRef.current = next
     setSelectedElement(doc, next)
+    if (next) installSelectionResizeChrome(doc, next, startSelectedElementResize)
+    else removeSelectionResizeChrome(doc)
     onCommit?.(serializeDocument(doc))
     // Editing an href via the panel can add/change a connector — keep the
     // arrows in sync while the Link tool is showing them.
     if (editToolRef.current === 'link') paintConnections(doc)
     onElementSelect?.(next ? describeElement(next) : null)
-  }, [clearSelection, onCommit, onElementSelect])
+  }, [clearSelection, onCommit, onElementSelect, startSelectedElementResize])
 
   // Replace the open document wholesale (undo/redo, template load) — without
   // this, an open edit/source surface would clobber the new HTML with its
@@ -879,6 +1030,7 @@ function HtmlWorkspace({
   // listeners) are discarded wholesale on reload, so no cleanup is needed.
   function attachSelectionListeners(doc) {
     doc.addEventListener('click', (e) => {
+      if (e.target?.closest?.(`[${HTML_RESIZE_OVERLAY_ATTR}]`)) return
       if (pendingRef.current || editToolRef.current !== 'text') return // owned by another tool
       const tab = e.target?.closest?.('[data-builder-tabs] [role="tab"][data-builder-tab]')
       if (tab) {
@@ -891,17 +1043,26 @@ function HtmlWorkspace({
       const el = resolveSelectableElement(e.target, doc.body)
       selectedRef.current = el
       setSelectedElement(doc, el)
+      if (el) installSelectionResizeChrome(doc, el, startSelectedElementResize)
+      else removeSelectionResizeChrome(doc)
       onElementSelect?.(el ? describeElement(el) : null)
     })
     doc.addEventListener('input', () => {
       const el = selectedRef.current
       if (!el) return
+      updateSelectionResizeChrome(doc, el)
       if (selectRefreshTimer.current) window.clearTimeout(selectRefreshTimer.current)
       selectRefreshTimer.current = window.setTimeout(() => {
         const cur = selectedRef.current
-        if (cur && cur.isConnected) onElementSelect?.(describeElement(cur))
+        if (cur && cur.isConnected) {
+          updateSelectionResizeChrome(doc, cur)
+          onElementSelect?.(describeElement(cur))
+        }
       }, 250)
     })
+    const refreshChrome = () => updateSelectionResizeChrome(doc, selectedRef.current)
+    doc.defaultView?.addEventListener('scroll', refreshChrome, { passive: true })
+    doc.defaultView?.addEventListener('resize', refreshChrome)
   }
 
   // Single edit-mode tool manager: (re)binds the listeners for whatever is

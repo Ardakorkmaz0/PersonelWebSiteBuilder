@@ -141,10 +141,10 @@ const containers = [
 ]
 
 const icons = [
-  ['circle', 'Circle', `<span style="display:inline-grid;place-items:center;width:48px;height:48px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:22px;font-weight:800;font-family:system-ui;">*</span>`],
-  ['square', 'Square', `<span style="display:inline-grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#0f172a;color:#fff;font-size:22px;font-weight:800;font-family:system-ui;">+</span>`],
-  ['outline', 'Outline', `<span style="display:inline-grid;place-items:center;width:48px;height:48px;border-radius:14px;border:2px solid #2563eb;color:#2563eb;font-size:22px;font-weight:800;font-family:system-ui;">i</span>`],
-  ['gradient', 'Gradient', `<span style="display:inline-grid;place-items:center;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#ec4899);color:#fff;font-size:22px;font-weight:800;font-family:system-ui;box-shadow:0 12px 28px rgba(99,102,241,0.3);">+</span>`],
+  ['circle', 'Circle', `<span style="display:inline-grid;place-items:center;width:100%;height:100%;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:clamp(18px,38vmin,120px);font-weight:800;font-family:system-ui;">*</span>`],
+  ['square', 'Square', `<span style="display:inline-grid;place-items:center;width:100%;height:100%;border-radius:14px;background:#0f172a;color:#fff;font-size:clamp(18px,38vmin,120px);font-weight:800;font-family:system-ui;">+</span>`],
+  ['outline', 'Outline', `<span style="display:inline-grid;place-items:center;width:100%;height:100%;border-radius:14px;border:2px solid #2563eb;color:#2563eb;font-size:clamp(18px,38vmin,120px);font-weight:800;font-family:system-ui;">i</span>`],
+  ['gradient', 'Gradient', `<span style="display:inline-grid;place-items:center;width:100%;height:100%;border-radius:16px;background:linear-gradient(135deg,#6366f1,#ec4899);color:#fff;font-size:clamp(18px,38vmin,120px);font-weight:800;font-family:system-ui;box-shadow:0 12px 28px rgba(99,102,241,0.3);">+</span>`],
 ]
 
 const htmlEmbeds = [

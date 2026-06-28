@@ -10,6 +10,7 @@ import {
   groupSnippets,
   jsSnippets,
 } from '../../utils/snippets.js'
+import { htmlBaseSizeFromComponent } from '../../utils/htmlSnippetSizing.js'
 import {
   AI_PROVIDERS,
   fetchLocalStatus,
@@ -537,8 +538,29 @@ const STYLE_GROUPS = [
   { title: 'Effects', keys: ['boxShadow', 'opacity', 'objectFit'] },
 ]
 
+const BASIC_STYLE_KEYS = new Set([
+  'fontSize',
+  'fontWeight',
+  'textAlign',
+  'color',
+  'backgroundColor',
+  'borderRadius',
+  'borderWidth',
+  'borderColor',
+  'boxShadow',
+  'opacity',
+  'objectFit',
+])
+
 // Find a component anywhere in the tree (containers and tabs nest children).
 const NESTING_TYPES = new Set(['container', 'tabs'])
+const MIN_COMPONENT_SIZE = 20
+const SIZE_PRESET_OPTIONS = [
+  ['small', 'Small', 0.75],
+  ['mid', 'Mid', 1],
+  ['big', 'Big', 1.35],
+]
+
 function findComponentEntry(components, id, parent = null) {
   for (const c of components || []) {
     if (c.id === id) return { component: c, parent }
@@ -548,6 +570,45 @@ function findComponentEntry(components, id, parent = null) {
     }
   }
   return null
+}
+
+function componentLayout(component, layoutKey) {
+  return component?.[layoutKey] || component?.layout || { x: 0, y: 0, w: 200, h: 80 }
+}
+
+function cleanSize(value, fallback) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function clampSize(value) {
+  return Math.max(MIN_COMPONENT_SIZE, Math.round(cleanSize(value, MIN_COMPONENT_SIZE)))
+}
+
+function scaledLayoutSize(layout, factor) {
+  return {
+    w: clampSize(cleanSize(layout?.w, 200) * factor),
+    h: clampSize(cleanSize(layout?.h, 80) * factor),
+  }
+}
+
+function presetLayoutSize(component, factor, currentLayout) {
+  const current = currentLayout || componentLayout(component, 'layout')
+  const base = component?.type === 'html'
+    ? htmlBaseSizeFromComponent(component, current) || current
+    : registry[component?.type]?.defaultSize || current
+  return {
+    w: clampSize(cleanSize(base.w, 200) * factor),
+    h: clampSize(cleanSize(base.h, 80) * factor),
+  }
+}
+
+function sharedLayoutValue(items, key) {
+  if (!items.length) return null
+  const first = Math.round(cleanSize(items[0].layout?.[key], 0))
+  return items.every((item) => Math.round(cleanSize(item.layout?.[key], 0)) === first)
+    ? first
+    : null
 }
 
 function SectionTitle({ children }) {
@@ -676,8 +737,8 @@ function groupedStyles(keys) {
 }
 
 function visibleStyleGroups(keys, mode) {
-  if (mode !== 'extended') return []
-  return groupedStyles(keys)
+  if (mode === 'extended') return groupedStyles(keys)
+  return groupedStyles((keys || []).filter((key) => BASIC_STYLE_KEYS.has(key)))
 }
 
 export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }) {
@@ -693,6 +754,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const setCustomJs = useEditorStore((s) => s.setCustomJs)
   const applyComponentPreset = useEditorStore((s) => s.applyComponentPreset)
   const setLayout = useEditorStore((s) => s.setLayout)
+  const setLayoutMany = useEditorStore((s) => s.setLayoutMany)
   const alignSelection = useEditorStore((s) => s.alignSelection)
   const distributeSelection = useEditorStore((s) => s.distributeSelection)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -727,6 +789,42 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const parentComponent = selectedEntry?.parent || null
   const isAbsoluteNested = parentComponent?.type === 'tabs' || parentComponent?.type === 'container'
   const showPositionControls = !isFlow || isAbsoluteNested
+  const selectedEntries = selectedIds
+    .map((id) => findComponentEntry(page.components, id))
+    .filter(Boolean)
+  const selectedLayoutItems = selectedEntries.map((entry) => ({
+    component: entry.component,
+    layout: componentLayout(entry.component, layoutKey),
+  }))
+  const selectionWidthValue = sharedLayoutValue(selectedLayoutItems, 'w')
+  const selectionHeightValue = sharedLayoutValue(selectedLayoutItems, 'h')
+  const multiShowPositionControls = selectedEntries.some((entry) => (
+    !isFlow || entry.parent?.type === 'tabs' || entry.parent?.type === 'container'
+  ))
+  const applySelectionSize = (patch) => {
+    const updates = {}
+    for (const item of selectedLayoutItems) {
+      updates[item.component.id] = {
+        ...(patch.w === undefined ? {} : { w: clampSize(patch.w) }),
+        ...(patch.h === undefined ? {} : { h: clampSize(patch.h) }),
+      }
+    }
+    if (Object.keys(updates).length) setLayoutMany(updates)
+  }
+  const scaleSelectionSize = (factor) => {
+    const updates = {}
+    for (const item of selectedLayoutItems) {
+      updates[item.component.id] = scaledLayoutSize(item.layout, factor)
+    }
+    if (Object.keys(updates).length) setLayoutMany(updates)
+  }
+  const presetSelectionSize = (factor) => {
+    const updates = {}
+    for (const item of selectedLayoutItems) {
+      updates[item.component.id] = presetLayoutSize(item.component, factor, item.layout)
+    }
+    if (Object.keys(updates).length) setLayoutMany(updates)
+  }
   const pageBackground = isMobile
     ? page.backgroundMobile || page.background || '#ffffff'
     : page.background || '#ffffff'
@@ -735,6 +833,130 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const setPropertiesMode = (mode) => {
     setPropertiesModeState(mode)
     try { localStorage.setItem(PROPERTIES_MODE_KEY, mode) } catch { /* ignore */ }
+  }
+
+  if (selectedLayoutItems.length > 1) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="border-b border-[#e5e7eb] px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-[#111827]">Selection</h2>
+              <p className="truncate text-xs text-[#6b7280]">{selectedLayoutItems.length} items selected</p>
+            </div>
+            <div className="grid shrink-0 grid-cols-2 rounded-lg border border-[#d1d5db] bg-white p-0.5">
+              {[
+                ['basic', 'Basic'],
+                ['extended', 'Extend'],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setPropertiesMode(mode)}
+                  className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+                    propertiesMode === mode
+                      ? 'bg-[#4f46e5] text-white'
+                      : 'text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-4">
+          <div className="rounded-lg bg-[#eef2ff] px-3 py-2">
+            <span className="text-xs font-semibold text-[#4f46e5]">
+              {isFlow ? 'Editing HTML flow layout' : `Editing ${isMobile ? 'Mobile' : 'PC'} layout`}
+            </span>
+          </div>
+
+          <section className="space-y-3">
+            <SectionTitle>
+              Size
+              <span className="ml-1 font-normal normal-case text-[#9ca3af]">
+                ({isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC'})
+              </span>
+            </SectionTitle>
+            <div className="grid grid-cols-2 gap-2">
+              <MixedNumber
+                label={isFlow ? 'Max width' : 'Width'}
+                value={selectionWidthValue ?? 0}
+                mixed={selectionWidthValue === null}
+                onChange={(v) => applySelectionSize({ w: v })}
+              />
+              <MixedNumber
+                label={isFlow ? 'Min height' : 'Height'}
+                value={selectionHeightValue ?? 0}
+                mixed={selectionHeightValue === null}
+                onChange={(v) => applySelectionSize({ h: v })}
+              />
+            </div>
+            <SizeQuickControls
+              onScale={scaleSelectionSize}
+              onPreset={presetSelectionSize}
+            />
+          </section>
+
+          {multiShowPositionControls && (
+            <section className="space-y-2">
+              <SectionTitle>
+                Align &amp; Distribute
+                <span className="ml-1 font-normal normal-case text-[#9ca3af]">
+                  ({selectedLayoutItems.length} selected)
+                </span>
+              </SectionTitle>
+              {extendedMode && (
+                <p className="text-[11px] leading-snug text-[#9ca3af]">
+                  Aligns the selected items to each other.
+                </p>
+              )}
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  ['left', 'Left'],
+                  ['centerH', 'Center'],
+                  ['right', 'Right'],
+                  ['top', 'Top'],
+                  ['middleV', 'Middle'],
+                  ['bottom', 'Bottom'],
+                ].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => alignSelection(mode)}
+                    className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb]"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  disabled={selectedLayoutItems.length < 3}
+                  onClick={() => distributeSelection('x')}
+                  title={selectedLayoutItems.length < 3 ? 'Select 3+ items to distribute' : 'Equal horizontal gaps'}
+                  className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
+                >
+                  Distribute X
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedLayoutItems.length < 3}
+                  onClick={() => distributeSelection('y')}
+                  title={selectedLayoutItems.length < 3 ? 'Select 3+ items to distribute' : 'Equal vertical gaps'}
+                  className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
+                >
+                  Distribute Y
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (!component) {
@@ -949,6 +1171,12 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const layout = component[layoutKey] || component.layout
   const componentPresets = presetsForType(component.type)
   const scrollBehavior = component.props?.scrollBehavior || 'normal'
+  const scaleSingleSize = (factor) => {
+    setLayout(component.id, scaledLayoutSize(layout, factor))
+  }
+  const presetSingleSize = (factor) => {
+    setLayout(component.id, presetLayoutSize(component, factor, layout))
+  }
   const setScrollBehavior = (mode) => {
     const next = mode || 'normal'
     const currentLayout = component[layoutKey] || component.layout || {}
@@ -1099,6 +1327,10 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
               onChange={(v) => setLayout(component.id, { h: v })}
             />
           </div>
+          <SizeQuickControls
+            onScale={scaleSingleSize}
+            onPreset={presetSingleSize}
+          />
         </section>
 
         <section className="space-y-3">
@@ -1336,6 +1568,61 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           Delete component
         </button>
       </div>
+    </div>
+  )
+}
+
+function MixedNumber({ label, value, mixed, onChange }) {
+  const displayValue = mixed ? '' : Math.round(value ?? 0)
+
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-semibold text-[#6b7280]">{label}</span>
+      <input
+        key={`${label}-${mixed ? 'mixed' : displayValue}`}
+        type="number"
+        className="w-full rounded-lg border border-[#d1d5db] px-2 py-1 text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#4f46e5] focus:outline-none"
+        defaultValue={displayValue}
+        placeholder={mixed ? 'Mixed' : undefined}
+        onChange={(e) => {
+          const next = e.target.value
+          if (next !== '') onChange(Number(next))
+        }}
+      />
+    </label>
+  )
+}
+
+function SizeQuickControls({ onScale, onPreset }) {
+  return (
+    <div className="grid grid-cols-5 gap-1.5">
+      <button
+        type="button"
+        onClick={() => onScale(0.9)}
+        title="10% smaller"
+        className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#e5e7eb]"
+      >
+        -
+      </button>
+      <button
+        type="button"
+        onClick={() => onScale(1.1)}
+        title="10% larger"
+        className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#e5e7eb]"
+      >
+        +
+      </button>
+      {SIZE_PRESET_OPTIONS.map(([id, label, factor]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onPreset(factor)}
+          title={`${label} size`}
+          className="rounded-lg border border-[#e5e7eb] bg-white px-1.5 py-1.5 text-xs font-semibold text-[#374151] hover:border-[#4f46e5] hover:bg-[#eef2ff] hover:text-[#4f46e5]"
+        >
+          {label}
+        </button>
+      ))}
     </div>
   )
 }

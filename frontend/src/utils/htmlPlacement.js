@@ -255,6 +255,7 @@ export function serializeDocument(doc) {
   root
     .querySelectorAll('svg[data-pwb-chrome], svg[data-pwb-connections]')
     .forEach((el) => el.remove())
+  root.querySelectorAll('[data-pwb-resize-overlay]').forEach((el) => el.remove())
   // Strip styles/scripts the Code-project preview injected for visual fidelity
   // (the original <link>/<script src> are kept), so saving the file back never
   // bakes the resolved CSS/JS into the source.
@@ -335,7 +336,7 @@ export function relocateAppendedAfterAnchor(doc, appended, anchorIndex) {
 export function visibleAnchorIndex(doc, win = doc?.defaultView) {
   const body = doc?.body
   if (!body || !win) return null
-  const kids = [...body.children]
+  const kids = [...body.children].filter((el) => !el.hasAttribute('data-pwb-chrome'))
   if (!kids.length) return null
   const probeY = (win.innerHeight || 0) * 0.4
   for (let i = 0; i < kids.length; i++) {

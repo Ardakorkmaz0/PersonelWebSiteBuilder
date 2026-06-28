@@ -11,6 +11,7 @@ import { ALERT_VARIANTS } from '../components/renderer/constants.js'
 import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
 import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
+import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
 import { CANVAS_WIDTH } from '../components/registry.jsx'
 import {
@@ -288,7 +289,7 @@ function inlineNode(c) {
   }
   if (c.type === 'html') {
     const code = typeof p.code === 'string' ? p.code : ''
-    const doc = htmlEmbedDocument(code)
+    const doc = htmlEmbedDocument(code, htmlEmbedDocumentOptions(c))
     const h = Math.max(40, Math.round(c.layout?.h || 240))
     // withBuilderInteractiveHtml layers on the anchor-interceptor so `<a href="#">`
     // inside the user's snippet scrolls instead of navigating the sandboxed

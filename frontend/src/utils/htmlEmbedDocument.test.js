@@ -13,6 +13,53 @@ describe('htmlEmbedDocument', () => {
     expect(doc).toContain('img,video,canvas,svg{max-width:100%;height:auto;}')
   })
 
+  it('lets inline icon snippets fill the embed frame', () => {
+    const doc = htmlEmbedDocument(
+      '<span style="display:inline-grid;width:48px;height:48px;">+</span>',
+    )
+
+    expect(doc).toContain('body:has(> span[style*="inline-grid"]:first-of-type:last-of-type)')
+    expect(doc).toContain('width:100vw!important;height:100vh!important')
+    expect(doc).toContain('font-size:clamp(14px,38vmin,120px)!important')
+  })
+
+  it('can scale fixed-size embed content with a body wrapper', () => {
+    const doc = htmlEmbedDocument(
+      '<div style="width:220px;height:56px;font-size:16px;">Box</div>',
+      { scale: 2 },
+    )
+
+    expect(doc).toContain('data-pwb-embed-scale')
+    expect(doc).toContain('--pwb-embed-scale:2')
+    expect(doc).toContain('data-pwb-embed-scaled="true"')
+    expect(doc).toContain('data-pwb-embed-scale-root')
+    expect(doc).toContain('transform:scale(var(--pwb-embed-scale))')
+  })
+
+  it('lets inline controls fill the embed frame', () => {
+    const doc = htmlEmbedDocument(
+      '<a href="#" style="display:inline-block;padding:12px 26px;font-size:16px;">Button</a>',
+      { fill: 'control' },
+    )
+
+    expect(doc).toContain('data-pwb-embed-fill="control"')
+    expect(doc).toContain('place-items:stretch')
+    expect(doc).toContain('width:100vw!important;height:100vh!important')
+    expect(doc).toContain('font-size:clamp(12px,28vmin,88px)!important')
+  })
+
+  it('lets form controls use the whole embed frame without generic scaling', () => {
+    const doc = htmlEmbedDocument(
+      '<div><span>Filter</span><select><option>Newest</option></select></div>',
+      { fill: 'form' },
+    )
+
+    expect(doc).toContain('data-pwb-embed-fill="form"')
+    expect(doc).toContain('body[data-pwb-embed-fill="form"]>*:first-child')
+    expect(doc).toContain('height:calc(100vh - clamp(12px,8vmin,48px))!important')
+    expect(doc).not.toContain('data-pwb-embed-scaled="true"')
+  })
+
   it('injects the reset into full documents without duplicating it', () => {
     const source = '<!DOCTYPE html><html><head><style>.x{width:2000px}</style></head><body><div></div></body></html>'
     const doc = htmlEmbedDocument(source)

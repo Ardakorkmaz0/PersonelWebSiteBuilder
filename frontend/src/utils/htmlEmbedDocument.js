@@ -14,6 +14,10 @@ const HTML_EMBED_RESET_CSS = [
   'body:has(> span[style*="inline-grid"]:first-of-type:last-of-type)>span[style*="inline-grid"]:first-of-type:last-of-type{width:100vw!important;height:100vh!important;max-width:100vw!important;max-height:100vh!important;margin:0!important;font-size:clamp(14px,38vmin,120px)!important;}',
   'body *,body>*{max-width:100%;min-width:0;}',
   'body>:is(div,section,article,main,aside,header,footer):only-child{min-height:100%;}',
+  // When the embed is scaled, the snippet is wrapped in the scale-root; stretch a
+  // lone block child to fill it too, so a resized section/banner has no dead space
+  // below it (the colored background fills the whole frame).
+  'body[data-pwb-embed-scaled]>[data-pwb-embed-scale-root]>:is(div,section,article,main,aside,header,footer):only-child{min-height:100%;}',
   'img,video,canvas,svg{max-width:100%;height:auto;}',
   'iframe{max-width:100%;border:0;}',
   'table{max-width:100%;border-collapse:collapse;}',

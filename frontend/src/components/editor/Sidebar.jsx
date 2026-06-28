@@ -30,6 +30,17 @@ function htmlSize(type, variant) {
   return [size.w, size.h]
 }
 
+// Natural size per section block, so the dropped frame matches the content's real
+// height (no dead space below) — keyed by block id, all ~full-width.
+const BLOCK_SIZE = {
+  hero: [1000, 420], 'hero-split': [1000, 460], features: [1000, 280], stats: [1000, 170],
+  pricing: [1000, 380], logos: [1000, 140], testimonial: [1000, 220], faq: [1000, 360],
+  contact: [1000, 460], cta: [1000, 220], footer: [1000, 150],
+}
+function blockSize(id) {
+  return BLOCK_SIZE[id] || [1000, 360]
+}
+
 const CUSTOM_BLOCKS_KEY = 'pwb_custom_blocks'
 const DEFAULT_CUSTOM_HTML = `<section style="padding:64px 32px;background:#f8fafc;font-family:inherit;"><div style="max-width:860px;margin:0 auto;text-align:center;"><p style="margin:0 0 10px;color:#2563eb;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Custom block</p><h2 style="margin:0 0 12px;color:#0f172a;font-size:36px;line-height:1.1;">Build your own section</h2><p style="margin:0 auto;max-width:560px;color:#64748b;font-size:18px;line-height:1.6;">Paste HTML, inline CSS, or a small embed here and save it as a reusable block.</p></div></section>`
 
@@ -238,17 +249,18 @@ function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
 // A ready-made section block, dual-mode (same library as the variants). HTML mode
 // inserts the raw section HTML; the free canvas drops it as one `html` component.
 function BlockCard({ block, onPick, onInspect, theme }) {
+  const [w, h] = blockSize(block.id)
   const inspect = () => onInspect?.({
     type: 'Section',
     label: block.label,
     desc: block.desc,
     html: block.html,
     wide: true,
-    size: '1000 x 380',
+    size: `${w} x ${h}`,
   })
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `block-${block.id}`,
-    data: { from: 'palette', html: block.html, w: 1000, h: 380, label: block.label },
+    data: { from: 'palette', type: 'section', preset: block.id, html: block.html, w, h, label: block.label },
   })
   const inner = (
     <>

@@ -188,9 +188,9 @@ export default function EditorPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
-  // The header scrolls horizontally (overflow-x-auto), which would clip an
-  // absolutely-positioned dropdown. So the Import/Tools menus are position:fixed,
-  // anchored to their trigger button's on-screen rect (computed on open).
+  // The Import/Tools menus are position:fixed, anchored to their trigger
+  // button's on-screen rect (computed on open) — robust regardless of header
+  // layout (it wraps rather than scrolls, but fixed keeps menus unclipped).
   const importBtnRef = useRef(null)
   const toolsBtnRef = useRef(null)
   const [menuPos, setMenuPos] = useState({})
@@ -949,7 +949,7 @@ export default function EditorPage() {
           (small window), the strip scrolls horizontally instead of stacking
           onto a second line. The grow spacer below pins the toolbar right when
           there IS room. */}
-      <header className="flex flex-nowrap items-center gap-x-1.5 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm [scrollbar-width:thin]">
+      <header className="flex flex-wrap items-center gap-1.5 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
         <Link to="/" title="Back to Sites" className="flex shrink-0 items-center gap-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
           <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
           <span>&larr;</span>
@@ -1012,9 +1012,11 @@ export default function EditorPage() {
             of being right-aligned with a big empty gap before it. */}
         <div className="grow shrink basis-0" aria-hidden />
 
-        {/* Action toolbar — stays a single non-wrapping block pinned to the
-            right by the spacer; the header scrolls if the window is too narrow. */}
-        <div className="flex shrink-0 flex-nowrap items-center gap-1.5">
+        {/* Action toolbar — the spacer pins it to the right when there's room.
+            When the window is too narrow it wraps to a second row AND its own
+            items wrap within that row, so the header grows taller instead of
+            ever scrolling horizontally. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}

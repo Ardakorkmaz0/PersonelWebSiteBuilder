@@ -193,6 +193,37 @@ describe('brush tool', () => {
     expect(button.styles.borderColor).toBe('#333333')
     expect(button.styles.borderStyle).toBe('solid')
   })
+
+  it('recolors an html embed snippet in place (unified palette drops)', () => {
+    freshTwoPageSchema()
+    s().addBlock(
+      [
+        {
+          type: 'html',
+          x: 10,
+          y: 0,
+          w: 240,
+          h: 60,
+          props: { code: '<a style="background:#2563eb;color:#fff;">Button</a>' },
+        },
+      ],
+      10,
+    )
+    const htmlId = selectCurrentPage(useEditorStore.getState()).components[0].id
+
+    // smart → fill (snippet has a visible background)
+    s().paintComponent(htmlId, '#10b981')
+    let comp = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(comp.props.code).toContain('background:#10b981')
+    expect(comp.props.code).not.toContain('#2563eb')
+
+    // explicit text target recolors the snippet's text, not the wrapper styles
+    s().paintComponent(htmlId, '#000000', 'text')
+    comp = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(comp.props.code).toContain('color:#000000')
+    // the wrapper styles stay untouched — the visual lives in the code
+    expect(comp.styles.backgroundColor).toBeUndefined()
+  })
 })
 
 describe('component link tool', () => {

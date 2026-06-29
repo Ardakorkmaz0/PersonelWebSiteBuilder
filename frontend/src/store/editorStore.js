@@ -7,6 +7,7 @@ import {
   themedStyles,
 } from '../utils/theme.js'
 import { componentPresetStyles, componentPresetProps } from '../utils/componentPresets.js'
+import { recolorHtml } from '../utils/htmlRecolor.js'
 
 const HISTORY_LIMIT = 60
 const COALESCE_MS = 500
@@ -78,8 +79,16 @@ function brushBorderStyles(component, color, fallbackWidth = '2px') {
   }
 }
 
+// An `html` component (the unified palette drops these) carries its visual in
+// `props.code`, not in schema styles/props — so the brush recolors the snippet's
+// own inline styles instead of tinting the invisible embed wrapper.
+function brushHtmlPatch(component, color, target) {
+  return { styles: {}, props: { code: recolorHtml(component?.props?.code, color, target) } }
+}
+
 function brushFillPatch(component, color) {
   const type = component?.type
+  if (type === 'html') return brushHtmlPatch(component, color, 'fill')
   if (FIELD_BRUSH_TYPES.has(type)) {
     return { styles: {}, props: { fieldBackgroundColor: color } }
   }
@@ -98,6 +107,7 @@ function brushFillPatch(component, color) {
 
 function brushTextPatch(component, color) {
   const type = component?.type
+  if (type === 'html') return brushHtmlPatch(component, color, 'text')
   if (FIELD_BRUSH_TYPES.has(type)) return { styles: {}, props: { fieldColor: color } }
   if (type === 'tabs') {
     return {
@@ -113,6 +123,7 @@ function brushTextPatch(component, color) {
 
 function brushBorderPatch(component, color) {
   const type = component?.type
+  if (type === 'html') return brushHtmlPatch(component, color, 'border')
   if (FIELD_BRUSH_TYPES.has(type)) return { styles: {}, props: { fieldBorderColor: color } }
   if (type === 'tabs') {
     return {
@@ -140,6 +151,7 @@ function brushPatchForComponent(component, color, target = 'smart') {
   if (target === 'text') return brushTextPatch(component, color)
   if (target === 'border') return brushBorderPatch(component, color)
 
+  if (type === 'html') return brushHtmlPatch(component, color, 'smart')
   if (TEXT_BRUSH_TYPES.has(type)) return brushTextPatch(component, color)
   if (FIELD_BRUSH_TYPES.has(type)) {
     return {
@@ -150,7 +162,7 @@ function brushPatchForComponent(component, color, target = 'smart') {
       },
     }
   }
-  if (type === 'image' || type === 'html') return brushBorderPatch(component, color)
+  if (type === 'image') return brushBorderPatch(component, color)
   return brushFillPatch(component, color)
 }
 

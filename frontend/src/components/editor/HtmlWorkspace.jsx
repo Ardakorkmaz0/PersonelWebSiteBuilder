@@ -38,7 +38,9 @@ import {
 } from '../../utils/htmlElementEdit.js'
 import { componentToHtml } from '../../utils/componentToHtml.js'
 import { matchingCssRules } from '../../utils/htmlFiles.js'
-import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon } from '../icons.jsx'
+import { brushElementPatch } from '../../utils/htmlRecolor.js'
+import BrushControls from './BrushControls.jsx'
+import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon } from '../icons.jsx'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
 // - View: real document in a sandboxed iframe with scripts enabled.
@@ -338,6 +340,16 @@ function HtmlWorkspace({
   pendingHtml,
   onPlaced,
   onCancelPlacement,
+  // Brush tool (shared with the component canvas): when the 'brush' edit tool is
+  // active, clicking an element recolors it (fill/text/border/smart) instead of
+  // selecting it. Color/target are owned by the parent so the choice persists
+  // across both editor modes; onBrushUse remembers the color in the recents.
+  brushColor = '#4f46e5',
+  brushTarget = 'smart',
+  brushRecentColors = [],
+  onBrushColor,
+  onBrushTarget,
+  onBrushUse,
   // Code-project mode: when set, the View document and Edit seed are produced
   // by this async hook (HTML with its linked CSS/JS resolved from sibling
   // files) instead of using `html` verbatim. `assembleDeps` is a value that,
@@ -404,6 +416,14 @@ function HtmlWorkspace({
   // Latest edit tool for the load-time selection listener (bound once).
   const editToolRef = useRef(editTool)
   useEffect(() => { editToolRef.current = editTool }, [editTool])
+  // Brush color/target/onUse read through refs so attachBrushListeners stays a
+  // stable factory (the tool effect must not rebind on every color change).
+  const brushColorRef = useRef(brushColor)
+  useEffect(() => { brushColorRef.current = brushColor }, [brushColor])
+  const brushTargetRef = useRef(brushTarget)
+  useEffect(() => { brushTargetRef.current = brushTarget }, [brushTarget])
+  const onBrushUseRef = useRef(onBrushUse)
+  useEffect(() => { onBrushUseRef.current = onBrushUse }, [onBrushUse])
   // Persist the surface + sub-tool so a refresh restores them (see lsGet).
   useEffect(() => {
     try { localStorage.setItem(`pwb_htmlmode_${persistKey}`, mode) } catch { /* ignore */ }
@@ -995,6 +1015,40 @@ function HtmlWorkspace({
     // link source mid-pick.
   }, [onLinkArmedChange])
 
+  // ----- brush: click an element to paint its color --------------------------
+  // Mirrors the component-canvas brush. Color/target come through refs (stable
+  // factory); the patch is applied to the clicked element ONLY, then committed —
+  // same semantics as a panel style edit, so it round-trips and undoes cleanly.
+  const attachBrushListeners = useCallback((doc) => {
+    if (!doc?.body) return () => {}
+    ensurePlacementChrome(doc)
+    const hover = (x, y) => {
+      const t = resolveSelectableElement(doc.elementFromPoint(x, y), doc.body)
+      setHoverTarget(doc, t && t !== doc.body ? t : null)
+    }
+    const onMove = (e) => hover(e.clientX, e.clientY)
+    const onClick = (e) => {
+      if (e.target?.closest?.('[data-pwb-chrome]')) return
+      e.preventDefault()
+      e.stopPropagation()
+      const el = resolveSelectableElement(e.target, doc.body)
+      if (!el || el === doc.body) return
+      const patch = brushElementPatch(describeElement(el), brushColorRef.current, brushTargetRef.current)
+      applyElementPatch(el, patch)
+      onCommitRef.current?.(serializeDocument(doc))
+      flashNode(doc, el)
+      onBrushUseRef.current?.(brushColorRef.current)
+    }
+    doc.addEventListener('click', onClick, true)
+    doc.addEventListener('mousemove', onMove, true)
+    return () => {
+      doc.removeEventListener('click', onClick, true)
+      doc.removeEventListener('mousemove', onMove, true)
+      setHoverTarget(doc, null)
+      removePlacementChrome(doc)
+    }
+  }, [])
+
   function onIframeLoad() {
     const doc = iframeRef.current?.contentDocument
     if (!doc) return
@@ -1086,6 +1140,11 @@ function HtmlWorkspace({
       setDocumentDesignMode(doc, 'off')
       clearSelection()
       return attachLinkListeners(doc)
+    }
+    if (editTool === 'brush') {
+      setDocumentDesignMode(doc, 'off')
+      clearSelection()
+      return attachBrushListeners(doc)
     }
     // text tool → caret editing, no extra chrome
     setDocumentDesignMode(doc, 'on')
@@ -1179,6 +1238,7 @@ function HtmlWorkspace({
                 ['text', EditIcon, 'Text', 'Click any text and type'],
                 ['rearrange', MoveIcon, 'Move', 'Drag a block to reorder it'],
                 ['link', LinkIcon, 'Link', 'Click a link, then click where it should go'],
+                ['brush', PaletteIcon, 'Brush', 'Click any element to paint its color'],
               ].map(([id, ToolIcon, label, title]) => (
                 <button
                   key={id}
@@ -1239,7 +1299,9 @@ function HtmlWorkspace({
                     ? 'Drag any block to reorder it'
                     : editTool === 'link'
                       ? 'Connect a link to a target'
-                      : 'Click any text in the page and type — like a document'}
+                      : editTool === 'brush'
+                        ? 'Brush: choose target + color, then click elements'
+                        : 'Click any text in the page and type — like a document'}
             </span>
           )}
         </div>
@@ -1258,6 +1320,17 @@ function HtmlWorkspace({
               Switch to ● Live
             </button>
           </div>
+        )}
+
+        {/* Brush controls — same sub-toolbar as the component canvas. */}
+        {mode === 'edit' && editTool === 'brush' && !placing && (
+          <BrushControls
+            brushColor={brushColor}
+            brushTarget={brushTarget}
+            recentColors={brushRecentColors}
+            onColor={(c) => onBrushColor?.(c)}
+            onTarget={(t) => onBrushTarget?.(t)}
+          />
         )}
 
         {/* Link-tool guidance banner. */}

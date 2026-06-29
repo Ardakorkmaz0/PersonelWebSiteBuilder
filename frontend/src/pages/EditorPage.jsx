@@ -21,6 +21,14 @@ import Sidebar from '../components/editor/Sidebar.jsx'
 import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
 import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon, CogIcon, ClockIcon, PaletteIcon } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
+import BrushControls from '../components/editor/BrushControls.jsx'
+import {
+  BRUSH_TARGETS,
+  BRUSH_BASIC_COLORS,
+  BRUSH_RECENTS_KEY,
+  normalizeBrushColor,
+  readBrushRecents,
+} from '../utils/brush.js'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
@@ -58,38 +66,6 @@ const HtmlWorkspace = lazy(() => import('../components/editor/HtmlWorkspace.jsx'
 const TemplatePicker = lazy(() => import('../components/editor/TemplatePicker.jsx'))
 const HistoryPanel = lazy(() => import('../components/editor/HistoryPanel.jsx'))
 const NotesPanel = lazy(() => import('../components/editor/NotesPanel.jsx'))
-
-const BRUSH_BASIC_COLORS = [
-  '#111827', '#ffffff', '#ef4444', '#f97316', '#f59e0b',
-  '#22c55e', '#14b8a6', '#2563eb', '#7c3aed', '#ec4899',
-]
-const BRUSH_TARGETS = [
-  ['smart', 'Smart'],
-  ['fill', 'Fill'],
-  ['text', 'Text'],
-  ['border', 'Border'],
-]
-const BRUSH_RECENTS_KEY = 'pwb_brush_recent_colors'
-
-function normalizeBrushColor(color) {
-  return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color.trim())
-    ? color.trim().toLowerCase()
-    : ''
-}
-
-function readBrushRecents() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(BRUSH_RECENTS_KEY) || '[]')
-    return Array.isArray(parsed)
-      ? parsed
-        .map(normalizeBrushColor)
-        .filter((color) => color && !BRUSH_BASIC_COLORS.includes(color))
-        .slice(0, 8)
-      : []
-  } catch {
-    return []
-  }
-}
 
 function PanelFallback() {
   return (
@@ -1493,6 +1469,12 @@ export default function EditorPage() {
                   pendingHtml={pendingHtml}
                   onPlaced={() => { setPendingType(null); setPendingHtml(null) }}
                   onCancelPlacement={() => { setPendingType(null); setPendingHtml(null) }}
+                  brushColor={brushColor}
+                  brushTarget={brushTarget}
+                  brushRecentColors={recentBrushColors}
+                  onBrushColor={chooseBrushColor}
+                  onBrushTarget={setBrushTarget}
+                  onBrushUse={rememberBrushColor}
                 />
               </Suspense>
               {/* Right rail in HTML mode: element properties when something
@@ -1627,68 +1609,13 @@ export default function EditorPage() {
                   </span>
                 </div>
                 {canvasMode === 'edit' && brushMode && (
-                  <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-[#f8fafc] px-4 py-1.5 text-xs text-[#374151]">
-                    <div className="flex items-center rounded-lg border border-[#d1d5db] bg-white p-0.5 font-medium">
-                      {BRUSH_TARGETS.map(([key, label]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setBrushTarget(key)}
-                          className={
-                            brushTarget === key
-                              ? 'rounded-md bg-[#111827] px-2 py-0.5 text-white'
-                              : 'px-2 py-0.5 text-[#4b5563] hover:text-[#111827]'
-                          }
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {BRUSH_BASIC_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          title={color}
-                          aria-label={`Use ${color}`}
-                          onClick={() => chooseBrushColor(color)}
-                          className={`h-6 w-6 rounded-md border ${
-                            brushColor === color ? 'border-[#4f46e5] ring-2 ring-[#c7d2fe]' : 'border-[#d1d5db]'
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                    {recentBrushColors.length > 0 && (
-                      <div className="flex items-center gap-1 border-l border-[#d1d5db] pl-2">
-                        <span className="text-[11px] font-medium text-[#6b7280]">Recent</span>
-                        {recentBrushColors.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            title={color}
-                            aria-label={`Use recent ${color}`}
-                            onClick={() => chooseBrushColor(color)}
-                            className={`h-6 w-6 rounded-md border ${
-                              brushColor === color ? 'border-[#4f46e5] ring-2 ring-[#c7d2fe]' : 'border-[#d1d5db]'
-                            }`}
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    <label className="ml-auto flex h-7 items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white px-2 font-medium">
-                      <PaletteIcon size={13} aria-hidden />
-                      <input
-                        type="color"
-                        value={brushColor}
-                        onChange={(e) => chooseBrushColor(e.target.value)}
-                        className="h-5 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
-                        aria-label="Brush color"
-                      />
-                      <span className="font-mono text-[11px] uppercase">{brushColor}</span>
-                    </label>
-                  </div>
+                  <BrushControls
+                    brushColor={brushColor}
+                    brushTarget={brushTarget}
+                    recentColors={recentBrushColors}
+                    onColor={chooseBrushColor}
+                    onTarget={setBrushTarget}
+                  />
                 )}
                 {/* Link-tool guidance banner (component mode). */}
                 {canvasMode === 'edit' && linkMode && (

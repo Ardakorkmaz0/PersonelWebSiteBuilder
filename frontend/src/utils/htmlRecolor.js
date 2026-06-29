@@ -105,6 +105,22 @@ function recolorBorder(html, color) {
   })
 }
 
+// Brush for a SINGLE live element (HTML-upload mode): instead of rewriting a
+// snippet string, return an `applyElementPatch` patch for the clicked element.
+// `info` is a describeElement() snapshot (reads `background`/`borderWidth`).
+// `smart` paints the fill when the element has a visible background, else text.
+export function brushElementPatch(info, color, target = 'smart') {
+  let mode = target
+  if (mode === 'smart') mode = info?.background ? 'fill' : 'text'
+  if (mode === 'fill') return { background: color }
+  if (mode === 'text') return { color }
+  if (mode === 'border') {
+    const width = Number(info?.borderWidth)
+    return { borderColor: color, borderWidth: width > 0 ? width : 2 }
+  }
+  return {}
+}
+
 // Recolor `code` for a brush target. `smart` picks fill when the snippet has a
 // visible background (buttons, navbars, cards), otherwise text (headings, body).
 export function recolorHtml(code, color, target = 'smart') {

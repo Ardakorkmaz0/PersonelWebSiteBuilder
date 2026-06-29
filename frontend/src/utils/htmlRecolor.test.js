@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { recolorHtml, hasVisibleBackground } from './htmlRecolor.js'
+import { recolorHtml, hasVisibleBackground, brushElementPatch } from './htmlRecolor.js'
 
 describe('recolorHtml', () => {
   it('recolors a solid button background on fill', () => {
@@ -99,5 +99,26 @@ describe('recolorHtml', () => {
     expect(hasVisibleBackground('<a style="background:#2563eb;">x</a>')).toBe(true)
     expect(hasVisibleBackground('<a style="background:transparent;color:#fff;">x</a>')).toBe(false)
     expect(hasVisibleBackground('<h1 style="color:#000;">x</h1>')).toBe(false)
+  })
+})
+
+describe('brushElementPatch (HTML-mode brush)', () => {
+  it('smart paints fill when the element has a visible background', () => {
+    expect(brushElementPatch({ background: '#2563eb' }, '#dc2626', 'smart')).toEqual({ background: '#dc2626' })
+  })
+
+  it('smart paints text when there is no background', () => {
+    expect(brushElementPatch({ background: '' }, '#dc2626', 'smart')).toEqual({ color: '#dc2626' })
+  })
+
+  it('explicit fill and text targets', () => {
+    expect(brushElementPatch({ background: '#fff' }, '#000000', 'fill')).toEqual({ background: '#000000' })
+    expect(brushElementPatch({ background: '#fff' }, '#000000', 'text')).toEqual({ color: '#000000' })
+  })
+
+  it('border keeps an existing border width but defaults to 2 when there is none', () => {
+    expect(brushElementPatch({ borderWidth: 3 }, '#10b981', 'border')).toEqual({ borderColor: '#10b981', borderWidth: 3 })
+    expect(brushElementPatch({ borderWidth: 0 }, '#10b981', 'border')).toEqual({ borderColor: '#10b981', borderWidth: 2 })
+    expect(brushElementPatch({}, '#10b981', 'border')).toEqual({ borderColor: '#10b981', borderWidth: 2 })
   })
 })

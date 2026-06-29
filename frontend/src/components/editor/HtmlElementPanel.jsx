@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   LabeledColor,
   LabeledNumber,
+  LabeledRange,
   LabeledSelect,
   LabeledText,
   LabeledTextarea,
@@ -57,6 +58,31 @@ const ALIGN_OPTIONS_FLEX = [
   ['flex-start', 'Start'],
   ['center', 'Center'],
   ['flex-end', 'End'],
+]
+
+// Mirror the component-mode html panel's style controls so both modes edit the
+// same visual properties.
+const BORDER_STYLE_OPTIONS = [
+  ['', 'Default'],
+  ['none', 'None'],
+  ['solid', 'Solid'],
+  ['dashed', 'Dashed'],
+  ['dotted', 'Dotted'],
+]
+
+const SHADOW_OPTIONS = [
+  ['none', 'None'],
+  ['0 1px 3px rgba(0,0,0,0.15)', 'Small'],
+  ['0 4px 12px rgba(0,0,0,0.15)', 'Medium'],
+  ['0 10px 25px rgba(0,0,0,0.2)', 'Large'],
+]
+
+const OVERFLOW_OPTIONS = [
+  ['', 'Default'],
+  ['visible', 'Visible'],
+  ['hidden', 'Hidden'],
+  ['auto', 'Auto'],
+  ['scroll', 'Scroll'],
 ]
 
 const HTML_ELEMENT_MODE_KEY = 'pwb_html_element_properties_mode'
@@ -293,6 +319,35 @@ export default function HtmlElementPanel({
           label="Border color"
           value={info.borderColor || '#000000'}
           onChange={(v) => onChange({ borderColor: v })}
+        />
+        <LabeledSelect
+          label="Border style"
+          value={info.borderStyle}
+          onChange={(v) => onChange({ borderStyle: v })}
+          options={BORDER_STYLE_OPTIONS}
+        />
+      </div>
+
+      {/* Effects — parity with the component-mode html panel (shadow / opacity
+          / overflow), applied to this element only. */}
+      <SectionTitle>Effects</SectionTitle>
+      <div className="space-y-2">
+        <LabeledSelect
+          label="Shadow"
+          value={info.boxShadow}
+          onChange={(v) => onChange({ boxShadow: v })}
+          options={SHADOW_OPTIONS}
+        />
+        <LabeledRange
+          label="Opacity"
+          value={info.opacity}
+          onChange={(v) => onChange({ opacity: v })}
+        />
+        <LabeledSelect
+          label="Overflow"
+          value={info.overflow}
+          onChange={(v) => onChange({ overflow: v })}
+          options={OVERFLOW_OPTIONS}
         />
       </div>
 

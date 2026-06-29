@@ -257,6 +257,42 @@ describe('applyElementPatch — size & spacing', () => {
   })
 })
 
+describe('applyElementPatch — effects (parity with component mode)', () => {
+  it('sets a border style and clears the border on None', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { borderStyle: 'dashed' })
+    expect(p.style.getPropertyValue('border-style')).toBe('dashed')
+    expect(p.style.getPropertyValue('border-width')).toBe('1px') // seeds a width so it shows
+    applyElementPatch(p, { borderStyle: 'none' })
+    expect(p.style.getPropertyValue('border-style')).toBe('')
+    expect(p.style.getPropertyValue('border-width')).toBe('')
+  })
+
+  it('sets and clears box shadow', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { boxShadow: '0 4px 12px rgba(0,0,0,0.15)' })
+    expect(p.style.getPropertyValue('box-shadow')).toContain('4px')
+    applyElementPatch(p, { boxShadow: 'none' })
+    expect(p.style.getPropertyValue('box-shadow')).toBe('')
+  })
+
+  it('sets opacity below 1 and clears it at 1', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { opacity: 0.5 })
+    expect(p.style.getPropertyValue('opacity')).toBe('0.5')
+    applyElementPatch(p, { opacity: 1 })
+    expect(p.style.getPropertyValue('opacity')).toBe('')
+  })
+
+  it('sets and clears overflow', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { overflow: 'hidden' })
+    expect(p.style.getPropertyValue('overflow')).toBe('hidden')
+    applyElementPatch(p, { overflow: 'visible' })
+    expect(p.style.getPropertyValue('overflow')).toBe('')
+  })
+})
+
 describe('ensureElementId / bindLinkToTarget / nearestAnchor', () => {
   it('derives a stable, unique id from text and reuses an existing one', () => {
     const fresh = document.querySelector('#second p') // no id in the fixture

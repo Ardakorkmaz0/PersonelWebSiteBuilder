@@ -89,9 +89,16 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     marginTop: cs ? px(cs.marginTop) : 0,
     marginBottom: cs ? px(cs.marginBottom) : 0,
     display: cs ? String(cs.display || '') : '',
-    // Border (single width/colour for the whole box — covers the common case).
+    // Border (single width/colour/style for the whole box — covers the common case).
     borderWidth: cs ? px(cs.borderTopWidth) : 0,
     borderColor: cs ? cssColorToHex(cs.borderTopColor) : '',
+    borderStyle: el.style.borderStyle || (cs ? cs.borderTopStyle : '') || '',
+    // Effects — mirror the component-mode html panel. Read the INLINE value
+    // first so a preset applied here round-trips in the select; fall back to the
+    // computed value (which won't match a preset, but shows the right default).
+    boxShadow: el.style.boxShadow || (cs ? cs.boxShadow : '') || '',
+    opacity: el.style.opacity !== '' ? Number(el.style.opacity) : (cs ? Number(cs.opacity) : 1),
+    overflow: el.style.overflow || (cs ? cs.overflow : '') || '',
     // Flex layout — lets a nav/row container space and align its children
     // (the navbar case: it's a flex box, not a plain block).
     justifyContent: cs ? String(cs.justifyContent || '') : '',
@@ -195,6 +202,32 @@ export function applyElementPatch(el, patch = {}) {
     }
   }
   if (patch.borderColor !== undefined) setImp('border-color', patch.borderColor)
+  // Border style on its own (None clears the border entirely). Written
+  // !important like the rest of the box overrides so template CSS can't pin it.
+  if (patch.borderStyle !== undefined) {
+    if (patch.borderStyle && patch.borderStyle !== 'none') {
+      setImp('border-style', patch.borderStyle)
+      if (!el.style.getPropertyValue('border-width')) setImp('border-width', '1px')
+    } else {
+      el.style.removeProperty('border-style')
+      el.style.removeProperty('border-width')
+    }
+  }
+  // Effects — parity with the component-mode html panel. Empty string clears the
+  // override so the stylesheet value (if any) shows through again.
+  if (patch.boxShadow !== undefined) {
+    if (patch.boxShadow && patch.boxShadow !== 'none') setImp('box-shadow', patch.boxShadow)
+    else el.style.removeProperty('box-shadow')
+  }
+  if (patch.opacity !== undefined) {
+    const n = Number(patch.opacity)
+    if (patch.opacity === '' || !Number.isFinite(n) || n >= 1) el.style.removeProperty('opacity')
+    else setImp('opacity', String(Math.max(0, n)))
+  }
+  if (patch.overflow !== undefined) {
+    if (patch.overflow && patch.overflow !== 'visible') setImp('overflow', patch.overflow)
+    else el.style.removeProperty('overflow')
+  }
   // Flex layout controls (only take effect on flex/inline-flex containers, but
   // harmless otherwise) — the practical way to space/align a navbar's items.
   if (patch.justifyContent !== undefined) setStyle('justifyContent', patch.justifyContent)

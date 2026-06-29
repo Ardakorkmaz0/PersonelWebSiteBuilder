@@ -1172,10 +1172,10 @@ export default function EditorPage() {
             <button
               ref={importBtnRef}
               onClick={() => { anchorMenu('import', importBtnRef); setImportOpen((o) => !o) }}
-              title="Open an HTML file, a project folder, or a project .json"
+              title="Import, export, or remove this page's HTML"
               className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
             >
-              Import &#9662;
+              File &#9662;
             </button>
             {importOpen && (
               <>
@@ -1239,61 +1239,52 @@ export default function EditorPage() {
                       {label}
                     </button>
                   ))}
+                  {/* Export + Remove live here too so the header stays one row. */}
+                  <div className="my-1 border-t border-[#e5e7eb]" />
+                  <button
+                    onClick={() => {
+                      setImportOpen(false)
+                      if (currentPageIsHtml) exportHtmlToDisk()
+                      else exportProject()
+                    }}
+                    title={currentPageIsHtml ? 'Export (download) the HTML file' : 'Download this project (.json)'}
+                    className="block w-full px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
+                  >
+                    {currentPageIsHtml ? 'Export HTML…' : 'Export project (.json)'}
+                  </button>
+                  {currentPageIsHtml && (
+                    <button
+                      onClick={() => {
+                        setImportOpen(false)
+                        if (window.confirm("Remove this page's HTML and switch it back to the component canvas? (Undo brings the HTML back.)")) {
+                          commitHtml('')
+                          setPageMode(currentPageId, 'empty')
+                          if (localFile?.pageId === currentPageId) unlinkLocalFile()
+                          setHtmlSelection(null)
+                        }
+                      }}
+                      className="block w-full px-3 py-1.5 text-left text-sm text-[#b91c1c] hover:bg-[#fef2f2]"
+                    >
+                      Remove HTML
+                    </button>
+                  )}
                 </div>
               </>
             )}
           </div>
-          {!currentPageIsHtml && (
-          <>
-          <button
-            onClick={exportProject}
-            title="Download this project (.json)"
-            className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
-          >
-            Export
-          </button>
-          </>
-          )}
-          {currentPageIsHtml && (
-            <>
-              {/* Linked-file state is always visible: green = Save writes to
-                  this file on disk; gray = not linked, click to pick one.
-                  Hiding it made "Save doesn't change my file" undebuggable. */}
-              {localFile ? (
-                <span
-                  title={`Linked to ${localFile.name} — every Save also updates this file on disk. Click to unlink.`}
-                  onClick={() => {
-                    if (window.confirm(`Stop updating ${localFile.name} on Save?`)) unlinkLocalFile()
-                  }}
-                  className="flex cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3]"
-                >
-                  <SaveIcon size={13} /> {localFile.name}
-                </span>
-              ) : (
-                <button
-                  onClick={exportHtmlToDisk}
-                  title={supportsLocalFiles()
-                    ? 'Export the HTML to a file on disk — afterwards every Save updates that file automatically.'
-                    : 'Export (download) the HTML file'}
-                  className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
-                >
-                  Export
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  if (window.confirm("Remove this page's HTML and switch it back to the component canvas? (Undo brings the HTML back.)")) {
-                    commitHtml('')
-                    setPageMode(currentPageId, 'empty')
-                    if (localFile?.pageId === currentPageId) unlinkLocalFile()
-                    setHtmlSelection(null)
-                  }
-                }}
-                className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
-              >
-                Remove HTML
-              </button>
-            </>
+          {/* Linked-file status chip — green means every Save also writes this
+              file on disk; click to unlink. Export / Remove HTML now live inside
+              the File ▾ menu so the header stays a single row. */}
+          {currentPageIsHtml && localFile && (
+            <span
+              title={`Linked to ${localFile.name} — every Save also updates this file on disk. Click to unlink.`}
+              onClick={() => {
+                if (window.confirm(`Stop updating ${localFile.name} on Save?`)) unlinkLocalFile()
+              }}
+              className="flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3]"
+            >
+              <SaveIcon size={13} /> {localFile.name}
+            </span>
           )}
           {/* Shared Undo/Redo — identical in both modes; dispatches to the
               HTML snapshot stacks or the canvas store as appropriate. */}

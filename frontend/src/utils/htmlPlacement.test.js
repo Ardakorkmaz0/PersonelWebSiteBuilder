@@ -4,6 +4,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import {
   closestPlaceableBlock,
+  contentRoot,
   diffAppendedBodyChildren,
   ensureEditHintChrome,
   ensurePlacementChrome,
@@ -47,6 +48,34 @@ describe('closestPlaceableBlock', () => {
 
   it('falls back to body when given null', () => {
     expect(closestPlaceableBlock(null, body)).toBe(body)
+  })
+})
+
+describe('contentRoot + single-wrapper documents', () => {
+  it('stays at body when there are multiple top-level blocks', () => {
+    document.body.innerHTML = '<section id="a">A</section><section id="b">B</section>'
+    expect(contentRoot(document.body)).toBe(document.body)
+  })
+
+  it('descends into a single page wrapper so its sections are the real blocks', () => {
+    document.body.innerHTML =
+      '<div id="page"><section id="s1"><h2 id="h">Hi <a id="lnk" href="#">x</a></h2></section><section id="s2">B</section></div>'
+    const page = document.getElementById('page')
+    const s1 = document.getElementById('s1')
+    expect(contentRoot(document.body)).toBe(page)
+    // A click on the wrapper itself resolves to the wrapper (top-level insert).
+    expect(closestPlaceableBlock(page, document.body)).toBe(page)
+    // A click inside a section resolves to THAT section — not the whole page,
+    // so Move drags one section and a drop lands next to it.
+    expect(closestPlaceableBlock(s1, document.body)).toBe(s1)
+    expect(closestPlaceableBlock(document.getElementById('lnk'), document.body)).toBe(s1)
+  })
+
+  it('descends through nested single wrappers (skips meaningless nesting)', () => {
+    document.body.innerHTML =
+      '<div id="outer"><main id="mid"><section id="s1">A</section><section id="s2">B</section></main></div>'
+    expect(contentRoot(document.body)).toBe(document.getElementById('mid'))
+    expect(closestPlaceableBlock(document.getElementById('s1'), document.body)).toBe(document.getElementById('s1'))
   })
 })
 

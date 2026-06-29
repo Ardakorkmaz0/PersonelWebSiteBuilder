@@ -20,23 +20,59 @@ const BLOCK_TAGS = new Set([
   'FIGURE', 'BLOCKQUOTE', 'TABLE', 'FORM', 'HR', 'IMG', 'PRE', 'DETAILS',
 ])
 
-// Walk up from `el` to the nearest block-level element that sits directly (or
-// nearly) under <body>. Returns that element, or the body itself when nothing
-// better is found. `bodyEl` bounds the walk so we never escape the document.
+// Non-content children that don't count when deciding whether a level is "just
+// one big wrapper" (scripts/styles + the editor's own chrome layers).
+const NON_CONTENT_TAGS = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'TEMPLATE', 'NOSCRIPT', 'BR'])
+// Generic page wrappers we descend THROUGH, so the placeable "top-level" blocks
+// are the real sections — not the single container that holds the whole page.
+const WRAPPER_TAGS = new Set(['DIV', 'MAIN', 'SECTION', 'ARTICLE'])
+
+function realChildren(el) {
+  return [...el.children].filter(
+    (c) => c.nodeType === 1
+      && !c.hasAttribute('data-pwb-chrome')
+      && !NON_CONTENT_TAGS.has(c.tagName),
+  )
+}
+
+// The element whose direct children are the real, movable/insertable blocks.
+// Most pages wrap everything in one `<div>`/`<main>`; without descending into
+// it, EVERY click resolves to that single wrapper — so "Move" drags the whole
+// page and a new component lands at the very top/bottom instead of where you
+// pointed. Descend single-wrapper chains until a level has >1 real child.
+export function contentRoot(bodyEl) {
+  if (!bodyEl) return bodyEl
+  let root = bodyEl
+  for (let guard = 0; guard < 8; guard++) {
+    const kids = realChildren(root)
+    if (kids.length === 1 && WRAPPER_TAGS.has(kids[0].tagName) && kids[0].children.length > 0) {
+      root = kids[0]
+    } else {
+      break
+    }
+  }
+  return root
+}
+
+// Walk up from `el` to the nearest block-level element that sits directly under
+// the content root (see contentRoot). Returns that element, or the content root
+// when nothing better is found. `bodyEl` bounds the walk so we never escape.
 export function closestPlaceableBlock(el, bodyEl) {
   if (!el || !bodyEl) return bodyEl || null
+  const root = contentRoot(bodyEl)
   let node = el
   let lastBlock = null
   while (node && node !== bodyEl) {
     if (node.nodeType === 1 && BLOCK_TAGS.has(node.tagName)) {
       lastBlock = node
-      // Prefer a direct child of body — that's the cleanest place to splice
-      // a new top-level section. If this block's parent IS the body, stop.
-      if (node.parentElement === bodyEl) return node
+      // Prefer a direct child of the content root — the cleanest place to
+      // splice a new block / the unit the user means to move.
+      if (node.parentElement === root) return node
     }
+    if (node === root) break
     node = node.parentElement
   }
-  return lastBlock || bodyEl
+  return lastBlock || root
 }
 
 // Given the cursor's Y inside the target's bounding box, decide whether the

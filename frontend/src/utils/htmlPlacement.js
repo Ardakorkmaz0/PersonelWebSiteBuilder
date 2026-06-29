@@ -20,11 +20,11 @@ const BLOCK_TAGS = new Set([
   'FIGURE', 'BLOCKQUOTE', 'TABLE', 'FORM', 'HR', 'IMG', 'PRE', 'DETAILS',
 ])
 
-// Non-content children that don't count when deciding whether a level is "just
+// Non-content children that don't count when deciding whether <body> is "just
 // one big wrapper" (scripts/styles + the editor's own chrome layers).
 const NON_CONTENT_TAGS = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'TEMPLATE', 'NOSCRIPT', 'BR'])
-// Generic page wrappers we descend THROUGH, so the placeable "top-level" blocks
-// are the real sections — not the single container that holds the whole page.
+// Generic full-page wrappers — a lone one of these directly under <body> is the
+// container that holds the whole page, not a block you'd move on its own.
 const WRAPPER_TAGS = new Set(['DIV', 'MAIN', 'SECTION', 'ARTICLE'])
 
 function realChildren(el) {
@@ -35,44 +35,51 @@ function realChildren(el) {
   )
 }
 
-// The element whose direct children are the real, movable/insertable blocks.
-// Most pages wrap everything in one `<div>`/`<main>`; without descending into
-// it, EVERY click resolves to that single wrapper — so "Move" drags the whole
-// page and a new component lands at the very top/bottom instead of where you
-// pointed. Descend single-wrapper chains until a level has >1 real child.
-export function contentRoot(bodyEl) {
-  if (!bodyEl) return bodyEl
-  let root = bodyEl
-  for (let guard = 0; guard < 8; guard++) {
-    const kids = realChildren(root)
-    if (kids.length === 1 && WRAPPER_TAGS.has(kids[0].tagName) && kids[0].children.length > 0) {
-      root = kids[0]
-    } else {
-      break
-    }
+// The single element wrapping the ENTIRE page, when there is one (most docs are
+// `<body><div class="page">…everything…</div></body>`). Excluding just this one
+// element from the draggable set stops "Move" from ever grabbing the whole page,
+// while keeping every real block inside it — sections, grids, cards, headings —
+// individually movable. Returns null when <body> already holds the content
+// directly (multiple top-level blocks), so nothing is excluded.
+export function pageWrapper(bodyEl) {
+  if (!bodyEl) return null
+  const kids = realChildren(bodyEl)
+  if (kids.length === 1 && WRAPPER_TAGS.has(kids[0].tagName) && kids[0].children.length > 0) {
+    return kids[0]
   }
-  return root
+  return null
 }
 
-// Walk up from `el` to the nearest block-level element that sits directly under
-// the content root (see contentRoot). Returns that element, or the content root
-// when nothing better is found. `bodyEl` bounds the walk so we never escape.
+// Resolve a click to the block the user actually pointed at: the NEAREST
+// block-level ancestor of `el` (climbing only out of inline wrappers like
+// span/a/strong). This is what makes nested editing work — clicking a card
+// inside a grid targets the card, clicking a heading inside it targets the
+// heading — instead of always jumping to the top-level section. `bodyEl` bounds
+// the walk; a click that misses every block falls back to it.
 export function closestPlaceableBlock(el, bodyEl) {
   if (!el || !bodyEl) return bodyEl || null
-  const root = contentRoot(bodyEl)
   let node = el
-  let lastBlock = null
   while (node && node !== bodyEl) {
-    if (node.nodeType === 1 && BLOCK_TAGS.has(node.tagName)) {
-      lastBlock = node
-      // Prefer a direct child of the content root — the cleanest place to
-      // splice a new block / the unit the user means to move.
-      if (node.parentElement === root) return node
+    if (node.nodeType === 1 && BLOCK_TAGS.has(node.tagName) && !node.hasAttribute('data-pwb-chrome')) {
+      return node
     }
-    if (node === root) break
     node = node.parentElement
   }
-  return lastBlock || root
+  return bodyEl
+}
+
+// Every block the rearrange tool can pick up: all block-level elements (nested
+// cards, list items, headings included) EXCEPT the single page wrapper and the
+// editor's own chrome. So you can move one card inside a grid — or a whole
+// section — but never accidentally drag the entire page.
+export function placeableBlocks(bodyEl) {
+  if (!bodyEl) return []
+  const wrapper = pageWrapper(bodyEl)
+  return [...bodyEl.querySelectorAll('*')].filter(
+    (el) => BLOCK_TAGS.has(el.tagName)
+      && !el.hasAttribute('data-pwb-chrome')
+      && el !== wrapper,
+  )
 }
 
 // Given the cursor's Y inside the target's bounding box, decide whether the

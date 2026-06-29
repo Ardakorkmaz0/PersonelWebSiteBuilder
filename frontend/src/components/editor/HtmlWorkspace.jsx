@@ -9,7 +9,7 @@ import { DEVICES } from '../../utils/htmlDevices.js'
 import {
   DRAG_MIME,
   closestPlaceableBlock,
-  contentRoot,
+  placeableBlocks,
   diffAppendedBodyChildren,
   ensureEditHintChrome,
   ensurePlacementChrome,
@@ -877,11 +877,10 @@ function HtmlWorkspace({
     if (!doc?.body) return () => {}
     ensurePlacementChrome(doc)
     let dragging = null
-    // Only the REAL top-level blocks (direct children of the content root) are
-    // draggable — never the single page wrapper, which would drag everything.
-    const blocks = () => [...contentRoot(doc.body).children].filter(
-      (el) => el.nodeType === 1 && !el.hasAttribute('data-pwb-chrome'),
-    )
+    // Every nested block is draggable (cards, list items, headings) — but never
+    // the single page wrapper, which would drag everything. dragstart resolves
+    // the exact block grabbed via closestPlaceableBlock(e.target).
+    const blocks = () => placeableBlocks(doc.body)
     const arm = () => blocks().forEach((el) => { el.draggable = true; el.setAttribute('data-pwb-drag', '') })
     const disarm = () => doc.body.querySelectorAll('[data-pwb-drag]').forEach((el) => {
       el.removeAttribute('draggable')

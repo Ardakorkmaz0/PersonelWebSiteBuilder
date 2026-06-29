@@ -4,7 +4,8 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import {
   closestPlaceableBlock,
-  contentRoot,
+  pageWrapper,
+  placeableBlocks,
   diffAppendedBodyChildren,
   ensureEditHintChrome,
   ensurePlacementChrome,
@@ -34,16 +35,16 @@ describe('closestPlaceableBlock', () => {
     expect(closestPlaceableBlock(hero, body)).toBe(hero)
   })
 
-  it('bubbles an inline element up to its nearest body-level block', () => {
+  it('climbs an inline element up to the NEAREST block (not the top section)', () => {
     const link = document.getElementById('link')
-    // link → h1 (block) → section (direct child of body) — stops at section.
-    expect(closestPlaceableBlock(link, body)).toBe(document.getElementById('hero'))
+    // link (inline <a>) → its nearest block is the <h1>, NOT the whole section,
+    // so nested elements are individually targetable.
+    expect(closestPlaceableBlock(link, body)).toBe(document.getElementById('title'))
   })
 
-  it('returns the nearest block even when nested under a non-body div', () => {
+  it('returns the clicked block itself when it is already a block', () => {
     const para = document.getElementById('para')
-    // para's parent is #wrap (a div, direct child of body) → returns #wrap.
-    expect(closestPlaceableBlock(para, body)).toBe(document.getElementById('wrap'))
+    expect(closestPlaceableBlock(para, body)).toBe(para)
   })
 
   it('falls back to body when given null', () => {
@@ -51,31 +52,44 @@ describe('closestPlaceableBlock', () => {
   })
 })
 
-describe('contentRoot + single-wrapper documents', () => {
-  it('stays at body when there are multiple top-level blocks', () => {
+describe('nested blocks + the single page wrapper', () => {
+  it('pageWrapper is null when body holds the content directly', () => {
     document.body.innerHTML = '<section id="a">A</section><section id="b">B</section>'
-    expect(contentRoot(document.body)).toBe(document.body)
+    expect(pageWrapper(document.body)).toBeNull()
+    // …so every section is a draggable block, none excluded.
+    expect(placeableBlocks(document.body)).toEqual([
+      document.getElementById('a'),
+      document.getElementById('b'),
+    ])
   })
 
-  it('descends into a single page wrapper so its sections are the real blocks', () => {
+  it('excludes only the lone page wrapper, keeping every block inside it movable', () => {
     document.body.innerHTML =
       '<div id="page"><section id="s1"><h2 id="h">Hi <a id="lnk" href="#">x</a></h2></section><section id="s2">B</section></div>'
     const page = document.getElementById('page')
-    const s1 = document.getElementById('s1')
-    expect(contentRoot(document.body)).toBe(page)
-    // A click on the wrapper itself resolves to the wrapper (top-level insert).
-    expect(closestPlaceableBlock(page, document.body)).toBe(page)
-    // A click inside a section resolves to THAT section — not the whole page,
-    // so Move drags one section and a drop lands next to it.
-    expect(closestPlaceableBlock(s1, document.body)).toBe(s1)
-    expect(closestPlaceableBlock(document.getElementById('lnk'), document.body)).toBe(s1)
+    expect(pageWrapper(document.body)).toBe(page)
+    // A click inside a section resolves to the nearest block, so Move grabs one
+    // thing and a drop lands next to it — never the whole page.
+    expect(closestPlaceableBlock(document.getElementById('s1'), document.body)).toBe(document.getElementById('s1'))
+    expect(closestPlaceableBlock(document.getElementById('lnk'), document.body)).toBe(document.getElementById('h'))
+    const blocks = placeableBlocks(document.body)
+    expect(blocks).not.toContain(page) // the wrapper can't be dragged…
+    expect(blocks).toContain(document.getElementById('s1')) // …but its content can
+    expect(blocks).toContain(document.getElementById('h'))
   })
 
-  it('descends through nested single wrappers (skips meaningless nesting)', () => {
+  it('targets and arms deeply nested blocks (a card inside a grid inside a section)', () => {
     document.body.innerHTML =
-      '<div id="outer"><main id="mid"><section id="s1">A</section><section id="s2">B</section></main></div>'
-    expect(contentRoot(document.body)).toBe(document.getElementById('mid'))
-    expect(closestPlaceableBlock(document.getElementById('s1'), document.body)).toBe(document.getElementById('s1'))
+      '<div id="page"><section id="sec"><div id="grid"><div id="c1"><h3 id="t1">One</h3></div><div id="c2">Two</div></div></section></div>'
+    // Clicking the heading targets the heading; clicking the card targets the card.
+    expect(closestPlaceableBlock(document.getElementById('t1'), document.body)).toBe(document.getElementById('t1'))
+    expect(closestPlaceableBlock(document.getElementById('c1'), document.body)).toBe(document.getElementById('c1'))
+    const blocks = placeableBlocks(document.body)
+    // The section, the grid and both cards are all individually movable.
+    expect(blocks).toContain(document.getElementById('sec'))
+    expect(blocks).toContain(document.getElementById('grid'))
+    expect(blocks).toContain(document.getElementById('c1'))
+    expect(blocks).not.toContain(document.getElementById('page'))
   })
 })
 

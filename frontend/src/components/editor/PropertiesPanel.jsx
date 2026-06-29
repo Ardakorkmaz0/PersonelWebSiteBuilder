@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
+import SegmentedToggle from './SegmentedToggle.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
 import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS, normalizeTheme } from '../../utils/theme.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
@@ -844,25 +845,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
               <h2 className="truncate text-sm font-semibold text-[#111827]">Selection</h2>
               <p className="truncate text-xs text-[#6b7280]">{selectedLayoutItems.length} items selected</p>
             </div>
-            <div className="grid shrink-0 grid-cols-2 rounded-lg border border-[#d1d5db] bg-white p-0.5">
-              {[
-                ['basic', 'Basic'],
-                ['extended', 'Extend'],
-              ].map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setPropertiesMode(mode)}
-                  className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                    propertiesMode === mode
-                      ? 'bg-[#4f46e5] text-white'
-                      : 'text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <SegmentedToggle
+              value={propertiesMode}
+              onChange={setPropertiesMode}
+              options={[['basic', 'Basic'], ['extended', 'Extend']]}
+            />
           </div>
         </div>
 
@@ -1241,25 +1228,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
             <h2 className="truncate text-sm font-semibold text-[#111827]">{def.label}</h2>
             <p className="truncate text-xs text-[#6b7280]">{component.id}</p>
           </div>
-          <div className="grid shrink-0 grid-cols-2 rounded-lg border border-[#d1d5db] bg-white p-0.5">
-            {[
-              ['basic', 'Basic'],
-              ['extended', 'Extend'],
-            ].map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setPropertiesMode(mode)}
-                className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                  propertiesMode === mode
-                    ? 'bg-[#4f46e5] text-white'
-                    : 'text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <SegmentedToggle
+            value={propertiesMode}
+            onChange={setPropertiesMode}
+            options={[['basic', 'Basic'], ['extended', 'Extend']]}
+          />
         </div>
       </div>
 

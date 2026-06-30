@@ -102,26 +102,35 @@ function UsersTab() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(0) // id currently acting on
+  const [q, setQ] = useState('') // search: username / email / display name
 
+  // Debounced search — refetch page 1 whenever the query changes (empty query
+  // loads immediately on mount). `ignore` drops a stale response if the user
+  // keeps typing.
   useEffect(() => {
-    let alive = true
-    listAdminUsers(1)
-      .then((d) => {
-        if (!alive) return
-        const { rows, count: total, hasMore: more } = readPage(d)
-        setUsers(rows)
-        setCount(total)
-        setHasMore(more)
-      })
-      .catch((e) => alive && setError(apiError(e, 'Admin access required.')))
-    return () => { alive = false }
-  }, [])
+    let ignore = false
+    const handle = setTimeout(() => {
+      setUsers(null)
+      setError('')
+      listAdminUsers(1, q)
+        .then((d) => {
+          if (ignore) return
+          const { rows, count: total, hasMore: more } = readPage(d)
+          setUsers(rows)
+          setCount(total)
+          setHasMore(more)
+          setPage(1)
+        })
+        .catch((e) => !ignore && setError(apiError(e, 'Admin access required.')))
+    }, q ? 300 : 0)
+    return () => { ignore = true; clearTimeout(handle) }
+  }, [q])
 
   async function loadMore() {
     if (loadingMore || !hasMore) return
     setLoadingMore(true)
     try {
-      const d = await listAdminUsers(page + 1)
+      const d = await listAdminUsers(page + 1, q)
       const { rows, hasMore: more } = readPage(d)
       setUsers((prev) => [...(prev || []), ...rows])
       setPage((p) => p + 1)
@@ -174,11 +183,21 @@ function UsersTab() {
 
   const totalSites = (users || []).reduce((n, u) => n + u.site_count, 0)
 
-  if (users === null && !error) return <p className="text-sm text-[#6b7280]">Loading…</p>
-
   return (
     <>
       <StatsHeader />
+      <div className="mb-5">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search users by name, @username, or email…"
+          className="w-full rounded-lg border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm text-[#111827] outline-none focus:border-[#4f46e5] focus:ring-2 focus:ring-[#c7d2fe]"
+        />
+      </div>
+      {users === null && !error ? (
+        <p className="text-sm text-[#6b7280]">Loading…</p>
+      ) : (
+      <>
       {users && (
         <p className="mb-6 text-sm text-[#6b7280]">
           {count} user{count !== 1 ? 's' : ''}
@@ -195,10 +214,14 @@ function UsersTab() {
         {(users || []).map((u) => (
           <div key={u.id} className={`ms-card p-5 ${u.is_active ? '' : 'opacity-70 ring-1 ring-red-200'}`}>
             <div className="flex flex-wrap items-center gap-3">
-              <Avatar url={u.avatar_url} name={u.display_name} />
+              <Link to={`/u/${u.id}`} title="Open public profile" className="shrink-0 rounded-full ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe]">
+                <Avatar url={u.avatar_url} name={u.display_name} />
+              </Link>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-[#111827]">{u.display_name}</span>
+                  <Link to={`/u/${u.id}`} title="Open public profile" className="font-semibold text-[#111827] hover:text-[#4f46e5] hover:underline">
+                    {u.display_name}
+                  </Link>
                   <span className="text-xs text-[#9ca3af]">@{u.username}</span>
                   {u.is_superuser ? (
                     <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-[10px] font-bold uppercase text-[#b91c1c]">Superuser</span>
@@ -303,7 +326,12 @@ function UsersTab() {
             </button>
           </div>
         )}
+        {users && users.length === 0 && (
+          <p className="py-10 text-center text-sm text-[#9ca3af]">No users match “{q}”.</p>
+        )}
       </div>
+      </>
+      )}
     </>
   )
 }

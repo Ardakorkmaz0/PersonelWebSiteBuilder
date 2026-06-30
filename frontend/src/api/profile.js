@@ -13,3 +13,9 @@ export const uploadAvatar = (file) => {
   form.append('avatar', file)
   return client.patch('/profile/', form).then((r) => r.data)
 }
+
+// Any creator's PUBLIC profile by user id: display name / avatar / bio + their
+// published sites. What a normal visitor (or a moderator inspecting an account)
+// sees. Public endpoint — no auth required.
+export const getPublicProfile = (userId) =>
+  client.get(`/public/profiles/${userId}/`).then((r) => r.data)

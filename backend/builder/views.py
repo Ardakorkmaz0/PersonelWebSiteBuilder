@@ -26,7 +26,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from django.db import transaction
-from django.db.models import Count, F
+from django.db.models import Count, F, Q
 
 from . import runtime_config
 from .models import Favorite, Profile, Report, Site, SiteSettings, SiteVersion, UploadedImage
@@ -602,6 +602,39 @@ class ExplorePagination(PageNumberPagination):
     max_page_size = 60
 
 
+class PublicProfileView(APIView):
+    """A creator's PUBLIC profile: display name / avatar / bio + their PUBLISHED
+    sites (same card shape as Explore). AllowAny — this is exactly what any
+    visitor (and a moderator inspecting an account) sees as a normal user. 404
+    for a missing or suspended account."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(pk=user_id, is_active=True)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        profile, _ = Profile.objects.get_or_create(user=user)
+        prof = ProfileSerializer(profile, context={'request': request}).data
+        sites = (
+            Site.objects.filter(owner=user, published=True)
+            .select_related('owner', 'owner__profile')
+            .annotate(favorite_count=Count('favorited_by'))
+            .order_by('-hot_score', '-updated_at')
+        )
+        ctx = {'request': request, 'favorited_ids': _favorited_ids(request.user)}
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'display_name': prof.get('display_name') or user.username,
+            'avatar_url': prof.get('avatar_url'),
+            'bio': prof.get('bio') or '',
+            'date_joined': user.date_joined,
+            'sites': ExploreSiteSerializer(sites, many=True, context=ctx).data,
+        })
+
+
 class ExploreView(ListAPIView):
     """The Discover feed: every user's PUBLISHED sites, one ranking — the
     indexed `hot_score` (popularity + recency) — paginated. ?category=<slug>
@@ -767,19 +800,29 @@ class AdminPagination(PageNumberPagination):
 
 class AdminUsersView(ListAPIView):
     """In-app admin panel data: every user + their sites. Admin-only (is_staff).
-    Paginated (50/page) so the panel stays fast as the user base grows."""
+    Paginated (50/page) so the panel stays fast as the user base grows. `?q=`
+    filters by username, email, or display name so a moderator can jump straight
+    to one account instead of paging through everyone."""
 
     permission_classes = [IsAdminUser]
     serializer_class = AdminUserSerializer
     pagination_class = AdminPagination
 
     def get_queryset(self):
-        return (
+        qs = (
             User.objects.all()
             .select_related('profile')
             .prefetch_related('sites', 'sites__reports', 'sites__favorited_by')
             .order_by('-date_joined')
         )
+        q = self.request.query_params.get('q', '').strip()
+        if q:
+            qs = qs.filter(
+                Q(username__icontains=q)
+                | Q(email__icontains=q)
+                | Q(profile__display_name__icontains=q),
+            )
+        return qs
 
 
 class AdminStatsView(APIView):

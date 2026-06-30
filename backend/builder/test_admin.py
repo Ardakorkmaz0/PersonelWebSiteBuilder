@@ -103,6 +103,21 @@ class TestAdminPanel:
         site_row = next(x for x in alice_row['sites'] if x['title'] == 'Watched')
         assert site_row['favorite_count'] == 1
 
+    def test_admin_user_search_filters_by_username(self, client, admin, alice, bob):
+        _, atok = admin
+        _auth(client, atok)
+        rows = client.get('/api/admin/users/', {'q': 'ali'}).data['results']
+        names = {r['username'] for r in rows}
+        assert 'alice' in names and 'bob' not in names
+
+    def test_admin_user_search_matches_email(self, client, admin, bob):
+        bob[0].email = 'findme@example.com'
+        bob[0].save()
+        _, atok = admin
+        _auth(client, atok)
+        rows = client.get('/api/admin/users/', {'q': 'findme@'}).data['results']
+        assert [r['username'] for r in rows] == ['bob']
+
 
 @pytest.mark.django_db
 class TestAdminStats:
@@ -126,6 +141,27 @@ class TestAdminStats:
         assert d['total_views'] == 52 and d['total_favorites'] == 1
         assert d['top_sites'][0]['title'] == 'Popular'
         assert d['top_sites'][0]['favorite_count'] == 1
+
+
+@pytest.mark.django_db
+class TestPublicProfile:
+    def test_lists_only_published_sites_no_auth(self, client, alice):
+        a, _ = alice
+        Site.objects.create(owner=a, title='Live', published=True)
+        Site.objects.create(owner=a, title='Hidden', published=False)
+        resp = client.get(f'/api/public/profiles/{a.id}/')  # anonymous
+        assert resp.status_code == 200
+        assert resp.data['username'] == 'alice'
+        assert {s['title'] for s in resp.data['sites']} == {'Live'}
+
+    def test_404_for_missing_user(self, client):
+        assert client.get('/api/public/profiles/999999/').status_code == 404
+
+    def test_404_for_suspended_user(self, client, alice):
+        a, _ = alice
+        a.is_active = False
+        a.save()
+        assert client.get(f'/api/public/profiles/{a.id}/').status_code == 404
 
 
 @pytest.mark.django_db

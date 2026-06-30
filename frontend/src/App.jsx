@@ -18,6 +18,7 @@ const EditorPage = lazy(() => import('./pages/EditorPage.jsx'))
 const PreviewPage = lazy(() => import('./pages/PreviewPage.jsx'))
 const CodeProjectPage = lazy(() => import('./pages/CodeProjectPage.jsx'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
+const PublicProfilePage = lazy(() => import('./pages/PublicProfilePage.jsx'))
 const FavoritesPage = lazy(() => import('./pages/FavoritesPage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
@@ -96,6 +97,7 @@ export default function App() {
             }
           />
           <Route path="/site/:slug" element={<PreviewPage />} />
+          <Route path="/u/:id" element={<PublicProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

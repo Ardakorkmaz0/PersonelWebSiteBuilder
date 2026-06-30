@@ -39,8 +39,21 @@ export default function ExploreCard({ site, onToggleFav }) {
           </button>
         </div>
         <div className="mb-3 flex items-center gap-2 text-xs text-[#6b7280]">
-          <Avatar url={site.owner_avatar_url} name={site.owner_display_name} />
-          <span className="truncate">{site.owner_display_name}</span>
+          {site.owner_id ? (
+            <Link
+              to={`/u/${site.owner_id}`}
+              title={`See @${site.owner_username}'s profile`}
+              className="flex min-w-0 items-center gap-2 hover:text-[#4f46e5]"
+            >
+              <Avatar url={site.owner_avatar_url} name={site.owner_display_name} />
+              <span className="truncate hover:underline">{site.owner_display_name}</span>
+            </Link>
+          ) : (
+            <>
+              <Avatar url={site.owner_avatar_url} name={site.owner_display_name} />
+              <span className="truncate">{site.owner_display_name}</span>
+            </>
+          )}
           {site.category && site.category !== 'other' && (
             <span className="ml-auto rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-medium capitalize text-[#6b7280]">
               {site.category}

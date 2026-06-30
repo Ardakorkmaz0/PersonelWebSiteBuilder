@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { cloneSite, reportSite } from '../../api/sites.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { apiError } from '../../utils/errors.js'
+import { useGoBack } from '../../utils/useGoBack.js'
 import { schemaToSingleHtml } from '../../utils/schemaToFiles.js'
 import { CodeIcon, SparklesIcon, FlagIcon } from '../icons.jsx'
 
@@ -41,6 +42,7 @@ export default function PublicToolbar({ site }) {
   const [reported, setReported] = useState(false)
   const [reportError, setReportError] = useState('')
   const navigate = useNavigate()
+  const goBack = useGoBack('/')
   const token = useAuthStore((s) => s.token)
 
   async function onUse() {
@@ -85,7 +87,24 @@ export default function PublicToolbar({ site }) {
 
   return (
     <>
-      <div className="fixed left-3 top-3 z-[130] flex gap-2">
+      <div className="fixed left-3 top-3 z-[130] flex flex-wrap items-center gap-2">
+        {/* Home logo + a real Back button (goes to the page you came from). */}
+        <Link
+          to="/"
+          title="Sitebuilder home"
+          className="brand-mark shadow-lg"
+          style={{ width: '2rem', height: '2rem', fontSize: '0.85rem' }}
+        >
+          S
+        </Link>
+        <button
+          type="button"
+          onClick={goBack}
+          title="Go back"
+          className="flex items-center gap-1 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
+        >
+          &larr; Back
+        </button>
         <button
           type="button"
           onClick={() => setShowCode(true)}

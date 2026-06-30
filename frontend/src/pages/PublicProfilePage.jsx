@@ -4,6 +4,8 @@ import { getPublicProfile } from '../api/profile.js'
 import { addFavorite, removeFavorite } from '../api/explore.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
+import { useGoBack } from '../utils/useGoBack.js'
+import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 
 function BigAvatar({ url, name }) {
@@ -41,6 +43,8 @@ export default function PublicProfilePage() {
   const ready = state.id === id
   const data = ready ? state.data : null
   const error = ready ? state.error : ''
+  const goBack = useGoBack('/')
+  useScrollRestore(!!data) // restore scroll once the profile + sites have loaded
 
   async function onToggleFav(site) {
     if (!token) { navigate('/login'); return }
@@ -68,10 +72,10 @@ export default function PublicProfilePage() {
     <div className="min-h-screen bg-[#f7f8fa]">
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-6 py-3">
-          <Link to="/" className="flex items-center gap-2.5 text-[#374151] hover:text-[#111827]">
-            <span className="brand-mark">S</span>
-            <span className="text-sm font-medium">&larr; Explore</span>
-          </Link>
+          <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+          <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
+            &larr; Back
+          </button>
         </div>
       </header>
 

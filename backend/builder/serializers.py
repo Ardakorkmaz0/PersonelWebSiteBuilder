@@ -234,6 +234,7 @@ class ExploreSiteSerializer(serializers.ModelSerializer):
     counts, no schema/html. `favorite_count` is annotated by the view (Count of
     favorited_by); `is_favorited` comes from context['favorited_ids']."""
 
+    owner_id = serializers.IntegerField(source='owner.id', read_only=True)
     owner_username = serializers.CharField(source='owner.username', read_only=True)
     owner_display_name = serializers.SerializerMethodField()
     owner_avatar_url = serializers.SerializerMethodField()
@@ -242,9 +243,9 @@ class ExploreSiteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Site
-        fields = ('id', 'title', 'slug', 'owner_username', 'owner_display_name',
-                  'owner_avatar_url', 'category', 'tags', 'view_count',
-                  'favorite_count', 'is_favorited', 'updated_at')
+        fields = ('id', 'title', 'slug', 'owner_id', 'owner_username',
+                  'owner_display_name', 'owner_avatar_url', 'category', 'tags',
+                  'view_count', 'favorite_count', 'is_favorited', 'updated_at')
 
     def _profile(self, obj):
         return getattr(obj.owner, 'profile', None)

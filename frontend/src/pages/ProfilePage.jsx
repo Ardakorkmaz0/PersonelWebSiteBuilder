@@ -7,10 +7,12 @@ import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
+import { useGoBack } from '../utils/useGoBack.js'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
 import { SearchIcon, CheckIcon, EyeIcon, StarIcon, GlobeIcon, FileIcon } from '../components/icons.jsx'
 
 export default function ProfilePage() {
+  const goBack = useGoBack('/')
   const setUser = useAuthStore((s) => s.setUser)
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
@@ -130,10 +132,12 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-[#f7f8fa]">
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <Link to="/" className="flex items-center gap-2.5 text-[#374151] hover:text-[#111827]">
-            <span className="brand-mark">S</span>
-            <span className="text-sm font-medium">&larr; Explore</span>
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+            <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
+              &larr; Back
+            </button>
+          </div>
         </div>
       </header>
 

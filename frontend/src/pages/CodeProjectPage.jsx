@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useGoBack } from '../utils/useGoBack.js'
 import { useProjectStore } from '../store/projectStore.js'
 import {
   chooseTargetFolder,
@@ -80,6 +81,7 @@ function LivePane({ url, reloadKey, onReload, onOpenWindow }) {
 // panel + component placement + device frames), and a right-rail element panel
 // — but operates on an in-memory file map (projectStore), not a server Site.
 export default function CodeProjectPage() {
+  const goBack = useGoBack('/')
   const rootHandle = useProjectStore((s) => s.rootHandle)
   const rootName = useProjectStore((s) => s.rootName)
   const files = useProjectStore((s) => s.files)
@@ -348,9 +350,9 @@ export default function CodeProjectPage() {
           )}
           {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
         </div>
-        <Link to="/" className="text-sm text-[#6b7280] hover:text-[#111827]">
-          &larr; Back to Sites
-        </Link>
+        <button type="button" onClick={goBack} className="text-sm text-[#6b7280] hover:text-[#111827]">
+          &larr; Back
+        </button>
       </div>
     )
   }
@@ -360,10 +362,10 @@ export default function CodeProjectPage() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
-        <Link to="/" title="Back to Sites" className="flex shrink-0 items-center gap-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
-          <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
-          <span>&larr;</span>
-        </Link>
+        <div className="flex shrink-0 items-center gap-1">
+          <Link to="/" title="Sitebuilder home" className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</Link>
+          <button type="button" onClick={goBack} title="Go back" className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
+        </div>
         <span className="flex shrink-0 items-center gap-1.5 truncate text-sm font-semibold text-[#111827]"><FolderOpenIcon size={15} className="text-[#6b7280]" /> {rootName}</span>
         <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-[#475569]">
           Code Project

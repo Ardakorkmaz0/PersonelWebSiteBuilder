@@ -12,6 +12,7 @@ import {
 import { getSite, updateSite } from '../api/sites.js'
 import { useEditorStore, selectCurrentPage } from '../store/editorStore.js'
 import { useAuthStore } from '../store/authStore.js'
+import { useGoBack } from '../utils/useGoBack.js'
 import {
   registry,
   PC_CANVAS_PRESETS,
@@ -158,6 +159,7 @@ export default function EditorPage() {
   // debounce off "the user is still editing".
   const histLen = useEditorStore((s) => s.past.length)
   const authUser = useAuthStore((s) => s.user)
+  const goBack = useGoBack('/')
   const theme = useEditorStore((s) => s.schema.theme)
   const customCss = useEditorStore((s) => s.schema.customCss)
   const customJs = useEditorStore((s) => s.schema.customJs)
@@ -991,10 +993,10 @@ export default function EditorPage() {
           onto a second line. The grow spacer below pins the toolbar right when
           there IS room. */}
       <header className="flex flex-wrap items-center gap-1.5 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
-        <Link to="/" title="Back to Sites" className="flex shrink-0 items-center gap-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">
-          <span className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</span>
-          <span>&larr;</span>
-        </Link>
+        <div className="flex shrink-0 items-center gap-1">
+          <Link to="/" title="Sitebuilder home" className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</Link>
+          <button type="button" onClick={goBack} title="Go back" className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
+        </div>
         <input
           className="min-w-[3rem] max-w-[160px] flex-shrink rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none"
           value={title}

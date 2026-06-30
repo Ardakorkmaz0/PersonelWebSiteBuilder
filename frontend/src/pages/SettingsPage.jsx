@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSettings, updateSettings } from '../api/admin.js'
 import { apiError } from '../utils/errors.js'
+import { useGoBack } from '../utils/useGoBack.js'
 
 // Superuser-only runtime settings: Google sign-in, reCAPTCHA, SMTP email, and the
 // frontend URL — edited here instead of redeploying env vars. Secrets are
@@ -25,6 +26,7 @@ function Field({ label, hint, children }) {
 }
 
 export default function SettingsPage() {
+  const goBack = useGoBack('/admin')
   const [data, setData] = useState(null) // null = loading; the masked GET payload
   const [form, setForm] = useState({})   // editable text fields
   const [secrets, setSecrets] = useState({ recaptcha_secret_key: '', email_host_password: '' })
@@ -80,10 +82,12 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-[#f7f8fa]">
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-3">
-          <Link to="/admin" className="flex items-center gap-2.5 text-[#374151] hover:text-[#111827]">
-            <span className="brand-mark">S</span>
-            <span className="text-sm font-medium">&larr; Admin</span>
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+            <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
+              &larr; Back
+            </button>
+          </div>
           <span className="rounded-full bg-[#111827] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
             Settings
           </span>

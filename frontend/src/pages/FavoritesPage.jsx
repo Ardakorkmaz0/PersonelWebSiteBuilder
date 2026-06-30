@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listFavorites, addFavorite, removeFavorite } from '../api/explore.js'
 import { apiError } from '../utils/errors.js'
+import { useGoBack } from '../utils/useGoBack.js'
+import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 import { StarIcon } from '../components/icons.jsx'
 
 export default function FavoritesPage() {
   const [items, setItems] = useState(null) // null = loading
   const [error, setError] = useState('')
+  const goBack = useGoBack('/')
+  useScrollRestore(items !== null)
 
   useEffect(() => {
     let alive = true
@@ -41,10 +45,12 @@ export default function FavoritesPage() {
     <div className="min-h-screen bg-[#f7f8fa]">
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-3">
-          <Link to="/" className="flex items-center gap-2.5 text-[#374151] hover:text-[#111827]">
-            <span className="brand-mark">S</span>
-            <span className="text-sm font-medium">&larr; Explore</span>
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+            <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
+              &larr; Back
+            </button>
+          </div>
         </div>
       </header>
 

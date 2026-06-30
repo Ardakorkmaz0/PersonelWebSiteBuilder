@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/core'
 import { getSite, updateSite } from '../api/sites.js'
 import { useEditorStore, selectCurrentPage } from '../store/editorStore.js'
+import { useAuthStore } from '../store/authStore.js'
 import {
   registry,
   PC_CANVAS_PRESETS,
@@ -153,6 +154,10 @@ export default function EditorPage() {
   const canRedo = useEditorStore((s) => s.future.length > 0)
   const markSaved = useEditorStore((s) => s.markSaved)
   const dirty = useEditorStore((s) => s.dirty)
+  // Edit counter — bumps on each recorded change, so the auto-save effect can
+  // debounce off "the user is still editing".
+  const histLen = useEditorStore((s) => s.past.length)
+  const authUser = useAuthStore((s) => s.user)
   const theme = useEditorStore((s) => s.schema.theme)
   const customCss = useEditorStore((s) => s.schema.customCss)
   const customJs = useEditorStore((s) => s.schema.customJs)
@@ -181,6 +186,12 @@ export default function EditorPage() {
   const [error, setError] = useState('')
   const [activeType, setActiveType] = useState(null)
   const [justSaved, setJustSaved] = useState(false)
+  // Auto-save: a quiet, debounced background save. 'idle'|'saving'|'saved'|'error'.
+  // It NEVER touches the undo/redo history (markSaved only clears `dirty`), so you
+  // can still undo after an auto-save — and every save the server keeps as a
+  // restorable version (the History panel), so auto-saved states are recoverable.
+  const [autoSaveState, setAutoSaveState] = useState('idle')
+  const autoSavingRef = useRef(false)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -386,6 +397,19 @@ export default function EditorPage() {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [dirty, htmlDirty])
+
+  // Debounced auto-save: a couple of seconds after you stop editing, persist to
+  // the server in the background. Reschedules on every further edit (histLen /
+  // siteHtml change), waits out the initial load, and never disables the
+  // toolbar — the manual Save still exists for the linked-file write. Undo is
+  // unaffected, and each save is a restorable server version.
+  useEffect(() => {
+    if (loading) return undefined
+    if (!dirty && !htmlDirty) return undefined
+    const t = setTimeout(() => { save(published, { auto: true }) }, 2500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, htmlDirty, histLen, siteHtml, loading])
 
   useEffect(() => {
     let active = true
@@ -680,9 +704,17 @@ export default function EditorPage() {
     }
   }
 
-  async function save(nextPublished = published) {
-    setSaving(true)
-    setError('')
+  async function save(nextPublished = published, { auto = false } = {}) {
+    // Auto-save runs in the background: don't stack on a manual save / another
+    // auto-save, and don't disable the toolbar buttons while it runs.
+    if (auto) {
+      if (saving || autoSavingRef.current) return null
+      autoSavingRef.current = true
+      setAutoSaveState('saving')
+    } else {
+      setSaving(true)
+      setError('')
+    }
     try {
       const schemaBase = useEditorStore.getState().schema
       // Fold the open workspace surface's html into the active page first.
@@ -711,7 +743,11 @@ export default function EditorPage() {
       // silently every time. The link belongs to the page it was created on.
       let fileError = ''
       const fileHtml = map[localFile?.pageId] ?? html
-      if (localFile?.handle && fileHtml) {
+      // Writing the linked local file needs a fresh user gesture (Chrome
+      // permission), which an automatic save doesn't have — so auto-save skips
+      // the disk write and only persists to the server. The manual Save still
+      // updates the file.
+      if (!auto && localFile?.handle && fileHtml) {
         try {
           await writeHtmlToHandle(localFile.handle, fileHtml)
         } catch (e) {
@@ -722,18 +758,23 @@ export default function EditorPage() {
       setPublished(data.published)
       setSlug(data.slug)
       setHtmlDirty(false)
-      markSaved()
-      setJustSaved(true)
-      setTimeout(() => setJustSaved(false), 1500)
-      if (fileError) {
-        setError(`Saved to the server, but writing ${localFile.name} failed: ${fileError}`)
+      markSaved() // clears `dirty` ONLY — undo/redo history is untouched.
+      setAutoSaveState('saved')
+      if (!auto) {
+        setJustSaved(true)
+        setTimeout(() => setJustSaved(false), 1500)
+        if (fileError) {
+          setError(`Saved to the server, but writing ${localFile.name} failed: ${fileError}`)
+        }
       }
       return data
     } catch (e) {
-      setError(apiError(e))
+      if (auto) setAutoSaveState('error')
+      else setError(apiError(e))
       return null
     } finally {
-      setSaving(false)
+      if (auto) autoSavingRef.current = false
+      else setSaving(false)
     }
   }
 
@@ -1003,8 +1044,16 @@ export default function EditorPage() {
           title="Comma-separated tags for discovery"
           className="w-28 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none"
         />
-        {(dirty || htmlDirty) && <span className="shrink-0 whitespace-nowrap text-xs text-amber-500">Unsaved changes</span>}
-        {justSaved && <span className="shrink-0 whitespace-nowrap text-xs text-[#15803d]">Saved &#10003;</span>}
+        {/* Save status — reflects the debounced auto-save. */}
+        {autoSaveState === 'error' ? (
+          <span className="shrink-0 whitespace-nowrap text-xs font-medium text-red-500">Auto-save failed — click Save</span>
+        ) : saving || autoSaveState === 'saving' ? (
+          <span className="shrink-0 whitespace-nowrap text-xs text-[#6b7280]">Saving…</span>
+        ) : (dirty || htmlDirty) ? (
+          <span className="shrink-0 whitespace-nowrap text-xs text-amber-500">Unsaved — autosaves shortly</span>
+        ) : justSaved || autoSaveState === 'saved' ? (
+          <span className="shrink-0 whitespace-nowrap text-xs text-[#15803d]">All changes saved &#10003;</span>
+        ) : null}
 
         {/* Flexible spacer: on a wide screen it expands to pin the toolbar to the
             right edge; the moment the toolbar can't fit and wraps to a second
@@ -1385,6 +1434,14 @@ export default function EditorPage() {
               Publish
             </button>
           )}
+          {/* Your profile — a quick hop to /profile (and your published sites). */}
+          <Link
+            to="/profile"
+            title="Your profile"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#4f46e5] ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe]"
+          >
+            {(authUser?.username || '?').trim().charAt(0).toUpperCase()}
+          </Link>
         </div>
       </header>
 

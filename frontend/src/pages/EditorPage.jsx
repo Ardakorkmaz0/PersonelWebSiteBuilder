@@ -1849,6 +1849,7 @@ export default function EditorPage() {
             open={historyOpen}
             siteId={id}
             onClose={() => setHistoryOpen(false)}
+            onSave={() => save()}
             onRestored={(fresh) => {
               // The restore endpoint returns the full site after the
               // rollback — push the schema + html back into the editor

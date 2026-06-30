@@ -12,3 +12,22 @@ export const restoreVersion = (siteId, versionId) =>
   client
     .post(`/sites/${siteId}/versions/${versionId}/restore/`)
     .then((r) => r.data)
+
+// Create a named "checkpoint" — a pinned save slot the auto-save FIFO never
+// evicts. Snapshots the CURRENTLY SAVED site, so save the editor first.
+export const createCheckpoint = (siteId, label) =>
+  client
+    .post(`/sites/${siteId}/versions/checkpoint/`, { label })
+    .then((r) => r.data)
+
+// Save the current (saved) state over an existing checkpoint slot.
+export const overwriteVersion = (siteId, versionId) =>
+  client
+    .post(`/sites/${siteId}/versions/${versionId}/overwrite/`)
+    .then((r) => r.data)
+
+// Delete a saved version / checkpoint.
+export const deleteVersion = (siteId, versionId) =>
+  client
+    .delete(`/sites/${siteId}/versions/${versionId}/`)
+    .then((r) => r.data)

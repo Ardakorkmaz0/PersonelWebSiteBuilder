@@ -334,7 +334,7 @@ class SiteVersionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SiteVersion
-        fields = ('id', 'label', 'source', 'created_at')
+        fields = ('id', 'label', 'source', 'pinned', 'created_at')
         read_only_fields = fields
 
 

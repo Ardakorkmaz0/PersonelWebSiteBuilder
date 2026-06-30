@@ -193,3 +193,58 @@ class TestApi:
         )
         # ViewSet's get_queryset filter blocks at /sites/:id → 404.
         assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+class TestCheckpoints:
+    def _create_site(self, client, token):
+        _auth(client, token)
+        return client.post('/api/sites/', {'title': 'Demo'}, format='json').data['id']
+
+    def test_create_checkpoint_is_pinned_and_named(self, client, alice):
+        site_id = self._create_site(client, alice[1])
+        resp = client.post(f'/api/sites/{site_id}/versions/checkpoint/', {'label': 'Before redesign'}, format='json')
+        assert resp.status_code == 201, resp.data
+        assert resp.data['pinned'] is True
+        assert resp.data['label'] == 'Before redesign'
+        assert resp.data['source'] == 'manual'
+
+    def test_checkpoint_survives_autosave_fifo(self, client, alice):
+        owner, _ = alice
+        site = _make_site(owner)
+        SiteVersion.snapshot(site, source='manual', label='keep me', pinned=True)
+        # Flood with more auto-saves than the cap — the checkpoint must remain.
+        for i in range(SiteVersion.MAX_VERSIONS_PER_SITE + 5):
+            site.schema = {'theme': {}, 'pages': [{'id': f'p{i}', 'name': str(i), 'components': []}]}
+            site.save()
+            SiteVersion.snapshot(site)
+        assert SiteVersion.objects.filter(site=site, pinned=True, label='keep me').exists()
+        assert SiteVersion.objects.filter(site=site, pinned=False).count() == SiteVersion.MAX_VERSIONS_PER_SITE
+
+    def test_overwrite_replaces_slot_contents(self, client, alice):
+        site_id = self._create_site(client, alice[1])
+        cp = client.post(f'/api/sites/{site_id}/versions/checkpoint/', {'label': 'slot'}, format='json').data
+        # Change the site, then save the new state over the slot.
+        client.put(f'/api/sites/{site_id}/', {
+            'title': 'Demo', 'html': '', 'published': False,
+            'schema': {'theme': {}, 'customCss': '', 'pages': [{'id': 'v2', 'name': 'v2', 'components': []}]},
+        }, format='json')
+        resp = client.post(f'/api/sites/{site_id}/versions/{cp["id"]}/overwrite/', format='json')
+        assert resp.status_code == 200
+        row = SiteVersion.objects.get(pk=cp['id'])
+        assert row.schema['pages'][0]['id'] == 'v2'
+        assert row.pinned is True
+
+    def test_delete_checkpoint(self, client, alice):
+        site_id = self._create_site(client, alice[1])
+        cp = client.post(f'/api/sites/{site_id}/versions/checkpoint/', {'label': 'x'}, format='json').data
+        resp = client.delete(f'/api/sites/{site_id}/versions/{cp["id"]}/')
+        assert resp.status_code == 204
+        assert not SiteVersion.objects.filter(pk=cp['id']).exists()
+
+    def test_cannot_touch_another_users_checkpoint(self, client, alice, bob):
+        site_id = self._create_site(client, alice[1])
+        cp = client.post(f'/api/sites/{site_id}/versions/checkpoint/', {'label': 'mine'}, format='json').data
+        _auth(client, bob[1])
+        assert client.delete(f'/api/sites/{site_id}/versions/{cp["id"]}/').status_code == 404
+        assert client.post(f'/api/sites/{site_id}/versions/{cp["id"]}/overwrite/', format='json').status_code == 404

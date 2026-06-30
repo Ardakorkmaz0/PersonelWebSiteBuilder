@@ -203,7 +203,8 @@ class SiteVersion(models.Model):
     column.
     """
 
-    MAX_VERSIONS_PER_SITE = 30
+    MAX_VERSIONS_PER_SITE = 30      # auto-save snapshots (FIFO)
+    MAX_CHECKPOINTS_PER_SITE = 25   # pinned, named "save slots" the user keeps
     SOURCE_CHOICES = (
         ('save', 'Save'),
         ('restore', 'Restore'),
@@ -219,6 +220,9 @@ class SiteVersion(models.Model):
     html = models.TextField(blank=True, default='')
     label = models.CharField(max_length=120, blank=True, default='')
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='save')
+    # Pinned rows are named "checkpoints" (Resident-Evil-style save slots): the
+    # user chose to keep them, so the auto-save FIFO never evicts them.
+    pinned = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -229,34 +233,46 @@ class SiteVersion(models.Model):
         return f'version#{self.pk} ({self.site_id} @ {self.created_at:%Y-%m-%d %H:%M})'
 
     @classmethod
-    def snapshot(cls, site, source='save', label=''):
-        """Create a fresh snapshot of `site` and prune over-cap rows.
-
-        Identical to the previous snapshot's schema+html → skipped (no
-        point keeping duplicates). Returns the created row or None when
-        skipped.
-        """
-        latest = cls.objects.filter(site=site).first()
-        if (
-            latest is not None
-            and latest.schema == site.schema
-            and latest.html == site.html
+    def _prune(cls, site):
+        """Cap auto-saves and checkpoints INDEPENDENTLY, so a burst of
+        auto-saves can never evict a checkpoint the user pinned."""
+        for is_pinned, cap in (
+            (False, cls.MAX_VERSIONS_PER_SITE),
+            (True, cls.MAX_CHECKPOINTS_PER_SITE),
         ):
-            return None
+            keep = list(
+                cls.objects.filter(site=site, pinned=is_pinned)
+                .order_by('-created_at')
+                .values_list('id', flat=True)[:cap]
+            )
+            cls.objects.filter(site=site, pinned=is_pinned).exclude(id__in=keep).delete()
+
+    @classmethod
+    def snapshot(cls, site, source='save', label='', pinned=False, force=False):
+        """Create a snapshot of `site` and prune over-cap rows.
+
+        Auto-saves (pinned=False) de-dupe against the latest snapshot and are
+        FIFO-capped. A pinned checkpoint always records (skips de-dup) and is
+        kept until the user deletes it (or the separate checkpoint cap is hit).
+        Returns the created row, or None when an auto-save was de-duped.
+        """
+        if not pinned and not force:
+            latest = cls.objects.filter(site=site).first()
+            if (
+                latest is not None
+                and latest.schema == site.schema
+                and latest.html == site.html
+            ):
+                return None
         row = cls.objects.create(
             site=site,
             schema=site.schema,
             html=site.html,
             source=source,
             label=label,
+            pinned=pinned,
         )
-        # FIFO prune: keep only the newest MAX_VERSIONS_PER_SITE rows per site.
-        keep_ids = list(
-            cls.objects.filter(site=site)
-            .order_by('-created_at')
-            .values_list('id', flat=True)[: cls.MAX_VERSIONS_PER_SITE]
-        )
-        cls.objects.filter(site=site).exclude(id__in=keep_ids).delete()
+        cls._prune(site)
         return row
 
 

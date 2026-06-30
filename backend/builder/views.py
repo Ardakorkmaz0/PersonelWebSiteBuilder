@@ -374,6 +374,44 @@ class SiteViewSet(viewsets.ModelViewSet):
             SiteVersion.snapshot(site, source='restore', label=f'restored from v{version.pk}')
         return Response(SiteSerializer(site).data)
 
+    # --- Named "checkpoints" (Resident-Evil-style save slots) ---------------
+    # A pinned snapshot of the CURRENTLY SAVED site that the auto-save FIFO never
+    # evicts. The client saves first (so the row captures the latest edits), then
+    # creates / overwrites a checkpoint.
+
+    @action(detail=True, methods=['post'], url_path='versions/checkpoint')
+    def create_checkpoint(self, request, pk=None):
+        site = self.get_object()
+        label = (request.data.get('label') or '').strip()[:120] or 'Checkpoint'
+        row = SiteVersion.snapshot(site, source='manual', label=label, pinned=True)
+        return Response(
+            SiteVersionSerializer(row, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['post'], url_path=r'versions/(?P<version_id>[0-9]+)/overwrite')
+    def overwrite_version(self, request, pk=None, version_id=None):
+        site = self.get_object()
+        try:
+            version = SiteVersion.objects.get(pk=version_id, site=site)
+        except SiteVersion.DoesNotExist:
+            return Response({'detail': 'Version not found for this site.'}, status=status.HTTP_404_NOT_FOUND)
+        # Save the current state INTO this slot, and bump it to the top.
+        version.schema = site.schema
+        version.html = site.html
+        version.pinned = True
+        version.created_at = timezone.now()
+        version.save(update_fields=['schema', 'html', 'pinned', 'created_at'])
+        return Response(SiteVersionSerializer(version, context={'request': request}).data)
+
+    @action(detail=True, methods=['delete'], url_path=r'versions/(?P<version_id>[0-9]+)')
+    def delete_version(self, request, pk=None, version_id=None):
+        site = self.get_object()
+        deleted, _ = SiteVersion.objects.filter(pk=version_id, site=site).delete()
+        if not deleted:
+            return Response({'detail': 'Version not found for this site.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class UploadedImageViewSet(viewsets.ModelViewSet):
     """List / upload / delete the current user's images.

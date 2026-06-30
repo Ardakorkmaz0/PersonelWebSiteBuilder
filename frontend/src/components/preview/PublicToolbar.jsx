@@ -29,6 +29,19 @@ function sourceOf(site) {
   }
 }
 
+// The creator's avatar (their uploaded photo, or an initial fallback).
+function CreatorAvatar({ url, name }) {
+  const letter = (name || '?').trim().charAt(0).toUpperCase()
+  if (url) {
+    return <img src={url} alt="" className="h-6 w-6 rounded-full object-cover" />
+  }
+  return (
+    <span className="grid h-6 w-6 place-items-center rounded-full bg-[#eef2ff] text-[11px] font-bold text-[#4f46e5]">
+      {letter}
+    </span>
+  )
+}
+
 // Floating toolbar on a public site page: view the code, or "Use this" to clone
 // the site into your own account and edit it.
 export default function PublicToolbar({ site }) {
@@ -130,6 +143,18 @@ export default function PublicToolbar({ site }) {
         >
           <FlagIcon size={14} /> Report
         </button>
+        {/* Who made this site — their profile photo, linking to their public
+            profile (so a visitor can see the creator's other published sites). */}
+        {site?.owner_id && (
+          <Link
+            to={`/u/${site.owner_id}`}
+            title={`By ${site.owner_display_name || site.owner_username} — see their profile`}
+            className="flex items-center gap-1.5 rounded-full border border-[#d1d5db] bg-white/90 py-1 pl-1 pr-3 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
+          >
+            <CreatorAvatar url={site.owner_avatar_url} name={site.owner_display_name || site.owner_username} />
+            <span className="max-w-[120px] truncate">{site.owner_display_name || site.owner_username}</span>
+          </Link>
+        )}
       </div>
 
       {showCode && (

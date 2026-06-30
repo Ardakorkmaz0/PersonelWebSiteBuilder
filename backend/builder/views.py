@@ -554,7 +554,7 @@ class PublicSiteView(APIView):
         # renders each card via this same endpoint) and React StrictMode / tab-
         # refocus refetches don't inflate the count. The real page calls the POST
         # once per browser session.
-        return Response(PublicSiteSerializer(site).data)
+        return Response(PublicSiteSerializer(site, context={'request': request}).data)
 
 
 class SiteViewCountView(APIView):

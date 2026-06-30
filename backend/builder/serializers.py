@@ -296,11 +296,30 @@ class SiteSerializer(serializers.ModelSerializer):
 
 
 class PublicSiteSerializer(serializers.ModelSerializer):
-    """Read-only representation served on the public /site/:slug page."""
+    """Read-only representation served on the public /site/:slug page. Carries
+    the creator's id / name / avatar so the public view can show & link to the
+    person who made the site."""
+
+    owner_id = serializers.IntegerField(source='owner.id', read_only=True)
+    owner_username = serializers.CharField(source='owner.username', read_only=True)
+    owner_display_name = serializers.SerializerMethodField()
+    owner_avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Site
-        fields = ('id', 'title', 'slug', 'schema', 'html', 'published', 'updated_at')
+        fields = ('id', 'title', 'slug', 'schema', 'html', 'published', 'updated_at',
+                  'owner_id', 'owner_username', 'owner_display_name', 'owner_avatar_url')
+
+    def _profile(self, obj):
+        return getattr(obj.owner, 'profile', None)
+
+    def get_owner_display_name(self, obj):
+        prof = self._profile(obj)
+        return (prof.display_name if prof and prof.display_name else '') or obj.owner.username
+
+    def get_owner_avatar_url(self, obj):
+        prof = self._profile(obj)
+        return _absolute_image_url(prof.avatar if prof else None, self.context)
 
 
 class SiteVersionSerializer(serializers.ModelSerializer):

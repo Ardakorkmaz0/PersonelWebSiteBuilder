@@ -155,9 +155,6 @@ export default function EditorPage() {
   const canRedo = useEditorStore((s) => s.future.length > 0)
   const markSaved = useEditorStore((s) => s.markSaved)
   const dirty = useEditorStore((s) => s.dirty)
-  // Edit counter — bumps on each recorded change, so the auto-save effect can
-  // debounce off "the user is still editing".
-  const histLen = useEditorStore((s) => s.past.length)
   const authUser = useAuthStore((s) => s.user)
   const goBack = useGoBack('/')
   const theme = useEditorStore((s) => s.schema.theme)
@@ -188,9 +185,10 @@ export default function EditorPage() {
   const [error, setError] = useState('')
   const [activeType, setActiveType] = useState(null)
   const [justSaved, setJustSaved] = useState(false)
-  // Auto-save: a quiet, debounced background save. 'idle'|'saving'|'saved'|'error'.
-  // It NEVER touches the undo/redo history (markSaved only clears `dirty`), so you
-  // can still undo after an auto-save — and every save the server keeps as a
+  // Auto-save status: 'idle'|'saving'|'saved'|'error'. Auto-save runs only at
+  // boundaries (tab hidden / leaving the editor), never on every keystroke. It
+  // NEVER touches the undo/redo history (markSaved only clears `dirty`), so you
+  // can still undo after a save — and every save the server keeps as a
   // restorable version (the History panel), so auto-saved states are recoverable.
   const [autoSaveState, setAutoSaveState] = useState('idle')
   const autoSavingRef = useRef(false)
@@ -400,18 +398,28 @@ export default function EditorPage() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [dirty, htmlDirty])
 
-  // Debounced auto-save: a couple of seconds after you stop editing, persist to
-  // the server in the background. Reschedules on every further edit (histLen /
-  // siteHtml change), waits out the initial load, and never disables the
-  // toolbar — the manual Save still exists for the linked-file write. Undo is
-  // unaffected, and each save is a restorable server version.
+  // Auto-save only at natural BOUNDARIES — not on every edit (that churned the
+  // toolbar and saved constantly). We persist in the background when the tab is
+  // hidden (switching away, closing, or refreshing) and when you leave the
+  // editor (unmount). A ref carries the latest save + dirty flags so the
+  // once-bound listeners never fire a stale closure. Undo is unaffected, and the
+  // manual Save still owns the linked-file write.
+  const saveLifecycleRef = useRef(null)
   useEffect(() => {
-    if (loading) return undefined
-    if (!dirty && !htmlDirty) return undefined
-    const t = setTimeout(() => { save(published, { auto: true }) }, 2500)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, htmlDirty, histLen, siteHtml, loading])
+    saveLifecycleRef.current = { save, dirty, htmlDirty, published, loading }
+  })
+  useEffect(() => {
+    const flush = () => {
+      const s = saveLifecycleRef.current
+      if (s && !s.loading && (s.dirty || s.htmlDirty)) s.save(s.published, { auto: true })
+    }
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush() }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      flush() // leaving the editor (unmount) → save anything still pending
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -1046,16 +1054,20 @@ export default function EditorPage() {
           title="Comma-separated tags for discovery"
           className="w-28 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none"
         />
-        {/* Save status — reflects the debounced auto-save. */}
-        {autoSaveState === 'error' ? (
-          <span className="shrink-0 whitespace-nowrap text-xs font-medium text-red-500">Auto-save failed — click Save</span>
-        ) : saving || autoSaveState === 'saving' ? (
-          <span className="shrink-0 whitespace-nowrap text-xs text-[#6b7280]">Saving…</span>
-        ) : (dirty || htmlDirty) ? (
-          <span className="shrink-0 whitespace-nowrap text-xs text-amber-500">Unsaved — autosaves shortly</span>
-        ) : justSaved || autoSaveState === 'saved' ? (
-          <span className="shrink-0 whitespace-nowrap text-xs text-[#15803d]">All changes saved &#10003;</span>
-        ) : null}
+        {/* Save status in a FIXED-WIDTH slot so the changing text never reflows
+            the toolbar (the churn the user hit). Auto-save now fires only when
+            you leave / refresh, so this mostly just reads Unsaved → Saved. */}
+        <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right text-xs font-medium">
+          {autoSaveState === 'error' ? (
+            <span className="text-red-500">Save failed</span>
+          ) : saving || autoSaveState === 'saving' ? (
+            <span className="text-[#6b7280]">Saving…</span>
+          ) : (dirty || htmlDirty) ? (
+            <span className="text-amber-500">Unsaved</span>
+          ) : justSaved || autoSaveState === 'saved' ? (
+            <span className="text-[#15803d]">Saved &#10003;</span>
+          ) : null}
+        </span>
 
         {/* Flexible spacer: on a wide screen it expands to pin the toolbar to the
             right edge; the moment the toolbar can't fit and wraps to a second

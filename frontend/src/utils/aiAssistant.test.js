@@ -19,7 +19,31 @@ import {
   setModel,
   getEndpoint,
   setEndpoint,
+  extractJsonObject,
 } from './aiAssistant.js'
+
+describe('extractJsonObject (single-component AI patch parsing)', () => {
+  it('parses a bare JSON object', () => {
+    expect(extractJsonObject('{"styles":{"backgroundColor":"#ef4444"}}'))
+      .toEqual({ styles: { backgroundColor: '#ef4444' } })
+  })
+
+  it('strips a ```json fence', () => {
+    const out = extractJsonObject('```json\n{"props":{"text":"Hi"}}\n```')
+    expect(out).toEqual({ props: { text: 'Hi' } })
+  })
+
+  it('ignores leading prose and trailing text', () => {
+    const out = extractJsonObject('Sure! Here you go:\n{"styles":{"color":"#fff"}}\nDone.')
+    expect(out).toEqual({ styles: { color: '#fff' } })
+  })
+
+  it('returns null for non-JSON', () => {
+    expect(extractJsonObject('no json here')).toBeNull()
+    expect(extractJsonObject('')).toBeNull()
+    expect(extractJsonObject(null)).toBeNull()
+  })
+})
 
 describe('AI_PROVIDERS', () => {
   it('exposes the four providers the editor knows about', () => {

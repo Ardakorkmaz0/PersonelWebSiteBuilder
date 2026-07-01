@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
 import SegmentedToggle from './SegmentedToggle.jsx'
+import AiComponentEdit from './AiComponentEdit.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
 import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS, normalizeTheme } from '../../utils/theme.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
@@ -1251,6 +1252,14 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
             </button>
           )}
         </div>
+
+        <AiComponentEdit
+          component={component}
+          onApply={(styles, props) => {
+            if (styles && Object.keys(styles).length) updateStyles(component.id, styles)
+            if (props && Object.keys(props).length) updateProps(component.id, props)
+          }}
+        />
 
         {contentSection}
         {linkSection}

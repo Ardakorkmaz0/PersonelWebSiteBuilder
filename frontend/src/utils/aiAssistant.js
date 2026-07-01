@@ -1759,3 +1759,117 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
 
   return { text: finalText || 'Done.', toolCallCount: calls.length, calls }
 }
+
+// ---- Scoped, single-component AI edit -------------------------------------
+// Powers the ✨ "ask AI to restyle / rewrite THIS element" affordance in the
+// properties panel: a single-shot completion (no tools, no rounds) that returns
+// a JSON patch applied to ONE component — its styles and/or props — so the AI
+// touches only the selected element, never the rest of the page.
+
+// Generic single-shot completion against the active provider. Returns the raw
+// model text. Mirrors callHtmlModeOnce's transport with a caller-supplied
+// system prompt + a tight token budget.
+async function completeText(systemPrompt, userText, { temperature = 0.4, maxTokens = 900 } = {}) {
+  const provider = getProvider()
+  const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
+  const apiKey = getApiKey(provider)
+  if (!apiKey && providerInfo?.needsKey !== false) {
+    throw new Error(`Set your ${providerInfo?.label || provider} API key in the editor settings (the AI button).`)
+  }
+  if (provider === 'gemini') {
+    const modelId = getModel('gemini')
+    const url = `${buildGeminiEndpoint(modelId)}?key=${encodeURIComponent(apiKey)}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { role: 'user', parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userText }] }],
+        generationConfig: { temperature, maxOutputTokens: maxTokens },
+      }),
+    })
+    if (!res.ok) throw new Error(describeApiError(res.status, await res.text(), 'gemini'))
+    const data = await res.json()
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  }
+  let url
+  let extraHeaders = {}
+  let extraBody = {}
+  let modelId
+  if (provider === 'groq') {
+    url = GROQ_ENDPOINT
+    modelId = getModel('groq')
+  } else if (provider === 'openrouter') {
+    url = OPENROUTER_ENDPOINT
+    modelId = getModel('openrouter')
+    extraHeaders = {
+      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
+      'X-Title': 'PersonelWebSiteBuilder',
+    }
+  } else {
+    const base = getEndpoint('local') || 'http://localhost:11434/v1'
+    url = `${resolveBackendBase()}${LOCAL_PROXY_PATH}/proxy/`
+    modelId = getModel('local')
+    extraBody = { _localBase: base }
+  }
+  const headers = { 'Content-Type': 'application/json', ...extraHeaders }
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: modelId,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userText },
+      ],
+      temperature,
+      max_tokens: maxTokens,
+      ...extraBody,
+    }),
+  })
+  if (!res.ok) throw new Error(describeApiError(res.status, await res.text(), provider))
+  const data = await res.json()
+  return data?.choices?.[0]?.message?.content || ''
+}
+
+// Pull the first JSON object out of a model reply (tolerates ```json fences +
+// leading prose). Exported for the test suite.
+export function extractJsonObject(text) {
+  if (typeof text !== 'string') return null
+  const s = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
+  const start = s.indexOf('{')
+  const end = s.lastIndexOf('}')
+  if (start === -1 || end === -1 || end < start) return null
+  try {
+    return JSON.parse(s.slice(start, end + 1))
+  } catch {
+    return null
+  }
+}
+
+const COMPONENT_EDIT_SYSTEM = `You restyle / rewrite ONE component inside a website builder. You get its type, current props, and current inline CSS styles (camelCase keys), plus a user instruction. Return ONLY a JSON object with the changes to APPLY to THIS component — no prose, no markdown fence:
+{"styles": {"backgroundColor": "#ef4444"}, "props": {"text": "New copy"}}
+Rules:
+- Change ONLY what the instruction asks; keep everything else. Include a key ONLY when you want to change it.
+- CSS keys are camelCase (backgroundColor, borderRadius, fontSize, boxShadow, padding). Colours as hex.
+- To change wording, set the SAME prop key the component already uses for its text (see the current props).
+- All user-facing text must be in English. Output valid JSON only.`
+
+// Ask the active model to edit a SINGLE component. Returns { styles, props }
+// (either may be empty). Throws on provider / parse errors.
+export async function aiEditComponent(component, instruction) {
+  if (!component || !instruction || !instruction.trim()) return { styles: {}, props: {} }
+  const userText = [
+    `Component type: ${component.type}`,
+    `Current props: ${JSON.stringify(component.props || {})}`,
+    `Current styles: ${JSON.stringify(component.styles || {})}`,
+    `Instruction: ${instruction.trim()}`,
+  ].join('\n')
+  const raw = await completeText(COMPONENT_EDIT_SYSTEM, userText)
+  const patch = extractJsonObject(raw) || {}
+  return {
+    styles: patch.styles && typeof patch.styles === 'object' ? patch.styles : {},
+    props: patch.props && typeof patch.props === 'object' ? patch.props : {},
+  }
+}

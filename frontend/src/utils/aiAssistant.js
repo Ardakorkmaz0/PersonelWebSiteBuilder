@@ -1766,71 +1766,83 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
 // a JSON patch applied to ONE component — its styles and/or props — so the AI
 // touches only the selected element, never the rest of the page.
 
-// Generic single-shot completion against the active provider. Returns the raw
-// model text. Mirrors callHtmlModeOnce's transport with a caller-supplied
-// system prompt + a tight token budget.
-async function completeText(systemPrompt, userText, { temperature = 0.4, maxTokens = 900 } = {}) {
-  const provider = getProvider()
-  const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
-  const apiKey = getApiKey(provider)
+// Generic single-shot completion. Returns the raw model text. Mirrors
+// callHtmlModeOnce's transport, plus the chat's ONE-shot 429 retry, with a
+// caller-supplied system prompt + `provider` override (so aiEditComponent can
+// fail over across providers without mutating the active one).
+async function completeText(systemPrompt, userText, { temperature = 0.4, maxTokens = 900, provider } = {}) {
+  const providerId = provider || getProvider()
+  const providerInfo = AI_PROVIDERS.find((p) => p.id === providerId)
+  const apiKey = getApiKey(providerId)
   if (!apiKey && providerInfo?.needsKey !== false) {
-    throw new Error(`Set your ${providerInfo?.label || provider} API key in the editor settings (the AI button).`)
+    throw new Error(`Set your ${providerInfo?.label || providerId} API key in the editor settings (the AI button).`)
   }
-  if (provider === 'gemini') {
-    const modelId = getModel('gemini')
-    const url = `${buildGeminiEndpoint(modelId)}?key=${encodeURIComponent(apiKey)}`
-    const res = await fetch(url, {
-      method: 'POST',
+
+  // One request shape per provider family (Gemini generateContent vs the
+  // OpenAI-compatible chat/completions used by Groq / OpenRouter / local).
+  let req
+  if (providerId === 'gemini') {
+    req = {
+      url: `${buildGeminiEndpoint(getModel('gemini'))}?key=${encodeURIComponent(apiKey)}`,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { role: 'user', parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userText }] }],
         generationConfig: { temperature, maxOutputTokens: maxTokens },
       }),
-    })
-    if (!res.ok) throw new Error(describeApiError(res.status, await res.text(), 'gemini'))
-    const data = await res.json()
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  }
-  let url
-  let extraHeaders = {}
-  let extraBody = {}
-  let modelId
-  if (provider === 'groq') {
-    url = GROQ_ENDPOINT
-    modelId = getModel('groq')
-  } else if (provider === 'openrouter') {
-    url = OPENROUTER_ENDPOINT
-    modelId = getModel('openrouter')
-    extraHeaders = {
-      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
-      'X-Title': 'PersonelWebSiteBuilder',
+      parse: (d) => d?.candidates?.[0]?.content?.parts?.[0]?.text || '',
     }
   } else {
-    const base = getEndpoint('local') || 'http://localhost:11434/v1'
-    url = `${resolveBackendBase()}${LOCAL_PROXY_PATH}/proxy/`
-    modelId = getModel('local')
-    extraBody = { _localBase: base }
+    let url
+    let extraHeaders = {}
+    let extraBody = {}
+    if (providerId === 'groq') {
+      url = GROQ_ENDPOINT
+    } else if (providerId === 'openrouter') {
+      url = OPENROUTER_ENDPOINT
+      extraHeaders = {
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
+        'X-Title': 'PersonelWebSiteBuilder',
+      }
+    } else {
+      url = `${resolveBackendBase()}${LOCAL_PROXY_PATH}/proxy/`
+      extraBody = { _localBase: getEndpoint('local') || 'http://localhost:11434/v1' }
+    }
+    const headers = { 'Content-Type': 'application/json', ...extraHeaders }
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+    req = {
+      url,
+      headers,
+      body: JSON.stringify({
+        model: getModel(providerId),
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userText },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+        ...extraBody,
+      }),
+      parse: (d) => d?.choices?.[0]?.message?.content || '',
+    }
   }
-  const headers = { 'Content-Type': 'application/json', ...extraHeaders }
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userText },
-      ],
-      temperature,
-      max_tokens: maxTokens,
-      ...extraBody,
-    }),
-  })
-  if (!res.ok) throw new Error(describeApiError(res.status, await res.text(), provider))
-  const data = await res.json()
-  return data?.choices?.[0]?.message?.content || ''
+
+  // A transient per-minute 429 self-heals with one short wait + retry; anything
+  // else (or a second 429) throws with the friendly describeApiError message,
+  // which aiEditComponent treats as failover-worthy.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(req.url, { method: 'POST', headers: req.headers, body: req.body })
+    if (res.ok) return req.parse(await res.json())
+    const rawText = await res.text()
+    if (res.status === 429 && attempt === 0) {
+      let parsed = null
+      try { parsed = JSON.parse(rawText) } catch { /* not JSON */ }
+      await new Promise((r) => setTimeout(r, Math.min(6000, parseRetryDelayMs(parsed, 4000))))
+      continue
+    }
+    throw new Error(describeApiError(res.status, rawText, providerId))
+  }
+  throw new Error(describeApiError(429, '', providerId))
 }
 
 // Pull the first JSON object out of a model reply (tolerates ```json fences +
@@ -1856,8 +1868,10 @@ Rules:
 - To change wording, set the SAME prop key the component already uses for its text (see the current props).
 - All user-facing text must be in English. Output valid JSON only.`
 
-// Ask the active model to edit a SINGLE component. Returns { styles, props }
-// (either may be empty). Throws on provider / parse errors.
+// Ask the model to edit a SINGLE component. Returns { styles, props } (either
+// may be empty). Tries the active provider first, then fails over to any other
+// configured provider on a quota/429/unreachable error — same resilience as the
+// chat — so a full Gemini free tier doesn't dead-end the ✨ edit.
 export async function aiEditComponent(component, instruction) {
   if (!component || !instruction || !instruction.trim()) return { styles: {}, props: {} }
   const userText = [
@@ -1866,10 +1880,23 @@ export async function aiEditComponent(component, instruction) {
     `Current styles: ${JSON.stringify(component.styles || {})}`,
     `Instruction: ${instruction.trim()}`,
   ].join('\n')
-  const raw = await completeText(COMPONENT_EDIT_SYSTEM, userText)
-  const patch = extractJsonObject(raw) || {}
-  return {
-    styles: patch.styles && typeof patch.styles === 'object' ? patch.styles : {},
-    props: patch.props && typeof patch.props === 'object' ? patch.props : {},
+  const candidates = readyProviders()
+  if (!candidates.length) {
+    throw new Error('No AI provider is set up yet. Open the AI button and paste any free key (OpenRouter is recommended — the biggest free pool).')
   }
+  let lastErr = null
+  for (const p of candidates) {
+    try {
+      const raw = await completeText(COMPONENT_EDIT_SYSTEM, userText, { provider: p.id })
+      const patch = extractJsonObject(raw) || {}
+      return {
+        styles: patch.styles && typeof patch.styles === 'object' ? patch.styles : {},
+        props: patch.props && typeof patch.props === 'object' ? patch.props : {},
+      }
+    } catch (e) {
+      lastErr = e
+      if (!isFailoverWorthy(e)) throw e // a real bug — surface it, don't mask
+    }
+  }
+  throw lastErr || new Error('All AI providers are out of quota or unreachable.')
 }

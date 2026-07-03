@@ -20,4 +20,7 @@ export function matchesQuery(query) {
 
 // The editor chrome (two fixed side rails + multi-row header) needs at least
 // ~1024px; below that the rails collapse and open as overlays instead.
-export const NARROW_EDITOR_QUERY = '(max-width: 1023px)'
+// .98 instead of a round 1023 so fractional viewport widths (e.g. 1023.33 on
+// scaled displays) fall on the same side of the boundary as Tailwind's lg:
+// (min-width: 1024px) — otherwise the sliver in between mixes both layouts.
+export const NARROW_EDITOR_QUERY = '(max-width: 1023.98px)'

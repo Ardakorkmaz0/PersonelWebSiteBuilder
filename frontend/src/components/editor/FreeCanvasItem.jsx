@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, TabsEditor } from './FlowCanvasItem.jsx'
@@ -63,6 +64,7 @@ export default function FreeCanvasItem({
   const toggleSelect = useEditorStore((s) => s.toggleSelect)
   const setLayout = useEditorStore((s) => s.setLayout)
   const setLayoutMany = useEditorStore((s) => s.setLayoutMany)
+  const updateProps = useEditorStore((s) => s.updateProps)
   const setDragGuides = useEditorStore((s) => s.setDragGuides)
   const clearDragGuides = useEditorStore((s) => s.clearDragGuides)
   const remove = useEditorStore((s) => s.removeComponent)
@@ -100,6 +102,64 @@ export default function FreeCanvasItem({
   const hidden =
     viewport === 'mobile' ? component.hiddenMobile : component.hidden
 
+  // Pinned (fixed/sticky) components stay glued to the visible canvas band
+  // while the user scrolls — mirroring how the published site pins them to
+  // the viewport. The wrapper keeps its absolute layout position (drag /
+  // resize math is untouched); a transform written straight to the DOM on
+  // each scroll tick moves it visually, so scrolling never re-renders React.
+  const props = component.props || {}
+  const pinMode =
+    props.scrollBehavior === 'fixed' || props.scrollBehavior === 'sticky'
+      ? props.scrollBehavior
+      : null
+  const wrapRef = useRef(null)
+  const pinY = props.pinY === 'bottom' ? 'bottom' : 'top'
+  const pinX = ['right', 'center'].includes(props.pinX) ? props.pinX : 'left'
+  const pinOffsetY = Number(props.pinOffsetY) || 0
+  const pinOffsetX = Number(props.pinOffsetX) || 0
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!pinMode || !el) return undefined
+    const scroller = document.getElementById('canvas-scroll')
+    const canvas = document.getElementById('free-canvas')
+    if (!scroller || !canvas) return undefined
+    const apply = () => {
+      const sRect = scroller.getBoundingClientRect()
+      const cRect = canvas.getBoundingClientRect()
+      // The visible scrollport band, in canvas coordinates (edit mode is 1:1).
+      const viewTop = sRect.top - cRect.top
+      const viewBottom = viewTop + sRect.height
+      let targetY = pinY === 'bottom' ? viewBottom - h - pinOffsetY : viewTop + pinOffsetY
+      if (pinMode === 'sticky') {
+        // Sticky scrolls with the page until it reaches the pinned edge.
+        targetY = pinY === 'bottom' ? Math.min(y, targetY) : Math.max(y, targetY)
+      }
+      targetY = Math.min(Math.max(targetY, 0), Math.max(0, cRect.height - h))
+      // Fixed pins X to the artboard (= the site viewport); sticky keeps design X.
+      let targetX = x
+      if (pinMode === 'fixed') {
+        targetX =
+          pinX === 'right'
+            ? cRect.width - w - pinOffsetX
+            : pinX === 'center'
+              ? (cRect.width - w) / 2 + pinOffsetX
+              : pinOffsetX
+        targetX = Math.min(Math.max(targetX, 0), Math.max(0, cRect.width - w))
+      }
+      const tx = Math.round(targetX - x)
+      const ty = Math.round(targetY - y)
+      el.style.transform = tx || ty ? `translate(${tx}px, ${ty}px)` : ''
+    }
+    apply()
+    scroller.addEventListener('scroll', apply, { passive: true })
+    window.addEventListener('resize', apply)
+    return () => {
+      scroller.removeEventListener('scroll', apply)
+      window.removeEventListener('resize', apply)
+      el.style.transform = ''
+    }
+  }, [pinMode, pinY, pinX, pinOffsetY, pinOffsetX, x, y, w, h, viewport])
+
   function startMove(e) {
     if (e.button !== 0) return
     if (brushMode) {
@@ -123,6 +183,28 @@ export default function FreeCanvasItem({
     const grid = state.gridStep
     const sx = e.clientX
     const sy = e.clientY
+    // A FIXED-pinned item ignores its design x/y on the published site, so
+    // dragging it edits the PIN OFFSETS instead — the item follows the
+    // pointer and stays pinned (the scroll effect repositions it live).
+    if (pinMode === 'fixed' && !alreadyMulti) {
+      const baseOffX = pinOffsetX
+      const baseOffY = pinOffsetY
+      const onMovePin = (ev) => {
+        const dx = ev.clientX - sx
+        const dy = ev.clientY - sy
+        updateProps(component.id, {
+          pinOffsetX: Math.round(baseOffX + (pinX === 'right' ? -dx : dx)),
+          pinOffsetY: Math.round(baseOffY + (pinY === 'bottom' ? -dy : dy)),
+        })
+      }
+      const onUpPin = () => {
+        window.removeEventListener('pointermove', onMovePin)
+        window.removeEventListener('pointerup', onUpPin)
+      }
+      window.addEventListener('pointermove', onMovePin)
+      window.addEventListener('pointerup', onUpPin)
+      return
+    }
     // Snapshot the dragged group's origins + the snap siblings/artboard ONCE.
     const page = selectCurrentPage(state)
     const isMobile = state.viewport === 'mobile'
@@ -212,6 +294,7 @@ export default function FreeCanvasItem({
 
   return (
     <div
+      ref={wrapRef}
       data-cid={component.id}
       onPointerDown={startMove}
       onClick={(e) => {
@@ -226,7 +309,9 @@ export default function FreeCanvasItem({
         width: w,
         height: h,
         cursor: brushMode ? BRUSH_CURSOR : linkMode ? 'crosshair' : 'move',
-        zIndex: isSelected || isLinkSource ? 20 : 1,
+        // Pinned items float above the page content while scrolled, mirroring
+        // their published z-order; selection chrome still wins.
+        zIndex: isSelected || isLinkSource ? 20 : pinMode ? 10 : 1,
         opacity: hidden ? 0.35 : 1,
         // Armed link source stays a solid blue ring (with a light wash) until
         // the next click picks the target — same affordance as HTML mode.
@@ -268,6 +353,20 @@ export default function FreeCanvasItem({
           className="rounded-lg bg-[#111827]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           Hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}
+        </span>
+      )}
+
+      {pinMode && (
+        <span
+          title={
+            pinMode === 'fixed'
+              ? 'Pinned to the screen — stays put while the page scrolls. Drag to adjust the pin offsets.'
+              : 'Sticky — scrolls with the page until it reaches the edge, then stays.'
+          }
+          style={{ position: 'absolute', bottom: 2, left: 2, zIndex: 25 }}
+          className="rounded-lg bg-[#4f46e5]/85 px-1.5 py-0.5 text-[10px] font-medium text-white"
+        >
+          {pinMode === 'fixed' ? 'Pinned' : 'Sticky'}
         </span>
       )}
 

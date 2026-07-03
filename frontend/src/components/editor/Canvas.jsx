@@ -17,6 +17,10 @@ export default function Canvas({
   brushColor = '#4f46e5',
   brushTarget = 'smart',
   onBrushUse = () => {},
+  // Tap-to-place: an armed palette item (touch fallback for drag-and-drop).
+  // A click/tap on the bare canvas calls onPlaceAt with canvas coordinates.
+  pendingPlace = null,
+  onPlaceAt = () => {},
 }) {
   const page = useEditorStore(selectCurrentPage)
   const components = page.components
@@ -82,6 +86,14 @@ export default function Canvas({
     .filter(Boolean)
 
   function startMarquee(e) {
+    // An armed palette item places itself where the user taps/clicks —
+    // before marquee/deselect logic so placement always wins while armed.
+    if (pendingPlace) {
+      if (e.button !== 0) return
+      const rect = canvasElRef.current.getBoundingClientRect()
+      onPlaceAt(e.clientX - rect.left, e.clientY - rect.top)
+      return
+    }
     if (brushMode) {
       if (e.button !== 0) return
       if (e.target === canvasElRef.current && (brushTarget === 'smart' || brushTarget === 'fill')) {
@@ -156,7 +168,7 @@ export default function Canvas({
         // backgroundColor (not the `background` shorthand) so it can coexist with
         // the grid overlay's backgroundImage/backgroundSize without React warning.
         backgroundColor: background,
-        cursor: brushMode ? BRUSH_CURSOR : undefined,
+        cursor: pendingPlace ? 'crosshair' : brushMode ? BRUSH_CURSOR : undefined,
         fontFamily: themeFontFamily,
         // Clip selection chrome (resize handles, outline) and any off-artboard
         // content at the canvas edge so you can't scroll into empty space beside

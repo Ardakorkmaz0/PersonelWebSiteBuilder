@@ -141,7 +141,7 @@ function PalettePreviewPanel({ preview, onClose }) {
 //    (click arms placement, drag drops the raw HTML into the page iframe).
 //  - Free canvas (no `onPick`): most variants carry HTML + size and become an
 //    editable HtmlEmbed; structural widgets can carry native component data.
-function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
+function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
   const [w, h] = htmlSize(type, variant)
   const nativeCanvas = !onPick && NATIVE_CANVAS_TYPES.has(type)
   const preset = variant.id === 'default' ? null : variant.id
@@ -194,8 +194,18 @@ function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
       {...listeners}
       {...attributes}
       onMouseEnter={inspect}
-      onClick={inspect}
-      title={`Drag onto the canvas — ${variant.label}`}
+      onClick={() => {
+        inspect()
+        // Tap-to-place fallback (touch devices can't reliably start a drag):
+        // arm the placement, then a tap on the canvas drops the component.
+        onArm?.(
+          nativeCanvas
+            ? { type, preset, w, h, label: variant.label }
+            : { type, preset, html: variant.html, w, h, label: variant.label },
+        )
+      }}
+      title={`Click to place, or drag onto the canvas — ${variant.label}`}
+      style={{ touchAction: 'manipulation' }}
       className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-1.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
     >
       {preview}
@@ -204,7 +214,7 @@ function VariantSwatch({ type, variant, onPick, onInspect, wide }) {
 }
 
 // A component category: click the row to reveal its variants. Same in both modes.
-function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
+function PaletteCategory({ item, onPick, onArm, onInspect, open, onToggle }) {
   const variants = variantsForType(item.type)
   const wide = WIDE_HTML.has(item.type)
   const firstVariant = variants[0]
@@ -238,7 +248,7 @@ function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
       {open && variants.length > 0 && (
         <div className="grid grid-cols-2 gap-2 border-t border-[#f1f1f4] bg-[#fafafa] p-2">
           {variants.map((v) => (
-            <VariantSwatch key={v.id} type={item.type} variant={v} onPick={onPick} onInspect={onInspect} wide={wide} />
+            <VariantSwatch key={v.id} type={item.type} variant={v} onPick={onPick} onArm={onArm} onInspect={onInspect} wide={wide} />
           ))}
         </div>
       )}
@@ -248,7 +258,7 @@ function PaletteCategory({ item, onPick, onInspect, open, onToggle }) {
 
 // A ready-made section block, dual-mode (same library as the variants). HTML mode
 // inserts the raw section HTML; the free canvas drops it as one `html` component.
-function BlockCard({ block, onPick, onInspect, theme }) {
+function BlockCard({ block, onPick, onArm, onInspect, theme }) {
   const [w, h] = blockSize(block.id)
   const inspect = () => onInspect?.({
     type: 'Section',
@@ -298,8 +308,12 @@ function BlockCard({ block, onPick, onInspect, theme }) {
       {...listeners}
       {...attributes}
       onMouseEnter={inspect}
-      onClick={inspect}
-      title={`Drag onto the canvas — ${block.label} section`}
+      onClick={() => {
+        inspect()
+        onArm?.({ type: 'section', preset: block.id, html: block.html, w, h, label: block.label })
+      }}
+      title={`Click to place, or drag onto the canvas — ${block.label} section`}
+      style={{ touchAction: 'manipulation' }}
       className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-2.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
     >
       {inner}
@@ -307,7 +321,7 @@ function BlockCard({ block, onPick, onInspect, theme }) {
   )
 }
 
-function CustomBlockPanel({ onPick, onInspect, theme }) {
+function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
   const addBlock = useEditorStore((s) => s.addBlock)
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('Custom block')
@@ -392,7 +406,7 @@ function CustomBlockPanel({ onPick, onInspect, theme }) {
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">Saved snippets</div>
               <div className="grid grid-cols-2 gap-2">
                 {saved.map((block) => (
-                  <BlockCard key={block.id} block={block} onPick={onPick} onInspect={onInspect} theme={theme} />
+                  <BlockCard key={block.id} block={block} onPick={onPick} onArm={onArm} onInspect={onInspect} theme={theme} />
                 ))}
               </div>
             </div>
@@ -455,8 +469,9 @@ const TABS = [
 // Shared left rail for BOTH editor modes: VS Code-style Files | Components
 // tabs. `filesPanel` is the page/file explorer node rendered by the editor;
 // `onPickComponent(type)` opts the palette into HTML-placement mode (omitted
-// → classic dnd-kit canvas palette). `onCollapse` hides the whole rail.
-export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
+// → classic dnd-kit canvas palette, where `onArmPlacement(data)` is the
+// click/tap-to-place fallback). `onCollapse` hides the whole rail.
+export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, filesPanel }) {
   const [tab, setTab] = useState(filesPanel ? 'files' : 'components')
   const [openType, setOpenType] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -508,10 +523,10 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 {HTML_BLOCKS.map((b) => (
-                  <BlockCard key={b.id} block={b} onPick={onPickComponent} onInspect={setPreview} theme={theme} />
+                  <BlockCard key={b.id} block={b} onPick={onPickComponent} onArm={onArmPlacement} onInspect={setPreview} theme={theme} />
                 ))}
               </div>
-              <CustomBlockPanel onPick={onPickComponent} onInspect={setPreview} theme={theme} />
+              <CustomBlockPanel onPick={onPickComponent} onArm={onArmPlacement} onInspect={setPreview} theme={theme} />
             </div>
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
               Components
@@ -522,6 +537,7 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
                   key={item.type}
                   item={item}
                   onPick={onPickComponent}
+                  onArm={onArmPlacement}
                   onInspect={setPreview}
                   open={openType === item.type}
                   onToggle={() => setOpenType((t) => (t === item.type ? null : item.type))}
@@ -529,7 +545,9 @@ export default function Sidebar({ onPickComponent, onCollapse, filesPanel }) {
               ))}
             </div>
             <p className="mt-4 text-xs leading-relaxed text-[#6b7280]">
-              {onPickComponent ? 'Click in the page or drag to place.' : 'Click for preview, drag onto the canvas.'}
+              {onPickComponent
+                ? 'Click in the page or drag to place.'
+                : 'Click (or tap) to place, or drag onto the canvas.'}
             </p>
           </>
         )}

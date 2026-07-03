@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   pointerWithin,
   rectIntersection,
   useSensor,
@@ -261,6 +262,17 @@ export default function EditorPage() {
   // into the HTML document (null when not placing).
   const [pendingType, setPendingType] = useState(null)
   const [pendingHtml, setPendingHtml] = useState(null)
+  // Component-canvas tap-to-place: the armed palette item (touch fallback for
+  // drag-and-drop) — {type, preset, html, w, h, label} or null. Esc cancels.
+  const [pendingPlace, setPendingPlace] = useState(null)
+  useEffect(() => {
+    if (!pendingPlace) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setPendingPlace(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pendingPlace])
   const jsonInputRef = useRef(null)
   const htmlInputRef = useRef(null)
   const folderInputRef = useRef(null)
@@ -501,8 +513,12 @@ export default function EditorPage() {
     }
   }, [id, loadSchema, savedPageOnMount])
 
+  // Mouse drags start after 5px of travel (so plain clicks stay clicks).
+  // Touch drags start after a 250ms hold — the standard long-press pattern
+  // that leaves quick swipes free to scroll the palette/canvas on phones.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   )
 
   // Keyboard shortcuts: undo/redo, duplicate, delete, arrow-nudge.
@@ -657,6 +673,36 @@ export default function EditorPage() {
 
     // Legacy schema-component drop (kept for safety; the unified palette uses html).
     if (data.type) addComponent(data.type, x, y, null, data.preset, { w: data.w, h: data.h })
+  }
+
+  // Tap-to-place drop: same insert logic as a palette drag, but the position
+  // comes from a click/tap on the free canvas (touch devices can't reliably
+  // start a drag). The component lands centred on the tapped point.
+  function placePendingAt(x, y) {
+    const d = pendingPlace
+    if (!d) return
+    setPendingPlace(null)
+    const w = d.w || 360
+    const h = d.h || 120
+    const px = Math.max(0, Math.round(x - w / 2))
+    const py = Math.max(0, Math.round(y - h / 2))
+    if (d.html) {
+      addBlock([{
+        type: 'html',
+        x: px,
+        y: 0,
+        w,
+        h,
+        props: {
+          code: d.html,
+          _paletteType: d.type || '',
+          _paletteVariant: d.preset || '',
+          _baseSize: { w, h },
+        },
+      }], py)
+      return
+    }
+    if (d.type) addComponent(d.type, px, py, null, d.preset, { w: d.w, h: d.h })
   }
 
   const HTML_HISTORY_CAP = 50
@@ -1641,6 +1687,13 @@ export default function EditorPage() {
               >
                 <Sidebar
                   key="components-rail"
+                  onArmPlacement={(data) => {
+                    setPendingPlace(data)
+                    switchCanvasMode('edit')
+                    // On a phone the palette is a drawer covering the canvas —
+                    // close it so the tap target is immediately visible.
+                    if (isNarrow) setRail('left', false)
+                  }}
                   onCollapse={() => setRail('left', false)}
                   filesPanel={
                     <PageFilesPanel
@@ -1731,6 +1784,21 @@ export default function EditorPage() {
                     onTarget={setBrushTarget}
                   />
                 )}
+                {/* Tap-to-place guidance banner (component mode). */}
+                {canvasMode === 'edit' && pendingPlace && (
+                  <div className="flex items-center gap-2 border-b border-[#c7d2fe] bg-[#eef2ff] px-4 py-1.5 text-xs text-[#3730a3]">
+                    <span className="min-w-0 truncate">
+                      Placing “{pendingPlace.label || 'component'}” — tap or click a spot on the canvas.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingPlace(null)}
+                      className="ml-auto shrink-0 rounded-lg border border-[#a5b4fc] bg-white px-2 py-0.5 font-medium text-[#3730a3] hover:bg-[#e0e7ff]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 {/* Link-tool guidance banner (component mode). */}
                 {canvasMode === 'edit' && linkMode && (
                   <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
@@ -1755,6 +1823,8 @@ export default function EditorPage() {
                     brushColor={brushColor}
                     brushTarget={brushTarget}
                     onBrushUse={rememberBrushColor}
+                    pendingPlace={pendingPlace}
+                    onPlaceAt={placePendingAt}
                   />
                 ) : canvasMode === 'view' ? (
                   componentViewNeedsIframe ? (

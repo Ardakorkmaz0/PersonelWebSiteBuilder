@@ -70,6 +70,7 @@ const HtmlWorkspace = lazy(() => import('../components/editor/HtmlWorkspace.jsx'
 const TemplatePicker = lazy(() => import('../components/editor/TemplatePicker.jsx'))
 const HistoryPanel = lazy(() => import('../components/editor/HistoryPanel.jsx'))
 const NotesPanel = lazy(() => import('../components/editor/NotesPanel.jsx'))
+const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 
 function PanelFallback() {
   return (
@@ -225,6 +226,7 @@ export default function EditorPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -504,6 +506,21 @@ export default function EditorPage() {
         if (savedPageOnMount && pages.some((p) => p.id === savedPageOnMount)) {
           useEditorStore.getState().selectPage(savedPageOnMount)
         }
+        // First-visit onboarding: a completely EMPTY site auto-opens the AI
+        // wizard once — "describe it → get a full site" converts far better
+        // than a blank canvas. The flag is set the moment it opens, so
+        // closing it never nags again.
+        try {
+          const key = 'pwb_wizard_auto_' + id
+          const empty =
+            !pages.some((p) => (p.components || []).length > 0) &&
+            !pages.some((p) => (p.html || '').trim()) &&
+            !(data.html || '').trim()
+          if (empty && !localStorage.getItem(key)) {
+            localStorage.setItem(key, '1')
+            setWizardOpen(true)
+          }
+        } catch { /* storage unavailable — skip the auto-open */ }
       })
       .catch((e) => active && setError(apiError(e)))
       .finally(() => {
@@ -969,6 +986,26 @@ export default function EditorPage() {
     setPageMode(currentPageId, 'html')
   }
 
+  // Apply the AI wizard's generated site: the active page becomes an HTML
+  // page holding the document, and the answers seed the publish metadata
+  // (title always follows the brand the user typed; category/tags only fill
+  // in when still at their defaults, so they never clobber a curated setup).
+  function applyWizardSite({ html, title: nextTitle, category: nextCategory, tags: nextTags }) {
+    if (
+      siteHtml.trim() &&
+      !window.confirm(
+        'Replace this page with the AI-generated site? Undo brings the old page back, and nothing is saved until you press Save.',
+      )
+    )
+      return
+    setWizardOpen(false)
+    commitHtml(html, { reseedWorkspace: true })
+    setPageMode(currentPageId, 'html')
+    if (nextTitle?.trim()) setTitle(nextTitle.trim())
+    if (nextCategory && category === 'other') setCategory(nextCategory)
+    if (nextTags?.length && tags.length === 0) setTags(nextTags.slice(0, 8))
+  }
+
   // Load a ready-made responsive template as the ACTIVE page's HTML.
   function pickTemplate(tpl) {
     setTemplateOpen(false)
@@ -1183,6 +1220,16 @@ export default function EditorPage() {
               commitHtml(placed) // applyAiHtml already reseeded the workspace
             }}
           />
+          {/* Guided full-site generation — the onboarding path for a blank
+              site, but always reachable for a fresh start. */}
+          <button
+            type="button"
+            onClick={() => setWizardOpen(true)}
+            title="AI Site Wizard — answer a few questions, get a complete site"
+            className="flex h-9 items-center gap-1 rounded-[4px] border border-[#c7d2fe] bg-[#eef2ff] px-2.5 text-xs font-semibold text-[#4f46e5] shadow-sm transition hover:bg-[#e0e7ff]"
+          >
+            ✨ <span>Wizard</span>
+          </button>
           {currentPageIsHtml && (
             <>
               {/* Device controls mirror the component editor's PC/Mobile +
@@ -1959,6 +2006,18 @@ export default function EditorPage() {
             theme={theme}
             onPick={pickTemplate}
             onClose={() => setTemplateOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {wizardOpen && (
+        <Suspense fallback={null}>
+          <AiWizard
+            open={wizardOpen}
+            initialBrand={title === 'Untitled site' ? '' : title}
+            onClose={() => setWizardOpen(false)}
+            onApply={applyWizardSite}
+            onOpenTemplates={() => setTemplateOpen(true)}
           />
         </Suspense>
       )}

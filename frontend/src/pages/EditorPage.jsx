@@ -1034,22 +1034,22 @@ export default function EditorPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      {/* Single row always: never wrap; if the meta + toolbar exceed the width
-          (small window), the strip scrolls horizontally instead of stacking
-          onto a second line. The grow spacer below pins the toolbar right when
-          there IS room. */}
+      {/* Wrapping header: the toolbar flows onto extra rows when the window is
+          narrow. Secondary meta (mode chip, category, tags, size presets)
+          hides below lg/md so the header stays ~2 rows on a phone. The grow
+          spacer below pins the toolbar right when there IS room. */}
       <header className="flex flex-wrap items-center gap-1.5 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
         <div className="flex shrink-0 items-center gap-1">
           <Link to="/" title="Sitebuilder home" className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</Link>
           <button type="button" onClick={goBack} title="Go back" className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
         </div>
         <input
-          className="min-w-[3rem] max-w-[160px] flex-shrink rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none"
+          className="min-w-[3rem] max-w-[110px] flex-shrink rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none md:max-w-[160px]"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <span
-          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+          className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold md:inline-block ${
             published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
           }`}
         >
@@ -1063,7 +1063,7 @@ export default function EditorPage() {
               ? 'This page is an uploaded/authored HTML document'
               : 'This page uses the drag-and-drop component canvas'
           }
-          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
+          className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide lg:inline-block ${
             currentPageIsHtml
               ? 'bg-[#eef2ff] text-[#4f46e5]'
               : 'bg-[#f1f5f9] text-[#475569]'
@@ -1077,7 +1077,7 @@ export default function EditorPage() {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           title="Explore category (used when published)"
-          className="shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium capitalize text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+          className="hidden shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium capitalize text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block"
         >
           {DISCOVERY_CATEGORIES.map((c) => (
             <option key={c} value={c}>{c}</option>
@@ -1090,12 +1090,12 @@ export default function EditorPage() {
           }
           placeholder="tags…"
           title="Comma-separated tags for discovery"
-          className="w-28 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+          className="hidden w-28 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block"
         />
         {/* Save status in a FIXED-WIDTH slot so the changing text never reflows
             the toolbar (the churn the user hit). Auto-save now fires only when
             you leave / refresh, so this mostly just reads Unsaved → Saved. */}
-        <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right text-xs font-medium">
+        <span className="w-20 shrink-0 whitespace-nowrap text-right text-xs font-medium md:w-[6.5rem]">
           {autoSaveState === 'error' ? (
             <span className="text-red-500">Save failed</span>
           ) : saving || autoSaveState === 'saving' ? (
@@ -1165,7 +1165,7 @@ export default function EditorPage() {
                 value={htmlDevice}
                 onChange={(e) => setHtmlDevice(e.target.value)}
                 title="Screen / device width"
-                className="max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+                className="hidden max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
               >
                 {DEVICES.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -1213,7 +1213,7 @@ export default function EditorPage() {
                 ? 'Phone screen size'
                 : 'Screen ratio / artboard size'
             }
-            className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+            className="hidden rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
           >
             {sizePresets.map((p) => (
               <option key={p.id} value={p.id}>
@@ -1230,8 +1230,8 @@ export default function EditorPage() {
             title="Snap dragged items to a 10px grid"
             className={
               gridStep
-                ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1.5 text-xs font-medium text-white'
-                : 'rounded-lg border border-[#d1d5db] px-2.5 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]'
+                ? 'hidden rounded-lg bg-[#4f46e5] px-2.5 py-1.5 text-xs font-medium text-white md:block'
+                : 'hidden rounded-lg border border-[#d1d5db] px-2.5 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] md:block'
             }
           >
             # Grid
@@ -1486,11 +1486,12 @@ export default function EditorPage() {
               Publish
             </button>
           )}
-          {/* Your profile — a quick hop to /profile (and your published sites). */}
+          {/* Your profile — a quick hop to /profile (and your published sites).
+              Hidden on phones: it alone pushed the toolbar onto a third row. */}
           <Link
             to="/profile"
             title="Your profile"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#4f46e5] ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe]"
+            className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#4f46e5] ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe] md:grid"
           >
             {(authUser?.username || '?').trim().charAt(0).toUpperCase()}
           </Link>

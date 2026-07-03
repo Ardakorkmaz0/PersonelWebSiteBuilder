@@ -45,6 +45,7 @@ import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../utils/htmlRuntime.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
+import { NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
 import {
   clearLocalFileHandle,
   downloadHtmlFile,
@@ -112,13 +113,15 @@ const DISCOVERY_CATEGORIES = [
 
 // Slim vertical strip shown in place of a collapsed side rail — click to
 // reopen. Keeps a visible affordance so the panel never feels "lost".
+// z-40 keeps the strips clickable above a narrow-screen drawer backdrop, so
+// tapping the opposite strip switches drawers in one tap.
 function CollapsedRail({ side, label, onOpen }) {
   return (
     <button
       type="button"
       onClick={onOpen}
       title={`Show ${label}`}
-      className={`flex w-7 shrink-0 flex-col items-center gap-2 bg-white py-3 text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
+      className={`relative z-40 flex w-7 shrink-0 flex-col items-center gap-2 bg-white py-3 text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
         side === 'left' ? 'border-r border-[#e5e7eb]' : 'border-l border-[#e5e7eb]'
       }`}
     >
@@ -130,6 +133,28 @@ function CollapsedRail({ side, label, onOpen }) {
         {label}
       </span>
     </button>
+  )
+}
+
+// One slot per side rail. Desktop: the open rail sits inline in the flex row.
+// Narrow screens (tablet/phone): the rails would crush the canvas (240+288px
+// of fixed chrome), so an OPEN rail floats over the canvas as a drawer — the
+// collapsed strip stays in the flow behind it and a backdrop click closes it.
+function RailSlot({ side, label, open, narrow, onOpen, onClose, children }) {
+  if (!open) return <CollapsedRail side={side} label={label} onOpen={onOpen} />
+  if (!narrow) return children
+  return (
+    <>
+      <CollapsedRail side={side} label={label} onOpen={onOpen} />
+      <div className="absolute inset-0 z-30 bg-black/20" onClick={onClose} />
+      <div
+        className={`absolute inset-y-0 z-40 flex max-w-[calc(100%-1.75rem)] overflow-hidden shadow-2xl ${
+          side === 'left' ? 'left-0' : 'right-0'
+        }`}
+      >
+        {children}
+      </div>
+    </>
   )
 }
 
@@ -273,20 +298,33 @@ export default function EditorPage() {
   // placements, panel edits, and Remove HTML are all undoable.
   const [htmlPast, setHtmlPast] = useState([])
   const [htmlFuture, setHtmlFuture] = useState([])
-  // Collapsible side rails (persisted): hide the palette / properties rail
-  // to give the canvas the full width.
-  const [leftOpen, setLeftOpen] = useState(() => {
+  // Collapsible side rails. Desktop keeps the user's choice in localStorage;
+  // on narrow screens both rails are collapsed and open only as a transient
+  // drawer overlay (one side at a time, never persisted), so the desktop
+  // preference survives a phone visit. leftOpen/rightOpen are derived, which
+  // makes a window resize across the breakpoint reconfigure the rails with no
+  // effects involved.
+  const isNarrow = useMediaQuery(NARROW_EDITOR_QUERY)
+  const [deskLeftOpen, setDeskLeftOpen] = useState(() => {
     try { return localStorage.getItem('pwb_left_open') !== '0' } catch { return true }
   })
-  const [rightOpen, setRightOpen] = useState(() => {
+  const [deskRightOpen, setDeskRightOpen] = useState(() => {
     try { return localStorage.getItem('pwb_right_open') !== '0' } catch { return true }
   })
-  useEffect(() => {
-    try { localStorage.setItem('pwb_left_open', leftOpen ? '1' : '0') } catch { /* ignore */ }
-  }, [leftOpen])
-  useEffect(() => {
-    try { localStorage.setItem('pwb_right_open', rightOpen ? '1' : '0') } catch { /* ignore */ }
-  }, [rightOpen])
+  const [drawer, setDrawer] = useState(null) // 'left' | 'right' | null — narrow only
+  const leftOpen = isNarrow ? drawer === 'left' : deskLeftOpen
+  const rightOpen = isNarrow ? drawer === 'right' : deskRightOpen
+  const setRail = (side, open) => {
+    if (isNarrow) {
+      setDrawer(open ? side : null)
+      return
+    }
+    if (side === 'left') setDeskLeftOpen(open)
+    else setDeskRightOpen(open)
+    try {
+      localStorage.setItem(side === 'left' ? 'pwb_left_open' : 'pwb_right_open', open ? '1' : '0')
+    } catch { /* ignore */ }
+  }
   // Remember the active page + component surface per site, so a browser refresh
   // returns to exactly where the user left off (the HTML workspace's
   // view/edit/source + link sub-tool is persisted inside HtmlWorkspace itself).
@@ -1488,11 +1526,18 @@ export default function EditorPage() {
               {/* Left rail: VS Code-style Files tab (pages as .html files) +
                   the component palette. Picking a palette item splices that
                   component's snippet into the document where the user points. */}
-              {leftOpen ? (
+              <RailSlot
+                side="left"
+                label="Files"
+                open={leftOpen}
+                narrow={isNarrow}
+                onOpen={() => setRail('left', true)}
+                onClose={() => setRail('left', false)}
+              >
                 <Sidebar
                   key="html-rail"
                   onPickComponent={(type, html) => { setPendingType(type); setPendingHtml(html || null) }}
-                  onCollapse={() => setLeftOpen(false)}
+                  onCollapse={() => setRail('left', false)}
                   filesPanel={
                     <PageFilesPanel
                       mode="html"
@@ -1505,9 +1550,7 @@ export default function EditorPage() {
                     />
                   }
                 />
-              ) : (
-                <CollapsedRail side="left" label="Files" onOpen={() => setLeftOpen(true)} />
-              )}
+              </RailSlot>
               {/* The workspace renders for EMPTY pages too — same toolbar and
                   chrome, with the starter card where the page would show. */}
               <Suspense fallback={<PanelFallback />}>
@@ -1543,15 +1586,22 @@ export default function EditorPage() {
               </Suspense>
               {/* Right rail in HTML mode: element properties when something
                   is selected in the edit iframe, site settings otherwise. */}
-              {rightOpen ? (
-                <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
+              <RailSlot
+                side="right"
+                label={htmlSelection ? 'Element' : 'Settings'}
+                open={rightOpen}
+                narrow={isNarrow}
+                onOpen={() => setRail('right', true)}
+                onClose={() => setRail('right', false)}
+              >
+                <div className="flex w-72 max-w-full shrink-0 flex-col border-l border-gray-200 bg-white">
                   <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
                       {htmlSelection ? 'Element' : 'Site settings'}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setRightOpen(false)}
+                      onClick={() => setRail('right', false)}
                       title="Hide panel"
                       className="rounded-md px-1.5 py-0.5 text-xs text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
                     >
@@ -1576,20 +1626,21 @@ export default function EditorPage() {
                     )}
                   </div>
                 </div>
-              ) : (
-                <CollapsedRail
-                  side="right"
-                  label={htmlSelection ? 'Element' : 'Settings'}
-                  onOpen={() => setRightOpen(true)}
-                />
-              )}
+              </RailSlot>
             </>
           ) : (
             <>
-              {leftOpen ? (
+              <RailSlot
+                side="left"
+                label="Files"
+                open={leftOpen}
+                narrow={isNarrow}
+                onOpen={() => setRail('left', true)}
+                onClose={() => setRail('left', false)}
+              >
                 <Sidebar
                   key="components-rail"
-                  onCollapse={() => setLeftOpen(false)}
+                  onCollapse={() => setRail('left', false)}
                   filesPanel={
                     <PageFilesPanel
                       mode="pages"
@@ -1600,9 +1651,7 @@ export default function EditorPage() {
                     />
                   }
                 />
-              ) : (
-                <CollapsedRail side="left" label="Files" onOpen={() => setLeftOpen(true)} />
-              )}
+              </RailSlot>
               {/* Canvas column with the same View/Edit/Source bar the HTML
                   workspace has — identical chrome in both editor modes. */}
               <div className="flex min-w-0 flex-1 flex-col">
@@ -1748,9 +1797,16 @@ export default function EditorPage() {
                   </div>
                 )}
               </div>
-              {rightOpen ? (
+              <RailSlot
+                side="right"
+                label="Properties"
+                open={rightOpen}
+                narrow={isNarrow}
+                onOpen={() => setRail('right', true)}
+                onClose={() => setRail('right', false)}
+              >
               <div
-                className={`flex shrink-0 flex-col border-l border-gray-200 bg-white ${
+                className={`flex max-w-full shrink-0 flex-col border-l border-gray-200 bg-white ${
                   rightTab === 'code' ? 'w-[480px]' : 'w-72'
                 }`}
               >
@@ -1779,7 +1835,7 @@ export default function EditorPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setRightOpen(false)}
+                    onClick={() => setRail('right', false)}
                     title="Hide panel"
                     className="px-2 py-2 text-xs text-[#9ca3af] hover:text-[#374151]"
                   >
@@ -1796,9 +1852,7 @@ export default function EditorPage() {
                   )}
                 </div>
               </div>
-              ) : (
-                <CollapsedRail side="right" label="Properties" onOpen={() => setRightOpen(true)} />
-              )}
+              </RailSlot>
             </>
           )}
 

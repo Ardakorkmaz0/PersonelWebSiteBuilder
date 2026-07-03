@@ -50,7 +50,21 @@ function wrapperStyle(c, viewport, canvasWidth, flowMode, layoutKey = 'layout') 
   const base = flowMode
     ? flowItemStyle(c, viewport, canvasWidth)
     : absoluteWrapperStyle(c, layoutKey)
+  // Sticky on an ABSOLUTE page: native position:sticky needs a flow position,
+  // which absolute pages don't have — the element would render at the page top
+  // instead of its design spot. Keep the absolute design position and let the
+  // runtime stick handler (data-builder-sticky) translate it on scroll.
+  if (!flowMode && c?.props?.scrollBehavior === 'sticky') {
+    return { ...base, zIndex: Number(c.props?.pinZIndex) || 20 }
+  }
   return pinnedLayoutStyle(c, base)
+}
+
+// Marker attributes for the runtime stick handler in builderInteractiveTags().
+function stickyAttrs(c, flowMode) {
+  if (flowMode || c?.props?.scrollBehavior !== 'sticky') return ''
+  const edge = c.props?.pinY === 'bottom' ? ' data-builder-sticky-edge="bottom"' : ''
+  return ` data-builder-sticky data-builder-sticky-offset="${Number(c.props?.pinOffsetY) || 0}"${edge}`
 }
 
 function esc(s) {
@@ -377,11 +391,11 @@ function innerHtml(c) {
   }
 }
 
-function openTag(c) {
+function openTag(c, extraAttrs = '') {
   const tag = tagFor(c.type)
   const cls = `c-${c.id}`
   // id lets in-page links (#componentId) scroll to this component.
-  const idAttr = ` id="${esc(c.id)}"`
+  const idAttr = ` id="${esc(c.id)}"${extraAttrs}`
   if (tag === 'a') {
     const href = sanitizeUrl((c.props || {}).href)
     const ext = /^https?:\/\//i.test(href)
@@ -430,19 +444,20 @@ function pageBody(page, { fixed = 'all' } = {}) {
       return true
     })
     .map((c) => {
+      const sticky = stickyAttrs(c, page.flowMode)
       if (['container', 'tabs', 'select', 'alert', 'accordion', 'html'].includes(c.type)) {
         // Wrap inlineNode types in an outer that mirrors the React Renderer
         // layout: flow mode → flowItemStyle (flex); non-flow → absolute. Without
         // this, top-level container/tabs floated at intrinsic size and the
         // iframe preview looked broken next to the non-Custom-JS path.
         const wrap = styleObjectBlock(wrapperStyle(c, 'pc', canvasW, page.flowMode))
-        return `      <div id="${esc(c.id)}" style="${wrap}">${linkWrap(c, inlineNode(c))}</div>`
+        return `      <div id="${esc(c.id)}"${sticky} style="${wrap}">${linkWrap(c, inlineNode(c))}</div>`
       }
       const tag = tagFor(c.type)
       const el =
         tag === 'img'
-          ? openTag(c)
-          : `${openTag(c)}${innerHtml(c) ? `\n        ${innerHtml(c)}\n      ` : ''}</${tag}>`
+          ? openTag(c, sticky)
+          : `${openTag(c, sticky)}${innerHtml(c) ? `\n        ${innerHtml(c)}\n      ` : ''}</${tag}>`
       return `      ${linkWrap(c, el)}`
     })
     .join('\n')

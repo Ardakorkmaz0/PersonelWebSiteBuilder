@@ -125,9 +125,48 @@ const INTERACTIVE_SCRIPT = `
       if (/^https?:\\/\\//i.test(action) || /^mailto:|^tel:/i.test(action)) return;
       event.preventDefault();
     }
+    // Sticky components on ABSOLUTE component pages. They keep their absolute
+    // design position (no flow exists for native position:sticky), and this
+    // handler translates them once the viewport passes them — sticking to the
+    // top/bottom edge with the configured offset. Scale-aware: the scaled
+    // export transforms .page, so distances are converted to page-local px
+    // via rect.width / offsetWidth.
+    function initSticky() {
+      var els = document.querySelectorAll('[data-builder-sticky]');
+      if (!els.length) return;
+      function update() {
+        for (var i = 0; i < els.length; i++) {
+          var el = els[i];
+          var page = el.offsetParent;
+          if (!page || !page.offsetWidth) continue;
+          var rect = page.getBoundingClientRect();
+          var scale = rect.width / page.offsetWidth || 1;
+          var offset = parseFloat(el.getAttribute('data-builder-sticky-offset')) || 0;
+          var bottomPin = el.getAttribute('data-builder-sticky-edge') === 'bottom';
+          var y = el.offsetTop;
+          var h = el.offsetHeight;
+          var ty = 0;
+          if (bottomPin) {
+            var viewBottom = (window.innerHeight - rect.top) / scale;
+            ty = Math.min(0, viewBottom - offset - h - y);
+            if (y + ty < 0) ty = -y;
+          } else {
+            var viewTop = -rect.top / scale;
+            ty = Math.max(0, viewTop + offset - y);
+            var maxTy = page.offsetHeight - h - y;
+            if (ty > maxTy) ty = Math.max(0, maxTy);
+          }
+          el.style.transform = ty ? 'translateY(' + ty + 'px)' : '';
+        }
+      }
+      window.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update);
+      update();
+    }
     function init() {
       document.addEventListener('click', onClick);
       document.addEventListener('submit', onSubmit);
+      initSticky();
       // Ensure each tabs widget has exactly one panel visible on load (the one
       // whose tab is marked aria-selected, falling back to the first tab).
       var roots = document.querySelectorAll('[data-builder-tabs]');

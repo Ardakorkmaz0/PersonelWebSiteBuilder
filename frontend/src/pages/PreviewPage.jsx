@@ -232,9 +232,12 @@ export default function PreviewPage() {
     return (site?.schema?.pages || []).some((p) => walk(p?.components))
   }, [site?.schema?.pages])
   const hasPinnedFixed = useMemo(() => {
+    // Sticky counts too: on absolute pages it needs the export runtime's
+    // stick handler (iframe path) — the plain Renderer would drop it at the
+    // page top and never engage it inside the scaled wrapper.
     const walk = (arr) => {
       for (const c of arr || []) {
-        if (c?.props?.scrollBehavior === 'fixed') return true
+        if (['fixed', 'sticky'].includes(c?.props?.scrollBehavior)) return true
         if (Array.isArray(c?.children) && walk(c.children)) return true
       }
       return false

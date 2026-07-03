@@ -106,6 +106,59 @@ export default function FlowCanvasItem({
   const full = isFlowFullWidth(component)
   const canShowInlineDelete = Math.round(component.layout?.w || 240) >= 34 && Math.round(component.layout?.h || 80) >= 30
 
+  // Pinned behavior mirrored in the edit canvas (same idea as FreeCanvasItem):
+  // sticky uses NATIVE position:sticky — flow items are in flow, so it engages
+  // against #canvas-scroll exactly like the published page. Fixed keeps its
+  // flow slot (so the layout stays editable) but a scroll-driven transform
+  // glues it to the visible band, matching what visitors see.
+  const props = component.props || {}
+  const pinMode =
+    props.scrollBehavior === 'fixed' || props.scrollBehavior === 'sticky'
+      ? props.scrollBehavior
+      : null
+  const pinY = props.pinY === 'bottom' ? 'bottom' : 'top'
+  const pinX = ['right', 'left'].includes(props.pinX) ? props.pinX : 'center'
+  const pinOffsetY = Number(props.pinOffsetY) || 0
+  const pinOffsetX = Number(props.pinOffsetX) || 0
+  const pinRef = useRef(null)
+  useEffect(() => {
+    const el = pinRef.current
+    if (pinMode !== 'fixed' || !el) return undefined
+    const scroller = document.getElementById('canvas-scroll')
+    const canvas = document.getElementById('free-canvas')
+    if (!scroller || !canvas) return undefined
+    let prev = { x: 0, y: 0 }
+    const apply = () => {
+      const sRect = scroller.getBoundingClientRect()
+      const cRect = canvas.getBoundingClientRect()
+      const r = el.getBoundingClientRect()
+      // The item's untransformed flow position, in canvas coordinates (1:1).
+      const baseX = r.left - cRect.left - prev.x
+      const baseY = r.top - cRect.top - prev.y
+      const viewTop = sRect.top - cRect.top
+      const viewBottom = viewTop + sRect.height
+      let targetY = pinY === 'bottom' ? viewBottom - r.height - pinOffsetY : viewTop + pinOffsetY
+      targetY = Math.min(Math.max(targetY, 0), Math.max(0, cRect.height - r.height))
+      let targetX =
+        pinX === 'right'
+          ? cRect.width - r.width - pinOffsetX
+          : pinX === 'left'
+            ? pinOffsetX
+            : (cRect.width - r.width) / 2 + pinOffsetX
+      targetX = Math.min(Math.max(targetX, 0), Math.max(0, cRect.width - r.width))
+      prev = { x: Math.round(targetX - baseX), y: Math.round(targetY - baseY) }
+      el.style.transform = prev.x || prev.y ? `translate(${prev.x}px, ${prev.y}px)` : ''
+    }
+    apply()
+    scroller.addEventListener('scroll', apply, { passive: true })
+    window.addEventListener('resize', apply)
+    return () => {
+      scroller.removeEventListener('scroll', apply)
+      window.removeEventListener('resize', apply)
+      el.style.transform = ''
+    }
+  }, [pinMode, pinY, pinX, pinOffsetY, pinOffsetX, viewport])
+
   function startResize(e, dir) {
     e.stopPropagation()
     e.preventDefault()
@@ -177,6 +230,7 @@ export default function FlowCanvasItem({
 
   return (
     <div
+      ref={pinRef}
       onPointerDown={(e) => {
         e.stopPropagation()
         if (brushMode) {
@@ -188,11 +242,29 @@ export default function FlowCanvasItem({
       }}
       style={{
         ...flowItemStyle(component, viewport, canvasWidth, { parentDirection }),
+        // Sticky is native here — flow items are in flow, so the canvas scroll
+        // engages it exactly like the published page does.
+        ...(pinMode === 'sticky'
+          ? { position: 'sticky', [pinY === 'bottom' ? 'bottom' : 'top']: pinOffsetY }
+          : {}),
         cursor: brushMode ? BRUSH_CURSOR : 'pointer',
-        zIndex: isSelected ? 20 : 1,
+        zIndex: isSelected ? 20 : pinMode ? 10 : 1,
       }}
       className={isSelected || brushMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'}
     >
+      {pinMode && (
+        <span
+          title={
+            pinMode === 'fixed'
+              ? 'Pinned to the screen — stays put while the page scrolls.'
+              : 'Sticky — scrolls with the page until it reaches the edge, then stays.'
+          }
+          style={{ position: 'absolute', bottom: 2, left: 2, zIndex: 25 }}
+          className="rounded-lg bg-[#4f46e5]/85 px-1.5 py-0.5 text-[10px] font-medium text-white"
+        >
+          {pinMode === 'fixed' ? 'Pinned' : 'Sticky'}
+        </span>
+      )}
       {component.type === 'container' ? (
         <ContainerEditor
           component={component}

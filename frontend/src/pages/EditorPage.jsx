@@ -79,9 +79,12 @@ function PanelFallback() {
   )
 }
 
+// Fixed AND sticky both need the export/iframe path in View mode: fixed would
+// pin to the editor window otherwise, and sticky on absolute pages needs the
+// export runtime's stick handler to sit at its design spot and engage.
 function hasFixedComponent(components) {
   for (const component of components || []) {
-    if (component?.props?.scrollBehavior === 'fixed') return true
+    if (['fixed', 'sticky'].includes(component?.props?.scrollBehavior)) return true
     if (hasFixedComponent(component?.children)) return true
   }
   return false

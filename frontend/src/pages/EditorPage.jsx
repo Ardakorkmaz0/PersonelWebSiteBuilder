@@ -232,7 +232,8 @@ export default function EditorPage() {
   const [toolsOpen, setToolsOpen] = useState(false)
   // The Import/Tools menus are position:fixed, anchored to their trigger
   // button's on-screen rect (computed on open) — robust regardless of header
-  // layout (it wraps rather than scrolls, but fixed keeps menus unclipped).
+  // layout (the single-row strip scrolls horizontally; fixed positioning
+  // keeps the menus unclipped by that overflow).
   const importBtnRef = useRef(null)
   const toolsBtnRef = useRef(null)
   const [menuPos, setMenuPos] = useState({})
@@ -1120,11 +1121,13 @@ export default function EditorPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      {/* Wrapping header: the toolbar flows onto extra rows when the window is
-          narrow. Secondary meta (mode chip, category, tags, size presets)
-          hides below lg/md so the header stays ~2 rows on a phone. The grow
-          spacer below pins the toolbar right when there IS room. */}
-      <header className="flex flex-wrap items-center gap-1.5 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
+      {/* Single-row header: never wraps. When the window is too narrow the
+          strip scrolls horizontally instead of stacking rows (the File/Tools
+          menus are position:fixed, so the overflow never clips them).
+          Secondary meta (mode chip, category, tags, size presets) still hides
+          below lg/md so there is less to scroll on a phone. The grow spacer
+          below pins the toolbar right when there IS room. */}
+      <header className="flex items-center gap-1.5 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm [scrollbar-width:thin]">
         <div className="flex shrink-0 items-center gap-1">
           <Link to="/" title="Sitebuilder home" className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</Link>
           <button type="button" onClick={goBack} title="Go back" className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
@@ -1176,7 +1179,7 @@ export default function EditorPage() {
           }
           placeholder="tags…"
           title="Comma-separated tags for discovery"
-          className="hidden w-28 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block"
+          className="hidden w-24 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block"
         />
         {/* Save status in a FIXED-WIDTH slot so the changing text never reflows
             the toolbar (the churn the user hit). Auto-save now fires only when
@@ -1193,17 +1196,16 @@ export default function EditorPage() {
           ) : null}
         </span>
 
-        {/* Flexible spacer: on a wide screen it expands to pin the toolbar to the
-            right edge; the moment the toolbar can't fit and wraps to a second
-            row, the spacer collapses so the toolbar starts at the LEFT instead
-            of being right-aligned with a big empty gap before it. */}
+        {/* Flexible spacer: on a wide screen it expands to pin the toolbar to
+            the right edge; when the strip overflows it collapses to zero so
+            the header scrolls horizontally with no dead gap in the middle. */}
         <div className="grow shrink basis-0" aria-hidden />
 
         {/* Action toolbar — the spacer pins it to the right when there's room.
-            When the window is too narrow it wraps to a second row AND its own
-            items wrap within that row, so the header grows taller instead of
-            ever scrolling horizontally. */}
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            shrink-0 keeps every control at its natural size; on a too-narrow
+            window the whole header strip scrolls sideways instead of wrapping,
+            so the top bar is always exactly one row tall. */}
+        <div className="flex shrink-0 items-center gap-1.5">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}
@@ -1226,114 +1228,13 @@ export default function EditorPage() {
             type="button"
             onClick={() => setWizardOpen(true)}
             title="AI Site Wizard — answer a few questions, get a complete site"
-            className="flex h-9 items-center gap-1 rounded-[4px] border border-[#c7d2fe] bg-[#eef2ff] px-2.5 text-xs font-semibold text-[#4f46e5] shadow-sm transition hover:bg-[#e0e7ff]"
+            className="flex h-9 shrink-0 items-center gap-1 rounded-[4px] border border-[#c7d2fe] bg-[#eef2ff] px-2.5 text-xs font-semibold text-[#4f46e5] shadow-sm transition hover:bg-[#e0e7ff]"
           >
-            ✨ <span>Wizard</span>
+            ✨ <span className="hidden 2xl:inline">Wizard</span>
           </button>
-          {currentPageIsHtml && (
-            <>
-              {/* Device controls mirror the component editor's PC/Mobile +
-                  size block exactly (same anatomy, no extra buttons), so the
-                  header stays consistent as you switch between page modes. */}
-              <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
-                <button
-                  onClick={() => { setHtmlDevice('fit'); setHtmlLandscape(false) }}
-                  className={
-                    !isMobileDevice(htmlDevice)
-                      ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                      : 'px-2.5 py-1 text-[#374151]'
-                  }
-                >
-                  PC
-                </button>
-                <button
-                  onClick={() => setHtmlDevice('iphone15')}
-                  className={
-                    isMobileDevice(htmlDevice)
-                      ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                      : 'px-2.5 py-1 text-[#374151]'
-                  }
-                >
-                  Mobile
-                </button>
-              </div>
-              <select
-                value={htmlDevice}
-                onChange={(e) => setHtmlDevice(e.target.value)}
-                title="Screen / device width"
-                className="hidden max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
-              >
-                {DEVICES.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-          {!currentPageIsHtml && (
-          <>
-          {/* HTML Flow stays supported for existing flow pages, but the
-              toggle is gone — "Convert to responsive HTML" + HTML mode is
-              the one blessed path to responsive sites now. */}
-          <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
-            <button
-              onClick={() => setViewport('pc')}
-              className={
-                viewport === 'pc'
-                  ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                  : 'px-2.5 py-1 text-[#374151]'
-              }
-            >
-              PC
-            </button>
-            <button
-              onClick={() => setViewport('mobile')}
-              className={
-                viewport === 'mobile'
-                  ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                  : 'px-2.5 py-1 text-[#374151]'
-              }
-            >
-              Mobile
-            </button>
-          </div>
-          <select
-            value={curPresetId}
-            onChange={(e) => {
-              const p = sizePresets.find((x) => x.id === e.target.value)
-              if (p) setCanvasPreset({ width: p.width, fold: p.fold })
-            }}
-            title={
-              viewport === 'mobile'
-                ? 'Phone screen size'
-                : 'Screen ratio / artboard size'
-            }
-            className="hidden rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
-          >
-            {sizePresets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-            {curPresetId === 'custom' && (
-              <option value="custom">Custom - {curW}px</option>
-            )}
-          </select>
-          <button
-            type="button"
-            onClick={() => setGridStep(gridStep ? 0 : 10)}
-            title="Snap dragged items to a 10px grid"
-            className={
-              gridStep
-                ? 'hidden rounded-lg bg-[#4f46e5] px-2.5 py-1.5 text-xs font-medium text-white md:block'
-                : 'hidden rounded-lg border border-[#d1d5db] px-2.5 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] md:block'
-            }
-          >
-            # Grid
-          </button>
-          </>
-          )}
+          {/* Device controls (PC/Mobile + size) live in the canvas/workspace
+              toolbar below, next to View/Edit/Source — keeps this header a
+              single row that fits without scrolling on common desktops. */}
           <input
             ref={jsonInputRef}
             type="file"
@@ -1658,6 +1559,44 @@ export default function EditorPage() {
                   html={siteHtml}
                   deviceId={htmlDevice}
                   landscape={htmlLandscape}
+                  deviceControls={
+                    <>
+                      <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+                        <button
+                          onClick={() => { setHtmlDevice('fit'); setHtmlLandscape(false) }}
+                          className={
+                            !isMobileDevice(htmlDevice)
+                              ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                              : 'px-2.5 py-1 text-[#374151]'
+                          }
+                        >
+                          PC
+                        </button>
+                        <button
+                          onClick={() => setHtmlDevice('iphone15')}
+                          className={
+                            isMobileDevice(htmlDevice)
+                              ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                              : 'px-2.5 py-1 text-[#374151]'
+                          }
+                        >
+                          Mobile
+                        </button>
+                      </div>
+                      <select
+                        value={htmlDevice}
+                        onChange={(e) => setHtmlDevice(e.target.value)}
+                        title="Screen / device width"
+                        className="hidden max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
+                      >
+                        {DEVICES.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  }
                   fileName={
                     (localFile?.pageId === currentPageId && localFile?.name) ||
                     pageFileName(currentPage, currentPageIndex === 0)
@@ -1775,6 +1714,66 @@ export default function EditorPage() {
                       </button>
                     ))}
                   </div>
+                  {/* Device controls — moved out of the app header so it stays
+                      one row; they act on the canvas this bar belongs to. */}
+                  <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+                    <button
+                      onClick={() => setViewport('pc')}
+                      className={
+                        viewport === 'pc'
+                          ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                          : 'px-2.5 py-1 text-[#374151]'
+                      }
+                    >
+                      PC
+                    </button>
+                    <button
+                      onClick={() => setViewport('mobile')}
+                      className={
+                        viewport === 'mobile'
+                          ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
+                          : 'px-2.5 py-1 text-[#374151]'
+                      }
+                    >
+                      Mobile
+                    </button>
+                  </div>
+                  <select
+                    value={curPresetId}
+                    onChange={(e) => {
+                      const p = sizePresets.find((x) => x.id === e.target.value)
+                      if (p) setCanvasPreset({ width: p.width, fold: p.fold })
+                    }}
+                    title={
+                      viewport === 'mobile'
+                        ? 'Phone screen size'
+                        : 'Screen ratio / artboard size'
+                    }
+                    className="hidden rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
+                  >
+                    {sizePresets.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                    {curPresetId === 'custom' && (
+                      <option value="custom">Custom - {curW}px</option>
+                    )}
+                  </select>
+                  {canvasMode === 'edit' && (
+                    <button
+                      type="button"
+                      onClick={() => setGridStep(gridStep ? 0 : 10)}
+                      title="Snap dragged items to a 10px grid"
+                      className={
+                        gridStep
+                          ? 'hidden rounded-lg bg-[#4f46e5] px-2.5 py-1 text-xs font-medium text-white md:block'
+                          : 'hidden rounded-lg border border-[#d1d5db] px-2.5 py-1 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] md:block'
+                      }
+                    >
+                      # Grid
+                    </button>
+                  )}
                   {/* Link tool — mirrors the HTML workspace's Link sub-tool:
                       click a button/link component, then click its target
                       component (or a page in the Files panel). */}

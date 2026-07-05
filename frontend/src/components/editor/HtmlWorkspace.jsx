@@ -329,6 +329,9 @@ function HtmlWorkspace({
   fileName = 'index.html',
   deviceId = 'fit',
   landscape = false,
+  // Device frame picker (PC/Mobile + size dropdown) rendered by the editor —
+  // lives in this toolbar so the single-row app header stays uncluttered.
+  deviceControls = null,
   persistKey,
   onCommit,
   onRequestSave,
@@ -1231,6 +1234,7 @@ function HtmlWorkspace({
               </button>
             )}
           </div>
+          {deviceControls}
           {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
               empty page: there's no document to act on, so the starter card is
               the single clear action instead of dead chips. */}

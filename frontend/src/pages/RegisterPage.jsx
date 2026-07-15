@@ -7,10 +7,13 @@ import { passwordStrength } from '../utils/passwordStrength.js'
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
 import Recaptcha from '../components/auth/Recaptcha.jsx'
 import { usePublicConfig } from '../utils/usePublicConfig.js'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 const ENV_RECAPTCHA = !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
 
 export default function RegisterPage() {
+  const { t } = useLanguage()
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -28,7 +31,7 @@ export default function RegisterPage() {
   async function onSubmit(e) {
     e.preventDefault()
     if (recaptchaOn && !captcha) {
-      setError('Please confirm you are not a robot.')
+      setError(t('Please confirm you are not a robot.'))
       return
     }
     setError('')
@@ -38,7 +41,7 @@ export default function RegisterPage() {
       setAuth(token, user, true)
       navigate('/')
     } catch (err) {
-      setError(apiError(err, 'Registration failed.'))
+      setError(apiError(err, t('Registration failed.')))
     } finally {
       setLoading(false)
     }
@@ -51,7 +54,7 @@ export default function RegisterPage() {
       setAuth(token, user, true)
       navigate('/')
     } catch (err) {
-      setError(apiError(err, 'Google sign-in failed.'))
+      setError(apiError(err, t('Google sign-in failed.')))
     }
   }
 
@@ -63,6 +66,7 @@ export default function RegisterPage() {
           'radial-gradient(900px 500px at 80% -10%, rgba(99,102,241,0.14), transparent 60%), radial-gradient(700px 420px at -10% 110%, rgba(67,56,202,0.10), transparent 60%), #f7f8fa',
       }}
     >
+      <LanguageSwitcher className="fixed right-4 top-4 z-20" />
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2.5">
           <span className="brand-mark">S</span>
@@ -71,8 +75,8 @@ export default function RegisterPage() {
 
         <form onSubmit={onSubmit} className="ms-card space-y-5 p-8">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-[#111827]">Create your account</h1>
-            <p className="mt-1 text-sm text-[#6b7280]">Build and publish your first site in minutes.</p>
+            <h1 className="text-xl font-bold tracking-tight text-[#111827]">{t('Create your account')}</h1>
+            <p className="mt-1 text-sm text-[#6b7280]">{t('Build and publish your first site in minutes.')}</p>
           </div>
 
           {error && (
@@ -82,7 +86,7 @@ export default function RegisterPage() {
           )}
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-[#374151]">Username</span>
+            <span className="mb-1.5 block text-sm font-medium text-[#374151]">{t('Username')}</span>
             <input
               className="ms-input"
               value={username}
@@ -93,7 +97,7 @@ export default function RegisterPage() {
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-[#374151]">Email</span>
+            <span className="mb-1.5 block text-sm font-medium text-[#374151]">{t('Email')}</span>
             <input
               type="email"
               className="ms-input"
@@ -105,7 +109,7 @@ export default function RegisterPage() {
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-[#374151]">Password</span>
+            <span className="mb-1.5 block text-sm font-medium text-[#374151]">{t('Password')}</span>
             <input
               type="password"
               className="ms-input"
@@ -123,8 +127,8 @@ export default function RegisterPage() {
               />
             </div>
             <span className="mt-1 flex items-center justify-between text-xs text-[#6b7280]">
-              <span>8+ chars, mix letters, numbers &amp; symbols.</span>
-              {password && <span style={{ color: strength.color }}>{strength.label}</span>}
+              <span>{t('8+ chars, mix letters, numbers & symbols.')}</span>
+              {password && <span style={{ color: strength.color }}>{t(strength.label)}</span>}
             </span>
           </label>
 
@@ -132,16 +136,16 @@ export default function RegisterPage() {
           <Recaptcha onChange={setCaptcha} />
 
           <button type="submit" disabled={loading} className="ms-btn ms-btn-primary w-full py-2.5">
-            {loading ? 'Creating…' : 'Create account'}
+            {loading ? t('Creating…') : t('Create account')}
           </button>
 
           {/* Google sign-in renders only when VITE_GOOGLE_CLIENT_ID is set. */}
           <GoogleSignInButton onCredential={onGoogle} onError={setError} />
 
           <p className="text-center text-sm text-[#6b7280]">
-            Already have an account?{' '}
+            {t('Already have an account?')}{' '}
             <Link className="font-semibold text-[#4f46e5] hover:underline" to="/login">
-              Sign in
+              {t('Sign in')}
             </Link>
           </p>
         </form>

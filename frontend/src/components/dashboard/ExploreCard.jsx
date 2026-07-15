@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import SitePreview from './SitePreview.jsx'
 import { StarIcon, EyeIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 function Avatar({ url, name, size = 20 }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -20,9 +21,10 @@ function Avatar({ url, name, size = 20 }) {
 // One card on the Explore / Favorites grid: a live public thumbnail, owner
 // attribution, view + favorite counts, and a star toggle.
 export default function ExploreCard({ site, onToggleFav }) {
+  const { t } = useLanguage()
   return (
     <div className="ms-card group flex flex-col overflow-hidden p-0 transition hover:-translate-y-0.5 hover:shadow-md">
-      <Link to={`/site/${site.slug}`} className="block" title="Open the live site">
+      <Link to={`/site/${site.slug}`} className="block" title={t('Open the live site')}>
         <SitePreview site={site} source="public" height={150} />
       </Link>
       <div className="flex flex-1 flex-col p-4">
@@ -30,7 +32,7 @@ export default function ExploreCard({ site, onToggleFav }) {
           <h2 className="min-w-0 truncate font-semibold text-[#111827]">{site.title}</h2>
           <button
             onClick={() => onToggleFav(site)}
-            title={site.is_favorited ? 'Unfavorite' : 'Favorite'}
+            title={site.is_favorited ? t('Unfavorite') : t('Favorite')}
             className={`shrink-0 rounded-lg p-1.5 leading-none transition hover:bg-[#f3f4f6] ${
               site.is_favorited ? 'text-[#f59e0b]' : 'text-[#d1d5db] hover:text-[#9ca3af]'
             }`}
@@ -42,7 +44,7 @@ export default function ExploreCard({ site, onToggleFav }) {
           {site.owner_id ? (
             <Link
               to={`/u/${site.owner_id}`}
-              title={`See @${site.owner_username}'s profile`}
+              title={t('Profile')}
               className="flex min-w-0 items-center gap-2 hover:text-[#4f46e5]"
             >
               <Avatar url={site.owner_avatar_url} name={site.owner_display_name} />
@@ -56,15 +58,15 @@ export default function ExploreCard({ site, onToggleFav }) {
           )}
           {site.category && site.category !== 'other' && (
             <span className="ml-auto rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-medium capitalize text-[#6b7280]">
-              {site.category}
+              {t(site.category.charAt(0).toUpperCase() + site.category.slice(1))}
             </span>
           )}
         </div>
         <div className="mt-auto flex items-center gap-4 text-xs text-[#9ca3af]">
-          <span title="Views" className="flex items-center gap-1"><EyeIcon size={14} /> {site.view_count}</span>
-          <span title="Favorites" className="flex items-center gap-1"><StarIcon size={14} /> {site.favorite_count}</span>
+          <span title={t('Views')} className="flex items-center gap-1"><EyeIcon size={14} /> {site.view_count}</span>
+          <span title={t('Favorites')} className="flex items-center gap-1"><StarIcon size={14} /> {site.favorite_count}</span>
           <Link to={`/site/${site.slug}`} className="ml-auto font-medium text-[#4f46e5] hover:underline">
-            View →
+            {t('View →')}
           </Link>
         </div>
       </div>

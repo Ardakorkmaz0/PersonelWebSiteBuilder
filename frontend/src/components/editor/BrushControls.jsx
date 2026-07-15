@@ -1,5 +1,6 @@
 import { PaletteIcon } from '../icons.jsx'
 import { BRUSH_BASIC_COLORS, BRUSH_TARGETS } from '../../utils/brush.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Shared Brush sub-toolbar, used by BOTH editor modes so the brush looks and
 // behaves identically on the component canvas (EditorPage) and inside the
@@ -13,6 +14,7 @@ const swatchCls = (active) =>
 // `onColor(color)` is expected to both set the brush color AND remember it (the
 // caller's chooseBrushColor). `onTarget(key)` switches what gets recolored.
 export default function BrushControls({ brushColor, brushTarget, recentColors = [], onColor, onTarget }) {
+  const { t } = useLanguage()
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-[#f8fafc] px-4 py-1.5 text-xs text-[#374151]">
       <div className="flex items-center rounded-lg border border-[#d1d5db] bg-white p-0.5 font-medium">
@@ -27,7 +29,7 @@ export default function BrushControls({ brushColor, brushTarget, recentColors = 
                 : 'px-2 py-0.5 text-[#4b5563] hover:text-[#111827]'
             }
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -37,7 +39,7 @@ export default function BrushControls({ brushColor, brushTarget, recentColors = 
             key={color}
             type="button"
             title={color}
-            aria-label={`Use ${color}`}
+            aria-label={t('Use {color}', { color })}
             onClick={() => onColor(color)}
             className={swatchCls(brushColor === color)}
             style={{ backgroundColor: color }}
@@ -46,13 +48,13 @@ export default function BrushControls({ brushColor, brushTarget, recentColors = 
       </div>
       {recentColors.length > 0 && (
         <div className="flex items-center gap-1 border-l border-[#d1d5db] pl-2">
-          <span className="text-[11px] font-medium text-[#6b7280]">Recent</span>
+          <span className="text-[11px] font-medium text-[#6b7280]">{t('Recent')}</span>
           {recentColors.map((color) => (
             <button
               key={color}
               type="button"
               title={color}
-              aria-label={`Use recent ${color}`}
+              aria-label={t('Use recent {color}', { color })}
               onClick={() => onColor(color)}
               className={swatchCls(brushColor === color)}
               style={{ backgroundColor: color }}
@@ -67,7 +69,7 @@ export default function BrushControls({ brushColor, brushTarget, recentColors = 
           value={brushColor}
           onChange={(e) => onColor(e.target.value)}
           className="h-5 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
-          aria-label="Brush color"
+          aria-label={t('Brush color')}
         />
         <span className="font-mono text-[11px] uppercase">{brushColor}</span>
       </label>

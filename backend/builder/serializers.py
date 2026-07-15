@@ -4,7 +4,16 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import Profile, Report, Site, SiteSettings, SiteVersion, UploadedImage
+from .models import (
+    FormSubmission,
+    Profile,
+    Report,
+    ReviewComment,
+    Site,
+    SiteSettings,
+    SiteVersion,
+    UploadedImage,
+)
 from .validators import validate_and_clean_schema
 
 
@@ -272,15 +281,21 @@ class SiteListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'published', 'category', 'view_count',
-                  'favorite_count', 'created_at', 'updated_at')
+                  'favorite_count', 'custom_domain', 'domain_status',
+                  'created_at', 'updated_at')
 
 
 class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'schema', 'html', 'published',
-                  'category', 'tags', 'view_count', 'created_at', 'updated_at')
-        read_only_fields = ('id', 'slug', 'view_count', 'created_at', 'updated_at')
+                  'category', 'tags', 'site_options', 'review_token',
+                  'custom_domain', 'domain_status', 'domain_verification_token',
+                  'view_count', 'created_at', 'updated_at')
+        read_only_fields = (
+            'id', 'slug', 'review_token', 'domain_status',
+            'domain_verification_token', 'view_count', 'created_at', 'updated_at',
+        )
 
     def validate_schema(self, value):
         return validate_and_clean_schema(value)
@@ -308,7 +323,8 @@ class PublicSiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'schema', 'html', 'published', 'updated_at',
-                  'owner_id', 'owner_username', 'owner_display_name', 'owner_avatar_url')
+                  'site_options', 'owner_id', 'owner_username',
+                  'owner_display_name', 'owner_avatar_url')
 
     def _profile(self, obj):
         return getattr(obj.owner, 'profile', None)
@@ -320,6 +336,66 @@ class PublicSiteSerializer(serializers.ModelSerializer):
     def get_owner_avatar_url(self, obj):
         prof = self._profile(obj)
         return _absolute_image_url(prof.avatar if prof else None, self.context)
+
+
+class FormSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormSubmission
+        fields = ('id', 'data', 'page', 'is_read', 'created_at')
+        read_only_fields = fields
+
+
+class PublicFormSubmissionSerializer(serializers.Serializer):
+    data = serializers.JSONField()
+    page = serializers.CharField(required=False, allow_blank=True, max_length=140)
+    website = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
+    def validate_data(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Form data must be an object.')
+        if len(value) > 20:
+            raise serializers.ValidationError('Too many form fields.')
+        cleaned = {}
+        for raw_key, raw_value in value.items():
+            key = str(raw_key).strip()[:80]
+            if not key or key.lower() in {'password', 'passcode', 'credit_card', 'card_number'}:
+                continue
+            if isinstance(raw_value, list):
+                text = ', '.join(str(item) for item in raw_value[:10])
+            else:
+                text = str(raw_value)
+            cleaned[key] = text.strip()[:2000]
+        if not cleaned:
+            raise serializers.ValidationError('The form is empty.')
+        return cleaned
+
+
+class OwnerReviewCommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReviewComment
+        fields = (
+            'id', 'author_name', 'author_email', 'page_id',
+            'body', 'resolved', 'created_at',
+        )
+        read_only_fields = fields
+
+
+class PublicReviewCommentSerializer(serializers.ModelSerializer):
+    author_email = serializers.EmailField(required=False, allow_blank=True, write_only=True)
+
+    class Meta:
+        model = ReviewComment
+        fields = ('id', 'author_name', 'author_email', 'page_id', 'body', 'resolved', 'created_at')
+        read_only_fields = ('id', 'resolved', 'created_at')
+
+    def validate_author_name(self, value):
+        return value.strip()
+
+    def validate_body(self, value):
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError('Comment is too short.')
+        return value
 
 
 class SiteVersionSerializer(serializers.ModelSerializer):

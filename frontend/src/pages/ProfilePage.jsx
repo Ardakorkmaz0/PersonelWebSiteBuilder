@@ -10,8 +10,11 @@ import { useScrollRestore } from '../utils/useScrollRestore.js'
 import { useGoBack } from '../utils/useGoBack.js'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
 import { SearchIcon, CheckIcon, EyeIcon, StarIcon, GlobeIcon, FileIcon } from '../components/icons.jsx'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 export default function ProfilePage() {
+  const { t } = useLanguage()
   const goBack = useGoBack('/')
   const setUser = useAuthStore((s) => s.setUser)
   const navigate = useNavigate()
@@ -117,7 +120,7 @@ export default function ProfilePage() {
   }
 
   async function onDelete(id) {
-    if (!window.confirm('Delete this site? This cannot be undone.')) return
+    if (!window.confirm(t('Delete this site? This cannot be undone.'))) return
     try {
       await deleteSite(id)
       setSites((prev) => prev.filter((s) => s.id !== id))
@@ -133,16 +136,17 @@ export default function ProfilePage() {
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">
-            <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+            <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
             <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
-              &larr; Back
+              &larr; {t('Back')}
             </button>
           </div>
+          <LanguageSwitcher />
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="mb-6 text-2xl font-bold tracking-tight text-[#111827]">Profile</h1>
+        <h1 className="mb-6 text-2xl font-bold tracking-tight text-[#111827]">{t('Profile')}</h1>
 
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -151,7 +155,7 @@ export default function ProfilePage() {
         )}
 
         {loading ? (
-          <p className="text-sm text-[#6b7280]">Loading…</p>
+          <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
         ) : (
           <form onSubmit={onSave} className="ms-card space-y-6 p-6">
             <div className="flex items-center gap-5">
@@ -171,14 +175,14 @@ export default function ProfilePage() {
                   className="hidden"
                 />
                 <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="ms-btn px-4">
-                  {uploading ? 'Uploading…' : profile?.avatar_url ? 'Change photo' : 'Upload photo'}
+                  {uploading ? t('Uploading…') : profile?.avatar_url ? t('Change photo') : t('Upload photo')}
                 </button>
-                <p className="mt-1.5 text-xs text-[#9ca3af]">PNG, JPG, GIF, WEBP, AVIF or SVG. Max 5 MB.</p>
+                <p className="mt-1.5 text-xs text-[#9ca3af]">{t('PNG, JPG, GIF, WEBP, AVIF or SVG. Max 5 MB.')}</p>
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-[#374151]">Display name</label>
+              <label className="mb-1 block text-sm font-medium text-[#374151]">{t('Display name')}</label>
               <input
                 className="ms-input w-full"
                 placeholder={profile?.username}
@@ -186,16 +190,16 @@ export default function ProfilePage() {
                 maxLength={80}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
-              <p className="mt-1 text-xs text-[#9ca3af]">Shown in the header and on your sites. Defaults to your username.</p>
+              <p className="mt-1 text-xs text-[#9ca3af]">{t('Shown in the header and on your sites. Defaults to your username.')}</p>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-[#374151]">Bio</label>
+              <label className="mb-1 block text-sm font-medium text-[#374151]">{t('Bio')}</label>
               <textarea
                 className="ms-input w-full resize-none"
                 rows={3}
                 maxLength={300}
-                placeholder="A line or two about you…"
+                placeholder={t('A line or two about you…')}
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
               />
@@ -204,9 +208,9 @@ export default function ProfilePage() {
 
             <div className="flex items-center gap-3">
               <button type="submit" disabled={saving} className="ms-btn ms-btn-primary px-5">
-                {saving ? 'Saving…' : 'Save profile'}
+                {saving ? t('Saving…') : t('Save profile')}
               </button>
-              {saved && <span className="flex items-center gap-1 text-sm text-[#15803d]"><CheckIcon size={15} /> Saved</span>}
+              {saved && <span className="flex items-center gap-1 text-sm text-[#15803d]"><CheckIcon size={15} /> {t('Saved')}</span>}
             </div>
           </form>
         )}
@@ -215,16 +219,16 @@ export default function ProfilePage() {
             show on Explore). */}
         <section className="mt-12">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-bold tracking-tight text-[#111827]">My sites</h2>
+            <h2 className="text-xl font-bold tracking-tight text-[#111827]">{t('My sites')}</h2>
             <form onSubmit={onCreate} className="flex gap-2">
               <input
                 className="ms-input w-44"
-                placeholder="New site title"
+                placeholder={t('New site title')}
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
               />
               <button type="submit" disabled={creating || !newTitle.trim()} className="ms-btn ms-btn-primary whitespace-nowrap px-4">
-                {creating ? '…' : '+ Create'}
+                {creating ? '…' : t('+ Create')}
               </button>
             </form>
           </div>
@@ -244,7 +248,7 @@ export default function ProfilePage() {
                   </span>
                   <div className="min-w-0">
                     <div className="text-lg font-bold leading-tight text-[#111827]">{value.toLocaleString()}</div>
-                    <div className="truncate text-xs text-[#6b7280]">{label}</div>
+                    <div className="truncate text-xs text-[#6b7280]">{t(label)}</div>
                   </div>
                 </div>
               ))}
@@ -256,7 +260,7 @@ export default function ProfilePage() {
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]"><SearchIcon size={16} /></span>
               <input
                 className="ms-input w-full pl-9"
-                placeholder="Search your sites…"
+                placeholder={t('Search your sites…')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -264,14 +268,14 @@ export default function ProfilePage() {
           )}
 
           {sitesLoading ? (
-            <p className="text-sm text-[#6b7280]">Loading…</p>
+            <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
           ) : sites.length === 0 ? (
             <div className="ms-card border-dashed py-14 text-center">
-              <p className="font-medium text-[#374151]">No sites yet</p>
-              <p className="mt-1 text-sm text-[#6b7280]">Create your first site above.</p>
+              <p className="font-medium text-[#374151]">{t('No sites yet')}</p>
+              <p className="mt-1 text-sm text-[#6b7280]">{t('Create your first site above.')}</p>
             </div>
           ) : visibleSites.length === 0 ? (
-            <p className="text-sm text-[#6b7280]">No sites match “{query}”.</p>
+            <p className="text-sm text-[#6b7280]">{t('No sites match “{query}”.', { query })}</p>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {visibleSites.map((site) => (
@@ -290,28 +294,28 @@ export default function ProfilePage() {
                           site.published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
                         }`}
                       >
-                        {site.published ? 'Published' : 'Draft'}
+                        {site.published ? t('Published') : t('Draft')}
                       </span>
                     </div>
                     <div className="mb-3 flex items-center gap-4 text-xs text-[#9ca3af]">
-                      <span title="Views" className="flex items-center gap-1"><EyeIcon size={13} /> {(site.view_count || 0).toLocaleString()}</span>
-                      <span title="Favorites" className="flex items-center gap-1"><StarIcon size={13} /> {(site.favorite_count || 0).toLocaleString()}</span>
+                      <span title={t('Views')} className="flex items-center gap-1"><EyeIcon size={13} /> {(site.view_count || 0).toLocaleString()}</span>
+                      <span title={t('Favorites')} className="flex items-center gap-1"><StarIcon size={13} /> {(site.favorite_count || 0).toLocaleString()}</span>
                     </div>
                     <div className="mt-auto flex items-center gap-3 text-sm">
                       <Link to={`/editor/${site.id}`} className="ms-btn ms-btn-primary">
-                        Open editor
+                        {t('Open editor')}
                       </Link>
                       {site.published && (
                         <Link to={`/site/${site.slug}`} className="font-medium text-[#4f46e5] hover:underline">
-                          View
+                          {t('View')}
                         </Link>
                       )}
                       <button
                         onClick={() => onDelete(site.id)}
                         className="ml-auto rounded-lg px-2 py-1 text-[#9ca3af] transition hover:bg-red-50 hover:text-red-600"
-                        title="Delete site"
+                        title={t('Delete site')}
                       >
-                        Delete
+                        {t('Delete')}
                       </button>
                     </div>
                   </div>

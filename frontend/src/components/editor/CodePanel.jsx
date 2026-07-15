@@ -3,6 +3,7 @@ import { useEditorStore } from '../../store/editorStore.js'
 import { schemaToFiles, schemaToSingleHtml } from '../../utils/schemaToFiles.js'
 import { schemaToResponsiveHtml } from '../../utils/responsiveHtml.js'
 import { zipFiles } from '../../utils/zip.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Produce a GENUINELY responsive standalone .html for one page: flow pages are
 // already responsive (their classed CSS uses flex + @media), while free/absolute
@@ -43,6 +44,7 @@ function saveAs(filename, content, mime = 'text/plain') {
 }
 
 export default function CodePanel() {
+  const { t } = useLanguage()
   const schema = useEditorStore((s) => s.schema)
   const files = useMemo(() => schemaToFiles(schema), [schema])
   const [active, setActive] = useState('index.html')
@@ -113,13 +115,13 @@ export default function CodePanel() {
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e7eb] px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-          Code files
+          {t('Code files')}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
             onClick={downloadSingleHtml}
-            title="Download a single responsive .html file"
+            title={t('Download a single responsive .html file')}
             className="rounded-lg border border-[#d1d5db] px-2 py-0.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
           >
             HTML
@@ -127,7 +129,7 @@ export default function CodePanel() {
           <button
             type="button"
             onClick={downloadZip}
-            title="Download all pages and schema as a .zip"
+            title={t('Download all pages and schema as a .zip')}
             className="rounded-lg bg-[#4f46e5] px-2 py-0.5 text-xs font-semibold text-white hover:bg-[#4338ca]"
           >
             ZIP
@@ -140,11 +142,11 @@ export default function CodePanel() {
         <div className="w-36 shrink-0 overflow-y-auto border-r border-[#e5e7eb] bg-[#f9fafb] p-1.5">
           <div className="flex items-center gap-1 px-1 py-1 text-xs font-semibold text-[#374151]">
             <span className="font-mono text-[10px]">/</span>
-            <span>my-site</span>
+            <span>{t('my-site')}</span>
           </div>
           <div className="flex items-center gap-1 py-1 pl-3 text-xs font-medium text-[#6b7280]">
             <span className="font-mono text-[10px]">/</span>
-            <span>pages</span>
+            <span>{t('pages')}</span>
           </div>
           {htmlFiles.map((f) => (
             <FileBtn key={f.name} f={f} indent={28} />
@@ -162,17 +164,17 @@ export default function CodePanel() {
               <button
                 type="button"
                 onClick={downloadCurrentFile}
-                title={`Download ${file?.name}`}
+                title={t('Download {name}', { name: file?.name })}
                 className="rounded-lg border border-[#d1d5db] px-2 py-0.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
               >
-                File
+                {t('File')}
               </button>
               <button
                 type="button"
                 onClick={copy}
                 className="rounded-lg border border-[#d1d5db] px-2 py-0.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
               >
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? t('Copied') : t('Copy')}
               </button>
             </div>
           </div>

@@ -17,7 +17,21 @@ export const ICONS = {
 }
 
 export const ICON_NAMES = Object.keys(ICONS)
-export const ICON_OPTIONS = ICON_NAMES.map((n) => [n, n])
+const ICON_LABELS = {
+  star: 'Star',
+  heart: 'Heart',
+  check: 'Check',
+  arrowRight: 'Arrow right',
+  mail: 'Mail',
+  phone: 'Phone',
+  home: 'Home',
+  user: 'User',
+  search: 'Search',
+  link: 'Link',
+  menu: 'Menu',
+  globe: 'Globe',
+}
+export const ICON_OPTIONS = ICON_NAMES.map((name) => [name, ICON_LABELS[name]])
 
 // Build the inline <svg> string (used by the HTML export). `name` is looked up in
 // the trusted ICONS map, so nothing user-supplied ends up in the markup.

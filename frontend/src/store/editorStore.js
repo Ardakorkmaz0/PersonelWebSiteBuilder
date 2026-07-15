@@ -8,6 +8,7 @@ import {
 } from '../utils/theme.js'
 import { componentPresetStyles, componentPresetProps } from '../utils/componentPresets.js'
 import { recolorHtml } from '../utils/htmlRecolor.js'
+import { regionContentWidth } from '../utils/regionLayout.js'
 
 const HISTORY_LIMIT = 60
 const COALESCE_MS = 500
@@ -15,7 +16,7 @@ const COALESCE_MS = 500
 const MOBILE_PAD = 16
 const MOBILE_GAP = 16
 const MOBILE_IMAGE_MAX_WIDTH = 280
-const FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
+const FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
 
 function genId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 8)}`
@@ -66,7 +67,7 @@ function mapPage(schema, id, updater) {
 // walk the tree so a component can be found / edited / removed anywhere, not
 // just at the top level. Top-level mobile auto-layout still only runs on the
 // page's roots.
-const PARENT_TYPES = new Set(['container', 'tabs'])
+const PARENT_TYPES = new Set(['container', 'tabs', 'region'])
 const hasKids = (c) => PARENT_TYPES.has(c.type) && Array.isArray(c.children)
 const TEXT_BRUSH_TYPES = new Set(['heading', 'text', 'list', 'quote', 'icon', 'linkbutton'])
 const FIELD_BRUSH_TYPES = new Set(['input', 'select'])
@@ -207,6 +208,76 @@ function findParentInTree(components, id) {
   return null
 }
 
+function parentDesignWidth(parent, mobileWidth) {
+  if (parent?.type === 'region') {
+    return mobileWidth || regionContentWidth(parent)
+  }
+  return Math.round(parent?.layout?.w || 0) || undefined
+}
+
+function shiftAfterRegion(components, regionId, key, delta, oldBottom) {
+  if (!delta) return components
+  return components.map((component) => {
+    if (component.id === regionId) return component
+    const layout = component[key] || component.layout || {}
+    if ((layout.y || 0) < oldBottom - 1) return component
+    return {
+      ...component,
+      [key]: { ...layout, y: Math.max(0, Math.round((layout.y || 0) + delta)) },
+    }
+  })
+}
+
+function removeWithRegionReflow(components, ids) {
+  const wanted = new Set(ids)
+  let next = components
+  const regions = components
+    .filter((component) => wanted.has(component.id) && component.type === 'region')
+    .sort((a, b) => (a.layout?.y || 0) - (b.layout?.y || 0))
+  for (const region of regions) {
+    next = removeFromTree(next, region.id)
+    for (const key of ['layout', 'mobileLayout']) {
+      const layout = region[key] || region.layout || {}
+      next = shiftAfterRegion(
+        next,
+        region.id,
+        key,
+        -Math.max(4, Math.round(layout.h || 0)),
+        (layout.y || 0) + (layout.h || 0),
+      )
+    }
+  }
+  for (const id of ids) {
+    if (!regions.some((region) => region.id === id)) next = removeFromTree(next, id)
+  }
+  return next
+}
+
+function swapRegionPositions(components, id, direction) {
+  const regions = components
+    .filter((component) => component.type === 'region')
+    .sort((a, b) => (a.layout?.y || 0) - (b.layout?.y || 0))
+  const index = regions.findIndex((region) => region.id === id)
+  const targetIndex = index + direction
+  if (index < 0 || targetIndex < 0 || targetIndex >= regions.length) return components
+  const current = regions[index]
+  const target = regions[targetIndex]
+  const updates = {}
+  for (const key of ['layout', 'mobileLayout']) {
+    const currentLayout = current[key] || current.layout || {}
+    const targetLayout = target[key] || target.layout || {}
+    const start = direction < 0 ? targetLayout.y || 0 : currentLayout.y || 0
+    if (direction < 0) {
+      updates[current.id] = { ...(updates[current.id] || {}), [key]: { ...currentLayout, y: start } }
+      updates[target.id] = { ...(updates[target.id] || {}), [key]: { ...targetLayout, y: start + (currentLayout.h || 0) } }
+    } else {
+      updates[target.id] = { ...(updates[target.id] || {}), [key]: { ...targetLayout, y: start } }
+      updates[current.id] = { ...(updates[current.id] || {}), [key]: { ...currentLayout, y: start + (targetLayout.h || 0) } }
+    }
+  }
+  return components.map((component) => updates[component.id] ? { ...component, ...updates[component.id] } : component)
+}
+
 function addChildToTree(components, parentId, child) {
   return components.map((c) => {
     if (c.id === parentId && PARENT_TYPES.has(c.type)) {
@@ -305,9 +376,14 @@ function computeAlignParentBox(page, viewport, id, components) {
   }
   const parent = findParentInTree(components, id)
   if (!parent) return null
+  const parentLayout = viewport === 'mobile' && parent.type === 'region'
+    ? parent.mobileLayout || parent.layout
+    : parent.layout
   return {
-    w: Math.round(parent.layout?.w || 0) || 600,
-    h: Math.round(parent.layout?.h || 0) || 400,
+    w: parentDesignWidth(parent, viewport === 'mobile' && parent.type === 'region'
+      ? page.mobileWidth || MOBILE_CANVAS_WIDTH
+      : undefined) || 600,
+    h: Math.round(parentLayout?.h || 0) || 400,
   }
 }
 
@@ -538,10 +614,11 @@ export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) 
     .map((c) => c.id)
 
   const out = {}
-  let y = MOBILE_PAD
   const byId = new Map(components.map((c) => [c.id, c]))
+  const readingOrder = byReading(topLevel)
+  let y = readingOrder.length && byId.get(readingOrder[0])?.type === 'region' ? 0 : MOBILE_PAD
 
-  for (const id of byReading(topLevel)) {
+  for (const id of readingOrder) {
     const c = byId.get(id)
     const kids = childrenOf.get(id)
     if (c.type === 'section' && kids && kids.length) {
@@ -558,6 +635,12 @@ export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) 
       const bandH = cy - MOBILE_GAP + BAND_PAD - y
       out[id] = { x: 0, y, w: mobileWidth, h: Math.round(bandH) }
       y += Math.round(bandH) + MOBILE_GAP
+    } else if (c.type === 'region') {
+      // Wix-like sections form one continuous page: no outer padding or gaps
+      // between consecutive bands. Their own backgrounds provide separation.
+      const h = estMobileHeight(c, mobileWidth)
+      out[id] = { x: 0, y, w: mobileWidth, h }
+      y += h
     } else if (FULL_WIDTH_TYPES.has(c.type)) {
       const h = estMobileHeight(c, mobileWidth)
       out[id] = { x: 0, y, w: mobileWidth, h }
@@ -606,6 +689,7 @@ function normalize(components, mobileWidth = MOBILE_CANVAS_WIDTH) {
             children: normalizeAbsoluteChildren(
               c,
               normalize(Array.isArray(c.children) ? c.children : [], mobileWidth),
+              mobileWidth,
             ),
           }
         : {}),
@@ -613,7 +697,31 @@ function normalize(components, mobileWidth = MOBILE_CANVAS_WIDTH) {
   })
 }
 
-function normalizeAbsoluteChildren(parent, children) {
+function normalizeAbsoluteChildren(parent, children, mobileWidth = MOBILE_CANVAS_WIDTH) {
+  if (parent.type === 'region') {
+    const needsMobileStack = children.length > 1 && children.every((child) => {
+      const layout = child.mobileLayout || {}
+      return (layout.x || 0) === 0 && (layout.y || 0) === 0
+    })
+    if (!needsMobileStack) return children
+    let mobileY = MOBILE_PAD
+    return children.map((child) => {
+      const layout = child.mobileLayout || child.layout || {}
+      const width = Math.min(Math.max(8, Math.round(layout.w || 200)), mobileWidth - MOBILE_PAD * 2)
+      const next = {
+        ...child,
+        mobileLayout: {
+          ...layout,
+          x: MOBILE_PAD,
+          y: mobileY,
+          w: width,
+          h: Math.max(4, Math.round(layout.h || 80)),
+        },
+      }
+      mobileY += next.mobileLayout.h + MOBILE_GAP
+      return next
+    })
+  }
   if (parent.type !== 'container' || children.length <= 1) return children
   const hasPositionedChild = children.some((child) => {
     const l = child.layout || {}
@@ -805,6 +913,7 @@ export const useEditorStore = create((set, get) => ({
         components: orderForFlow(p.components || []),
       })),
       selectedId: null,
+      selectedIds: [],
       dirty: true,
     }))
   },
@@ -833,6 +942,7 @@ export const useEditorStore = create((set, get) => ({
       schema: normalized,
       currentPageId: normalized.pages[0].id,
       selectedId: null,
+      selectedIds: [],
       viewport: 'pc',
       dirty: false,
       past: [],
@@ -856,6 +966,7 @@ export const useEditorStore = create((set, get) => ({
         schema: normalized,
         currentPageId: normalized.pages[0].id,
         selectedId: null,
+        selectedIds: [],
         viewport: 'pc',
         dirty: true,
         linkMode: false,
@@ -881,6 +992,7 @@ export const useEditorStore = create((set, get) => ({
         schema: { ...state.schema, pages: [...state.schema.pages, page] },
         currentPageId: page.id,
         selectedId: null,
+        selectedIds: [],
         dirty: true,
       }
     })
@@ -935,6 +1047,7 @@ export const useEditorStore = create((set, get) => ({
         schema: { ...state.schema, pages },
         currentPageId: copy.id,
         selectedId: null,
+        selectedIds: [],
         dirty: true,
       }
     })
@@ -951,6 +1064,7 @@ export const useEditorStore = create((set, get) => ({
         schema: { ...state.schema, pages },
         currentPageId: current,
         selectedId: null,
+        selectedIds: [],
         dirty: true,
       }
     })
@@ -993,28 +1107,61 @@ export const useEditorStore = create((set, get) => ({
       // Dropping a palette item INTO a container: it becomes a flowing child.
       if (parentId) {
         const parentNode = findInTree(comps, parentId)
-        const parentW = Math.round(parentNode?.layout?.w || 0) || undefined
+        const parentW = parentDesignWidth(parentNode)
         const parentH = Math.round(parentNode?.layout?.h || 0) || undefined
+        const regionParent = parentNode?.type === 'region'
+        const siblings = Array.isArray(parentNode?.children) ? parentNode.children : []
+        const desktopBottom = siblings.reduce((max, sibling) => {
+          const layout = sibling.layout || {}
+          return Math.max(max, (layout.y || 0) + (layout.h || 0))
+        }, 0)
+        const mobileBottom = siblings.reduce((max, sibling) => {
+          const layout = sibling.mobileLayout || sibling.layout || {}
+          return Math.max(max, (layout.y || 0) + (layout.h || 0))
+        }, 0)
+        const desktopLayout = regionParent && state.viewport === 'mobile'
+          ? {
+              x: MOBILE_PAD,
+              y: desktopBottom ? desktopBottom + MOBILE_GAP : MOBILE_PAD,
+              w: Math.min(size.w, Math.max(8, parentW - MOBILE_PAD * 2)),
+              h: size.h,
+            }
+          : {
+              x: Math.max(0, Math.round(x)),
+              y: Math.max(0, Math.round(y)),
+              w: fullWidth ? parentW || page.canvasWidth || CANVAS_WIDTH : size.w,
+              h: size.h,
+            }
+        const regionMobileLayout = state.viewport === 'mobile'
+          ? {
+              x: Math.max(0, Math.round(x)),
+              y: Math.max(0, Math.round(y)),
+              w: fullWidth ? mobileWidth : Math.min(size.w, mobileWidth - MOBILE_PAD * 2),
+              h: size.h,
+            }
+          : {
+              x: MOBILE_PAD,
+              y: mobileBottom ? mobileBottom + MOBILE_GAP : MOBILE_PAD,
+              w: fullWidth ? mobileWidth : Math.min(size.w, mobileWidth - MOBILE_PAD * 2),
+              h: size.h,
+            }
         const child = {
           id,
           type,
           props: makeProps(),
           styles,
           layout: clampLayout(
-            {
-              x: Math.max(0, Math.round(x)),
-              y: Math.max(0, Math.round(y)),
-              w: fullWidth ? parentW || page.canvasWidth || CANVAS_WIDTH : size.w,
-              h: size.h,
-            },
+            desktopLayout,
             { maxX: parentW, maxY: parentH },
           ),
-          mobileLayout: {
-            x: 0,
-            y: 0,
-            w: fullWidth ? mobileWidth : Math.min(size.w, mobileWidth - MOBILE_PAD * 2),
-            h: size.h,
-          },
+          mobileLayout: regionParent
+            ? clampLayout(regionMobileLayout, { maxX: mobileWidth, maxY: parentNode?.mobileLayout?.h || parentH })
+            : {
+                x: 0,
+                y: 0,
+                w: fullWidth ? mobileWidth : Math.min(size.w, mobileWidth - MOBILE_PAD * 2),
+                h: size.h,
+              },
           hidden: false,
           hiddenMobile: false,
           ...kids,
@@ -1026,6 +1173,7 @@ export const useEditorStore = create((set, get) => ({
             addChildToTree(page.components, parentId, child),
           ),
           selectedId: id,
+          selectedIds: [id],
           dirty: true,
         }
       }
@@ -1055,11 +1203,21 @@ export const useEditorStore = create((set, get) => ({
         return {
           schema: withComponents(state.schema, page.id, [...comps, component]),
           selectedId: id,
+          selectedIds: [id],
           dirty: true,
         }
       }
 
       const pcW = page.canvasWidth || CANVAS_WIDTH
+      const isRegion = type === 'region'
+      const desktopBandY = comps.reduce(
+        (max, component) => Math.max(max, (component.layout?.y || 0) + (component.layout?.h || 0)),
+        0,
+      )
+      const mobileBandY = comps.reduce((max, component) => {
+        const itemLayout = component.mobileLayout || component.layout || {}
+        return Math.max(max, (itemLayout.y || 0) + (itemLayout.h || 0))
+      }, 0)
       let layout, mobileLayout
       if (state.viewport === 'mobile') {
         // Drop lands on the mobile canvas; give the desktop a stacked default.
@@ -1069,7 +1227,7 @@ export const useEditorStore = create((set, get) => ({
         mobileLayout = clampLayout(
           {
             x: fullWidth ? 0 : Math.round(x),
-            y: Math.round(y),
+            y: isRegion ? mobileBandY : Math.round(y),
             w: mw,
             h: size.h,
           },
@@ -1081,13 +1239,13 @@ export const useEditorStore = create((set, get) => ({
             24,
           ) + 16
         layout = clampLayout(
-          { x: 24, y: dy, w: size.w, h: size.h },
+          { x: isRegion ? 0 : 24, y: isRegion ? desktopBandY : dy, w: size.w, h: size.h },
           { maxX: pcW },
         )
       } else {
         // Drop lands on the desktop canvas; stack a mobile default below.
         layout = clampLayout(
-          { x: Math.round(x), y: Math.round(y), w: size.w, h: size.h },
+          { x: isRegion ? 0 : Math.round(x), y: isRegion ? desktopBandY : Math.round(y), w: size.w, h: size.h },
           { maxX: pcW },
         )
         const my =
@@ -1099,7 +1257,7 @@ export const useEditorStore = create((set, get) => ({
         mobileLayout = clampLayout(
           {
             x: fullWidth ? 0 : MOBILE_PAD,
-            y: my,
+            y: isRegion ? mobileBandY : my,
             w: fullWidth ? mobileWidth : mobileWidth - MOBILE_PAD * 2,
             h: size.h,
           },
@@ -1125,7 +1283,7 @@ export const useEditorStore = create((set, get) => ({
         state.viewport === 'mobile'
           ? mapPage(state.schema, page.id, (p) => ({ ...p, components: nextComps, mobileManual: true }))
           : withComponents(state.schema, page.id, nextComps)
-      return { schema, selectedId: id, dirty: true }
+      return { schema, selectedId: id, selectedIds: [id], dirty: true }
     })
   },
 
@@ -1175,7 +1333,7 @@ export const useEditorStore = create((set, get) => ({
       if (!built.length) return {}
       const nextComps = [...page.components, ...built]
       const schema = withComponents(state.schema, page.id, nextComps)
-      return { schema, selectedId: built[0].id, dirty: true }
+      return { schema, selectedId: built[0].id, selectedIds: [built[0].id], dirty: true }
     })
   },
 
@@ -1281,8 +1439,7 @@ export const useEditorStore = create((set, get) => ({
     get().record('remove-sel')
     set((state) => {
       const page = selectCurrentPage(state)
-      let components = page.components
-      for (const id of ids) components = removeFromTree(components, id)
+      const components = removeWithRegionReflow(page.components, ids)
       return {
         schema: withComponents(state.schema, page.id, components),
         selectedId: null,
@@ -1640,7 +1797,13 @@ export const useEditorStore = create((set, get) => ({
   // Nested children always flow, so they only ever edit their single `layout`.
   setLayout: (id, patch) => {
     const page0 = selectCurrentPage(get())
-    const key = isTopLevel(page0.components, id) ? get().layoutKey() : 'layout'
+    const topLevel = isTopLevel(page0.components, id)
+    const parent0 = topLevel ? null : findParentInTree(page0.components, id)
+    const key = topLevel
+      ? get().layoutKey()
+      : get().viewport === 'mobile' && parent0?.type === 'region'
+        ? 'mobileLayout'
+        : 'layout'
     get().record('layout-' + key + '-' + id)
     set((state) => {
       const page = selectCurrentPage(state)
@@ -1657,14 +1820,31 @@ export const useEditorStore = create((set, get) => ({
       } else if (!isTop) {
         const parent = findParentInTree(page.components, id)
         if (parent) {
-          maxX = Math.round(parent.layout?.w || 0) || undefined
-          maxY = Math.round(parent.layout?.h || 0) || undefined
+          maxX = parentDesignWidth(parent, key === 'mobileLayout' && parent.type === 'region'
+            ? page.mobileWidth || MOBILE_CANVAS_WIDTH
+            : undefined)
+          const parentLayout = key === 'mobileLayout' ? parent.mobileLayout || parent.layout : parent.layout
+          maxY = Math.round(parentLayout?.h || 0) || undefined
         }
       }
-      const components = mapTree(page.components, id, (c) => {
+      const before = findInTree(page.components, id)
+      let components = mapTree(page.components, id, (c) => {
         const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
         return { ...c, [key]: clampLayout({ ...base, ...patch }, { maxX, maxY }) }
       })
+      if (isTop && before?.type === 'region' && patch.h !== undefined) {
+        const oldLayout = before[key] || before.layout || {}
+        const after = findInTree(components, id)
+        const nextLayout = after?.[key] || after?.layout || oldLayout
+        const delta = (nextLayout.h || 0) - (oldLayout.h || 0)
+        components = shiftAfterRegion(
+          components,
+          id,
+          key,
+          delta,
+          (oldLayout.y || 0) + (oldLayout.h || 0),
+        )
+      }
       // Editing the mobile layout directly switches that page to manual mode (it
       // stops auto-following PC); PC edits keep mobile in auto sync.
       const schema =
@@ -1831,6 +2011,7 @@ export const useEditorStore = create((set, get) => ({
       return {
         schema: withComponents(state.schema, page.id, components),
         selectedId: copy.id,
+        selectedIds: [copy.id],
         dirty: true,
       }
     })
@@ -1921,15 +2102,30 @@ export const useEditorStore = create((set, get) => ({
     })
   },
 
+  moveRegion: (id, direction) => {
+    const delta = direction === 'up' || direction === -1 ? -1 : 1
+    get().record('region-order')
+    set((state) => {
+      const page = selectCurrentPage(state)
+      return {
+        schema: withComponents(state.schema, page.id, swapRegionPositions(page.components, id, delta)),
+        dirty: true,
+      }
+    })
+  },
+
   removeComponent: (id) => {
     get().record('remove')
     set((state) => {
       const page = selectCurrentPage(state)
-      const components = removeFromTree(page.components, id)
+      const components = removeWithRegionReflow(page.components, [id])
+      const selectedIds = state.selectedIds.filter((selected) => findInTree(components, selected))
       return {
         schema: withComponents(state.schema, page.id, components),
-        selectedId: state.selectedId === id ? null : state.selectedId,
-        selectedIds: state.selectedIds.filter((x) => x !== id),
+        selectedId: selectedIds.includes(state.selectedId)
+          ? state.selectedId
+          : selectedIds[selectedIds.length - 1] || null,
+        selectedIds,
         dirty: true,
       }
     })
@@ -1949,6 +2145,7 @@ export const useEditorStore = create((set, get) => ({
         past: state.past.slice(0, -1),
         future: [state.schema, ...state.future],
         selectedId: null,
+        selectedIds: [],
         dirty: true,
       }
     }),
@@ -1966,6 +2163,8 @@ export const useEditorStore = create((set, get) => ({
         currentPageId,
         future: state.future.slice(1),
         past: [...state.past, state.schema],
+        selectedId: null,
+        selectedIds: [],
         dirty: true,
       }
     }),

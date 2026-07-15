@@ -60,3 +60,66 @@ describe('schemaToSingleHtml fixed components', () => {
     expect(html).toContain('Math.min(1, screenW / mode.w)')
   })
 })
+
+describe('schemaToSingleHtml responsive regions', () => {
+  it('exports a full-width wrapper with docked desktop and separate mobile layouts', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+        canvasWidth: 1000, mobileWidth: 390,
+        components: [{
+          id: 'region_1', type: 'region', props: { contentWidth: 1200 },
+          styles: { backgroundColor: '#eef2ff' },
+          layout: { x: 100, y: 40, w: 1200, h: 360 },
+          mobileLayout: { x: 0, y: 40, w: 390, h: 360 },
+          children: [{
+            id: 'button_1', type: 'button',
+            props: { text: 'Go', href: '#', dockX: 'right' }, styles: {},
+            layout: { x: 940, y: 80, w: 180, h: 48 },
+            mobileLayout: { x: 16, y: 24, w: 180, h: 48 },
+          }],
+        }],
+      }],
+    }, 'Region test')
+    expect(html).toContain('class="region-child region-region_1-button_1"')
+    expect(html).toContain('max-width:1200px')
+    expect(html).toContain('left: 0px')
+    expect(html).toContain('width: 1000px')
+    expect(html).toContain('right:80px;width:180px')
+    expect(html).toContain('.region-region_1-button_1 { left:16px;right:auto;top:24px;width:180px')
+    expect(html).not.toContain('data-region-design')
+  })
+})
+
+describe('schemaToSingleHtml mobile navbar', () => {
+  it('exports a hamburger menu with the same interactive runtime as preview', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'home', name: 'Home', mode: 'empty', flowMode: false,
+        canvasWidth: 1000, mobileWidth: 390,
+        components: [{
+          id: 'nav', type: 'navbar',
+          props: {
+            brand: 'Studio',
+            links: [{ label: 'Work', href: '#work' }],
+            navLayout: 'horizontal',
+            mobileNavMode: 'menu',
+          },
+          styles: { backgroundColor: '#111827', color: '#ffffff' },
+          layout: { x: 0, y: 0, w: 1000, h: 64 },
+          mobileLayout: { x: 0, y: 0, w: 390, h: 64 },
+        }],
+      }],
+    }, 'Navbar test')
+
+    expect(html).toContain('data-builder-mobile-nav')
+    expect(html).toContain('data-builder-mobile-nav-toggle')
+    expect(html).toContain('nav-mobile-menu')
+    expect(html).toContain('--builder-nav-menu-bg:#111827')
+    expect(html).toContain('background:var(--builder-nav-menu-bg,#1d1d1f)')
+    expect(html).toContain('[data-mobile-open="true"] .links')
+    expect(html).toContain("navRoot.setAttribute('data-mobile-open'")
+  })
+})

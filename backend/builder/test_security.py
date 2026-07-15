@@ -5,6 +5,8 @@ import pytest
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 
+from .views import _normalise_base
+
 
 @pytest.fixture
 def client():
@@ -17,6 +19,10 @@ def _auth_limit(settings):
     isn't fragile to DRF's api_settings reload timing across tests."""
     rate = settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['auth']
     return int(rate.split('/')[0])
+
+
+def test_save_source_header_is_allowed_by_cors(settings):
+    assert 'x-site-save-source' in settings.CORS_ALLOW_HEADERS
 
 
 @pytest.mark.django_db
@@ -61,6 +67,56 @@ class TestLocalAiDisabledInProd:
         # in CI) — the point is it is NOT a hard 403.
         settings.DEBUG = True
         assert client.get('/api/ai/local/status/').status_code != 403
+
+
+class TestLocalAiLoopbackOnly:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('http://localhost:11434', 'http://localhost:11434/v1'),
+            ('http://127.0.0.1:1234/v1', 'http://127.0.0.1:1234/v1'),
+            ('http://127.42.0.9:11434', 'http://127.42.0.9:11434/v1'),
+            ('http://[::1]:11434', 'http://[::1]:11434/v1'),
+        ],
+    )
+    def test_normalise_accepts_only_loopback_forms(self, value, expected):
+        assert _normalise_base(value) == expected
+
+    @pytest.mark.parametrize(
+        'value',
+        [
+            'http://169.254.169.254/latest/meta-data',
+            'http://10.0.0.5:11434',
+            'https://example.com/v1',
+            'http://localhost.evil.test:11434',
+            'http://user:pass@localhost:11434',
+            'file:///etc/passwd',
+        ],
+    )
+    def test_normalise_rejects_non_loopback_or_ambiguous_urls(self, value):
+        with pytest.raises(ValueError):
+            _normalise_base(value)
+
+    @pytest.mark.django_db
+    def test_status_rejects_remote_base_before_network_access(self, client, settings):
+        settings.DEBUG = True
+        response = client.get(
+            '/api/ai/local/status/',
+            {'base': 'http://169.254.169.254/latest/meta-data'},
+        )
+        assert response.status_code == 400
+        assert 'loopback' in response.data['detail']
+
+    @pytest.mark.django_db
+    def test_proxy_rejects_remote_base_before_network_access(self, client, settings):
+        settings.DEBUG = True
+        response = client.post(
+            '/api/ai/local/proxy/',
+            {'_localBase': 'http://10.0.0.5:11434', 'messages': []},
+            format='json',
+        )
+        assert response.status_code == 400
+        assert 'loopback' in response.data['detail']
 
 
 @pytest.mark.django_db

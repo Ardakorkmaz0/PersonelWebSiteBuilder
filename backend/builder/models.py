@@ -1,4 +1,6 @@
 import math
+import secrets
+import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -49,6 +51,10 @@ def default_schema():
     }
 
 
+def _domain_verification_token():
+    return secrets.token_hex(16)
+
+
 class Site(models.Model):
     # YouTube-style discovery categories the creator picks; drives the Explore
     # filter chips.
@@ -76,6 +82,27 @@ class Site(models.Model):
     published = models.BooleanField(default=False)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     tags = models.JSONField(default=list, blank=True)
+    # Product-level settings that do not belong to the visual schema. Keeping
+    # SEO and publishing metadata here lets content/design history remain small.
+    site_options = models.JSONField(default=dict, blank=True)
+    # Tokenised review links allow a client to comment on a draft without
+    # receiving an editor account or access to the owner's dashboard.
+    review_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    custom_domain = models.CharField(max_length=253, blank=True, default='', db_index=True)
+    domain_status = models.CharField(
+        max_length=16,
+        choices=(
+            ('not_connected', 'Not connected'),
+            ('pending', 'Pending DNS'),
+            ('connected', 'Connected'),
+        ),
+        default='not_connected',
+    )
+    domain_verification_token = models.CharField(
+        max_length=64,
+        default=_domain_verification_token,
+        editable=False,
+    )
     # How many times the public /site/<slug> page has been viewed (by anyone
     # other than the owner).
     view_count = models.PositiveIntegerField(default=0)
@@ -119,6 +146,58 @@ class Site(models.Model):
             slug = f'{base}-{counter}'
             counter += 1
         return slug
+
+
+class FormSubmission(models.Model):
+    """A form payload received from a hosted public site.
+
+    The payload is deliberately generic because imported HTML can name fields
+    freely. Serializers cap field count/key/value sizes before data reaches it.
+    """
+
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='form_submissions')
+    data = models.JSONField(default=dict)
+    page = models.CharField(max_length=140, blank=True, default='')
+    is_read = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['site', 'is_read', '-created_at'])]
+
+
+class SiteVisit(models.Model):
+    """Privacy-light analytics event: no IP, cookie id, or full user agent."""
+
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='visits')
+    path = models.CharField(max_length=180, blank=True, default='')
+    referrer = models.CharField(max_length=253, blank=True, default='')
+    device = models.CharField(
+        max_length=10,
+        choices=(('mobile', 'Mobile'), ('tablet', 'Tablet'), ('desktop', 'Desktop')),
+        default='desktop',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['site', '-created_at'])]
+
+
+class ReviewComment(models.Model):
+    """Client feedback left through a site's unguessable review link."""
+
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='review_comments')
+    author_name = models.CharField(max_length=80)
+    author_email = models.EmailField(blank=True, default='')
+    page_id = models.CharField(max_length=140, blank=True, default='')
+    body = models.CharField(max_length=1200)
+    resolved = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['site', 'resolved', '-created_at'])]
 
 
 class Favorite(models.Model):
@@ -206,7 +285,8 @@ class SiteVersion(models.Model):
     MAX_VERSIONS_PER_SITE = 30      # auto-save snapshots (FIFO)
     MAX_CHECKPOINTS_PER_SITE = 25   # pinned, named "save slots" the user keeps
     SOURCE_CHOICES = (
-        ('save', 'Save'),
+        ('save', 'Legacy save'),
+        ('auto', 'Auto save'),
         ('restore', 'Restore'),
         ('manual', 'Manual'),
     )

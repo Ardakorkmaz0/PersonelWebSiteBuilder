@@ -7,6 +7,8 @@ import { apiError } from '../utils/errors.js'
 import { useGoBack } from '../utils/useGoBack.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 function BigAvatar({ url, name }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -24,6 +26,7 @@ function BigAvatar({ url, name }) {
 // their published sites — exactly what a normal visitor sees. Linked from the
 // admin panel so a moderator can inspect an account the way the public does.
 export default function PublicProfilePage() {
+  const { t, language } = useLanguage()
   const { id } = useParams()
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
@@ -36,9 +39,9 @@ export default function PublicProfilePage() {
     let alive = true
     getPublicProfile(id)
       .then((d) => alive && setState({ id, data: d, error: '' }))
-      .catch((e) => alive && setState({ id, data: null, error: apiError(e, 'This profile is unavailable.') }))
+      .catch((e) => alive && setState({ id, data: null, error: apiError(e, t('This profile is unavailable.')) }))
     return () => { alive = false }
-  }, [id])
+  }, [id, t])
 
   const ready = state.id === id
   const data = ready ? state.data : null
@@ -72,10 +75,11 @@ export default function PublicProfilePage() {
     <div className="min-h-screen bg-[#f7f8fa]">
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-6 py-3">
-          <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+          <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
           <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
-            &larr; Back
+            &larr; {t('Back')}
           </button>
+          <LanguageSwitcher className="ml-auto" />
         </div>
       </header>
 
@@ -84,11 +88,11 @@ export default function PublicProfilePage() {
           <div className="ms-card border-dashed py-16 text-center">
             <p className="font-medium text-[#374151]">{error}</p>
             <Link to="/" className="mt-3 inline-block text-sm font-medium text-[#4f46e5] hover:underline">
-              Back to Explore
+              {t('Back to Explore')}
             </Link>
           </div>
         ) : !data ? (
-          <p className="text-sm text-[#6b7280]">Loading…</p>
+          <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
         ) : (
           <>
             <div className="mb-8 flex flex-wrap items-center gap-5">
@@ -98,16 +102,16 @@ export default function PublicProfilePage() {
                 <div className="text-sm text-[#9ca3af]">@{data.username}</div>
                 {data.bio && <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#374151]">{data.bio}</p>}
                 <div className="mt-2 text-xs text-[#9ca3af]">
-                  {data.sites.length} published site{data.sites.length !== 1 ? 's' : ''}
-                  {data.date_joined && <> · joined {new Date(data.date_joined).toLocaleDateString()}</>}
+                  {t(data.sites.length === 1 ? '{count} published site' : '{count} published sites', { count: data.sites.length })}
+                  {data.date_joined && <> · {new Date(data.date_joined).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US')}</>}
                 </div>
               </div>
             </div>
 
             {data.sites.length === 0 ? (
               <div className="ms-card border-dashed py-16 text-center">
-                <p className="font-medium text-[#374151]">No published sites yet</p>
-                <p className="mt-1 text-sm text-[#6b7280]">When {data.display_name} publishes a site, it shows up here.</p>
+                <p className="font-medium text-[#374151]">{t('No published sites yet')}</p>
+                <p className="mt-1 text-sm text-[#6b7280]">{t('When {name} publishes a site, it shows up here.', { name: data.display_name })}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

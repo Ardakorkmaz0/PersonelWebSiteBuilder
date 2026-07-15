@@ -6,6 +6,7 @@ import {
   updateHtmlHrefAtPath,
   updateHtmlTextAtPath,
 } from '../../utils/htmlQuickEdit.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Small, reusable form controls used by the PropertiesPanel:
 // square 2px corners, neutral borders, blue focus.
@@ -52,6 +53,7 @@ export function LabeledTextarea({ label, value, onChange, placeholder, rows = 3,
 //   4. Paste a URL (advanced — collapsed by default).
 // The value is always a plain string (URL or data: URL for legacy schemas).
 export function LabeledImage({ label, value, onChange }) {
+  const { t } = useLanguage()
   const fileRef = useRef(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -62,11 +64,11 @@ export function LabeledImage({ label, value, onChange }) {
   async function uploadOne(file) {
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      setErr('Please choose an image file.')
+      setErr(t('Please choose an image file.'))
       return
     }
     if (file.size > 5 * 1024 * 1024) {
-      setErr('Image is too large (max 5 MB).')
+      setErr(t('Image is too large (max 5 MB).'))
       return
     }
     setBusy(true)
@@ -79,7 +81,7 @@ export function LabeledImage({ label, value, onChange }) {
       setErr(
         typeof detail === 'string'
           ? detail
-          : detail?.file?.[0] || detail?.detail || 'Upload failed.',
+          : detail?.file?.[0] || detail?.detail || t('Upload failed.'),
       )
     } finally {
       setBusy(false)
@@ -117,7 +119,7 @@ export function LabeledImage({ label, value, onChange }) {
             onClick={() => onChange('')}
             className="rounded-lg px-2 py-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6]"
           >
-            Clear
+            {t('Clear')}
           </button>
         </div>
       ) : null}
@@ -140,10 +142,10 @@ export function LabeledImage({ label, value, onChange }) {
         }`}
       >
         {busy
-          ? 'Uploading…'
+          ? t('Uploading…')
           : dragOver
-            ? 'Drop to upload'
-            : 'Drop an image here or click to upload (max 5 MB)'}
+            ? t('Drop to upload')
+            : t('Drop an image here or click to upload (max 5 MB)')}
       </div>
       <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
 
@@ -153,14 +155,14 @@ export function LabeledImage({ label, value, onChange }) {
           onClick={() => setLibraryOpen((o) => !o)}
           className="rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
         >
-          {libraryOpen ? 'Hide library' : 'My library'}
+          {libraryOpen ? t('Hide library') : t('My library')}
         </button>
         <button
           type="button"
           onClick={() => setShowUrl((s) => !s)}
           className="rounded-lg px-2 py-1 text-xs font-medium text-[#6b7280] hover:bg-[#f3f4f6]"
         >
-          {showUrl ? 'Hide URL' : 'Paste URL'}
+          {showUrl ? t('Hide URL') : t('Paste URL')}
         </button>
       </div>
 
@@ -181,14 +183,14 @@ export function LabeledImage({ label, value, onChange }) {
       {/* Built-in presets */}
       <div className="mt-2">
         <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
-          Quick presets
+          {t('Quick presets')}
         </span>
         <div className="grid grid-cols-4 gap-1.5">
           {PRESET_IMAGES.map((p) => (
             <button
               key={p.name}
               type="button"
-              title={p.name}
+              title={t(p.name)}
               onClick={() => onChange(p.src)}
               style={{ aspectRatio: '4 / 3' }}
               className={`overflow-hidden rounded-lg border ${
@@ -210,6 +212,7 @@ export function LabeledImage({ label, value, onChange }) {
 // user opens the library panel, so the editor doesn't fire an extra request
 // for sessions that just use presets or a manual URL.
 function ImageLibrary({ value, onPick }) {
+  const { t } = useLanguage()
   const [images, setImages] = useState(null) // null = loading, [] = empty
   const [err, setErr] = useState('')
 
@@ -221,29 +224,29 @@ function ImageLibrary({ value, onPick }) {
       })
       .catch((e) => {
         if (cancelled) return
-        setErr(e?.response?.data?.detail || 'Could not load library.')
+        setErr(e?.response?.data?.detail || t('Could not load library.'))
         setImages([])
       })
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   async function remove(id) {
-    if (!window.confirm('Delete this image from your library?')) return
+    if (!window.confirm(t('Delete this image from your library?'))) return
     try {
       await deleteImage(id)
       setImages((prev) => (prev || []).filter((r) => r.id !== id))
     } catch (e) {
-      setErr(e?.response?.data?.detail || 'Delete failed.')
+      setErr(e?.response?.data?.detail || t('Delete failed.'))
     }
   }
 
   if (images === null) {
-    return <p className="mt-1.5 text-xs text-[#6b7280]">Loading library…</p>
+    return <p className="mt-1.5 text-xs text-[#6b7280]">{t('Loading library…')}</p>
   }
   if (images.length === 0) {
     return (
       <p className="mt-1.5 text-xs text-[#6b7280]">
-        {err || 'No uploads yet — drop an image above to start your library.'}
+        {err || t('No uploads yet — drop an image above to start your library.')}
       </p>
     )
   }
@@ -267,7 +270,7 @@ function ImageLibrary({ value, onPick }) {
             <button
               type="button"
               onClick={() => remove(img.id)}
-              title="Delete from library"
+              title={t('Delete from library')}
               className="absolute right-0.5 top-0.5 rounded-full bg-white/90 px-1 text-[10px] text-[#a4262c] opacity-0 shadow group-hover:opacity-100"
             >
               ×
@@ -400,6 +403,7 @@ export function LabeledCheckbox({ label, checked, onChange, hint }) {
 // children stay associated with their tab. Removing the active tab moves its
 // children onto the first remaining tab.
 export function TabsEditorControl({ label, value, onChange, activeId, onActiveChange, children, onChildrenChange }) {
+  const { t } = useLanguage()
   const tabs = Array.isArray(value) ? value.filter((t) => t && t.id) : []
 
   const genId = () => {
@@ -414,7 +418,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
 
   const add = () => {
     const id = genId()
-    onChange([...tabs, { id, label: `Tab ${tabs.length + 1}` }])
+    onChange([...tabs, { id, label: t('Tab {count}', { count: tabs.length + 1 }) }])
     if (onActiveChange) onActiveChange(id)
   }
 
@@ -460,9 +464,9 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                   className={`text-xs font-semibold ${
                     sel ? 'text-[#4f46e5]' : 'text-[#6b7280] hover:text-[#4f46e5]'
                   }`}
-                  title="Show this tab on the canvas"
+                  title={t('Show this tab on the canvas')}
                 >
-                  {sel ? '● ' : ''}Tab {i + 1}
+                  {sel ? '● ' : ''}{t('Tab')} {i + 1}
                 </button>
                 <div className="flex items-center gap-1">
                   <button
@@ -470,7 +474,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                     onClick={() => move(t.id, -1)}
                     disabled={i === 0}
                     className="rounded-lg px-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-30"
-                    title="Move up"
+                    title={t('Move up')}
                   >
                     ↑
                   </button>
@@ -479,7 +483,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                     onClick={() => move(t.id, 1)}
                     disabled={i === tabs.length - 1}
                     className="rounded-lg px-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-30"
-                    title="Move down"
+                    title={t('Move down')}
                   >
                     ↓
                   </button>
@@ -489,7 +493,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                     disabled={tabs.length <= 1}
                     className="text-xs text-[#a4262c] hover:underline disabled:text-[#9ca3af] disabled:no-underline"
                   >
-                    Remove
+                    {t('Remove')}
                   </button>
                 </div>
               </div>
@@ -497,7 +501,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                 type="text"
                 className={inputCls}
                 value={t.label ?? ''}
-                placeholder="Tab label"
+                placeholder={t('Tab label')}
                 onChange={(e) => rename(t.id, e.target.value)}
               />
             </div>
@@ -508,7 +512,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
           onClick={add}
           className="w-full rounded-lg border border-dashed border-[#d1d5db] py-1 text-xs text-[#6b7280] hover:border-[#4f46e5] hover:text-[#4f46e5]"
         >
-          + Add tab
+          {t('+ Add tab')}
         </button>
       </div>
     </div>
@@ -521,6 +525,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
 // published page navigates by `#<pageId>` (page switch), `#top` (scroll up),
 // or `#<section-id>` (scroll to element), all handled by the runtime.
 export function LinkTargetControl({ label, value, onChange, pages = [] }) {
+  const { t } = useLanguage()
   const href = typeof value === 'string' ? value : ''
   const pageIds = new Set(pages.map((p) => p.id))
   let kind
@@ -547,11 +552,11 @@ export function LinkTargetControl({ label, value, onChange, pages = [] }) {
         value={kind}
         onChange={(e) => setKind(e.target.value)}
       >
-        <option value="none">No link</option>
-        <option value="page">→ Go to page</option>
-        <option value="top">↑ Top of this page</option>
-        <option value="section"># Section on this page</option>
-        <option value="url">External URL</option>
+        <option value="none">{t('No link')}</option>
+        <option value="page">→ {t('Go to page')}</option>
+        <option value="top">↑ {t('Top of this page')}</option>
+        <option value="section"># {t('Section on this page')}</option>
+        <option value="url">{t('External URL')}</option>
       </select>
       {kind === 'page' && (
         <select
@@ -571,7 +576,7 @@ export function LinkTargetControl({ label, value, onChange, pages = [] }) {
           type="text"
           className={inputCls}
           value={href.replace(/^#/, '')}
-          placeholder="section id (e.g. contact)"
+          placeholder={t('section id (e.g. contact)')}
           onChange={(e) => onChange('#' + e.target.value.replace(/^#/, ''))}
         />
       )}
@@ -585,19 +590,20 @@ export function LinkTargetControl({ label, value, onChange, pages = [] }) {
         />
       )}
       {kind === 'top' && (
-        <p className="text-xs text-[#9ca3af]">Clicking scrolls to the top of the page.</p>
+        <p className="text-xs text-[#9ca3af]">{t('Clicking scrolls to the top of the page.')}</p>
       )}
     </label>
   )
 }
 
 export function LinksEditor({ label, value, onChange, pages = [] }) {
+  const { t } = useLanguage()
   const links = Array.isArray(value) ? value : []
 
   const update = (i, patch) =>
     onChange(links.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
   const remove = (i) => onChange(links.filter((_, idx) => idx !== i))
-  const add = () => onChange([...links, { label: 'New link', href: '#top' }])
+  const add = () => onChange([...links, { label: t('New link'), href: '#top' }])
 
   return (
     <div>
@@ -606,20 +612,20 @@ export function LinksEditor({ label, value, onChange, pages = [] }) {
         {links.map((link, i) => (
           <div key={i} className="rounded-lg border border-[#e5e7eb] p-2">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs text-[#6b7280]">Link {i + 1}</span>
+              <span className="text-xs text-[#6b7280]">{t('Link')} {i + 1}</span>
               <button
                 type="button"
                 onClick={() => remove(i)}
                 className="text-xs text-[#a4262c] hover:underline"
               >
-                Remove
+                {t('Remove')}
               </button>
             </div>
             <input
               type="text"
               className={inputCls + ' mb-1'}
               value={link.label ?? ''}
-              placeholder="Label"
+              placeholder={t('Label')}
               onChange={(e) => update(i, { label: e.target.value })}
             />
             <LinkTargetControl
@@ -635,7 +641,7 @@ export function LinksEditor({ label, value, onChange, pages = [] }) {
           onClick={add}
           className="w-full rounded-lg border border-dashed border-[#d1d5db] py-1 text-xs text-[#6b7280] hover:border-[#4f46e5] hover:text-[#4f46e5]"
         >
-          + Add link
+          {t('+ Add link')}
         </button>
       </div>
     </div>
@@ -643,6 +649,7 @@ export function LinksEditor({ label, value, onChange, pages = [] }) {
 }
 
 export function HtmlContentControl({ label, value, onChange, pages = [] }) {
+  const { t } = useLanguage()
   const code = typeof value === 'string' ? value : ''
   const fields = useMemo(() => listHtmlContentFields(code), [code])
   const hasFields = fields.texts.length > 0 || fields.links.length > 0
@@ -652,17 +659,17 @@ export function HtmlContentControl({ label, value, onChange, pages = [] }) {
       <span className={labelCls}>{label}</span>
       {!hasFields ? (
         <p className="rounded-lg border border-dashed border-[#d1d5db] bg-white p-2 text-xs leading-relaxed text-[#6b7280]">
-          No simple text or links found. Use the HTML / CSS / JS editor below.
+          {t('No simple text or links found. Use the HTML / CSS / JS editor below.')}
         </p>
       ) : (
         <div className="space-y-3">
           {fields.texts.length > 0 && (
             <div className="space-y-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">Text</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">{t('Text')}</div>
               {fields.texts.map((field) => (
                 <LabeledTextarea
                   key={`text-${field.path}`}
-                  label={field.label}
+                  label={t(field.label)}
                   value={field.text}
                   rows={2}
                   onChange={(text) => onChange(updateHtmlTextAtPath(code, field.path, text))}
@@ -670,18 +677,18 @@ export function HtmlContentControl({ label, value, onChange, pages = [] }) {
               ))}
               {fields.textOverflow > 0 && (
                 <p className="text-[11px] text-[#9ca3af]">
-                  {fields.textOverflow} more text fields are available in the code editor.
+                  {t('{count} more text fields are available in the code editor.', { count: fields.textOverflow })}
                 </p>
               )}
             </div>
           )}
           {fields.links.length > 0 && (
             <div className="space-y-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">Links</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">{t('Links')}</div>
               {fields.links.map((field) => (
                 <LinkTargetControl
                   key={`link-${field.path}`}
-                  label={field.label}
+                  label={t(field.label)}
                   value={field.href}
                   pages={pages}
                   onChange={(href) => onChange(updateHtmlHrefAtPath(code, field.path, href))}
@@ -689,7 +696,7 @@ export function HtmlContentControl({ label, value, onChange, pages = [] }) {
               ))}
               {fields.linkOverflow > 0 && (
                 <p className="text-[11px] text-[#9ca3af]">
-                  {fields.linkOverflow} more links are available in the code editor.
+                  {t('{count} more links are available in the code editor.', { count: fields.linkOverflow })}
                 </p>
               )}
             </div>

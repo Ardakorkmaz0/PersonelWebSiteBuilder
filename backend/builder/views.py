@@ -1,7 +1,11 @@
 import json
+from datetime import timedelta
+from ipaddress import ip_address
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -27,14 +31,31 @@ from rest_framework.views import APIView
 
 from django.db import transaction
 from django.db.models import Count, F, Q
+from django.db.models.functions import TruncDate
 
 from . import runtime_config
-from .models import Favorite, Profile, Report, Site, SiteSettings, SiteVersion, UploadedImage
+from .api_errors import error_response
+from .models import (
+    Favorite,
+    FormSubmission,
+    Profile,
+    Report,
+    ReviewComment,
+    Site,
+    SiteSettings,
+    SiteVersion,
+    SiteVisit,
+    UploadedImage,
+)
 from .serializers import (
     AdminReportSerializer,
     AdminUserSerializer,
     ExploreSiteSerializer,
+    FormSubmissionSerializer,
+    OwnerReviewCommentSerializer,
     ProfileSerializer,
+    PublicFormSubmissionSerializer,
+    PublicReviewCommentSerializer,
     PublicSiteSerializer,
     RegisterSerializer,
     ReportSerializer,
@@ -141,16 +162,16 @@ class GoogleLoginView(APIView):
             )
         credential = request.data.get('credential')
         if not credential:
-            return Response({'detail': 'Missing Google credential.'}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('google_credential_missing', 'Missing Google credential.')
         try:
             from google.auth.transport import requests as google_requests
             from google.oauth2 import id_token
             info = id_token.verify_oauth2_token(credential, google_requests.Request(), client_id)
         except Exception:  # noqa: BLE001 - bad/expired token, or lib missing
-            return Response({'detail': 'Invalid Google token.'}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('google_token_invalid', 'Invalid Google token.')
         email = (info.get('email') or '').strip().lower()
         if not email:
-            return Response({'detail': 'Google account has no email.'}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('google_email_missing', 'Google account has no email.')
         user = self._get_or_create_user(email, info)
         token, _ = Token.objects.get_or_create(user=user)
         return Response(
@@ -209,7 +230,7 @@ class PasswordResetRequestView(APIView):
     def post(self, request):
         email = (request.data.get('email') or '').strip().lower()
         if not email:
-            return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('email_required', 'Email is required.')
         # Only usable accounts (active, with a real password) get a link.
         user = (
             User.objects.filter(email__iexact=email, is_active=True)
@@ -336,11 +357,16 @@ class SiteViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         site = serializer.save()
-        # Capture the post-save state so the user can roll back to it later.
-        # snapshot() de-dupes identical-schema saves so a no-op PUT (e.g. the
-        # editor auto-saves after a tiny ephemeral change) doesn't burn a
-        # slot. SiteVersion FIFO-prunes anything past MAX_VERSIONS_PER_SITE.
-        SiteVersion.snapshot(site, source='save')
+        # Manual and automatic saves are distinct history concepts. The client
+        # communicates the intent in a header so it never becomes part of the
+        # public Site serializer payload. A checkpoint save persists the site
+        # first, then the dedicated endpoint records one pinned row (avoiding a
+        # duplicate unpinned row immediately before it).
+        save_source = (self.request.headers.get('X-Site-Save-Source') or 'manual').lower()
+        if save_source == 'checkpoint':
+            return
+        source = 'auto' if save_source == 'auto' else 'manual'
+        SiteVersion.snapshot(site, source=source, force=source == 'manual')
 
     # --- /api/sites/:id/versions/ -------------------------------------------
     # Nested route via @action: the list view shows recent snapshots, the
@@ -395,7 +421,7 @@ class SiteViewSet(viewsets.ModelViewSet):
         try:
             version = SiteVersion.objects.get(pk=version_id, site=site)
         except SiteVersion.DoesNotExist:
-            return Response({'detail': 'Version not found for this site.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('version_not_found', 'Version not found for this site.', status.HTTP_404_NOT_FOUND)
         # Save the current state INTO this slot, and bump it to the top.
         version.schema = site.schema
         version.html = site.html
@@ -404,13 +430,128 @@ class SiteViewSet(viewsets.ModelViewSet):
         version.save(update_fields=['schema', 'html', 'pinned', 'created_at'])
         return Response(SiteVersionSerializer(version, context={'request': request}).data)
 
+    @action(detail=True, methods=['patch'], url_path=r'versions/(?P<version_id>[0-9]+)/pin')
+    def pin_version(self, request, pk=None, version_id=None):
+        site = self.get_object()
+        try:
+            version = SiteVersion.objects.get(pk=version_id, site=site)
+        except SiteVersion.DoesNotExist:
+            return error_response('version_not_found', 'Version not found for this site.', status.HTTP_404_NOT_FOUND)
+        pinned = request.data.get('pinned')
+        if not isinstance(pinned, bool):
+            return error_response('invalid_pin_state', 'pinned must be a boolean.')
+        version.pinned = pinned
+        version.save(update_fields=['pinned'])
+        SiteVersion._prune(site)
+        return Response(SiteVersionSerializer(version, context={'request': request}).data)
+
     @action(detail=True, methods=['delete'], url_path=r'versions/(?P<version_id>[0-9]+)')
     def delete_version(self, request, pk=None, version_id=None):
         site = self.get_object()
         deleted, _ = SiteVersion.objects.filter(pk=version_id, site=site).delete()
         if not deleted:
-            return Response({'detail': 'Version not found for this site.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('version_not_found', 'Version not found for this site.', status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # --- Site control centre -------------------------------------------------
+    @action(detail=True, methods=['get'], url_path='submissions')
+    def list_submissions(self, request, pk=None):
+        site = self.get_object()
+        rows = FormSubmission.objects.filter(site=site)[:200]
+        return Response(FormSubmissionSerializer(rows, many=True).data)
+
+    @action(
+        detail=True,
+        methods=['patch', 'delete'],
+        url_path=r'submissions/(?P<submission_id>[0-9]+)',
+    )
+    def update_submission(self, request, pk=None, submission_id=None):
+        site = self.get_object()
+        try:
+            row = FormSubmission.objects.get(site=site, pk=submission_id)
+        except FormSubmission.DoesNotExist:
+            return error_response('submission_not_found', 'Submission not found.', status.HTTP_404_NOT_FOUND)
+        if request.method == 'DELETE':
+            row.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        row.is_read = bool(request.data.get('is_read', True))
+        row.save(update_fields=['is_read'])
+        return Response(FormSubmissionSerializer(row).data)
+
+    @action(detail=True, methods=['get'], url_path='analytics')
+    def analytics(self, request, pk=None):
+        site = self.get_object()
+        since = timezone.now() - timedelta(days=29)
+        visits = SiteVisit.objects.filter(site=site, created_at__gte=since)
+        daily = list(
+            visits.annotate(day=TruncDate('created_at'))
+            .values('day').annotate(views=Count('id')).order_by('day')
+        )
+        devices = list(visits.values('device').annotate(views=Count('id')).order_by('-views'))
+        referrers = list(
+            visits.exclude(referrer='').values('referrer')
+            .annotate(views=Count('id')).order_by('-views')[:8]
+        )
+        return Response({
+            'total_views': site.view_count,
+            'last_30_days': visits.count(),
+            'daily': daily,
+            'devices': devices,
+            'referrers': referrers,
+        })
+
+    @action(detail=True, methods=['get'], url_path='comments')
+    def list_comments(self, request, pk=None):
+        site = self.get_object()
+        return Response(OwnerReviewCommentSerializer(site.review_comments.all()[:200], many=True).data)
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'comments/(?P<comment_id>[0-9]+)/resolve',
+    )
+    def resolve_comment(self, request, pk=None, comment_id=None):
+        site = self.get_object()
+        try:
+            row = ReviewComment.objects.get(site=site, pk=comment_id)
+        except ReviewComment.DoesNotExist:
+            return error_response('comment_not_found', 'Comment not found.', status.HTTP_404_NOT_FOUND)
+        row.resolved = bool(request.data.get('resolved', True))
+        row.save(update_fields=['resolved'])
+        return Response(OwnerReviewCommentSerializer(row).data)
+
+    @action(detail=True, methods=['post'], url_path='review-link/regenerate')
+    def regenerate_review_link(self, request, pk=None):
+        site = self.get_object()
+        site.review_token = uuid.uuid4()
+        site.save(update_fields=['review_token', 'updated_at'])
+        return Response({'review_token': str(site.review_token)})
+
+    @action(detail=True, methods=['get', 'post'], url_path='domain')
+    def domain(self, request, pk=None):
+        site = self.get_object()
+        if request.method == 'POST':
+            raw = str(request.data.get('domain') or '').strip().lower()
+            raw = re.sub(r'^https?://', '', raw).strip().strip('/')
+            domain = raw.split('/')[0].split(':')[0]
+            if domain and not re.fullmatch(r'(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}', domain):
+                return error_response('invalid_domain', 'Enter a valid domain name.')
+            if domain and Site.objects.exclude(pk=site.pk).filter(custom_domain=domain).exists():
+                return error_response('domain_in_use', 'This domain is already connected to another site.')
+            site.custom_domain = domain
+            site.domain_status = 'pending' if domain else 'not_connected'
+            site.save(update_fields=['custom_domain', 'domain_status', 'updated_at'])
+        target = getattr(settings, 'CUSTOM_DOMAIN_TARGET', 'sites.example.com')
+        return Response({
+            'domain': site.custom_domain,
+            'status': site.domain_status,
+            'verification_token': site.domain_verification_token,
+            'records': [
+                {'type': 'CNAME', 'name': 'www', 'value': target},
+                {'type': 'TXT', 'name': '_sitebuilder', 'value': site.domain_verification_token},
+            ],
+            'ssl_status': 'active' if site.domain_status == 'connected' else 'waiting_for_dns',
+        })
 
 
 class UploadedImageViewSet(viewsets.ModelViewSet):
@@ -443,12 +584,48 @@ class UploadedImageViewSet(viewsets.ModelViewSet):
 
 def _normalise_base(base_url):
     base = (base_url or DEFAULT_LOCAL_BASE).rstrip('/')
+    try:
+        parsed = urllib.parse.urlsplit(base)
+        # Accessing .port also validates malformed/out-of-range port strings.
+        parsed.port
+    except ValueError as exc:
+        raise ValueError('Invalid local AI base URL.') from exc
+
+    if parsed.scheme.lower() not in {'http', 'https'} or not parsed.hostname:
+        raise ValueError('Local AI base URL must use http:// or https://.')
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError('Local AI base URL cannot contain credentials, a query, or a fragment.')
+
+    hostname = parsed.hostname.lower().rstrip('.')
+    is_loopback = hostname == 'localhost'
+    if not is_loopback:
+        try:
+            is_loopback = ip_address(hostname).is_loopback
+        except ValueError:
+            is_loopback = False
+    if not is_loopback:
+        raise ValueError('Local AI base URL must point to localhost or a loopback IP address.')
+
     # Accept both "http://host:port" and "http://host:port/v1"; the rest of
     # the code assumes /v1 is implied when missing so the model can stick to
     # the standard OpenAI-compatible path.
     if not base.endswith('/v1'):
         base = base + '/v1'
     return base
+
+
+class _NoLocalAiRedirects(urllib.request.HTTPRedirectHandler):
+    """Do not let a loopback service redirect the proxy to a remote host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ARG002
+        return None
+
+
+_LOCAL_AI_OPENER = urllib.request.build_opener(_NoLocalAiRedirects)
+
+
+def _open_local_ai(request_or_url, timeout):
+    return _LOCAL_AI_OPENER.open(request_or_url, timeout=timeout)
 
 
 class LocalAiStatusView(APIView):
@@ -465,21 +642,24 @@ class LocalAiStatusView(APIView):
         blocked = _local_ai_blocked()
         if blocked is not None:
             return blocked
-        base = _normalise_base(request.GET.get('base'))
+        try:
+            base = _normalise_base(request.GET.get('base'))
+        except ValueError as exc:
+            return error_response('local_ai_invalid_url', str(exc))
         # Ollama's native /api/tags returns installed models. LM Studio's
         # /v1/models is OpenAI-compatible; we try both so either runtime
         # advertises its model list. /api/tags wins where both reply because
         # it carries richer metadata (size, modified_at).
         native_url = base.rsplit('/v1', 1)[0] + '/api/tags'
         try:
-            with urllib.request.urlopen(native_url, timeout=2) as resp:
+            with _open_local_ai(native_url, timeout=2) as resp:
                 payload = json.loads(resp.read().decode('utf-8'))
                 models = [m.get('name') for m in payload.get('models', []) if m.get('name')]
                 return Response({'ok': True, 'runtime': 'ollama', 'models': models, 'base': base})
         except Exception:  # pragma: no cover - falls through to /v1/models
             pass
         try:
-            with urllib.request.urlopen(base + '/models', timeout=2) as resp:
+            with _open_local_ai(base + '/models', timeout=2) as resp:
                 payload = json.loads(resp.read().decode('utf-8'))
                 models = [m.get('id') for m in payload.get('data', []) if m.get('id')]
                 return Response({'ok': True, 'runtime': 'openai-compatible', 'models': models, 'base': base})
@@ -515,9 +695,12 @@ class LocalAiProxyView(APIView):
         # payload stays a clean OpenAI chat-completions request. Using the
         # body (instead of a custom header) keeps us out of CORS preflight
         # headache territory.
-        body_in = request.data if isinstance(request.data, dict) else {}
+        body_in = request.data.copy() if isinstance(request.data, dict) else {}
         custom_base = body_in.pop('_localBase', None)
-        base = _normalise_base(custom_base)
+        try:
+            base = _normalise_base(custom_base)
+        except ValueError as exc:
+            return error_response('local_ai_invalid_url', str(exc))
         url = base + '/chat/completions'
         try:
             data = json.dumps(body_in).encode('utf-8')
@@ -529,7 +712,7 @@ class LocalAiProxyView(APIView):
             )
             # Local models do CPU/GPU inference — give them headroom; the
             # browser-side throttle keeps this honest.
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with _open_local_ai(req, timeout=120) as resp:
                 text = resp.read().decode('utf-8')
                 try:
                     parsed = json.loads(text)
@@ -615,8 +798,77 @@ class SiteViewCountView(APIView):
         if not updated:
             return Response(status=status.HTTP_204_NO_CONTENT)
         site = Site.objects.get(slug=slug)
+        user_agent = (request.META.get('HTTP_USER_AGENT') or '').lower()
+        if re.search(r'ipad|tablet', user_agent):
+            device = 'tablet'
+        elif re.search(r'mobile|iphone|android', user_agent):
+            device = 'mobile'
+        else:
+            device = 'desktop'
+        raw_referrer = str(request.data.get('referrer') or '')[:500]
+        try:
+            referrer = (urllib.parse.urlsplit(raw_referrer).hostname or '')[:253]
+        except ValueError:
+            referrer = ''
+        SiteVisit.objects.create(
+            site=site,
+            path=str(request.data.get('path') or '')[:180],
+            referrer=referrer,
+            device=device,
+        )
         site.recompute_hot_score(save=True)
         return Response({'view_count': site.view_count})
+
+
+class PublicFormSubmissionView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, slug):
+        try:
+            site = Site.objects.get(slug=slug, published=True)
+        except Site.DoesNotExist:
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
+        serializer = PublicFormSubmissionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # Honeypot: bots fill the hidden website field; pretend success without
+        # adding noise to the owner's inbox.
+        if serializer.validated_data.get('website'):
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        row = FormSubmission.objects.create(
+            site=site,
+            data=serializer.validated_data['data'],
+            page=serializer.validated_data.get('page', ''),
+        )
+        return Response({'id': row.id, 'detail': 'Message received.'}, status=status.HTTP_201_CREATED)
+
+
+class PublicReviewView(APIView):
+    permission_classes = [AllowAny]
+
+    def _site(self, token):
+        try:
+            return Site.objects.get(review_token=token)
+        except (Site.DoesNotExist, ValueError):
+            return None
+
+    def get(self, request, token):
+        site = self._site(token)
+        if site is None:
+            return error_response('review_link_not_found', 'Review link not found.', status.HTTP_404_NOT_FOUND)
+        comments = PublicReviewCommentSerializer(site.review_comments.all()[:200], many=True).data
+        return Response({
+            'site': PublicSiteSerializer(site, context={'request': request}).data,
+            'comments': comments,
+        })
+
+    def post(self, request, token):
+        site = self._site(token)
+        if site is None:
+            return error_response('review_link_not_found', 'Review link not found.', status.HTTP_404_NOT_FOUND)
+        serializer = PublicReviewCommentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        row = serializer.save(site=site)
+        return Response(PublicReviewCommentSerializer(row).data, status=status.HTTP_201_CREATED)
 
 
 class PublicConfigView(APIView):
@@ -652,7 +904,7 @@ class PublicProfileView(APIView):
         try:
             user = User.objects.get(pk=user_id, is_active=True)
         except User.DoesNotExist:
-            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('user_not_found', 'User not found.', status.HTTP_404_NOT_FOUND)
         profile, _ = Profile.objects.get_or_create(user=user)
         prof = ProfileSerializer(profile, context={'request': request}).data
         sites = (
@@ -738,7 +990,7 @@ class FavoriteToggleView(APIView):
     def post(self, request, site_id):
         site = self._site(request, site_id)
         if site is None:
-            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
         Favorite.objects.get_or_create(user=request.user, site=site)
         site.recompute_hot_score(save=True)
         return Response({'favorited': True}, status=status.HTTP_201_CREATED)
@@ -762,9 +1014,9 @@ class CloneSiteView(APIView):
         try:
             src = Site.objects.get(slug=slug)
         except Site.DoesNotExist:
-            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
         if not (src.published or src.owner_id == request.user.id):
-            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
         copy = Site.objects.create(
             owner=request.user,
             title=f'{src.title} (copy)'[:100],
@@ -788,9 +1040,9 @@ class ReportSiteView(APIView):
         try:
             site = Site.objects.get(pk=site_id, published=True)
         except Site.DoesNotExist:
-            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
         if site.owner_id == request.user.id:
-            return Response({'detail': "You can't report your own site."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('own_site_report_forbidden', "You can't report your own site.")
         serializer = ReportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         Report.objects.update_or_create(
@@ -921,11 +1173,11 @@ class AdminReportResolveView(APIView):
     def post(self, request, report_id):
         action = request.data.get('action')
         if action not in ('resolve', 'dismiss'):
-            return Response({'detail': "action must be 'resolve' or 'dismiss'."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('invalid_report_action', "action must be 'resolve' or 'dismiss'.")
         try:
             report = Report.objects.get(pk=report_id)
         except Report.DoesNotExist:
-            return Response({'detail': 'Report not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('report_not_found', 'Report not found.', status.HTTP_404_NOT_FOUND)
         report.status = 'resolved' if action == 'resolve' else 'dismissed'
         report.resolved_at = timezone.now()
         report.save(update_fields=['status', 'resolved_at'])
@@ -943,11 +1195,11 @@ class AdminUserSuspendView(APIView):
         try:
             target = User.objects.get(pk=user_id)
         except User.DoesNotExist:
-            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('user_not_found', 'User not found.', status.HTTP_404_NOT_FOUND)
         if target.id == request.user.id:
-            return Response({'detail': "You can't suspend your own account."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('self_suspend_forbidden', "You can't suspend your own account.")
         if target.is_staff or target.is_superuser:
-            return Response({'detail': "You can't suspend another admin."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('admin_suspend_forbidden', "You can't suspend another admin.")
         suspend = bool(request.data.get('suspend', True))
         target.is_active = not suspend
         target.save(update_fields=['is_active'])
@@ -966,11 +1218,11 @@ class AdminSiteModerateView(APIView):
     def post(self, request, site_id):
         action = request.data.get('action')
         if action not in ('unpublish', 'delete'):
-            return Response({'detail': "action must be 'unpublish' or 'delete'."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response('invalid_site_action', "action must be 'unpublish' or 'delete'.")
         try:
             site = Site.objects.get(pk=site_id)
         except Site.DoesNotExist:
-            return Response({'detail': 'Site not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
         if action == 'delete':
             site.delete()
             return Response({'detail': 'Site deleted.', 'deleted': True})

@@ -11,7 +11,7 @@ from rest_framework import serializers
 
 ALLOWED_COMPONENT_TYPES = {
     'navbar', 'text', 'heading', 'button', 'linkbutton', 'image',
-    'section', 'card', 'divider', 'spacer',
+    'section', 'region', 'card', 'divider', 'spacer',
     'list', 'quote', 'badge', 'icon', 'input',
     'container', 'tabs', 'select', 'alert', 'accordion',
     'html',
@@ -22,7 +22,7 @@ ALLOWED_COMPONENT_TYPES = {
 MAX_HTML_EMBED = 50 * 1024
 
 # Component types that hold a nested child list (recursively sanitized).
-PARENT_TYPES = {'container', 'tabs'}
+PARENT_TYPES = {'container', 'tabs', 'region'}
 MAX_TABS = 12
 TAB_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
 
@@ -153,7 +153,15 @@ def sanitize_props(ctype, props):
                         'label': _str(link.get('label')),
                         'href': sanitize_url(link.get('href')),
                     })
-        return {'brand': _str(props.get('brand')), 'links': links}
+        nav_layout = props.get('navLayout')
+        width_mode = props.get('widthMode')
+        return {
+            'brand': _str(props.get('brand')),
+            'links': links,
+            'navLayout': nav_layout if nav_layout in ('horizontal', 'centered', 'twoRow', 'vertical') else 'horizontal',
+            'widthMode': width_mode if width_mode in ('full', 'boxed') else 'full',
+            'contentWidth': _num(props.get('contentWidth'), 980, 320, 2000),
+        }
     if ctype == 'text':
         return {'text': _str(props.get('text')), 'href': sanitize_url(props.get('href'))}
     if ctype == 'heading':
@@ -175,6 +183,8 @@ def sanitize_props(ctype, props):
         }
     if ctype == 'section':
         return {'heading': _str(props.get('heading'))}
+    if ctype == 'region':
+        return {'contentWidth': _num(props.get('contentWidth'), 980, 320, 2000)}
     if ctype == 'card':
         return {
             'title': _str(props.get('title')),
@@ -291,19 +301,24 @@ def _num(value, default, lo, hi):
 def sanitize_shared_props(props):
     if not isinstance(props, dict):
         return {}
+    clean = {}
+    dock_x = props.get('dockX')
+    if dock_x in ('auto', 'left', 'center', 'right', 'stretch'):
+        clean['dockX'] = dock_x
     mode = props.get('scrollBehavior')
     if mode not in ('fixed', 'sticky'):
-        return {}
+        return clean
     pin_y = props.get('pinY')
     pin_x = props.get('pinX')
-    return {
+    clean.update({
         'scrollBehavior': mode,
         'pinY': pin_y if pin_y in ('top', 'bottom') else 'top',
         'pinX': pin_x if pin_x in ('left', 'center', 'right') else 'left',
         'pinOffsetY': _num(props.get('pinOffsetY'), 0, -20000, 20000),
         'pinOffsetX': _num(props.get('pinOffsetX'), 0, -20000, 20000),
         'pinZIndex': _num(props.get('pinZIndex'), 100 if mode == 'fixed' else 20, 0, 2147483647),
-    }
+    })
+    return clean
 
 
 def sanitize_layout(layout):

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useEditorStore } from '../../store/editorStore.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Page explorer: pages grouped into (optional) folders. Switch the current page,
 // add pages/folders, rename inline, duplicate, delete. Builder UI styling.
 export default function PagesPanel() {
+  const { t } = useLanguage()
   const pages = useEditorStore((s) => s.schema.pages)
   const currentPageId = useEditorStore((s) => s.currentPageId)
   const selectPage = useEditorStore((s) => s.selectPage)
@@ -28,7 +30,7 @@ export default function PagesPanel() {
     setEditingId(null)
   }
   function addFolder() {
-    addPage('New Page', `Folder ${folders.length + 1}`)
+    addPage(t('New Page'), t('Folder {count}', { count: folders.length + 1 }))
   }
 
   const PageRow = ({ p, indent }) => {
@@ -67,10 +69,10 @@ export default function PagesPanel() {
         </button>
         {!editing && (
           <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
-            <IconBtn title="Rename" onClick={() => startRename(p)}>&#9998;</IconBtn>
-            <IconBtn title="Duplicate" onClick={() => duplicatePage(p.id)}>&#10697;</IconBtn>
+            <IconBtn title={t('Rename')} onClick={() => startRename(p)}>&#9998;</IconBtn>
+            <IconBtn title={t('Duplicate')} onClick={() => duplicatePage(p.id)}>&#10697;</IconBtn>
             {pages.length > 1 && (
-              <IconBtn title="Delete" danger onClick={() => deletePage(p.id)}>
+              <IconBtn title={t('Delete')} danger onClick={() => deletePage(p.id)}>
                 &#215;
               </IconBtn>
             )}
@@ -84,13 +86,13 @@ export default function PagesPanel() {
     <div className="mb-4">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-          Pages
+          {t('Pages')}
         </h2>
         <div className="flex items-center gap-1">
-          <IconBtn title="New page" onClick={() => addPage()}>
+          <IconBtn title={t('New page')} onClick={() => addPage()}>
             &#43;
           </IconBtn>
-          <IconBtn title="New folder" onClick={addFolder}>
+          <IconBtn title={t('New folder')} onClick={addFolder}>
             &#128193;
           </IconBtn>
         </div>

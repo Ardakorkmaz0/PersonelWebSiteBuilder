@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 export default function HtmlModal({ html, onClose }) {
+  const { t } = useLanguage()
   const [copied, setCopied] = useState(false)
 
   function copy() {
@@ -30,16 +32,16 @@ export default function HtmlModal({ html, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#e1dfdd] px-4 py-3">
-          <h2 className="text-sm font-semibold text-[#201f1e]">Generated HTML</h2>
+          <h2 className="text-sm font-semibold text-[#201f1e]">{t('Generated HTML')}</h2>
           <div className="flex items-center gap-2">
             <button onClick={copy} className="ms-btn ms-btn-primary">
-              {copied ? 'Copied ✓' : 'Copy'}
+              {copied ? t('Copied ✓') : t('Copy')}
             </button>
             <button onClick={download} className="ms-btn">
-              Download
+              {t('Download')}
             </button>
             <button onClick={onClose} className="ms-btn ms-btn-subtle">
-              Close
+              {t('Close')}
             </button>
           </div>
         </div>

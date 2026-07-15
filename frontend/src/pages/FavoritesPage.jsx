@@ -6,8 +6,11 @@ import { useGoBack } from '../utils/useGoBack.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 import { StarIcon } from '../components/icons.jsx'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 export default function FavoritesPage() {
+  const { t } = useLanguage()
   const [items, setItems] = useState(null) // null = loading
   const [error, setError] = useState('')
   const goBack = useGoBack('/')
@@ -46,19 +49,20 @@ export default function FavoritesPage() {
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">
-            <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+            <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
             <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
-              &larr; Back
+              &larr; {t('Back')}
             </button>
           </div>
+          <LanguageSwitcher />
         </div>
       </header>
 
       <main className="mx-auto max-w-[1400px] px-6 py-8">
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold tracking-tight text-[#111827]">
-          <StarIcon size={22} className="text-[#f59e0b]" filled /> Favorites
+          <StarIcon size={22} className="text-[#f59e0b]" filled /> {t('Favorites')}
         </h1>
-        <p className="mb-6 text-sm text-[#6b7280]">Sites you starred on Explore.</p>
+        <p className="mb-6 text-sm text-[#6b7280]">{t('Sites you starred on Explore.')}</p>
 
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -67,13 +71,13 @@ export default function FavoritesPage() {
         )}
 
         {items === null ? (
-          <p className="text-sm text-[#6b7280]">Loading…</p>
+          <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
         ) : items.length === 0 ? (
           <div className="ms-card border-dashed py-16 text-center">
             <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#fef3c7] text-[#f59e0b]"><StarIcon size={24} filled /></div>
-            <p className="font-medium text-[#374151]">No favorites yet</p>
+            <p className="font-medium text-[#374151]">{t('No favorites yet')}</p>
             <p className="mt-1 text-sm text-[#6b7280]">
-              Star sites on <Link to="/" className="font-medium text-[#4f46e5] hover:underline">Explore</Link> to keep them here.
+              {t('Star sites on Explore to keep them here.')}
             </p>
           </div>
         ) : (

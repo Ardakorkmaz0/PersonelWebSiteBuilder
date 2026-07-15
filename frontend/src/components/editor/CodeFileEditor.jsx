@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { assetDataUrl } from '../../utils/projectFs.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Source editor for the non-HTML files of a Code project. Text files (CSS / JS)
 // get a plain monospace editor whose edits flow straight into the store, so any
@@ -7,6 +8,7 @@ import { assetDataUrl } from '../../utils/projectFs.js'
 // read-only data-URL preview — there's nothing to type.
 
 function AssetPreview({ file }) {
+  const { t } = useLanguage()
   const [url, setUrl] = useState('')
   useEffect(() => {
     let alive = true
@@ -20,7 +22,7 @@ function AssetPreview({ file }) {
         <img src={url} alt={file.name} className="max-h-full max-w-full object-contain shadow" />
       ) : (
         <div className="text-sm text-[#6b7280]">
-          {file.name} — binary asset (read-only)
+          {file.name} — {t('binary asset (read-only)')}
         </div>
       )}
     </div>

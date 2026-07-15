@@ -13,6 +13,7 @@ import {
   LinkButton,
   Image,
   Section,
+  Region,
   Card,
   List,
   Quote,
@@ -49,6 +50,9 @@ export const registry = {
         { label: 'Contact', href: '#contact' },
       ],
       navLayout: 'horizontal',
+      mobileNavMode: 'menu',
+      widthMode: 'full',
+      contentWidth: 980,
     },
     defaultStyles: {
       backgroundColor: '#1d1d1f',
@@ -69,6 +73,19 @@ export const registry = {
           ['vertical', 'Vertical'],
         ],
       },
+      {
+        key: 'widthMode',
+        label: 'Width mode',
+        control: 'select',
+        options: [['full', 'Full width'], ['boxed', 'Boxed']],
+      },
+      {
+        key: 'mobileNavMode',
+        label: 'Mobile navigation',
+        control: 'select',
+        options: [['menu', 'Hamburger menu'], ['stack', 'Stacked links']],
+      },
+      { key: 'contentWidth', label: 'Content width', control: 'px' },
     ],
     editableStyles: [
       'backgroundColor', 'backgroundImage', 'color', 'fontSize', 'fontWeight',
@@ -231,6 +248,26 @@ export const registry = {
       'backgroundColor', 'backgroundImage', 'color', 'fontSize', 'fontFamily',
       'textAlign', 'textTransform', 'padding', 'borderRadius', 'boxShadow',
       'opacity',
+    ],
+  },
+
+  region: {
+    type: 'region',
+    label: 'Region',
+    icon: '▤',
+    Render: Region,
+    defaultSize: { w: 980, h: 360 },
+    defaultProps: { contentWidth: 980 },
+    defaultStyles: {
+      backgroundColor: '#f5f5f7',
+      overflow: 'hidden',
+    },
+    editableProps: [
+      { key: 'contentWidth', label: 'Max content width (desktop)', control: 'px' },
+    ],
+    editableStyles: [
+      'backgroundColor', 'backgroundImage', 'color', 'padding', 'borderRadius',
+      'borderWidth', 'borderStyle', 'borderColor', 'boxShadow', 'opacity',
     ],
   },
 

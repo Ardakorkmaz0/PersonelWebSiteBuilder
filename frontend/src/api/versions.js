@@ -26,6 +26,13 @@ export const overwriteVersion = (siteId, versionId) =>
     .post(`/sites/${siteId}/versions/${versionId}/overwrite/`)
     .then((r) => r.data)
 
+// Protect/unprotect any history row without changing whether it was created by
+// a manual save or auto-save. Pinning and source are deliberately independent.
+export const setVersionPinned = (siteId, versionId, pinned) =>
+  client
+    .patch(`/sites/${siteId}/versions/${versionId}/pin/`, { pinned })
+    .then((r) => r.data)
+
 // Delete a saved version / checkpoint.
 export const deleteVersion = (siteId, versionId) =>
   client

@@ -11,6 +11,7 @@ import {
   WIZARD_SITE_TYPES,
 } from '../../utils/aiWizard.js'
 import { HTML_ALLOW, PUBLIC_HTML_SANDBOX, withViewportMeta } from '../../utils/htmlRuntime.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 const STEPS = ['Type', 'About', 'Style', 'Sections']
 
@@ -57,6 +58,7 @@ const inputCls =
 // same provider stack as the AI chat's HTML path — with an in-modal preview,
 // a refine loop and a regenerate before anything touches the page.
 export default function AiWizard({ open, onClose, onApply, onOpenTemplates, initialBrand = '' }) {
+  const { t } = useLanguage()
   const [step, setStep] = useState(0)
   const [phase, setPhase] = useState('form') // form | generating | preview | error
   const [answers, setAnswers] = useState(() => ({
@@ -117,7 +119,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
       setPhase('preview')
     } catch (e) {
       if (run !== generationRef.current) return
-      setError(e?.message || 'Generation failed.')
+      setError(e?.message || t('Generation failed.'))
       setPhase('error')
     }
   }
@@ -136,7 +138,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
       setRefineText('')
     } catch (e) {
       if (run !== generationRef.current) return
-      setError(e?.message || 'Refine failed.')
+      setError(e?.message || t('Refine failed.'))
     } finally {
       if (run === generationRef.current) setRefining(false)
     }
@@ -163,9 +165,9 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
             </svg>
           </span>
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-[#111827]">AI Site Wizard</h2>
+            <h2 className="text-sm font-bold text-[#111827]">{t('AI Site Wizard')}</h2>
             <p className="truncate text-xs text-[#6b7280]">
-              Answer a few questions — get a complete, responsive site.
+              {t('Answer a few questions — get a complete, responsive site.')}
             </p>
           </div>
           {phase === 'form' && (
@@ -184,7 +186,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
           <button
             type="button"
             onClick={close}
-            title="Close"
+            title={t('Close')}
             className={`${phase === 'form' ? '' : 'ml-auto '}rounded-lg px-2 py-1 text-sm text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]`}
           >
             ✕
@@ -195,12 +197,12 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {phase === 'form' && step === 0 && (
             <>
-              <h3 className="mb-3 text-sm font-semibold text-[#111827]">What kind of site is this?</h3>
+              <h3 className="mb-3 text-sm font-semibold text-[#111827]">{t('What kind of site is this?')}</h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {WIZARD_SITE_TYPES.map((t) => (
-                  <Chip key={t.id} active={answers.type === t.id} onClick={() => pickType(t.id)}>
-                    <span className="mr-1.5">{t.icon}</span>
-                    {t.label}
+                {WIZARD_SITE_TYPES.map((type) => (
+                  <Chip key={type.id} active={answers.type === type.id} onClick={() => pickType(type.id)}>
+                    <span className="mr-1.5">{type.icon}</span>
+                    {t(type.label)}
                   </Chip>
                 ))}
               </div>
@@ -209,38 +211,38 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
 
           {phase === 'form' && step === 1 && (
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-[#111827]">Tell it about you</h3>
+              <h3 className="text-sm font-semibold text-[#111827]">{t('Tell it about you')}</h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Site / brand name">
+                <Field label={t('Site / brand name')}>
                   <input
                     className={inputCls}
                     value={answers.brand}
                     onChange={(e) => patch({ brand: e.target.value })}
-                    placeholder="e.g. Nova Studio, Arda Korkmaz"
+                    placeholder={t('e.g. Nova Studio, Arda Korkmaz')}
                   />
                 </Field>
-                <Field label="Tagline / role (optional)">
+                <Field label={t('Tagline / role (optional)')}>
                   <input
                     className={inputCls}
                     value={answers.tagline}
                     onChange={(e) => patch({ tagline: e.target.value })}
-                    placeholder="e.g. Freelance product designer"
+                    placeholder={t('e.g. Freelance product designer')}
                   />
                 </Field>
               </div>
               <Field
-                label="What is it about?"
-                hint="The more specific you are, the better the copy — services, audience, what makes you different."
+                label={t('What is it about?')}
+                hint={t('The more specific you are, the better the copy — services, audience, what makes you different.')}
               >
                 <textarea
                   className={`${inputCls} min-h-[96px] resize-y`}
                   value={answers.description}
                   onChange={(e) => patch({ description: e.target.value })}
-                  placeholder="e.g. I design mobile apps for early-stage startups. 6 years of experience, 40+ shipped projects…"
+                  placeholder={t('e.g. I design mobile apps for early-stage startups. 6 years of experience, 40+ shipped projects…')}
                 />
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Contact email (optional)">
+                <Field label={t('Contact email (optional)')}>
                   <input
                     className={inputCls}
                     value={answers.email}
@@ -248,7 +250,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                     placeholder="hello@example.com"
                   />
                 </Field>
-                <Field label="Social links (optional)">
+                <Field label={t('Social links (optional)')}>
                   <input
                     className={inputCls}
                     value={answers.socials}
@@ -263,17 +265,17 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
           {phase === 'form' && step === 2 && (
             <div className="space-y-5">
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-[#111827]">Pick a vibe</h3>
+                <h3 className="mb-3 text-sm font-semibold text-[#111827]">{t('Pick a vibe')}</h3>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {WIZARD_MOODS.map((m) => (
                     <Chip key={m.id} active={answers.mood === m.id} onClick={() => patch({ mood: m.id })}>
-                      {m.label}
+                      {t(m.label)}
                     </Chip>
                   ))}
                 </div>
               </div>
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-[#111827]">Accent color</h3>
+                <h3 className="mb-2 text-sm font-semibold text-[#111827]">{t('Accent color')}</h3>
                 <div className="flex flex-wrap items-center gap-2">
                   {WIZARD_ACCENTS.map((c) => (
                     <button
@@ -291,17 +293,17 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                     type="color"
                     value={answers.accent}
                     onChange={(e) => patch({ accent: e.target.value })}
-                    title="Custom accent color"
+                    title={t('Custom accent color')}
                     className="h-8 w-8 cursor-pointer rounded-full border border-[#d1d5db] bg-white p-0.5"
                   />
                 </div>
               </div>
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-[#111827]">Typography</h3>
+                <h3 className="mb-3 text-sm font-semibold text-[#111827]">{t('Typography')}</h3>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {WIZARD_FONTS.map((f) => (
                     <Chip key={f.id} active={answers.font === f.id} onClick={() => patch({ font: f.id })}>
-                      {f.label}
+                      {t(f.label)}
                       <span className="block text-[11px] text-[#9ca3af]">{f.family}</span>
                     </Chip>
                   ))}
@@ -313,24 +315,26 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
           {phase === 'form' && step === 3 && (
             <div className="space-y-4">
               <div>
-                <h3 className="mb-1 text-sm font-semibold text-[#111827]">Which sections?</h3>
+                <h3 className="mb-1 text-sm font-semibold text-[#111827]">{t('Which sections?')}</h3>
                 <p className="mb-3 text-xs text-[#6b7280]">
-                  Pre-picked for a {WIZARD_SITE_TYPES.find((t) => t.id === answers.type)?.label.toLowerCase()} — toggle freely; order follows this list.
+                  {t('Pre-picked for a {type} — toggle freely; order follows this list.', {
+                    type: t(WIZARD_SITE_TYPES.find((siteType) => siteType.id === answers.type)?.label || '').toLocaleLowerCase(),
+                  })}
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {WIZARD_SECTIONS.map((s) => (
                     <Chip key={s.id} active={answers.sections.includes(s.id)} onClick={() => toggleSection(s.id)}>
-                      {s.label}
+                      {t(s.label)}
                     </Chip>
                   ))}
                 </div>
               </div>
-              <Field label="Anything else? (optional)">
+              <Field label={t('Anything else? (optional)')}>
                 <input
                   className={inputCls}
                   value={answers.extra}
                   onChange={(e) => patch({ extra: e.target.value })}
-                  placeholder="e.g. add a photo of Istanbul in the hero, mention weekend workshops…"
+                  placeholder={t('e.g. add a photo of Istanbul in the hero, mention weekend workshops…')}
                 />
               </Field>
             </div>
@@ -339,29 +343,29 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
           {phase === 'generating' && (
             <div className="flex min-h-[280px] flex-col items-center justify-center gap-4 text-center">
               <span className="h-10 w-10 animate-spin rounded-full border-4 border-[#e5e7eb] border-t-[#4f46e5]" aria-hidden />
-              <p className="text-sm font-semibold text-[#111827]">{statusLine}</p>
+              <p className="text-sm font-semibold text-[#111827]">{t(statusLine)}</p>
               <p className="max-w-sm text-xs text-[#6b7280]">
-                Building a complete responsive site from your answers — usually 15-40 seconds.
+                {t('Building a complete responsive site from your answers — usually 15-40 seconds.')}
               </p>
             </div>
           )}
 
           {phase === 'error' && (
             <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-center">
-              <p className="max-w-md text-sm font-medium text-[#b91c1c]">{error}</p>
+              <p className="max-w-md text-sm font-medium text-[#b91c1c]">{t(error)}</p>
               {noProvider ? (
                 <p className="max-w-md text-xs text-[#6b7280]">
-                  Open the AI chat (AI button in the header) → Settings, and paste any free key — or start from a ready-made template instead.
+                  {t('Open the AI chat (AI button in the header) → Settings, and paste any free key — or start from a ready-made template instead.')}
                 </p>
               ) : (
                 <p className="max-w-md text-xs text-[#6b7280]">
-                  This is usually a temporary quota hiccup — trying again often works.
+                  {t('This is usually a temporary quota hiccup — trying again often works.')}
                 </p>
               )}
               <div className="flex gap-2">
                 {!noProvider && (
                   <button type="button" onClick={generate} className="rounded-lg bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4338ca]">
-                    Try again
+                    {t('Try again')}
                   </button>
                 )}
                 <button
@@ -369,10 +373,10 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                   onClick={() => { close(); onOpenTemplates?.() }}
                   className="rounded-lg border border-[#d1d5db] px-4 py-2 text-sm font-medium text-[#374151] hover:bg-[#f3f4f6]"
                 >
-                  Browse templates
+                  {t('Browse templates')}
                 </button>
                 <button type="button" onClick={() => setPhase('form')} className="rounded-lg border border-[#d1d5db] px-4 py-2 text-sm font-medium text-[#374151] hover:bg-[#f3f4f6]">
-                  Back
+                  {t('Back')}
                 </button>
               </div>
             </div>
@@ -381,20 +385,20 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
           {phase === 'preview' && (
             <div className="flex h-full min-h-[320px] flex-col gap-3">
               <iframe
-                title="AI site preview"
+                title={t('AI site preview')}
                 srcDoc={withViewportMeta(html)}
                 sandbox={PUBLIC_HTML_SANDBOX}
                 allow={HTML_ALLOW}
                 className="min-h-[320px] w-full flex-1 rounded-lg border border-[#e5e7eb] bg-white"
               />
-              {error && <p className="text-xs font-medium text-[#b91c1c]">{error}</p>}
+              {error && <p className="text-xs font-medium text-[#b91c1c]">{t(error)}</p>}
               <div className="flex items-center gap-2">
                 <input
                   className={inputCls}
                   value={refineText}
                   onChange={(e) => setRefineText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') refine() }}
-                  placeholder="Refine it: “make the hero darker”, “add a pricing section”…"
+                  placeholder={t('Refine it: “make the hero darker”, “add a pricing section”…')}
                   disabled={refining}
                 />
                 <button
@@ -403,7 +407,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                   disabled={refining || !refineText.trim()}
                   className="shrink-0 rounded-lg border border-[#4f46e5] px-3 py-2 text-sm font-semibold text-[#4f46e5] hover:bg-[#eef2ff] disabled:opacity-50"
                 >
-                  {refining ? 'Refining…' : 'Refine'}
+                  {refining ? t('Refining…') : t('Refine')}
                 </button>
               </div>
             </div>
@@ -418,17 +422,17 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
               onClick={() => (step === 0 ? close() : setStep(step - 1))}
               className="rounded-lg px-3 py-2 text-sm font-medium text-[#6b7280] hover:bg-[#f3f4f6]"
             >
-              {step === 0 ? 'Cancel' : '← Back'}
+              {step === 0 ? t('Cancel') : t('← Back')}
             </button>
             {step < STEPS.length - 1 ? (
               <button
                 type="button"
                 onClick={() => setStep(step + 1)}
                 disabled={!canNext}
-                title={canNext ? '' : 'Add a name or a short description first'}
+                title={canNext ? '' : t('Add a name or a short description first')}
                 className="rounded-lg bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4338ca] disabled:opacity-50"
               >
-                Next →
+                {t('Next →')}
               </button>
             ) : (
               <button
@@ -436,7 +440,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                 onClick={generate}
                 className="rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] px-5 py-2 text-sm font-bold text-white hover:from-[#4338ca] hover:to-[#1e4079]"
               >
-                ✨ Generate my site
+                {t('✨ Generate my site')}
               </button>
             )}
           </div>
@@ -449,7 +453,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                 onClick={() => setPhase('form')}
                 className="rounded-lg px-3 py-2 text-sm font-medium text-[#6b7280] hover:bg-[#f3f4f6]"
               >
-                ← Edit answers
+                {t('← Edit answers')}
               </button>
               <button
                 type="button"
@@ -457,20 +461,25 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                 disabled={refining}
                 className="rounded-lg border border-[#d1d5db] px-3 py-2 text-sm font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
               >
-                ↻ Regenerate
+                {t('↻ Regenerate')}
               </button>
               {providerUsed && (
-                <span className="text-[11px] text-[#9ca3af]">via {providerUsed}</span>
+                <span className="text-[11px] text-[#9ca3af]">{t('via')} {providerUsed}</span>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => onApply?.({ html, ...wizardMeta(answers) })}
-              disabled={refining}
-              className="rounded-lg bg-[#16a34a] px-5 py-2 text-sm font-bold text-white hover:bg-[#15803d] disabled:opacity-50"
-            >
-              Use this site
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={close} disabled={refining} className="rounded-lg border border-[#d1d5db] px-4 py-2 text-sm font-semibold text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50">
+                {t('Reject')}
+              </button>
+              <button
+                type="button"
+                onClick={() => onApply?.({ html, ...wizardMeta(answers) })}
+                disabled={refining}
+                className="rounded-lg bg-[#16a34a] px-5 py-2 text-sm font-bold text-white hover:bg-[#15803d] disabled:opacity-50"
+              >
+                {t('Accept and use this site')}
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NoteIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Work journal: a month calendar + per-day notes ("today I did X"). Lives in
 // localStorage (one journal across all sites), so it never touches the server
@@ -23,6 +24,7 @@ const todayKey = () => {
 }
 
 export default function NotesPanel({ open, onClose }) {
+  const { t } = useLanguage()
   const [notes, setNotes] = useState(loadNotes)
   const [cursor, setCursor] = useState(() => new Date())
   const [selected, setSelected] = useState(todayKey)
@@ -68,7 +70,7 @@ export default function NotesPanel({ open, onClose }) {
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between border-b border-[#e5e7eb] px-3 py-2">
-        <span className="flex items-center gap-1.5 text-sm font-bold text-[#111827]"><NoteIcon size={15} /> Notes</span>
+        <span className="flex items-center gap-1.5 text-sm font-bold text-[#111827]"><NoteIcon size={15} /> {t('Notes')}</span>
         <button
           type="button"
           onClick={onClose}
@@ -89,7 +91,7 @@ export default function NotesPanel({ open, onClose }) {
             ‹
           </button>
           <span className="text-sm font-semibold text-[#111827]">
-            {MONTHS[month]} {year}
+            {t(MONTHS[month])} {year}
           </span>
           <button
             type="button"
@@ -102,7 +104,7 @@ export default function NotesPanel({ open, onClose }) {
         <div className="grid grid-cols-7 gap-0.5 text-center">
           {DOWS.map((d) => (
             <span key={d} className="py-0.5 text-[10px] font-semibold uppercase text-[#9ca3af]">
-              {d}
+              {t(d)}
             </span>
           ))}
           {Array.from({ length: startDow }, (_, i) => (
@@ -143,11 +145,11 @@ export default function NotesPanel({ open, onClose }) {
       {/* Notes for the selected day */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-          {selected === todayKey() ? 'Today' : selected}
+          {selected === todayKey() ? t('Today') : selected}
         </div>
         {dayNotes.length === 0 ? (
           <p className="text-xs text-[#9ca3af]">
-            No notes for this day yet. Write what you did below.
+            {t('No notes for this day yet. Write what you did below.')}
           </p>
         ) : (
           dayNotes.map((n) => (
@@ -160,7 +162,7 @@ export default function NotesPanel({ open, onClose }) {
               <button
                 type="button"
                 onClick={() => removeNote(n.id)}
-                title="Delete note"
+                title={t('Delete note')}
                 className="hidden rounded px-1 text-xs text-[#9ca3af] hover:text-red-600 group-hover:block"
               >
                 ✕
@@ -179,7 +181,7 @@ export default function NotesPanel({ open, onClose }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') addNote()
             }}
-            placeholder='e.g. "Finished the pricing section today"'
+            placeholder={t('e.g. "Finished the pricing section today"')}
             className="ms-input flex-1 text-sm"
           />
           <button
@@ -188,7 +190,7 @@ export default function NotesPanel({ open, onClose }) {
             disabled={!draft.trim()}
             className="ms-btn ms-btn-primary px-3"
           >
-            Add
+            {t('Add')}
           </button>
         </div>
       </div>

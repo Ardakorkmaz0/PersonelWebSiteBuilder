@@ -2,10 +2,10 @@ const FLOW_GAP = 20
 const FLOW_MOBILE_GAP = 16
 const FLOW_SIDE_PAD = 24
 const FLOW_MOBILE_SIDE_PAD = 16
-const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'divider'])
+const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
 const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
 const FLOW_MOBILE_BLOCK_TYPES = new Set([
-  'navbar', 'heading', 'text', 'image', 'section', 'card', 'divider',
+  'navbar', 'heading', 'text', 'image', 'section', 'region', 'card', 'divider',
   'list', 'quote', 'input', 'container', 'tabs', 'select', 'alert', 'accordion',
   'html',
 ])
@@ -110,7 +110,7 @@ const FLOW_INLINE_TYPES = new Set(['button', 'linkbutton', 'badge', 'icon'])
 // pixels — these MUST keep their layout.w as the rendered width on PC (no
 // flex-grow stretching), so the inner mini-canvas matches the visible box and
 // the editor's mobile auto-scale has a sane reference.
-const FLOW_FIXED_DESIGN_WIDTH_TYPES = new Set(['container', 'tabs'])
+const FLOW_FIXED_DESIGN_WIDTH_TYPES = new Set(['container', 'tabs', 'region'])
 
 export function flowItemStyle(component, viewport = 'pc', canvasWidth = 1000, options = {}) {
   // Flow is a single design that adapts to both breakpoints, so the box metrics

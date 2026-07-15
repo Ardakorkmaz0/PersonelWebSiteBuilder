@@ -8,11 +8,13 @@ import {
   setModel,
 } from '../../utils/aiAssistant.js'
 import AiChatPanel from './AiChatPanel.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Compact toolbar button that opens the AI chat panel.
 // Replaces the earlier single-line prompt input — the chat panel itself
 // holds the input, history, and per-turn tool calls.
 export default function AiBar({ currentHtml = '', onApplyHtml }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [hasKey, setHasKey] = useState(() => !!getApiKey())
 
@@ -55,7 +57,7 @@ export default function AiBar({ currentHtml = '', onApplyHtml }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title={hasKey ? 'Open AI assistant' : 'Set a Gemini API key first'}
+        title={hasKey ? t('Open AI assistant') : t('Set an AI provider key first')}
         className={`flex h-9 items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold shadow-sm transition ${
           open
             ? 'bg-[#1e4079] text-white'
@@ -70,7 +72,7 @@ export default function AiBar({ currentHtml = '', onApplyHtml }) {
           />
         </svg>
         <span>AI</span>
-        {!hasKey && <span className="ml-0.5 rounded bg-white/20 px-1 text-[9px]">setup</span>}
+        {!hasKey && <span className="ml-0.5 rounded bg-white/20 px-1 text-[9px]">{t('setup')}</span>}
       </button>
       <AiChatPanel
         open={open}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useProjectStore } from '../../store/projectStore.js'
 import { linkedFilesFor } from '../../utils/htmlFiles.js'
 import { FileIcon, FileCodeIcon, PaletteIcon, CogIcon, ImageIcon, FolderIcon, FolderOpenIcon, LinkIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // VS Code-style explorer for the local "Code project" editor: the real folder
 // tree, already filtered to web files by projectFs. A modified (unsaved) file
@@ -18,6 +19,7 @@ function KindIcon({ kind, size = 14, className = '' }) {
 }
 
 function TreeNode({ node, depth, activePath, dirty, onOpen, collapsed, toggle }) {
+  const { t } = useLanguage()
   if (node.type === 'file') {
     const isDirty = dirty.has(node.path)
     const active = node.path === activePath
@@ -45,7 +47,7 @@ function TreeNode({ node, depth, activePath, dirty, onOpen, collapsed, toggle })
         >
           {node.name}
         </span>
-        {isDirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#16a34a]" title="Unsaved changes" />}
+        {isDirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#16a34a]" title={t('Unsaved changes')} />}
       </button>
     )
   }
@@ -99,6 +101,7 @@ function TreeNode({ node, depth, activePath, dirty, onOpen, collapsed, toggle })
 }
 
 export default function ProjectFilesPanel() {
+  const { t } = useLanguage()
   const tree = useProjectStore((s) => s.tree)
   const activePath = useProjectStore((s) => s.activePath)
   const dirty = useProjectStore((s) => s.dirty)
@@ -138,7 +141,7 @@ export default function ProjectFilesPanel() {
       {linked.length > 0 && (
         <div className="mb-3 rounded-lg border border-[#e5e7eb] bg-white p-1.5">
           <div className="flex items-center gap-1 px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-            <LinkIcon size={11} /> Linked by this page
+            <LinkIcon size={11} /> {t('Linked by this page')}
           </div>
           {linked.map((path) => {
             const f = files.get(path)
@@ -183,8 +186,8 @@ export default function ProjectFilesPanel() {
         />
       </div>
       <p className="mt-4 text-xs leading-relaxed text-[#9ca3af]">
-        Only web files (HTML / CSS / JS + images) are shown. Edited files turn
-        <span className="font-semibold text-[#15803d]"> green</span> until you save them to disk.
+        {t('Only web files (HTML / CSS / JS + images) are shown. Edited files turn')}
+        <span className="font-semibold text-[#15803d]"> {t('green')}</span> {t('until you save them to disk.')}
       </p>
     </div>
   )

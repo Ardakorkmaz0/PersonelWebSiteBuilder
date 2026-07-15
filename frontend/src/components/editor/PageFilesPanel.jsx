@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore.js'
 import { pageFileName } from '../../utils/pageFiles.js'
 import { FileIcon, FileCodeIcon, FolderIcon, LinkIcon, LayersIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // VS Code-style file explorer, shared by BOTH editor modes: every page is a
 // "file", optionally grouped under collapsible folders (page.folder).
@@ -21,6 +22,7 @@ export default function PageFilesPanel({
   onActiveClick,
   onImportInto,
 }) {
+  const { t } = useLanguage()
   const pages = useEditorStore((s) => s.schema.pages)
   const currentPageId = useEditorStore((s) => s.currentPageId)
   const selectPage = useEditorStore((s) => s.selectPage)
@@ -40,7 +42,7 @@ export default function PageFilesPanel({
 
   const createPage = (mode) => {
     if (!addPrompt) return
-    addPage('New Page', addPrompt.folder, mode)
+    addPage(t('New Page'), addPrompt.folder, mode)
     setAddPrompt(null)
   }
 
@@ -113,10 +115,10 @@ export default function PageFilesPanel({
             }}
             title={
               linkArmed
-                ? `Link the selected element to ${page.name}`
+                ? t('Link the selected element to {name}', { name: page.name })
                 : active
-                  ? `${page.name} — click again to ${mode === 'html' ? 'open/close the source code' : 'open/close the code panel'}`
-                  : `Open ${page.name}`
+                  ? t('{name} — click again to {action}', { name: page.name, action: t(mode === 'html' ? 'open/close the source code' : 'open/close the code panel') })
+                  : t('Open {name}', { name: page.name })
             }
             className={`min-w-0 flex-1 truncate text-left font-mono text-[12.5px] ${
               linkArmed
@@ -129,13 +131,13 @@ export default function PageFilesPanel({
         )}
         {mode === 'html' && !(htmlMap[page.id] || '').trim() && (
           <span className="shrink-0 rounded bg-[#f3f4f6] px-1 text-[9px] font-bold uppercase text-[#9ca3af]">
-            empty
+            {t('empty')}
           </span>
         )}
         <span className="hidden shrink-0 gap-0.5 group-hover:flex">
           <button
             type="button"
-            title="Rename page"
+            title={t('Rename page')}
             onClick={() => {
               setEditingId(page.id)
               setDraft(page.name || '')
@@ -147,7 +149,7 @@ export default function PageFilesPanel({
           {mode === 'html' && (
             <button
               type="button"
-              title="Import an HTML file into this page"
+              title={t('Import an HTML file into this page')}
               onClick={() => {
                 importTarget.current = page.id
                 importRef.current?.click()
@@ -160,9 +162,9 @@ export default function PageFilesPanel({
           {pages.length > 1 && (
             <button
               type="button"
-              title="Delete page"
+              title={t('Delete page')}
               onClick={() => {
-                if (window.confirm(`Delete "${page.name}" (${fname})?`)) deletePage(page.id)
+                if (window.confirm(t('Delete "{name}" ({file})?', { name: page.name, file: fname }))) deletePage(page.id)
               }}
               className="rounded px-1 text-xs text-[#9ca3af] hover:bg-white hover:text-red-600"
             >
@@ -178,26 +180,26 @@ export default function PageFilesPanel({
     <div>
       {linkArmed && (
         <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2 py-1.5 text-[11px] font-medium text-[#1e40af]">
-          <LinkIcon size={13} /> Click a page to link the selected element to it.
+          <LinkIcon size={13} /> {t('Click a page to link the selected element to it.')}
         </div>
       )}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-          Explorer
+          {t('Explorer')}
         </h2>
         <span className="flex gap-0.5">
           <button
             type="button"
             onClick={() => setAddPrompt({ folder: '' })}
-            title="New page (file)"
+            title={t('New page (file)')}
             className="rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
           >
-            + File
+            {t('+ File')}
           </button>
           <button
             type="button"
-            onClick={() => setAddPrompt({ folder: `Folder ${folderCount + 1}` })}
-            title="New page inside a new folder"
+            onClick={() => setAddPrompt({ folder: t('Folder {count}', { count: folderCount + 1 }) })}
+            title={t('New page inside a new folder')}
             className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
           >
             + <FolderIcon size={13} />
@@ -243,8 +245,8 @@ export default function PageFilesPanel({
 
       <p className="mt-4 text-xs leading-relaxed text-[#9ca3af]">
         {mode === 'html'
-          ? 'Each page is its own HTML file — the first one publishes as the home page. Click the open file again to view its source code.'
-          : 'Pages of your design. Click the open page again to toggle the code panel.'}
+          ? t('Each page is its own HTML file — the first one publishes as the home page. Click the open file again to view its source code.')
+          : t('Pages of your design. Click the open page again to toggle the code panel.')}
       </p>
 
       {addPrompt && (
@@ -256,9 +258,9 @@ export default function PageFilesPanel({
             className="w-full max-w-sm rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-[#111827]">How should this page start?</h3>
+            <h3 className="text-base font-bold text-[#111827]">{t('How should this page start?')}</h3>
             <p className="mt-1 text-sm text-[#6b7280]">
-              Each page can use a different mode. You can switch a page later from its toolbar.
+              {t('Each page can use a different mode. You can switch a page later from its toolbar.')}
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button
@@ -267,9 +269,9 @@ export default function PageFilesPanel({
                 className="flex flex-col items-start gap-1 rounded-lg border border-[#e5e7eb] bg-white p-3 text-left hover:border-[#4f46e5] hover:bg-[#eef2ff]"
               >
                 <LayersIcon size={20} className="text-[#4f46e5]" />
-                <span className="text-sm font-semibold text-[#111827]">Empty canvas</span>
+                <span className="text-sm font-semibold text-[#111827]">{t('Empty canvas')}</span>
                 <span className="text-[11px] leading-snug text-[#6b7280]">
-                  Drag-and-drop components on a blank canvas.
+                  {t('Drag-and-drop components on a blank canvas.')}
                 </span>
               </button>
               <button
@@ -278,9 +280,9 @@ export default function PageFilesPanel({
                 className="flex flex-col items-start gap-1 rounded-lg border border-[#e5e7eb] bg-white p-3 text-left hover:border-[#4f46e5] hover:bg-[#eef2ff]"
               >
                 <FileCodeIcon size={20} className="text-[#4f46e5]" />
-                <span className="text-sm font-semibold text-[#111827]">HTML page</span>
+                <span className="text-sm font-semibold text-[#111827]">{t('HTML page')}</span>
                 <span className="text-[11px] leading-snug text-[#6b7280]">
-                  Upload, paste, or author a full HTML document.
+                  {t('Upload, paste, or author a full HTML document.')}
                 </span>
               </button>
             </div>
@@ -289,7 +291,7 @@ export default function PageFilesPanel({
               onClick={() => setAddPrompt(null)}
               className="mt-4 w-full rounded-lg border border-[#e5e7eb] px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
             >
-              Cancel
+              {t('Cancel')}
             </button>
           </div>
         </div>

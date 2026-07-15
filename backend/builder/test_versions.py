@@ -105,6 +105,31 @@ class TestApi:
         assert resp.status_code == 200, resp.data
         rows = SiteVersion.objects.filter(site_id=site_id)
         assert rows.count() == 1
+        assert rows.first().source == 'manual'
+
+    def test_auto_save_header_creates_an_auto_version(self, client, alice):
+        site_id = self._create_site(client, alice[1])
+        resp = client.put(f'/api/sites/{site_id}/', {
+            'title': 'Demo', 'html': '', 'published': False,
+            'schema': {'theme': {}, 'customCss': '', 'pages': [
+                {'id': 'auto', 'name': 'Auto', 'components': []},
+            ]},
+        }, format='json', HTTP_X_SITE_SAVE_SOURCE='auto')
+        assert resp.status_code == 200, resp.data
+        row = SiteVersion.objects.get(site_id=site_id)
+        assert row.source == 'auto'
+        assert row.pinned is False
+
+    def test_checkpoint_header_persists_without_duplicate_version(self, client, alice):
+        site_id = self._create_site(client, alice[1])
+        resp = client.put(f'/api/sites/{site_id}/', {
+            'title': 'Demo', 'html': '', 'published': False,
+            'schema': {'theme': {}, 'customCss': '', 'pages': [
+                {'id': 'checkpoint', 'name': 'Checkpoint', 'components': []},
+            ]},
+        }, format='json', HTTP_X_SITE_SAVE_SOURCE='checkpoint')
+        assert resp.status_code == 200, resp.data
+        assert SiteVersion.objects.filter(site_id=site_id).count() == 0
 
     def test_list_versions_scoped_to_owner(self, client, alice, bob):
         site_id = self._create_site(client, alice[1])
@@ -132,7 +157,7 @@ class TestApi:
         resp = client.get(f'/api/sites/{site_id}/versions/')
         assert resp.status_code == 200
         assert len(resp.data) == 1
-        assert resp.data[0]['source'] == 'save'
+        assert resp.data[0]['source'] == 'manual'
 
     def test_restore_swaps_schema_and_records_two_new_versions(self, client, alice):
         site_id = self._create_site(client, alice[1])
@@ -241,6 +266,46 @@ class TestCheckpoints:
         resp = client.delete(f'/api/sites/{site_id}/versions/{cp["id"]}/')
         assert resp.status_code == 204
         assert not SiteVersion.objects.filter(pk=cp['id']).exists()
+
+    def test_pin_and_unpin_are_independent_from_source(self, client, alice):
+        site_id = self._create_site(client, alice[1])
+        client.put(f'/api/sites/{site_id}/', {
+            'title': 'Demo', 'html': '', 'published': False,
+            'schema': {'theme': {}, 'customCss': '', 'pages': [
+                {'id': 'auto', 'name': 'Auto', 'components': []},
+            ]},
+        }, format='json', HTTP_X_SITE_SAVE_SOURCE='auto')
+        row = SiteVersion.objects.get(site_id=site_id)
+
+        pinned = client.patch(
+            f'/api/sites/{site_id}/versions/{row.id}/pin/',
+            {'pinned': True}, format='json',
+        )
+        assert pinned.status_code == 200, pinned.data
+        assert pinned.data['pinned'] is True
+        assert pinned.data['source'] == 'auto'
+
+        unpinned = client.patch(
+            f'/api/sites/{site_id}/versions/{row.id}/pin/',
+            {'pinned': False}, format='json',
+        )
+        assert unpinned.status_code == 200, unpinned.data
+        assert unpinned.data['pinned'] is False
+
+    def test_pin_rejects_non_boolean_and_other_owner(self, client, alice, bob):
+        site_id = self._create_site(client, alice[1])
+        cp = client.post(f'/api/sites/{site_id}/versions/checkpoint/', {'label': 'mine'}, format='json').data
+        invalid = client.patch(
+            f'/api/sites/{site_id}/versions/{cp["id"]}/pin/',
+            {'pinned': 'false'}, format='json',
+        )
+        assert invalid.status_code == 400
+        _auth(client, bob[1])
+        denied = client.patch(
+            f'/api/sites/{site_id}/versions/{cp["id"]}/pin/',
+            {'pinned': False}, format='json',
+        )
+        assert denied.status_code == 404
 
     def test_cannot_touch_another_users_checkpoint(self, client, alice, bob):
         site_id = self._create_site(client, alice[1])

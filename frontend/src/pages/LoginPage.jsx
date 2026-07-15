@@ -4,8 +4,11 @@ import { login, googleLogin } from '../api/auth.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 export default function LoginPage() {
+  const { t } = useLanguage()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
@@ -23,7 +26,7 @@ export default function LoginPage() {
       setAuth(token, user, remember)
       navigate('/')
     } catch (err) {
-      setError(apiError(err, 'Invalid username or password.'))
+      setError(apiError(err, t('Invalid username or password.')))
     } finally {
       setLoading(false)
     }
@@ -36,7 +39,7 @@ export default function LoginPage() {
       setAuth(token, user, remember)
       navigate('/')
     } catch (err) {
-      setError(apiError(err, 'Google sign-in failed.'))
+      setError(apiError(err, t('Google sign-in failed.')))
     }
   }
 
@@ -48,6 +51,7 @@ export default function LoginPage() {
           'radial-gradient(900px 500px at 80% -10%, rgba(99,102,241,0.14), transparent 60%), radial-gradient(700px 420px at -10% 110%, rgba(67,56,202,0.10), transparent 60%), #f7f8fa',
       }}
     >
+      <LanguageSwitcher className="fixed right-4 top-4 z-20" />
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2.5">
           <span className="brand-mark">S</span>
@@ -59,10 +63,10 @@ export default function LoginPage() {
         <form onSubmit={onSubmit} className="ms-card space-y-5 p-8">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#111827]">
-              Welcome back
+              {t('Welcome back')}
             </h1>
             <p className="mt-1 text-sm text-[#6b7280]">
-              Sign in to keep building your sites.
+              {t('Sign in to keep building your sites.')}
             </p>
           </div>
 
@@ -74,7 +78,7 @@ export default function LoginPage() {
 
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-[#374151]">
-              Username
+              {t('Username')}
             </span>
             <input
               className="ms-input"
@@ -87,7 +91,7 @@ export default function LoginPage() {
 
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-[#374151]">
-              Password
+              {t('Password')}
             </span>
             <input
               type="password"
@@ -107,10 +111,10 @@ export default function LoginPage() {
                 onChange={(e) => setRemember(e.target.checked)}
                 className="h-4 w-4 rounded border-[#d1d5db] text-[#4f46e5] focus:ring-[#4f46e5]"
               />
-              Remember me
+              {t('Remember me')}
             </label>
             <Link to="/forgot-password" className="text-sm font-medium text-[#4f46e5] hover:underline">
-              Forgot password?
+              {t('Forgot password?')}
             </Link>
           </div>
 
@@ -119,19 +123,19 @@ export default function LoginPage() {
             disabled={loading}
             className="ms-btn ms-btn-primary w-full py-2.5"
           >
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? t('Signing in…') : t('Sign in')}
           </button>
 
           {/* Google sign-in renders only when VITE_GOOGLE_CLIENT_ID is set. */}
           <GoogleSignInButton onCredential={onGoogle} onError={setError} />
 
           <p className="text-center text-sm text-[#6b7280]">
-            No account?{' '}
+            {t('No account?')}{' '}
             <Link
               className="font-semibold text-[#4f46e5] hover:underline"
               to="/register"
             >
-              Create one free
+              {t('Create one free')}
             </Link>
           </p>
         </form>

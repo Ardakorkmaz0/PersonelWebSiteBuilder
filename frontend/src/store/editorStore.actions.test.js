@@ -89,6 +89,83 @@ describe('per-page mode', () => {
   })
 })
 
+describe('custom canvas resolution', () => {
+  it('stores independent desktop and mobile width/height values', () => {
+    freshTwoPageSchema()
+
+    s().setViewport('pc')
+    s().setCanvasPreset({ width: 1366, fold: 768 })
+    let page = selectCurrentPage(useEditorStore.getState())
+    expect(page.canvasWidth).toBe(1366)
+    expect(page.canvasFold).toBe(768)
+
+    s().setViewport('mobile')
+    s().setCanvasPreset({ width: 412, fold: 915 })
+    page = selectCurrentPage(useEditorStore.getState())
+    expect(page.mobileWidth).toBe(412)
+    expect(page.mobileFold).toBe(915)
+    expect(page.canvasWidth).toBe(1366)
+    expect(page.canvasFold).toBe(768)
+  })
+
+  it('clamps manually entered sizes to the supported artboard limits', () => {
+    freshTwoPageSchema()
+    s().setViewport('pc')
+    s().setCanvasPreset({ width: 99999, fold: -1 })
+    const page = selectCurrentPage(useEditorStore.getState())
+    expect(page.canvasWidth).toBe(4000)
+    expect(page.canvasFold).toBe(0)
+  })
+})
+
+describe('selection invariants', () => {
+  it('keeps single and multi-selection aligned after add and duplicate', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 10, 10)
+    const first = s().selectedId
+    expect(s().selectedIds).toEqual([first])
+
+    s().duplicateComponent(first)
+    expect(s().selectedIds).toEqual([s().selectedId])
+    expect(s().selectedId).not.toBe(first)
+  })
+
+  it('clears both selection forms when loading, changing pages, undoing, or redoing', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 10, 10)
+    s().undo()
+    expect(s().selectedId).toBeNull()
+    expect(s().selectedIds).toEqual([])
+
+    s().redo()
+    expect(s().selectedId).toBeNull()
+    expect(s().selectedIds).toEqual([])
+
+    s().selectComponent(selectCurrentPage(useEditorStore.getState()).components[0].id)
+    s().selectPage('p2')
+    expect(s().selectedId).toBeNull()
+    expect(s().selectedIds).toEqual([])
+
+    s().loadSchema({ pages: [{ id: 'fresh', name: 'Fresh', components: [] }] })
+    expect(s().selectedId).toBeNull()
+    expect(s().selectedIds).toEqual([])
+  })
+
+  it('promotes a remaining selected component when the primary is removed', () => {
+    freshTwoPageSchema()
+    s().addComponent('button', 10, 10)
+    const first = s().selectedId
+    s().addComponent('text', 30, 30)
+    const second = s().selectedId
+    s().selectMany([first, second])
+
+    s().removeComponent(second)
+
+    expect(s().selectedIds).toEqual([first])
+    expect(s().selectedId).toBe(first)
+  })
+})
+
 describe('native tabs drops', () => {
   it('creates palette tab presets as native tabs with matching labels', () => {
     freshTwoPageSchema()
@@ -121,6 +198,46 @@ describe('native navbar drops', () => {
     expect(nav.props.navLayout).toBe('vertical')
     expect(nav.props.links.map((l) => l.label)).toEqual(['Dashboard', 'Projects', 'Team', 'Settings'])
     expect(nav.layout).toMatchObject({ w: 220, h: 320 })
+  })
+})
+
+describe('responsive regions', () => {
+  it('creates a full-width parent and clamps children to its safe content width', () => {
+    freshTwoPageSchema()
+    s().addComponent('region', 0, 40)
+    const region = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(region.type).toBe('region')
+    expect(region.props.contentWidth).toBe(980)
+    expect(region.children).toEqual([])
+    expect(region.mobileLayout).toMatchObject({ x: 0, y: 0, w: 390, h: 360 })
+
+    s().addComponent('heading', 960, 20, region.id)
+    const updated = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(updated.children).toHaveLength(1)
+    expect(updated.children[0].layout.x + updated.children[0].layout.w).toBeLessThanOrEqual(980)
+    expect(updated.children[0].mobileLayout).toMatchObject({ x: 16, y: 16 })
+  })
+
+  it('keeps sections stacked when resized and lets them be reordered', () => {
+    freshTwoPageSchema()
+    s().addComponent('region', 0, 0)
+    s().addComponent('region', 0, 360)
+    let regions = selectCurrentPage(useEditorStore.getState()).components
+    const firstId = regions[0].id
+    const secondId = regions[1].id
+    expect(regions.map((region) => region.mobileLayout.y)).toEqual([0, 360])
+    s().setLayout(regions[0].id, { h: 460 })
+    regions = selectCurrentPage(useEditorStore.getState()).components
+    expect(regions[1].layout.y).toBe(460)
+    expect(regions[1].mobileLayout.y).toBe(460)
+
+    s().moveRegion(regions[1].id, 'up')
+    regions = selectCurrentPage(useEditorStore.getState()).components
+      .filter((component) => component.type === 'region')
+      .sort((a, b) => a.layout.y - b.layout.y)
+    expect(regions.map((region) => region.id)).toEqual([secondId, firstId])
+    expect(regions[0].layout.y).toBe(0)
+    expect(regions[1].layout.y).toBe(regions[0].layout.h)
   })
 })
 

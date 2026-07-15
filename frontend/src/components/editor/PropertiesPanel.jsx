@@ -43,6 +43,7 @@ import {
   TabsEditorControl,
 } from './controls.jsx'
 import { PaletteIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
@@ -51,25 +52,26 @@ const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
 // is reachable and reports installed models, amber while we ping, red when
 // it can't be reached. Doubles as a refresh button.
 function LocalStatusRow({ status, refreshing, onRefresh }) {
+  const { t } = useLanguage()
   let tone = 'amber'
-  let label = 'Checking…'
+  let label = t('Checking…')
   let detail = ''
   if (!refreshing && status) {
     if (status.ok) {
       tone = 'emerald'
       const count = (status.models || []).length
       label = count
-        ? `Ready · ${count} model${count === 1 ? '' : 's'} found`
-        : 'Reachable but no models installed'
+        ? t(count === 1 ? '{count} model ready' : '{count} models ready', { count })
+        : t('Reachable but no models installed')
       detail = count
-        ? `Runtime: ${status.runtime || 'ollama'}`
-        : 'Pull one with `ollama pull qwen2.5`.'
+        ? t('Runtime: {runtime}', { runtime: status.runtime || 'ollama' })
+        : t('Pull one with `ollama pull qwen2.5`.')
     } else {
       tone = 'red'
-      label = 'Cannot reach the local runtime'
+      label = t('Cannot reach the local runtime')
       detail = status.reason
-        ? `Make sure Ollama is running. (${status.reason})`
-        : 'Make sure Ollama (or LM Studio) is running.'
+        ? t('Make sure Ollama is running. ({reason})', { reason: status.reason })
+        : t('Make sure Ollama (or LM Studio) is running.')
     }
   }
   const toneClasses = {
@@ -89,7 +91,7 @@ function LocalStatusRow({ status, refreshing, onRefresh }) {
         disabled={refreshing}
         className="rounded-lg border border-current bg-white px-2 py-0.5 text-[10px] font-semibold opacity-90 hover:opacity-100 disabled:cursor-wait"
       >
-        {refreshing ? '…' : 'Refresh'}
+        {refreshing ? '…' : t('Refresh')}
       </button>
     </div>
   )
@@ -99,6 +101,7 @@ function LocalStatusRow({ status, refreshing, onRefresh }) {
 // sent directly from the browser to Google's API — the Django backend never
 // sees it. Saved per browser, not per site.
 function AiAssistantSection() {
+  const { t } = useLanguage()
   const [provider, setProviderState] = useState(() => getProvider())
   const [value, setValue] = useState(() => getApiKey(provider))
   const [reveal, setReveal] = useState(false)
@@ -188,9 +191,9 @@ function AiAssistantSection() {
   }, [endpoint, provider, providerInfo?.configurableEndpoint])
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">AI Assistant</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">{t('AI Assistant')}</h3>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold text-[#6b7280]">Provider</span>
+        <span className="mb-1 block text-xs font-semibold text-[#6b7280]">{t('Provider')}</span>
         <select
           value={provider}
           onChange={(e) => pickProvider(e.target.value)}
@@ -198,16 +201,16 @@ function AiAssistantSection() {
         >
           {AI_PROVIDERS.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.label}
+              {t(p.label)}
             </option>
           ))}
         </select>
-        <span className="mt-1 block text-[11px] text-[#6b7280]">{providerInfo?.keyHint}</span>
+        <span className="mt-1 block text-[11px] text-[#6b7280]">{t(providerInfo?.keyHint)}</span>
       </label>
       {needsKey ? (
         <>
           <p className="text-xs leading-relaxed text-[#6b7280]">
-            Paste a free API key from{' '}
+            {t('Paste a free API key from')}{' '}
             <a
               href={providerInfo?.keyUrl || '#'}
               target="_blank"
@@ -216,11 +219,11 @@ function AiAssistantSection() {
             >
               {(providerInfo?.keyUrl || '').replace(/^https?:\/\//, '').replace(/\/.*/, '')}
             </a>
-            . The key stays in your browser and is sent directly to the provider — never to our server.
+            . {t('The key stays in your browser and is sent directly to the provider — never to our server.')}
           </p>
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-[#6b7280]">
-              {providerInfo?.label || 'API'} key
+              {t('{provider} key', { provider: t(providerInfo?.label || 'API') })}
             </span>
             <div className="flex gap-2">
               <input
@@ -237,7 +240,7 @@ function AiAssistantSection() {
                 onClick={() => setReveal((r) => !r)}
                 className="rounded-lg border border-[#d1d5db] px-2 text-xs text-[#374151] hover:bg-[#f3f4f6]"
               >
-                {reveal ? 'Hide' : 'Show'}
+                {reveal ? t('Hide') : t('Show')}
               </button>
             </div>
           </label>
@@ -245,11 +248,9 @@ function AiAssistantSection() {
       ) : (
         <div className="space-y-2">
           <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-relaxed text-emerald-900">
-            No API key needed — this provider runs on your computer. All you
-            need is Ollama installed and at least one model pulled (e.g.
+            {t('No API key needed — this provider runs on your computer. All you need is Ollama installed and at least one model pulled (e.g.')}{' '}
             <code className="mx-1 rounded bg-white px-1 py-0.5 text-[10px]">ollama pull qwen2.5</code>
-            ). Requests are routed through this app&apos;s backend, so you
-            don&apos;t have to deal with CORS or OLLAMA_ORIGINS.
+            {' '}{t('). Requests are routed through this app backend, so you do not have to deal with CORS or OLLAMA_ORIGINS.')}
           </p>
           <LocalStatusRow
             status={localStatus}
@@ -260,7 +261,7 @@ function AiAssistantSection() {
       )}
       {providerInfo?.configurableEndpoint && (
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-[#6b7280]">Base URL (advanced)</span>
+          <span className="mb-1 block text-xs font-semibold text-[#6b7280]">{t('Base URL (advanced)')}</span>
           <input
             type="text"
             value={endpoint}
@@ -271,20 +272,19 @@ function AiAssistantSection() {
             spellCheck={false}
           />
           <span className="mt-1 block text-[11px] text-[#6b7280]">
-            Ollama: http://localhost:11434/v1 — LM Studio: http://localhost:1234/v1.
-            Leave as-is unless you changed Ollama&apos;s default port.
+            {t('Ollama: http://localhost:11434/v1 — LM Studio: http://localhost:1234/v1. Leave as-is unless you changed Ollama default port.')}
           </span>
         </label>
       )}
       <p className="text-xs text-[#6b7280]">
         {value
           ? savedFlash
-            ? 'Saved ✓'
-            : 'Key saved. The AI button in the toolbar opens the chat panel.'
-          : 'No key set — the AI button in the toolbar is in setup mode.'}
+            ? t('Saved ✓')
+            : t('Key saved. The AI button in the toolbar opens the chat panel.')
+          : t('No key set — the AI button in the toolbar is in setup mode.')}
       </p>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold text-[#6b7280]">Model</span>
+        <span className="mb-1 block text-xs font-semibold text-[#6b7280]">{t('Model')}</span>
         {providerInfo?.customModel ? (
           <>
             <input
@@ -300,13 +300,13 @@ function AiAssistantSection() {
             <datalist id="ai-model-suggestions">
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.label}
+                  {t(m.label)}
                 </option>
               ))}
             </datalist>
             <span className="mt-1 block text-[11px] text-[#6b7280]">
-              {models.find((m) => m.id === model)?.note ||
-                'Type any model you have pulled with Ollama or loaded in LM Studio.'}
+              {t(models.find((m) => m.id === model)?.note ||
+                'Type any model you have pulled with Ollama or loaded in LM Studio.')}
             </span>
           </>
         ) : (
@@ -318,12 +318,12 @@ function AiAssistantSection() {
             >
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.label}
+                  {t(m.label)}
                 </option>
               ))}
             </select>
             <span className="mt-1 block text-[11px] text-[#6b7280]">
-              {models.find((m) => m.id === model)?.note}
+              {t(models.find((m) => m.id === model)?.note)}
             </span>
           </>
         )}
@@ -335,10 +335,11 @@ function AiAssistantSection() {
 // Optional snippet picker. Empty selection is the default — writing by hand
 // stays the primary workflow; this is just a shortcut.
 function SnippetPicker({ groups, list, onPick }) {
+  const { t } = useLanguage()
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-semibold text-[#6b7280]">
-        Insert snippet (optional)
+        {t('Insert snippet (optional)')}
       </span>
       <select
         value=""
@@ -351,12 +352,12 @@ function SnippetPicker({ groups, list, onPick }) {
         }}
         className="w-full rounded-lg border border-[#d1d5db] bg-white px-2 py-1 text-sm text-[#111827] focus:border-[#4f46e5] focus:outline-none"
       >
-        <option value="">— pick a snippet to append —</option>
+        <option value="">{t('— pick a snippet to append —')}</option>
         {groups.map((g) => (
-          <optgroup key={g.category} label={g.category}>
+          <optgroup key={g.category} label={t(g.category)}>
             {g.items.map((s) => (
-              <option key={s.id} value={s.id} title={s.description}>
-                {s.name}
+              <option key={s.id} value={s.id} title={t(s.description)}>
+                {t(s.name)}
               </option>
             ))}
           </optgroup>
@@ -555,7 +556,7 @@ const BASIC_STYLE_KEYS = new Set([
 ])
 
 // Find a component anywhere in the tree (containers and tabs nest children).
-const NESTING_TYPES = new Set(['container', 'tabs'])
+const NESTING_TYPES = new Set(['container', 'tabs', 'region'])
 const MIN_COMPONENT_SIZE = 20
 const SIZE_PRESET_OPTIONS = [
   ['small', 'Small', 0.75],
@@ -622,16 +623,19 @@ function SectionTitle({ children }) {
 }
 
 function PropControl({ field, value, onChange, extras, pages = [] }) {
+  const { t } = useLanguage()
+  const label = t(field.label)
+  const options = field.options?.map(([optionValue, optionLabel]) => [optionValue, t(optionLabel)])
   // An href field becomes the visual link-target picker (page / top / section
   // / URL) instead of a raw text box.
   if (field.key === 'href') {
-    return <LinkTargetControl label={field.label} value={value} onChange={onChange} pages={pages} />
+    return <LinkTargetControl label={label} value={value} onChange={onChange} pages={pages} />
   }
   if (field.control === 'link') {
-    return <LinkTargetControl label={field.label} value={value} onChange={onChange} pages={pages} />
+    return <LinkTargetControl label={label} value={value} onChange={onChange} pages={pages} />
   }
   if (field.control === 'textarea') {
-    return <LabeledTextarea label={field.label} value={value} onChange={onChange} />
+    return <LabeledTextarea label={label} value={value} onChange={onChange} />
   }
   if (field.control === 'code') {
     return (
@@ -642,7 +646,7 @@ function PropControl({ field, value, onChange, extras, pages = [] }) {
           onPick={(s) => onChange(appendSnippet(value, s, 'js'))}
         />
         <LabeledTextarea
-          label={field.label}
+          label={label}
           value={value}
           onChange={onChange}
           rows={14}
@@ -653,15 +657,15 @@ function PropControl({ field, value, onChange, extras, pages = [] }) {
     )
   }
   if (field.control === 'links') {
-    return <LinksEditor label={field.label} value={value} onChange={onChange} pages={pages} />
+    return <LinksEditor label={label} value={value} onChange={onChange} pages={pages} />
   }
   if (field.control === 'htmlContent') {
-    return <HtmlContentControl label={field.label} value={value} onChange={onChange} pages={pages} />
+    return <HtmlContentControl label={label} value={value} onChange={onChange} pages={pages} />
   }
   if (field.control === 'tabs') {
     return (
       <TabsEditorControl
-        label={field.label}
+        label={label}
         value={value}
         onChange={onChange}
         activeId={extras?.activeId}
@@ -672,52 +676,55 @@ function PropControl({ field, value, onChange, extras, pages = [] }) {
     )
   }
   if (field.control === 'image') {
-    return <LabeledImage label={field.label} value={value} onChange={onChange} />
+    return <LabeledImage label={label} value={value} onChange={onChange} />
   }
   if (field.control === 'color') {
-    return <LabeledColor label={field.label} value={value} onChange={onChange} />
+    return <LabeledColor label={label} value={value} onChange={onChange} />
   }
   if (field.control === 'px') {
-    return <LabeledPx label={field.label} value={value} onChange={onChange} />
+    return <LabeledPx label={label} value={value} onChange={onChange} />
   }
   if (field.control === 'select') {
     return (
       <LabeledSelect
-        label={field.label}
+        label={label}
         value={value}
         onChange={onChange}
-        options={field.options}
+        options={options}
       />
     )
   }
-  return <LabeledText label={field.label} value={value} onChange={onChange} />
+  return <LabeledText label={label} value={value} onChange={onChange} />
 }
 
 function StyleControl({ styleKey, value, onChange }) {
+  const { t } = useLanguage()
   const meta = STYLE_META[styleKey]
   if (!meta) return null
+  const label = t(meta.label)
+  const options = meta.options?.map(([optionValue, optionLabel]) => [optionValue, t(optionLabel)])
   if (meta.control === 'color') {
-    return <LabeledColor label={meta.label} value={value} onChange={onChange} />
+    return <LabeledColor label={label} value={value} onChange={onChange} />
   }
   if (meta.control === 'select') {
     return (
       <LabeledSelect
-        label={meta.label}
+        label={label}
         value={value}
         onChange={onChange}
-        options={meta.options}
+        options={options}
       />
     )
   }
   if (meta.control === 'px') {
-    return <LabeledPx label={meta.label} value={value} onChange={onChange} />
+    return <LabeledPx label={label} value={value} onChange={onChange} />
   }
   if (meta.control === 'range') {
-    return <LabeledRange label={meta.label} value={value} onChange={onChange} />
+    return <LabeledRange label={label} value={value} onChange={onChange} />
   }
   return (
     <LabeledText
-      label={meta.label}
+      label={label}
       value={value}
       onChange={onChange}
       placeholder={meta.placeholder}
@@ -743,7 +750,8 @@ function visibleStyleGroups(keys, mode) {
   return groupedStyles((keys || []).filter((key) => BASIC_STYLE_KEYS.has(key)))
 }
 
-export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }) {
+export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, simpleMode = false }) {
+  const { t } = useLanguage()
   const selectedId = useEditorStore((s) => s.selectedId)
   const schema = useEditorStore((s) => s.schema)
   const page = useEditorStore(selectCurrentPage)
@@ -770,6 +778,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const sendToBack = useEditorStore((s) => s.sendToBack)
   const moveForward = useEditorStore((s) => s.moveForward)
   const moveBackward = useEditorStore((s) => s.moveBackward)
+  const moveRegion = useEditorStore((s) => s.moveRegion)
   const removeComponent = useEditorStore((s) => s.removeComponent)
   const setActiveTab = useEditorStore((s) => s.setActiveTab)
   const setTabsChildren = useEditorStore((s) => s.setTabsChildren)
@@ -789,7 +798,18 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const selectedEntry = findComponentEntry(page.components, selectedId)
   const component = selectedEntry?.component || null
   const parentComponent = selectedEntry?.parent || null
-  const isAbsoluteNested = parentComponent?.type === 'tabs' || parentComponent?.type === 'container'
+  const viewportStretchComponent = component?.type === 'region' || (
+    component?.type === 'navbar' &&
+    component.props?.navLayout !== 'vertical' &&
+    component.props?.widthMode !== 'boxed'
+  )
+  const orderedRegions = page.components
+    .filter((item) => item.type === 'region')
+    .sort((a, b) => (a.layout?.y || 0) - (b.layout?.y || 0))
+  const regionIndex = component?.type === 'region'
+    ? orderedRegions.findIndex((item) => item.id === component.id)
+    : -1
+  const isAbsoluteNested = parentComponent?.type === 'tabs' || parentComponent?.type === 'container' || parentComponent?.type === 'region'
   const showPositionControls = !isFlow || isAbsoluteNested
   const selectedEntries = selectedIds
     .map((id) => findComponentEntry(page.components, id))
@@ -801,7 +821,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   const selectionWidthValue = sharedLayoutValue(selectedLayoutItems, 'w')
   const selectionHeightValue = sharedLayoutValue(selectedLayoutItems, 'h')
   const multiShowPositionControls = selectedEntries.some((entry) => (
-    !isFlow || entry.parent?.type === 'tabs' || entry.parent?.type === 'container'
+    !isFlow || entry.parent?.type === 'tabs' || entry.parent?.type === 'container' || entry.parent?.type === 'region'
   ))
   const applySelectionSize = (patch) => {
     const updates = {}
@@ -831,7 +851,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
     ? page.backgroundMobile || page.background || '#ffffff'
     : page.background || '#ffffff'
   const theme = schema.theme || DEFAULT_THEME
-  const extendedMode = propertiesMode === 'extended'
+  const extendedMode = !simpleMode && propertiesMode === 'extended'
   const setPropertiesMode = (mode) => {
     setPropertiesModeState(mode)
     try { localStorage.setItem(PROPERTIES_MODE_KEY, mode) } catch { /* ignore */ }
@@ -843,40 +863,42 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
         <div className="border-b border-[#e5e7eb] px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-[#111827]">Selection</h2>
-              <p className="truncate text-xs text-[#6b7280]">{selectedLayoutItems.length} items selected</p>
+              <h2 className="truncate text-sm font-semibold text-[#111827]">{t('Selection')}</h2>
+              <p className="truncate text-xs text-[#6b7280]">{t('{count} items selected', { count: selectedLayoutItems.length })}</p>
             </div>
-            <SegmentedToggle
-              value={propertiesMode}
-              onChange={setPropertiesMode}
-              options={[['basic', 'Basic'], ['extended', 'Extend']]}
-            />
+            {!simpleMode && (
+              <SegmentedToggle
+                value={propertiesMode}
+                onChange={setPropertiesMode}
+                options={[['basic', t('Basic')], ['extended', t('Extend')]]}
+              />
+            )}
           </div>
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-4">
           <div className="rounded-lg bg-[#eef2ff] px-3 py-2">
             <span className="text-xs font-semibold text-[#4f46e5]">
-              {isFlow ? 'Editing HTML flow layout' : `Editing ${isMobile ? 'Mobile' : 'PC'} layout`}
+              {isFlow ? t('Editing HTML flow layout') : t('Editing {viewport} layout', { viewport: t(isMobile ? 'Mobile' : 'PC') })}
             </span>
           </div>
 
           <section className="space-y-3">
             <SectionTitle>
-              Size
+              {t('Size')}
               <span className="ml-1 font-normal normal-case text-[#9ca3af]">
-                ({isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC'})
+                ({t(isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC')})
               </span>
             </SectionTitle>
             <div className="grid grid-cols-2 gap-2">
               <MixedNumber
-                label={isFlow ? 'Max width' : 'Width'}
+                label={t(isFlow ? 'Max width' : 'Width')}
                 value={selectionWidthValue ?? 0}
                 mixed={selectionWidthValue === null}
                 onChange={(v) => applySelectionSize({ w: v })}
               />
               <MixedNumber
-                label={isFlow ? 'Min height' : 'Height'}
+                label={t(isFlow ? 'Min height' : 'Height')}
                 value={selectionHeightValue ?? 0}
                 mixed={selectionHeightValue === null}
                 onChange={(v) => applySelectionSize({ h: v })}
@@ -891,14 +913,14 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           {multiShowPositionControls && (
             <section className="space-y-2">
               <SectionTitle>
-                Align &amp; Distribute
+                {t('Align & Distribute')}
                 <span className="ml-1 font-normal normal-case text-[#9ca3af]">
-                  ({selectedLayoutItems.length} selected)
+                  ({t('{count} selected', { count: selectedLayoutItems.length })})
                 </span>
               </SectionTitle>
               {extendedMode && (
                 <p className="text-[11px] leading-snug text-[#9ca3af]">
-                  Aligns the selected items to each other.
+                  {t('Aligns the selected items to each other.')}
                 </p>
               )}
               <div className="grid grid-cols-3 gap-1.5">
@@ -916,7 +938,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                     onClick={() => alignSelection(mode)}
                     className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb]"
                   >
-                    {label}
+                    {t(label)}
                   </button>
                 ))}
               </div>
@@ -925,19 +947,19 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                   type="button"
                   disabled={selectedLayoutItems.length < 3}
                   onClick={() => distributeSelection('x')}
-                  title={selectedLayoutItems.length < 3 ? 'Select 3+ items to distribute' : 'Equal horizontal gaps'}
+                  title={t(selectedLayoutItems.length < 3 ? 'Select 3+ items to distribute' : 'Equal horizontal gaps')}
                   className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
                 >
-                  Distribute X
+                  {t('Distribute X')}
                 </button>
                 <button
                   type="button"
                   disabled={selectedLayoutItems.length < 3}
                   onClick={() => distributeSelection('y')}
-                  title={selectedLayoutItems.length < 3 ? 'Select 3+ items to distribute' : 'Equal vertical gaps'}
+                  title={t(selectedLayoutItems.length < 3 ? 'Select 3+ items to distribute' : 'Equal vertical gaps')}
                   className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
                 >
-                  Distribute Y
+                  {t('Distribute Y')}
                 </button>
               </div>
             </section>
@@ -951,34 +973,36 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
     return (
       <div className="flex h-full flex-col">
         <div className="border-b border-[#e5e7eb] px-4 py-3">
-          <h2 className="text-sm font-semibold text-[#111827]">Page</h2>
+          <h2 className="text-sm font-semibold text-[#111827]">{t('Page')}</h2>
           <p className="text-xs text-[#6b7280]">
             {isFlow
-              ? 'HTML flow layout - nothing selected'
-              : `${isMobile ? 'Mobile layout' : 'PC layout'} - nothing selected`}
+              ? t('HTML flow layout - nothing selected')
+              : t(isMobile ? 'Mobile layout - nothing selected' : 'PC layout - nothing selected')}
           </p>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-4">
           <section className="space-y-3">
-            <SectionTitle>Page</SectionTitle>
+            <SectionTitle>{t('Page')}</SectionTitle>
             <LabeledText
-              label="Page name"
+              label={t('Page name')}
               value={page.name}
               onChange={(v) => renamePage(page.id, v)}
             />
-            <LabeledText
-              label="Folder (optional)"
-              value={page.folder}
-              onChange={(v) => setPageFolder(page.id, v)}
-              placeholder="e.g. Marketing"
-            />
+            {!simpleMode && (
+              <LabeledText
+                label={t('Folder (optional)')}
+                value={page.folder}
+                onChange={(v) => setPageFolder(page.id, v)}
+                placeholder={t('e.g. Marketing')}
+              />
+            )}
             <LabeledColor
               label={
                 isFlow
-                  ? 'Page background'
+                  ? t('Page background')
                   : isMobile
-                    ? 'Page background (Mobile)'
-                    : 'Page background (PC)'
+                    ? t('Page background (Mobile)')
+                    : t('Page background (PC)')
               }
               value={pageBackground}
               onChange={setPageBackground}
@@ -989,23 +1013,23 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                 onClick={autoArrangeMobile}
                 className="w-full rounded-lg border border-[#d1d5db] bg-white py-2 text-sm font-medium text-[#374151] hover:bg-[#f3f4f6]"
               >
-                Auto-arrange mobile layout
+                {t('Auto-arrange mobile layout')}
               </button>
             )}
           </section>
 
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <SectionTitle>Theme</SectionTitle>
+              <SectionTitle>{t('Theme')}</SectionTitle>
               <button
                 type="button"
                 onClick={() => (htmlMode ? onApplyThemeToHtml?.(theme) : applyTheme())}
                 title={htmlMode
-                  ? 'Apply this palette + font to every HTML page'
-                  : 'Apply the theme to every component'}
+                  ? t('Apply this palette + font to every HTML page')
+                  : t('Apply the theme to every component')}
                 className="rounded-lg border border-[#4f46e5] px-2 py-1 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
               >
-                {htmlMode ? 'Apply to pages' : 'Apply to design'}
+                {htmlMode ? t('Apply to pages') : t('Apply to design')}
               </button>
             </div>
             {/* One-click presets: set the palette AND restyle everything —
@@ -1016,7 +1040,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                 <button
                   key={p.id}
                   type="button"
-                  title={`Use the "${p.name}" theme and apply it to the whole site`}
+                  title={t('Use the "{name}" theme and apply it to the whole site', { name: t(p.name) })}
                   onClick={() => {
                     updateTheme(p.theme)
                     if (htmlMode) onApplyThemeToHtml?.(normalizeTheme(p.theme))
@@ -1033,76 +1057,78 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                       />
                     ))}
                   </span>
-                  <span className="truncate">{p.name}</span>
+                  <span className="truncate">{t(p.name)}</span>
                 </button>
               ))}
             </div>
             <LabeledColor
-              label="Primary color"
+              label={t('Primary color')}
               value={theme.primaryColor}
               onChange={(v) => updateTheme({ primaryColor: v })}
             />
+            {!simpleMode && <>
             <LabeledColor
-              label="Text color"
+              label={t('Text color')}
               value={theme.textColor}
               onChange={(v) => updateTheme({ textColor: v })}
             />
             <LabeledColor
-              label="Muted color"
+              label={t('Muted color')}
               value={theme.mutedColor}
               onChange={(v) => updateTheme({ mutedColor: v })}
             />
             <LabeledColor
-              label="Site background"
+              label={t('Site background')}
               value={theme.backgroundColor}
               onChange={(v) => updateTheme({ backgroundColor: v })}
             />
             <LabeledColor
-              label="Surface color"
+              label={t('Surface color')}
               value={theme.surfaceColor}
               onChange={(v) => updateTheme({ surfaceColor: v })}
             />
             <LabeledColor
-              label="Soft background"
+              label={t('Soft background')}
               value={theme.softColor}
               onChange={(v) => updateTheme({ softColor: v })}
             />
             <LabeledColor
-              label="Header color"
+              label={t('Header color')}
               value={theme.headerColor}
               onChange={(v) => updateTheme({ headerColor: v })}
             />
             <LabeledColor
-              label="Header text"
+              label={t('Header text')}
               value={theme.headerTextColor}
               onChange={(v) => updateTheme({ headerTextColor: v })}
             />
             <LabeledSelect
-              label="Font"
+              label={t('Font')}
               value={theme.fontFamily}
               onChange={(v) => updateTheme({ fontFamily: v })}
-              options={FONT_OPTIONS}
+              options={FONT_OPTIONS.map(([value, label]) => [value, t(label)])}
             />
             <LabeledPx
-              label="Corner radius"
+              label={t('Corner radius')}
               value={theme.radius}
               onChange={(v) => updateTheme({ radius: v })}
             />
             <LabeledPx
-              label="Button radius"
+              label={t('Button radius')}
               value={theme.buttonRadius}
               onChange={(v) => updateTheme({ buttonRadius: v })}
             />
             <LabeledText
-              label="Shadow"
+              label={t('Shadow')}
               value={theme.shadow}
               onChange={(v) => updateTheme({ shadow: v })}
-              placeholder="e.g. 0 8px 24px rgba(0,0,0,0.12)"
+              placeholder={t('e.g. 0 8px 24px rgba(0,0,0,0.12)')}
             />
+            </>}
           </section>
 
-          <section className="space-y-3">
-            <SectionTitle>Custom CSS</SectionTitle>
+          {!simpleMode && <section className="space-y-3">
+            <SectionTitle>{t('Custom CSS')}</SectionTitle>
             <SnippetPicker
               groups={CSS_SNIPPET_GROUPS}
               list={cssSnippets}
@@ -1116,14 +1142,12 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
               mono
               placeholder=".page { scroll-behavior: smooth; }"
             />
-          </section>
+          </section>}
 
-          <section className="space-y-3">
-            <SectionTitle>Custom JavaScript</SectionTitle>
+          {!simpleMode && <section className="space-y-3">
+            <SectionTitle>{t('Custom JavaScript')}</SectionTitle>
             <p className="text-xs leading-relaxed text-[#6b7280]">
-              Runs on the published site inside a sandboxed iframe — full DOM,
-              fetch, setTimeout, third-party CDNs, etc. Cannot reach this app or
-              the visitor&apos;s session.
+              {t('Runs on the published site inside a sandboxed iframe — full DOM, fetch, setTimeout, third-party CDNs, etc. Cannot reach this app or the visitor session.')}
             </p>
             <SnippetPicker
               groups={JS_SNIPPET_GROUPS}
@@ -1138,17 +1162,17 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
               mono
               placeholder={'document.addEventListener("DOMContentLoaded", () => {\n  // your code\n})'}
             />
-          </section>
+          </section>}
 
-          <AiAssistantSection />
+          {!simpleMode && <AiAssistantSection />}
 
 
           <p className="text-xs leading-relaxed text-[#6b7280]">
             {isFlow
-              ? 'Flow mode uses one document order that adapts across PC and mobile.'
+              ? t('Flow mode uses one document order that adapts across PC and mobile.')
               : isMobile
-                ? 'Mobile is a separate design. Drag and resize components on the phone, or auto-arrange them into a clean single column.'
-                : 'Select a component on the canvas to edit its content, style, position and size.'}
+                ? t('Mobile is a separate design. Drag and resize components on the phone, or auto-arrange them into a clean single column.')
+                : t('Select a component on the canvas to edit its content, style, position and size.')}
           </p>
         </div>
       </div>
@@ -1171,7 +1195,10 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
     const enteringPinnedMode = scrollBehavior === 'normal' && next !== 'normal'
     const defaultPinX = isFlow && !isAbsoluteNested ? 'center' : 'left'
     const defaultPinOffsetX = isFlow && !isAbsoluteNested ? 0 : Math.round(currentLayout.x || 0)
-    const defaultPinOffsetY = isFlow && !isAbsoluteNested ? 16 : Math.round(currentLayout.y || 0)
+    // A newly pinned element should hug the selected viewport edge. Reusing
+    // its canvas Y coordinate made "Fixed" appear broken (an element at y=600
+    // stayed 600px below the screen top). Users can still set a custom offset.
+    const defaultPinOffsetY = isFlow && !isAbsoluteNested ? 16 : 0
     updateProps(component.id, {
       scrollBehavior: next,
       ...(next === 'normal'
@@ -1187,7 +1214,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   }
   const contentSection = (def.editableProps || []).length > 0 ? (
     <section className="space-y-3">
-      <SectionTitle>Content</SectionTitle>
+      <SectionTitle>{t('Content')}</SectionTitle>
       {def.editableProps.map((field) => (
         <PropControl
           key={`${field.key}-${field.control || 'text'}-${field.label}`}
@@ -1211,9 +1238,9 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
   ) : null
   const linkSection = LINKABLE_TYPES.has(component.type) ? (
     <section className="space-y-3">
-      <SectionTitle>Link</SectionTitle>
+      <SectionTitle>{t('Link')}</SectionTitle>
       <LinkTargetControl
-        label="Wrap in a link"
+        label={t('Wrap in a link')}
         value={component.props.href}
         pages={schema.pages}
         onChange={(val) => updateProps(component.id, { href: val })}
@@ -1226,21 +1253,23 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
       <div className="border-b border-[#e5e7eb] px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-[#111827]">{def.label}</h2>
+            <h2 className="truncate text-sm font-semibold text-[#111827]">{t(def.label)}</h2>
             <p className="truncate text-xs text-[#6b7280]">{component.id}</p>
           </div>
-          <SegmentedToggle
-            value={propertiesMode}
-            onChange={setPropertiesMode}
-            options={[['basic', 'Basic'], ['extended', 'Extend']]}
-          />
+          {!simpleMode && (
+            <SegmentedToggle
+              value={propertiesMode}
+              onChange={setPropertiesMode}
+              options={[['basic', t('Basic')], ['extended', t('Extend')]]}
+            />
+          )}
         </div>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
         <div className="flex items-center justify-between gap-2 rounded-lg bg-[#eef2ff] px-3 py-2">
           <span className="text-xs font-semibold text-[#4f46e5]">
-            {isFlow ? 'Editing HTML flow layout' : `Editing ${isMobile ? 'Mobile' : 'PC'} layout`}
+            {isFlow ? t('Editing HTML flow layout') : t('Editing {viewport} layout', { viewport: t(isMobile ? 'Mobile' : 'PC') })}
           </span>
           {isMobile && !isFlow && (
             <button
@@ -1248,7 +1277,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
               onClick={autoArrangeMobile}
               className="rounded-lg border border-[#4f46e5] bg-white px-2 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
             >
-              Auto-arrange
+              {t('Auto-arrange')}
             </button>
           )}
         </div>
@@ -1261,127 +1290,185 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           }}
         />
 
-        {contentSection}
+        {component.type === 'region' && isMobile ? null : contentSection}
         {linkSection}
+
+        {component.type === 'region' && (
+          <section className="space-y-3">
+            <SectionTitle>{t('Section order')}</SectionTitle>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={regionIndex <= 0}
+                onClick={() => moveRegion(component.id, 'up')}
+                className="rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ↑ {t('Move section up')}
+              </button>
+              <button
+                type="button"
+                disabled={regionIndex < 0 || regionIndex >= orderedRegions.length - 1}
+                onClick={() => moveRegion(component.id, 'down')}
+                className="rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ↓ {t('Move section down')}
+              </button>
+            </div>
+            <p className="text-[11px] leading-snug text-[#9ca3af]">
+              {t('Sections stay stacked; changing the height pushes the content below.')}
+            </p>
+          </section>
+        )}
+
+        {parentComponent?.type === 'region' && !isMobile && (
+          <section className="space-y-3">
+            <SectionTitle>{t('Dock to section')}</SectionTitle>
+            <LabeledSelect
+              label={t('Horizontal docking')}
+              value={component.props?.dockX || 'auto'}
+              onChange={(value) => updateProps(component.id, { dockX: value })}
+              options={[
+                ['auto', t('Auto (nearest edge)')],
+                ['left', t('Left')],
+                ['center', t('Center')],
+                ['right', t('Right')],
+                ['stretch', t('Stretch')],
+              ]}
+            />
+            <p className="text-[11px] leading-snug text-[#9ca3af]">
+              {t('Docking keeps this element attached to the chosen grid edge as the screen width changes.')}
+            </p>
+          </section>
+        )}
 
         {componentPresets.length > 0 && (
           <section className="space-y-3">
-            <SectionTitle>Presets</SectionTitle>
+            <SectionTitle>{t('Presets')}</SectionTitle>
             <LabeledSelect
-              label="Component preset"
+              label={t('Component preset')}
               value=""
               onChange={(value) => value && applyComponentPreset(component.id, value)}
-              options={presetOptions(component.type)}
+              options={presetOptions(component.type).map(([value, label]) => [value, t(label)])}
             />
           </section>
         )}
 
         <section className="space-y-3">
           <SectionTitle>
-            {showPositionControls ? (extendedMode ? 'Position & Size' : 'Size') : 'Layout Size'}
+            {t(showPositionControls ? (extendedMode ? 'Position & Size' : 'Size') : 'Layout Size')}
             <span className="ml-1 font-normal normal-case text-[#9ca3af]">
-              ({isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC'})
+              ({t(isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC')})
             </span>
           </SectionTitle>
           <div className="grid grid-cols-2 gap-2">
             {showPositionControls && extendedMode && (
               <>
-                <LabeledNumber
-                  label="X"
-                  value={layout.x}
-                  onChange={(v) => setLayout(component.id, { x: v })}
-                />
-                <LabeledNumber
-                  label="Y"
-                  value={layout.y}
-                  onChange={(v) => setLayout(component.id, { y: v })}
-                />
+                {!viewportStretchComponent && (
+                  <LabeledNumber
+                    label="X"
+                    value={layout.x}
+                    onChange={(v) => setLayout(component.id, { x: v })}
+                  />
+                )}
+                {component.type !== 'region' && (
+                  <LabeledNumber
+                    label="Y"
+                    value={layout.y}
+                    onChange={(v) => setLayout(component.id, { y: v })}
+                  />
+                )}
               </>
             )}
+            {!viewportStretchComponent && (
+              <LabeledNumber
+                label={t(isFlow ? 'Max width' : 'Width')}
+                value={layout.w}
+                onChange={(v) => setLayout(component.id, { w: v })}
+              />
+            )}
             <LabeledNumber
-              label={isFlow ? 'Max width' : 'Width'}
-              value={layout.w}
-              onChange={(v) => setLayout(component.id, { w: v })}
-            />
-            <LabeledNumber
-              label={isFlow ? 'Min height' : 'Height'}
+              label={t(isFlow ? 'Min height' : 'Height')}
               value={layout.h}
               onChange={(v) => setLayout(component.id, { h: v })}
             />
           </div>
-          <SizeQuickControls
-            onScale={scaleSingleSize}
-            onPreset={presetSingleSize}
-          />
+          {!viewportStretchComponent && (
+            <SizeQuickControls
+              onScale={scaleSingleSize}
+              onPreset={presetSingleSize}
+            />
+          )}
         </section>
 
+        {component.type !== 'region' && (
         <section className="space-y-3">
-          <SectionTitle>Scroll</SectionTitle>
+          <SectionTitle>{t('Scroll')}</SectionTitle>
           <LabeledSelect
-            label="Behavior"
+            label={t('Behavior')}
             value={scrollBehavior}
             onChange={setScrollBehavior}
-            options={SCROLL_BEHAVIOR_OPTIONS}
+            options={SCROLL_BEHAVIOR_OPTIONS.map(([value, label]) => [value, t(label)])}
           />
           {scrollBehavior !== 'normal' && (
             <>
               <div className="grid grid-cols-2 gap-2">
                 <LabeledSelect
-                  label="Vertical edge"
+                  label={t('Vertical edge')}
                   value={component.props?.pinY || 'top'}
                   onChange={(v) => updateProps(component.id, { pinY: v })}
-                  options={PIN_Y_OPTIONS}
+                  options={PIN_Y_OPTIONS.map(([value, label]) => [value, t(label)])}
                 />
                 <LabeledSelect
-                  label="Horizontal edge"
+                  label={t('Horizontal edge')}
                   value={component.props?.pinX || 'left'}
                   onChange={(v) => updateProps(component.id, { pinX: v })}
-                  options={PIN_X_OPTIONS}
+                  options={PIN_X_OPTIONS.map(([value, label]) => [value, t(label)])}
                 />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <LabeledNumber
-                  label="Y offset"
+                  label={t('Y offset')}
                   value={component.props?.pinOffsetY ?? 0}
                   onChange={(v) => updateProps(component.id, { pinOffsetY: v })}
                 />
                 <LabeledNumber
-                  label="X offset"
+                  label={t('X offset')}
                   value={component.props?.pinOffsetX ?? 0}
                   onChange={(v) => updateProps(component.id, { pinOffsetX: v })}
                 />
                 <LabeledNumber
-                  label="Layer"
+                  label={t('Layer')}
                   value={component.props?.pinZIndex ?? (scrollBehavior === 'fixed' ? 100 : 20)}
                   onChange={(v) => updateProps(component.id, { pinZIndex: v })}
                 />
               </div>
               {extendedMode && (
                 <p className="text-[11px] leading-snug text-[#9ca3af]">
-                  Sticky keeps the item in the page flow until it reaches the edge. Fixed pins it to the browser viewport.
+                  {t('Sticky keeps the item in the page flow until it reaches the edge. Fixed pins it to the browser viewport.')}
                 </p>
               )}
             </>
           )}
         </section>
+        )}
 
         {/* Align & Distribute. Live snap guides still help while dragging; these
             give precise, one-click control. One selection aligns to the
             artboard; a multi-selection (shift-click on the canvas) aligns the
             items to each other and can distribute equal gaps. */}
-        {showPositionControls && (
+        {showPositionControls && component.type !== 'region' && (
           <section className="space-y-2">
             <SectionTitle>
-              Align &amp; Distribute
+              {t('Align & Distribute')}
               {selectedIds.length > 1 && (
-                <span className="ml-1 font-normal normal-case text-[#9ca3af]">({selectedIds.length} selected)</span>
+                <span className="ml-1 font-normal normal-case text-[#9ca3af]">({t('{count} selected', { count: selectedIds.length })})</span>
               )}
             </SectionTitle>
             {extendedMode && (
               <p className="text-[11px] leading-snug text-[#9ca3af]">
                 {selectedIds.length > 1
-                  ? 'Aligns the selected items to each other.'
-                  : 'Aligns this item to the artboard. Shift-click on the canvas to select more.'}
+                  ? t('Aligns the selected items to each other.')
+                  : t('Aligns this item to the artboard. Shift-click on the canvas to select more.')}
               </p>
             )}
             <div className="grid grid-cols-3 gap-1.5">
@@ -1399,7 +1486,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                   onClick={() => alignSelection(mode)}
                   className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb]"
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
@@ -1408,33 +1495,33 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
                 type="button"
                 disabled={selectedIds.length < 3}
                 onClick={() => distributeSelection('x')}
-                title={selectedIds.length < 3 ? 'Select 3+ items (shift-click) to distribute' : 'Equal horizontal gaps'}
+                title={t(selectedIds.length < 3 ? 'Select 3+ items (shift-click) to distribute' : 'Equal horizontal gaps')}
                 className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
               >
-                ↔ Distribute
+                ↔ {t('Distribute')}
               </button>
               <button
                 type="button"
                 disabled={selectedIds.length < 3}
                 onClick={() => distributeSelection('y')}
-                title={selectedIds.length < 3 ? 'Select 3+ items (shift-click) to distribute' : 'Equal vertical gaps'}
+                title={t(selectedIds.length < 3 ? 'Select 3+ items (shift-click) to distribute' : 'Equal vertical gaps')}
                 className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs text-[#374151] hover:bg-[#e5e7eb] disabled:opacity-40"
               >
-                ↕ Distribute
+                ↕ {t('Distribute')}
               </button>
             </div>
           </section>
         )}
 
         <section className="space-y-2">
-          <SectionTitle>Responsive</SectionTitle>
+          <SectionTitle>{t('Responsive')}</SectionTitle>
           <LabeledCheckbox
-            label="Show on PC"
+            label={t('Show on PC')}
             checked={!component.hidden}
             onChange={(checked) => setVisibility(component.id, { hidden: !checked })}
           />
           <LabeledCheckbox
-            label="Show on Mobile"
+            label={t('Show on Mobile')}
             checked={!component.hiddenMobile}
             onChange={(checked) => setVisibility(component.id, { hiddenMobile: !checked })}
           />
@@ -1442,7 +1529,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
 
         {visibleStyleGroups(def.editableStyles || [], propertiesMode).map((group) => (
           <section key={group.title} className="space-y-3">
-            <SectionTitle>{group.title}</SectionTitle>
+            <SectionTitle>{t(group.title)}</SectionTitle>
             {group.keys.map((styleKey) => (
               <StyleControl
                 key={styleKey}
@@ -1456,7 +1543,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
 
         {extendedMode && (
           <section className="space-y-3">
-            <SectionTitle>Advanced CSS</SectionTitle>
+            <SectionTitle>{t('Advanced CSS')}</SectionTitle>
             {ADVANCED_STYLE_KEYS.map((styleKey) => (
               <StyleControl
                 key={styleKey}
@@ -1470,55 +1557,61 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
       </div>
 
       <div className="space-y-2 border-t border-[#e5e7eb] p-4">
-        <div className="grid grid-cols-3 gap-2">
+        <div className={`grid gap-2 ${component.type === 'region' ? 'grid-cols-1' : 'grid-cols-3'}`}>
           <button
             type="button"
             onClick={() => duplicateComponent(component.id)}
             className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
-            Duplicate
+            {t('Duplicate')}
           </button>
-          <button
-            type="button"
-            onClick={() => bringToFront(component.id)}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            {isFlow ? 'Move end' : 'Front'}
-          </button>
-          <button
-            type="button"
-            onClick={() => sendToBack(component.id)}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            {isFlow ? 'Move start' : 'Back'}
-          </button>
+          {component.type !== 'region' && (
+            <>
+              <button
+                type="button"
+                onClick={() => bringToFront(component.id)}
+                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+              >
+                {t(isFlow ? 'Move end' : 'Front')}
+              </button>
+              <button
+                type="button"
+                onClick={() => sendToBack(component.id)}
+                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+              >
+                {t(isFlow ? 'Move start' : 'Back')}
+              </button>
+            </>
+          )}
         </div>
+        {component.type !== 'region' && (
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => moveBackward(component.id)}
-            title={isFlow ? 'Move one step earlier in the order' : 'Bring one step backward'}
+            title={t(isFlow ? 'Move one step earlier in the order' : 'Bring one step backward')}
             className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
-            {isFlow ? 'Before' : 'Backward'}
+            {t(isFlow ? 'Before' : 'Backward')}
           </button>
           <button
             type="button"
             onClick={() => moveForward(component.id)}
-            title={isFlow ? 'Move one step later in the order' : 'Bring one step forward'}
+            title={t(isFlow ? 'Move one step later in the order' : 'Bring one step forward')}
             className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
           >
-            {isFlow ? 'Next' : 'Forward'}
+            {t(isFlow ? 'Next' : 'Forward')}
           </button>
         </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => applyThemeToComponent(component.id)}
-            title="Restyle this component with the active theme"
+            title={t('Restyle this component with the active theme')}
             className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
           >
-            <PaletteIcon size={14} /> Theme
+            <PaletteIcon size={14} /> {t('Theme')}
           </button>
           <select
             value=""
@@ -1527,11 +1620,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
               e.target.value = ''
             }}
             disabled={schema.pages.length < 2}
-            title="Copy this component onto another page"
+            title={t('Copy this component onto another page')}
             className="rounded-lg border border-[#d1d5db] bg-white px-1.5 py-1.5 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none disabled:opacity-40"
           >
             <option value="" disabled>
-              Copy page...
+              {t('Copy page...')}
             </option>
             {schema.pages
               .filter((p) => p.id !== page.id)
@@ -1547,7 +1640,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
           onClick={() => removeComponent(component.id)}
           className="w-full rounded-lg border border-[#d69ca5] bg-[#fde7e9] py-2 text-sm font-medium text-[#a4262c] hover:bg-[#f6d5d9]"
         >
-          Delete component
+          {t('Delete component')}
         </button>
       </div>
     </div>
@@ -1555,6 +1648,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml }
 }
 
 function MixedNumber({ label, value, mixed, onChange }) {
+  const { t } = useLanguage()
   const displayValue = mixed ? '' : Math.round(value ?? 0)
 
   return (
@@ -1565,7 +1659,7 @@ function MixedNumber({ label, value, mixed, onChange }) {
         type="number"
         className="w-full rounded-lg border border-[#d1d5db] px-2 py-1 text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#4f46e5] focus:outline-none"
         defaultValue={displayValue}
-        placeholder={mixed ? 'Mixed' : undefined}
+        placeholder={mixed ? t('Mixed') : undefined}
         onChange={(e) => {
           const next = e.target.value
           if (next !== '') onChange(Number(next))
@@ -1576,12 +1670,13 @@ function MixedNumber({ label, value, mixed, onChange }) {
 }
 
 function SizeQuickControls({ onScale, onPreset }) {
+  const { t } = useLanguage()
   return (
     <div className="grid grid-cols-5 gap-1.5">
       <button
         type="button"
         onClick={() => onScale(0.9)}
-        title="10% smaller"
+        title={t('10% smaller')}
         className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#e5e7eb]"
       >
         -
@@ -1589,7 +1684,7 @@ function SizeQuickControls({ onScale, onPreset }) {
       <button
         type="button"
         onClick={() => onScale(1.1)}
-        title="10% larger"
+        title={t('10% larger')}
         className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-1.5 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#e5e7eb]"
       >
         +
@@ -1599,10 +1694,10 @@ function SizeQuickControls({ onScale, onPreset }) {
           key={id}
           type="button"
           onClick={() => onPreset(factor)}
-          title={`${label} size`}
+          title={t('{label} size', { label: t(label) })}
           className="rounded-lg border border-[#e5e7eb] bg-white px-1.5 py-1.5 text-xs font-semibold text-[#374151] hover:border-[#4f46e5] hover:bg-[#eef2ff] hover:text-[#4f46e5]"
         >
-          {label}
+          {t(label)}
         </button>
       ))}
     </div>

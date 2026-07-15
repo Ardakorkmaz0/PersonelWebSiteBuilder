@@ -1,4 +1,4 @@
-export const FULL_BLEED_TYPES = ['navbar', 'section', 'divider']
+export const FULL_BLEED_TYPES = ['navbar', 'section', 'region', 'divider']
 
 // Components that can optionally be wrapped in a link (like plain HTML).
 export const LINKABLE_TYPES = new Set([
@@ -11,7 +11,7 @@ export const LINKABLE_TYPES = new Set([
 // (tabs/container/accordion/select/input/html). Everything else is linkable.
 export const NON_WRAP_LINK_TYPES = new Set([
   'button', 'linkbutton', 'navbar', 'tabs', 'container', 'accordion', 'select', 'input', 'html',
-  'section',
+  'section', 'region',
 ])
 
 // Shared tab-strip styles used by the editor and live renderer so the visual

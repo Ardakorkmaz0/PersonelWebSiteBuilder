@@ -7,6 +7,7 @@ import { htmlSnippetSize } from '../../utils/htmlSnippetSizing.js'
 import { componentToHtml } from '../../utils/componentToHtml.js'
 import { useEditorStore } from '../../store/editorStore.js'
 import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Variants for a type, with a synthesized "Default" snippet for the types that
 // have no curated variants yet (so every component is still placeable).
@@ -18,11 +19,11 @@ function variantsForType(type) {
 // ONE visual library powers both editor modes. Most palette variants still drop
 // as editable HTML embeds on the free canvas, but structural widgets that need
 // editor-owned children stay native there.
-const NATIVE_CANVAS_TYPES = new Set(['tabs', 'navbar'])
+const NATIVE_CANVAS_TYPES = new Set(['tabs', 'navbar', 'region'])
 
 // Types whose snippets are wide (full-width-ish) — previewed scaled-down from the
 // top-left; the rest are inline and shown a bit larger, centered.
-const WIDE_HTML = new Set(['navbar', 'section', 'card', 'image', 'list', 'input', 'select', 'alert', 'accordion', 'tabs', 'container', 'html', 'spacer'])
+const WIDE_HTML = new Set(['navbar', 'section', 'region', 'card', 'image', 'list', 'input', 'select', 'alert', 'accordion', 'tabs', 'container', 'html', 'spacer'])
 
 function htmlSize(type, variant) {
   const id = typeof variant === 'string' ? variant : variant?.id
@@ -100,9 +101,10 @@ function previewSrcDoc(html, wide) {
 }
 
 function DetailPreview({ html, wide }) {
+  const { t } = useLanguage()
   return (
     <iframe
-      title="Palette preview"
+      title={t('Palette preview')}
       sandbox=""
       srcDoc={previewSrcDoc(html, wide)}
       className="h-[132px] w-full rounded-md bg-white"
@@ -111,19 +113,20 @@ function DetailPreview({ html, wide }) {
 }
 
 function PalettePreviewPanel({ preview, onClose }) {
+  const { t } = useLanguage()
   if (!preview) return null
   return (
     <div className="shrink-0 border-t border-[#e5e7eb] bg-white p-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#4f46e5]">Preview</div>
-          <div className="truncate text-sm font-semibold text-[#111827]">{preview.label}</div>
-          {preview.desc && <div className="truncate text-[11px] text-[#6b7280]">{preview.desc}</div>}
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#4f46e5]">{t('Preview')}</div>
+          <div className="truncate text-sm font-semibold text-[#111827]">{t(preview.label)}</div>
+          {preview.desc && <div className="truncate text-[11px] text-[#6b7280]">{t(preview.desc)}</div>}
         </div>
         <button
           type="button"
           onClick={onClose}
-          title="Close preview"
+          title={t('Close preview')}
           className="rounded-md px-1.5 py-0.5 text-xs font-semibold text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
         >
           x
@@ -322,6 +325,7 @@ function BlockCard({ block, onPick, onArm, onInspect, theme }) {
 }
 
 function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
+  const { t } = useLanguage()
   const addBlock = useEditorStore((s) => s.addBlock)
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('Custom block')
@@ -344,8 +348,8 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
     if (!cleanHtml) return
     const nextBlock = {
       id: `custom-${Date.now()}`,
-      label: label.trim() || 'Custom block',
-      desc: 'Saved custom HTML',
+      label: label.trim() || t('Custom block'),
+      desc: t('Saved custom HTML'),
       html: cleanHtml,
     }
     const next = [nextBlock, ...saved].slice(0, 24)
@@ -363,7 +367,7 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-[#374151]">
           <CodeIcon size={15} />
         </span>
-        <span className="flex-1 text-left font-medium text-[#374151]">Custom HTML</span>
+        <span className="flex-1 text-left font-medium text-[#374151]">{t('Custom HTML')}</span>
         {saved.length > 0 && <span className="text-[11px] text-[#9ca3af]">{saved.length}</span>}
         <span className="w-3 text-[10px] text-[#9ca3af]">{open ? '-' : '+'}</span>
       </button>
@@ -372,7 +376,7 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
           <input
             value={label}
             onChange={(event) => setLabel(event.target.value)}
-            placeholder="Block name"
+            placeholder={t('Block name')}
             className="w-full rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-2 text-xs text-[#374151] outline-none focus:border-[#4f46e5]"
           />
           <textarea
@@ -390,7 +394,7 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
               disabled={!hasHtml}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#4f46e5] px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <PlusIcon size={13} /> Place
+              <PlusIcon size={13} /> {t('Place')}
             </button>
             <button
               type="button"
@@ -398,12 +402,12 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
               disabled={!hasHtml}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-2 text-xs font-semibold text-[#374151] transition hover:border-[#4f46e5] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <SaveIcon size={13} /> Save
+              <SaveIcon size={13} /> {t('Save')}
             </button>
           </div>
           {saved.length > 0 && (
             <div className="pt-1">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">Saved snippets</div>
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">{t('Saved snippets')}</div>
               <div className="grid grid-cols-2 gap-2">
                 {saved.map((block) => (
                   <BlockCard key={block.id} block={block} onPick={onPick} onArm={onArm} onInspect={onInspect} theme={theme} />
@@ -472,6 +476,7 @@ const TABS = [
 // → classic dnd-kit canvas palette, where `onArmPlacement(data)` is the
 // click/tap-to-place fallback). `onCollapse` hides the whole rail.
 export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, filesPanel }) {
+  const { t } = useLanguage()
   const [tab, setTab] = useState(filesPanel ? 'files' : 'components')
   const [openType, setOpenType] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -491,19 +496,19 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
                   : 'text-[#6b7280] hover:text-[#111827]'
               }`}
             >
-              <TabIcon size={15} /> {label}
+              <TabIcon size={15} /> {t(label)}
             </button>
           ))
         ) : (
           <span className="flex-1 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-            Components
+            {t('Components')}
           </span>
         )}
         {onCollapse && (
           <button
             type="button"
             onClick={onCollapse}
-            title="Hide panel"
+            title={t('Hide panel')}
             className="px-2 py-2 text-xs text-[#9ca3af] hover:text-[#374151]"
           >
             «
@@ -519,7 +524,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
             {/* ONE library for both modes — the same Sections + Components. */}
             <div className="mb-5">
               <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-                Sections
+                {t('Sections')}
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 {HTML_BLOCKS.map((b) => (
@@ -529,7 +534,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
               <CustomBlockPanel onPick={onPickComponent} onArm={onArmPlacement} onInspect={setPreview} theme={theme} />
             </div>
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-              Components
+              {t('Components')}
             </h2>
             <div className="space-y-2">
               {paletteItems.map((item) => (
@@ -546,8 +551,8 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
             </div>
             <p className="mt-4 text-xs leading-relaxed text-[#6b7280]">
               {onPickComponent
-                ? 'Click in the page or drag to place.'
-                : 'Click (or tap) to place, or drag onto the canvas.'}
+                ? t('Click in the page or drag to place.')
+                : t('Click (or tap) to place, or drag onto the canvas.')}
             </p>
           </>
         )}

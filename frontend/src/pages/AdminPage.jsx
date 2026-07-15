@@ -13,6 +13,8 @@ import { useGoBack } from '../utils/useGoBack.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
 import { useAuthStore } from '../store/authStore.js'
 import { FlagIcon, EyeIcon, StarIcon, CheckIcon, CogIcon, GlobeIcon, FileIcon } from '../components/icons.jsx'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 function Avatar({ url, name, size = 36 }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -40,6 +42,7 @@ function readPage(d) {
 // Platform stats header (totals + top sites)
 // ---------------------------------------------------------------------------
 function StatsHeader() {
+  const { t } = useLanguage()
   const [stats, setStats] = useState(null)
 
   useEffect(() => {
@@ -67,7 +70,7 @@ function StatsHeader() {
             </span>
             <div className="min-w-0">
               <div className="text-lg font-bold leading-tight text-[#111827]">{(value || 0).toLocaleString()}</div>
-              <div className="truncate text-xs text-[#6b7280]">{label}</div>
+              <div className="truncate text-xs text-[#6b7280]">{t(label)}</div>
             </div>
           </div>
         ))}
@@ -75,7 +78,7 @@ function StatsHeader() {
 
       {stats.top_sites?.length > 0 && (
         <div className="ms-card mt-3 p-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">Top sites by views</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">{t('Top sites by views')}</div>
           <div className="space-y-1.5">
             {stats.top_sites.map((s, i) => (
               <div key={s.id} className="flex items-center gap-3 text-sm">
@@ -97,6 +100,7 @@ function StatsHeader() {
 // Users tab
 // ---------------------------------------------------------------------------
 function UsersTab() {
+  const { t, language } = useLanguage()
   const [users, setUsers] = useState(null) // null = loading
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(1)
@@ -123,10 +127,10 @@ function UsersTab() {
           setHasMore(more)
           setPage(1)
         })
-        .catch((e) => !ignore && setError(apiError(e, 'Admin access required.')))
+        .catch((e) => !ignore && setError(apiError(e, t('Admin access required.'))))
     }, q ? 300 : 0)
     return () => { ignore = true; clearTimeout(handle) }
-  }, [q])
+  }, [q, t])
 
   async function loadMore() {
     if (loadingMore || !hasMore) return
@@ -146,8 +150,10 @@ function UsersTab() {
 
   async function onSuspend(u) {
     const suspend = u.is_active
-    const verb = suspend ? 'suspend' : 'reinstate'
-    if (!window.confirm(`Are you sure you want to ${verb} @${u.username}?`)) return
+    const message = suspend
+      ? t('Are you sure you want to suspend @{username}?', { username: u.username })
+      : t('Are you sure you want to reinstate @{username}?', { username: u.username })
+    if (!window.confirm(message)) return
     setBusy(u.id)
     setError('')
     try {
@@ -162,8 +168,8 @@ function UsersTab() {
 
   async function onModerate(u, site, action) {
     const msg = action === 'delete'
-      ? `Permanently DELETE "${site.title}"? This cannot be undone.`
-      : `Unpublish "${site.title}"? It will be removed from Explore and its public URL (the owner keeps the draft).`
+      ? t('Permanently DELETE "{title}"? This cannot be undone.', { title: site.title })
+      : t('Unpublish "{title}"? It will be removed from Explore and its public URL (the owner keeps the draft).', { title: site.title })
     if (!window.confirm(msg)) return
     setBusy(site.id)
     setError('')
@@ -192,19 +198,19 @@ function UsersTab() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search users by name, @username, or email…"
+          placeholder={t('Search users by name, @username, or email…')}
           className="w-full rounded-lg border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm text-[#111827] outline-none focus:border-[#4f46e5] focus:ring-2 focus:ring-[#c7d2fe]"
         />
       </div>
       {users === null && !error ? (
-        <p className="text-sm text-[#6b7280]">Loading…</p>
+        <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
       ) : (
       <>
       {users && (
         <p className="mb-6 text-sm text-[#6b7280]">
-          {count} user{count !== 1 ? 's' : ''}
-          {hasMore ? ` (${users.length} loaded)` : ''} · {totalSites} site{totalSites !== 1 ? 's' : ''}
-          {hasMore ? ' shown' : ''}
+          {t(count === 1 ? '{count} user' : '{count} users', { count })}
+          {hasMore ? ` (${t('{count} loaded', { count: users.length })})` : ''} · {t(totalSites === 1 ? '{count} site' : '{count} sites', { count: totalSites })}
+          {hasMore ? ` ${t('shown')}` : ''}
         </p>
       )}
 
@@ -216,31 +222,31 @@ function UsersTab() {
         {(users || []).map((u) => (
           <div key={u.id} className={`ms-card p-5 ${u.is_active ? '' : 'opacity-70 ring-1 ring-red-200'}`}>
             <div className="flex flex-wrap items-center gap-3">
-              <Link to={`/u/${u.id}`} title="Open public profile" className="shrink-0 rounded-full ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe]">
+              <Link to={`/u/${u.id}`} title={t('Open public profile')} className="shrink-0 rounded-full ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe]">
                 <Avatar url={u.avatar_url} name={u.display_name} />
               </Link>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Link to={`/u/${u.id}`} title="Open public profile" className="font-semibold text-[#111827] hover:text-[#4f46e5] hover:underline">
+                  <Link to={`/u/${u.id}`} title={t('Open public profile')} className="font-semibold text-[#111827] hover:text-[#4f46e5] hover:underline">
                     {u.display_name}
                   </Link>
                   <span className="text-xs text-[#9ca3af]">@{u.username}</span>
                   {u.is_superuser ? (
-                    <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-[10px] font-bold uppercase text-[#b91c1c]">Superuser</span>
+                    <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-[10px] font-bold uppercase text-[#b91c1c]">{t('Superuser')}</span>
                   ) : u.is_staff ? (
-                    <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10px] font-bold uppercase text-[#15803d]">Staff</span>
+                    <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10px] font-bold uppercase text-[#15803d]">{t('Staff')}</span>
                   ) : null}
                   {!u.is_active && (
-                    <span className="rounded-full bg-[#fef2f2] px-2 py-0.5 text-[10px] font-bold uppercase text-[#b91c1c]">Suspended</span>
+                    <span className="rounded-full bg-[#fef2f2] px-2 py-0.5 text-[10px] font-bold uppercase text-[#b91c1c]">{t('Suspended')}</span>
                   )}
                 </div>
                 <div className="text-xs text-[#9ca3af]">
-                  {u.email || 'no email'} · joined {new Date(u.date_joined).toLocaleDateString()}
+                  {u.email || t('no email')} · {t('joined')} {new Date(u.date_joined).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US')}
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-2">
                 <span className="rounded-full bg-[#f3f4f6] px-2.5 py-0.5 text-xs font-semibold text-[#6b7280]">
-                  {u.site_count} site{u.site_count !== 1 ? 's' : ''}
+                  {t(u.site_count === 1 ? '{count} site' : '{count} sites', { count: u.site_count })}
                 </span>
                 {!u.is_staff && !u.is_superuser && (
                   <button
@@ -252,7 +258,7 @@ function UsersTab() {
                         : 'border border-[#bbf7d0] text-[#15803d] hover:bg-[#f0fdf4]'
                     }`}
                   >
-                    {u.is_active ? 'Suspend' : 'Reinstate'}
+                    {u.is_active ? t('Suspend') : t('Reinstate')}
                   </button>
                 )}
               </div>
@@ -281,19 +287,19 @@ function UsersTab() {
                               s.published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
                             }`}
                           >
-                            {s.published ? 'Published' : 'Draft'}
+                            {s.published ? t('Published') : t('Draft')}
                           </span>
                         </td>
                         <td className="px-3 py-2 text-xs text-[#9ca3af]">
                           <span className="inline-flex items-center gap-3">
-                            <span className="inline-flex items-center gap-1" title="Views"><EyeIcon size={13} /> {(s.view_count || 0).toLocaleString()}</span>
-                            <span className="inline-flex items-center gap-1" title="Favorites"><StarIcon size={13} /> {(s.favorite_count || 0).toLocaleString()}</span>
+                            <span className="inline-flex items-center gap-1" title={t('Views')}><EyeIcon size={13} /> {(s.view_count || 0).toLocaleString()}</span>
+                            <span className="inline-flex items-center gap-1" title={t('Favorites')}><StarIcon size={13} /> {(s.favorite_count || 0).toLocaleString()}</span>
                           </span>
                         </td>
                         <td className="px-3 py-2 text-right text-xs">
                           <div className="flex items-center justify-end gap-2">
                             {s.published && (
-                              <Link to={`/site/${s.slug}`} className="font-medium text-[#4f46e5] hover:underline">View</Link>
+                              <Link to={`/site/${s.slug}`} className="font-medium text-[#4f46e5] hover:underline">{t('View')}</Link>
                             )}
                             {s.published && (
                               <button
@@ -301,7 +307,7 @@ function UsersTab() {
                                 disabled={busy === s.id}
                                 className="font-medium text-[#b45309] hover:underline disabled:opacity-50"
                               >
-                                Unpublish
+                                {t('Unpublish')}
                               </button>
                             )}
                             <button
@@ -309,7 +315,7 @@ function UsersTab() {
                               disabled={busy === s.id}
                               className="font-medium text-[#b91c1c] hover:underline disabled:opacity-50"
                             >
-                              Delete
+                              {t('Delete')}
                             </button>
                           </div>
                         </td>
@@ -324,12 +330,12 @@ function UsersTab() {
         {hasMore && (
           <div className="pt-2 text-center">
             <button onClick={loadMore} disabled={loadingMore} className="ms-btn px-6 py-2.5">
-              {loadingMore ? 'Loading…' : 'Load more'}
+              {loadingMore ? t('Loading…') : t('Load more')}
             </button>
           </div>
         )}
         {users && users.length === 0 && (
-          <p className="py-10 text-center text-sm text-[#9ca3af]">No users match “{q}”.</p>
+          <p className="py-10 text-center text-sm text-[#9ca3af]">{t('No users match “{query}”.', { query: q })}</p>
         )}
       </div>
       </>
@@ -344,6 +350,7 @@ function UsersTab() {
 const REPORT_FILTERS = [['open', 'Open'], ['resolved', 'Resolved'], ['dismissed', 'Dismissed'], ['all', 'All']]
 
 function ReportsTab() {
+  const { t, language } = useLanguage()
   const [statusFilter, setStatusFilter] = useState('open')
   // Tag the loaded list with its filter so "loading" is derived (no synchronous
   // setState in the fetch effect).
@@ -358,9 +365,9 @@ function ReportsTab() {
     let alive = true
     listReports(statusFilter)
       .then((d) => alive && setData({ status: statusFilter, rows: readPage(d).rows }))
-      .catch((e) => alive && setError(apiError(e, 'Admin access required.')))
+      .catch((e) => alive && setError(apiError(e, t('Admin access required.'))))
     return () => { alive = false }
-  }, [statusFilter])
+  }, [statusFilter, t])
 
   async function onResolve(report, action) {
     setBusy(report.id)
@@ -376,7 +383,7 @@ function ReportsTab() {
   }
 
   async function onTakedown(report) {
-    if (!window.confirm(`Unpublish "${report.site_title}"? This resolves the report.`)) return
+    if (!window.confirm(t('Unpublish "{title}"? This resolves the report.', { title: report.site_title }))) return
     setBusy(report.id)
     setError('')
     try {
@@ -401,7 +408,7 @@ function ReportsTab() {
               statusFilter === id ? 'bg-[#111827] text-white' : 'bg-white text-[#374151] ring-1 ring-[#e5e7eb] hover:bg-[#f3f4f6]'
             }`}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -411,12 +418,12 @@ function ReportsTab() {
       )}
 
       {loading ? (
-        <p className="text-sm text-[#6b7280]">Loading…</p>
+        <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
       ) : rows.length === 0 ? (
         <div className="ms-card border-dashed py-16 text-center">
           <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#dcfce7] text-[#15803d]"><CheckIcon size={24} /></div>
-          <p className="font-medium text-[#374151]">No {statusFilter === 'all' ? '' : statusFilter} reports</p>
-          <p className="mt-1 text-sm text-[#6b7280]">The moderation queue is clear.</p>
+          <p className="font-medium text-[#374151]">{statusFilter === 'all' ? t('No reports') : t('No {status} reports', { status: t(statusFilter) })}</p>
+          <p className="mt-1 text-sm text-[#6b7280]">{t('The moderation queue is clear.')}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -426,23 +433,23 @@ function ReportsTab() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-[11px] font-bold uppercase text-[#b91c1c]">
-                      {r.reason_label || r.reason}
+                      {t(r.reason_label || r.reason)}
                     </span>
                     <span className="font-semibold text-[#111827]">{r.site_title}</span>
-                    <span className="text-xs text-[#9ca3af]">by @{r.site_owner}</span>
+                    <span className="text-xs text-[#9ca3af]">{t('by')} @{r.site_owner}</span>
                     {!r.site_published && (
-                      <span className="rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-bold uppercase text-[#6b7280]">Not public</span>
+                      <span className="rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-bold uppercase text-[#6b7280]">{t('Not public')}</span>
                     )}
                   </div>
                   {r.detail && <p className="mt-2 text-sm text-[#374151]">“{r.detail}”</p>}
                   <div className="mt-1 text-xs text-[#9ca3af]">
-                    reported by @{r.reporter_username} · {new Date(r.created_at).toLocaleString()}
-                    {r.status !== 'open' && <span> · <span className="font-semibold capitalize">{r.status}</span></span>}
+                    {t('reported by')} @{r.reporter_username} · {new Date(r.created_at).toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US')}
+                    {r.status !== 'open' && <span> · <span className="font-semibold capitalize">{t(r.status)}</span></span>}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <Link to={`/site/${r.site_slug}`} className="rounded-lg border border-[#e5e7eb] px-3 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#f3f4f6]">
-                    View
+                    {t('View')}
                   </Link>
                   {r.status === 'open' && (
                     <>
@@ -452,7 +459,7 @@ function ReportsTab() {
                           disabled={busy === r.id}
                           className="rounded-lg border border-[#fecaca] px-3 py-1.5 text-xs font-semibold text-[#b91c1c] hover:bg-[#fef2f2] disabled:opacity-50"
                         >
-                          Unpublish site
+                          {t('Unpublish site')}
                         </button>
                       )}
                       <button
@@ -460,14 +467,14 @@ function ReportsTab() {
                         disabled={busy === r.id}
                         className="rounded-lg bg-[#15803d] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#166534] disabled:opacity-50"
                       >
-                        Resolve
+                        {t('Resolve')}
                       </button>
                       <button
                         onClick={() => onResolve(r, 'dismiss')}
                         disabled={busy === r.id}
                         className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-50"
                       >
-                        Dismiss
+                        {t('Dismiss')}
                       </button>
                     </>
                   )}
@@ -483,6 +490,7 @@ function ReportsTab() {
 
 // ---------------------------------------------------------------------------
 export default function AdminPage() {
+  const { t } = useLanguage()
   const [tab, setTab] = useState('users')
   const isSuperuser = useAuthStore((s) => s.user?.is_superuser)
   const goBack = useGoBack('/')
@@ -493,30 +501,31 @@ export default function AdminPage() {
       <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">
-            <Link to="/" title="Sitebuilder home" className="brand-mark">S</Link>
+            <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
             <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
-              &larr; Back
+              &larr; {t('Back')}
             </button>
           </div>
           <div className="flex items-center gap-3">
+            <LanguageSwitcher />
             {isSuperuser && (
               <Link
                 to="/admin/settings"
-                title="Server settings (Google, reCAPTCHA, email)"
+                title={t('Server settings (Google, reCAPTCHA, email)')}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
               >
-                <CogIcon size={15} /> Settings
+                <CogIcon size={15} /> {t('Settings')}
               </Link>
             )}
             <span className="rounded-full bg-[#111827] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
-              Admin
+              {t('Admin')}
             </span>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
-        <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Moderation</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-[#111827]">{t('Moderation')}</h1>
 
         <div className="mb-8 mt-4 flex gap-2 border-b border-[#e5e7eb]">
           {[['users', 'Users & sites'], ['reports', 'Reports']].map(([id, label]) => (
@@ -528,7 +537,7 @@ export default function AdminPage() {
                 tab === id ? 'border-[#4f46e5] text-[#4f46e5]' : 'border-transparent text-[#6b7280] hover:text-[#374151]'
               }`}
             >
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>

@@ -2,6 +2,7 @@
 // Each receives { props, style }. The passed `style` already includes
 // width/height 100% so the component fills its free-canvas box. They never use
 // dangerouslySetInnerHTML, so React escapes all text. URLs go through sanitizeUrl.
+import { useContext, useState } from 'react'
 import { sanitizeUrl, sanitizeImageSrc } from '../../utils/sanitize.js'
 import { ICONS } from '../../utils/icons.js'
 import { ALERT_VARIANTS } from './constants.js'
@@ -9,6 +10,7 @@ import { withBuilderInteractiveHtml } from '../../utils/htmlRuntime.js'
 import { htmlEmbedDocument } from '../../utils/htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from '../../utils/htmlSnippetSizing.js'
 import { scaleCssValue, scaledPx } from './scale.js'
+import { LanguageContext } from '../../i18n/context.js'
 
 function linkAttrs(href) {
   return /^https?:\/\//i.test(href)
@@ -37,15 +39,27 @@ function InlineIcon({ name }) {
   )
 }
 
+// The full region body is rendered by Renderer/RegionEditor because it owns
+// the centered, droppable inner design surface. This registry fallback keeps
+// isolated component previews valid.
+export function Region({ style }) {
+  return <section style={style} />
+}
+
 export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale = 1 }) {
+  const language = useContext(LanguageContext)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const links = Array.isArray(props.links) ? props.links : []
   const isMobile = viewport === 'mobile'
   const layout = props.navLayout || 'horizontal'
   const vertical = layout === 'vertical'
   const centered = layout === 'centered'
   const twoRow = layout === 'twoRow'
-  const stacked = isMobile || vertical || centered || twoRow
-  const linkColumn = isMobile || vertical
+  const mobileMenu = isMobile && !vertical && props.mobileNavMode !== 'stack'
+  const stacked = vertical || centered || twoRow || (isMobile && !mobileMenu)
+  const linkColumn = vertical || (isMobile && !mobileMenu)
+  const menuLabel = language?.t(mobileOpen ? 'Close navigation menu' : 'Open navigation menu')
+    || (mobileOpen ? 'Close navigation menu' : 'Open navigation menu')
   return (
     // The bar keeps its (possibly full-bleed) background; the inner row is capped
     // at `contentWidth` (the Max width) and centered — like a real site header.
@@ -56,7 +70,8 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
         display: 'flex',
         justifyContent: vertical ? 'flex-start' : 'center',
         alignItems: vertical ? 'stretch' : 'center',
-        overflow: vertical ? 'visible' : style?.overflow,
+        overflow: vertical || mobileMenu ? 'visible' : style?.overflow,
+        position: style?.position || 'relative',
       }}
     >
       <div
@@ -67,27 +82,66 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
           maxWidth: vertical ? undefined : contentWidth || undefined,
           marginLeft: 'auto',
           marginRight: 'auto',
-          // On mobile, stack the brand over the links (left-aligned, tight) instead
-          // of spreading them edge-to-edge, which looks cramped on a phone.
           flexDirection: stacked ? 'column' : 'row',
           alignItems: centered ? 'center' : stacked ? 'flex-start' : 'center',
           justifyContent: stacked ? 'flex-start' : 'space-between',
           gap: scaledPx(isMobile ? 10 : vertical ? 14 : twoRow ? 10 : 16, boxScale),
-          flexWrap: 'wrap',
+          flexWrap: mobileMenu ? 'nowrap' : 'wrap',
           textAlign: centered ? 'center' : undefined,
+          position: 'relative',
         }}
       >
         <span style={{ fontWeight: 'bold', fontSize: '1.125em' }}>{props.brand}</span>
+        {mobileMenu && (
+          <button
+            type="button"
+            aria-label={menuLabel}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((open) => !open)}
+            style={{
+              appearance: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: scaledPx(36, boxScale),
+              height: scaledPx(36, boxScale),
+              flexShrink: 0,
+              border: '1px solid currentColor',
+              borderRadius: scaledPx(8, boxScale),
+              background: 'transparent',
+              color: 'inherit',
+              font: 'inherit',
+              fontSize: '1.25em',
+              lineHeight: 1,
+              cursor: 'pointer',
+            }}
+          >
+            {mobileOpen ? '×' : '☰'}
+          </button>
+        )}
         <div
           style={{
-            display: 'flex',
-            flexDirection: linkColumn ? 'column' : 'row',
+            display: mobileMenu && !mobileOpen ? 'none' : 'flex',
+            flexDirection: mobileMenu || linkColumn ? 'column' : 'row',
             alignItems: centered ? 'center' : linkColumn ? 'stretch' : 'center',
             justifyContent: centered ? 'center' : undefined,
-            gap: scaledPx(linkColumn ? 6 : isMobile ? 16 : 20, boxScale),
+            gap: scaledPx(mobileMenu || linkColumn ? 6 : isMobile ? 16 : 20, boxScale),
             rowGap: scaledPx(6, boxScale),
             flexWrap: 'wrap',
-            width: linkColumn || twoRow ? '100%' : undefined,
+            width: mobileMenu || linkColumn || twoRow ? '100%' : undefined,
+            ...(mobileMenu ? {
+              position: 'absolute',
+              zIndex: 100,
+              top: `calc(100% + ${scaledPx(8, boxScale)})`,
+              left: 0,
+              right: 0,
+              alignItems: 'stretch',
+              padding: scaledPx(10, boxScale),
+              border: '1px solid currentColor',
+              borderRadius: scaledPx(10, boxScale),
+              backgroundColor: style?.backgroundColor || '#1d1d1f',
+              boxShadow: '0 12px 28px rgba(0,0,0,.2)',
+            } : {}),
           }}
         >
           {links.map((link, i) => {
@@ -100,11 +154,11 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
                   color: 'inherit',
                   textDecoration: 'none',
                   whiteSpace: 'nowrap',
-                  display: vertical ? 'block' : undefined,
-                  width: vertical ? '100%' : undefined,
-                  padding: vertical ? `${scaledPx(10, boxScale)} ${scaledPx(12, boxScale)}` : undefined,
-                  borderRadius: vertical ? scaledPx(8, boxScale) : undefined,
-                  boxSizing: vertical ? 'border-box' : undefined,
+                  display: vertical || mobileMenu ? 'block' : undefined,
+                  width: vertical || mobileMenu ? '100%' : undefined,
+                  padding: vertical || mobileMenu ? `${scaledPx(10, boxScale)} ${scaledPx(12, boxScale)}` : undefined,
+                  borderRadius: vertical || mobileMenu ? scaledPx(8, boxScale) : undefined,
+                  boxSizing: vertical || mobileMenu ? 'border-box' : undefined,
                 }}
                 {...linkAttrs(href)}
               >
@@ -476,6 +530,7 @@ export function Tabs({ style }) {
 // allow-scripts + allow-same-origin only when explicitly needed; the default
 // `allow-scripts` keeps an opaque origin so the embed can't read parent storage.
 export function HtmlEmbed({ props, style, boxScale = 1, editorPreview = false }) {
+  const language = useContext(LanguageContext)
   const code = typeof props.code === 'string' ? props.code : ''
   const baseHtml = htmlEmbedDocument(code, htmlEmbedDocumentOptions({ type: 'html', props }, boxScale))
   // Inject the same anchor-interceptor / tabs handler the rest of the site
@@ -486,7 +541,7 @@ export function HtmlEmbed({ props, style, boxScale = 1, editorPreview = false })
   const srcDoc = withBuilderInteractiveHtml(baseHtml)
   return (
     <iframe
-      title="Embedded HTML"
+      title={language?.t('Embedded HTML') || 'Embedded HTML'}
       srcDoc={srcDoc}
       scrolling="no"
       tabIndex={editorPreview ? -1 : undefined}

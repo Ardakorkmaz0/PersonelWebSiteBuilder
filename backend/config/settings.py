@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -170,6 +171,7 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Sitebuilder <no-reply@loca
 # Where the SPA is hosted — used to build absolute links in emails (password
 # reset). Defaults to the Vite dev server; set DJANGO_FRONTEND_URL in prod.
 FRONTEND_URL = os.getenv('DJANGO_FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+CUSTOM_DOMAIN_TARGET = os.getenv('CUSTOM_DOMAIN_TARGET', 'sites.example.com')
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -200,6 +202,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Django REST Framework
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'builder.api_errors.structured_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
@@ -243,6 +246,7 @@ CORS_ALLOWED_ORIGINS = _env_list(
     'DJANGO_CORS_ORIGINS',
     ['http://localhost:5173', 'http://127.0.0.1:5173'],
 )
+CORS_ALLOW_HEADERS = (*default_headers, 'x-site-save-source')
 
 
 # ---------------------------------------------------------------------------

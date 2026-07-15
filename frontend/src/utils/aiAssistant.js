@@ -1868,10 +1868,28 @@ Rules:
 - To change wording, set the SAME prop key the component already uses for its text (see the current props).
 - All user-facing text must be in English. Output valid JSON only.`
 
-// Ask the model to edit a SINGLE component. Returns { styles, props } (either
-// may be empty). Tries the active provider first, then fails over to any other
-// configured provider on a quota/429/unreachable error — same resilience as the
-// chat — so a full Gemini free tier doesn't dead-end the ✨ edit.
+// Single-shot completion with provider failover: active provider first, then
+// any other configured key, switching on quota/429/unreachable (same resilience
+// as the chat) so a full Gemini free tier doesn't dead-end a ✨ edit.
+async function completeWithFailover(systemPrompt, userText) {
+  const candidates = readyProviders()
+  if (!candidates.length) {
+    throw new Error('No AI provider is set up yet. Open the AI button and paste any free key (OpenRouter is recommended — the biggest free pool).')
+  }
+  let lastErr = null
+  for (const p of candidates) {
+    try {
+      return await completeText(systemPrompt, userText, { provider: p.id })
+    } catch (e) {
+      lastErr = e
+      if (!isFailoverWorthy(e)) throw e // a real bug — surface it, don't mask
+    }
+  }
+  throw lastErr || new Error('All AI providers are out of quota or unreachable.')
+}
+
+// Ask the model to edit a SINGLE component (component-canvas mode). Returns
+// { styles, props } (either may be empty).
 export async function aiEditComponent(component, instruction) {
   if (!component || !instruction || !instruction.trim()) return { styles: {}, props: {} }
   const userText = [
@@ -1880,23 +1898,44 @@ export async function aiEditComponent(component, instruction) {
     `Current styles: ${JSON.stringify(component.styles || {})}`,
     `Instruction: ${instruction.trim()}`,
   ].join('\n')
-  const candidates = readyProviders()
-  if (!candidates.length) {
-    throw new Error('No AI provider is set up yet. Open the AI button and paste any free key (OpenRouter is recommended — the biggest free pool).')
+  const patch = extractJsonObject(await completeWithFailover(COMPONENT_EDIT_SYSTEM, userText)) || {}
+  return {
+    styles: patch.styles && typeof patch.styles === 'object' ? patch.styles : {},
+    props: patch.props && typeof patch.props === 'object' ? patch.props : {},
   }
-  let lastErr = null
-  for (const p of candidates) {
-    try {
-      const raw = await completeText(COMPONENT_EDIT_SYSTEM, userText, { provider: p.id })
-      const patch = extractJsonObject(raw) || {}
-      return {
-        styles: patch.styles && typeof patch.styles === 'object' ? patch.styles : {},
-        props: patch.props && typeof patch.props === 'object' ? patch.props : {},
-      }
-    } catch (e) {
-      lastErr = e
-      if (!isFailoverWorthy(e)) throw e // a real bug — surface it, don't mask
-    }
-  }
-  throw lastErr || new Error('All AI providers are out of quota or unreachable.')
+}
+
+const HTML_ELEMENT_EDIT_SYSTEM = `You restyle / rewrite ONE HTML element inside a website builder. You get the element's tag + its current properties, plus a user instruction. Return ONLY a JSON object with any of these keys you want to change — no prose, no markdown fence:
+text (visible text), href, src, alt,
+color (hex), background (hex),
+fontSize (number of px), fontWeight ("400".."800"), textAlign ("left"|"center"|"right"),
+padding (number px), radius (number px), width (number px, 0=auto), height (number px, 0=auto),
+marginTop (number px), marginBottom (number px),
+borderWidth (number px), borderColor (hex), borderStyle ("solid"|"dashed"|"dotted"|"none"),
+boxShadow (a CSS shadow string or "none"), opacity (0..1), display ("block"|"flex"|"inline-block"|"inline"),
+justifyContent, alignItems, gap (number px).
+Rules: change ONLY what the instruction asks; include a key ONLY when you want to change it. Colours as hex. All user-facing text in English. Output valid JSON only.`
+
+// Ask the model to edit the SELECTED HTML element (HTML-upload mode). Returns a
+// flat patch shaped for applyElementPatch (color/background/fontSize/text/…).
+export async function aiEditHtmlElement(info, instruction) {
+  if (!info || !instruction || !instruction.trim()) return {}
+  const cur = [
+    `color=${info.color || '(inherit)'}`,
+    `background=${info.background || '(none)'}`,
+    `fontSize=${info.fontSize}`,
+    `fontWeight=${info.fontWeight || '(default)'}`,
+    `textAlign=${info.textAlign || '(default)'}`,
+    `padding=${info.padding}`,
+    `radius=${info.radius}`,
+    `borderWidth=${info.borderWidth}`,
+    `borderColor=${info.borderColor || '(none)'}`,
+  ].join(', ')
+  const userText = [
+    `Element: <${info.tag}>`,
+    `Current: ${cur}`,
+    `Text: ${info.canEditText ? (info.text || '(empty)') : '(not text-editable)'}`,
+    `Instruction: ${instruction.trim()}`,
+  ].join('\n')
+  return extractJsonObject(await completeWithFailover(HTML_ELEMENT_EDIT_SYSTEM, userText)) || {}
 }

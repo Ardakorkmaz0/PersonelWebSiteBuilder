@@ -8,6 +8,17 @@ import {
   writeFileToHandle,
 } from '../utils/projectFs.js'
 
+function acknowledgeWrittenContent(state, path, writtenContent) {
+  const current = state.files.get(path)
+  if (!current) return {}
+  const files = new Map(state.files)
+  files.set(path, { ...current, original: writtenContent })
+  const dirty = new Set(state.dirty)
+  if (current.content === writtenContent) dirty.delete(path)
+  else dirty.add(path)
+  return { files, dirty }
+}
+
 // In-memory model of an opened local folder (the "Code project" editor). The
 // document model is a path -> file map, NOT the schema/pages model — nothing
 // here touches the server Site flow. Each text file keeps `original` (as loaded
@@ -86,42 +97,39 @@ export const useProjectStore = create((set, get) => ({
   saveFile: async (path) => {
     const f = get().files.get(path)
     if (!f || !f.handle) return
+    const writtenContent = f.content ?? ''
     set({ saving: true, error: '' })
     try {
-      await writeFileToHandle(f.handle, f.content ?? '')
-      set((state) => {
-        const files = new Map(state.files)
-        files.set(path, { ...f, original: f.content })
-        const dirty = new Set(state.dirty)
-        dirty.delete(path)
-        return { files, dirty, saving: false }
-      })
+      await writeFileToHandle(f.handle, writtenContent)
+      set((state) => ({
+        ...acknowledgeWrittenContent(state, path, writtenContent),
+        saving: false,
+      }))
     } catch (e) {
       set({ saving: false, error: e?.message || String(e) })
     }
   },
 
-  // Write every changed file back to its folder on disk, then mark all clean.
+  // Write every changed file back to its folder. Each completed write is
+  // acknowledged against the snapshot actually sent to disk, so typing while
+  // Save All is running never gets overwritten or incorrectly marked clean.
   saveAll: async () => {
     const state = get()
-    const paths = [...state.dirty]
-    if (!paths.length) return
+    const snapshots = [...state.dirty].map((path) => {
+      const file = state.files.get(path)
+      return { path, handle: file?.handle, content: file?.content ?? '' }
+    })
+    if (!snapshots.length) return
     set({ saving: true, error: '' })
     try {
-      for (const path of paths) {
-        const f = state.files.get(path)
-        if (f?.handle) await writeFileToHandle(f.handle, f.content ?? '')
+      for (const snapshot of snapshots) {
+        if (!snapshot.handle) throw new Error(`Cannot write ${snapshot.path}: file handle is unavailable.`)
+        await writeFileToHandle(snapshot.handle, snapshot.content)
+        // Update after every successful file. If a later write fails, files
+        // already persisted still have an accurate baseline and dirty state.
+        set((current) => acknowledgeWrittenContent(current, snapshot.path, snapshot.content))
       }
-      set((s) => {
-        const files = new Map(s.files)
-        for (const path of paths) {
-          const f = files.get(path)
-          if (f) files.set(path, { ...f, original: f.content })
-        }
-        const dirty = new Set(s.dirty)
-        for (const path of paths) dirty.delete(path)
-        return { files, dirty, saving: false }
-      })
+      set({ saving: false })
     } catch (e) {
       set({ saving: false, error: e?.message || String(e) })
     }

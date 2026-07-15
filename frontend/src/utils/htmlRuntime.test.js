@@ -57,6 +57,12 @@ describe('builderInteractiveTags', () => {
     expect(tags).toMatch(/selectTab/)
   })
 
+  it('script opens and closes exported mobile navigation', () => {
+    expect(tags).toMatch(/data-builder-mobile-nav-toggle/)
+    expect(tags).toMatch(/data-mobile-open/)
+    expect(tags).toMatch(/aria-expanded/)
+  })
+
   it('script registers a submit handler for form interception', () => {
     // Without this, <form action=""> submits navigate the sandboxed iframe to
     // about:srcdoc and white it out — the same failure mode the anchor

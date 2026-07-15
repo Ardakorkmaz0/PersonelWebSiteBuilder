@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { usePublicConfig } from '../../utils/usePublicConfig.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Google sign-in (Google Identity Services). The client id comes from the
 // runtime SiteSettings (/api/public/config/) so a superadmin can enable it from
@@ -24,6 +25,7 @@ function loadGis() {
 }
 
 export default function GoogleSignInButton({ onCredential, onError }) {
+  const { t } = useLanguage()
   const ref = useRef(null)
   const cfg = usePublicConfig()
   const clientId = (cfg?.google_client_id || ENV_CLIENT_ID) || ''
@@ -50,9 +52,9 @@ export default function GoogleSignInButton({ onCredential, onError }) {
           text: 'continue_with',
         })
       })
-      .catch(() => errRef.current?.('Could not load Google sign-in.'))
+      .catch(() => errRef.current?.(t('Could not load Google sign-in.')))
     return () => { alive = false }
-  }, [clientId])
+  }, [clientId, t])
 
   if (!clientId) return null
   return <div ref={ref} className="flex justify-center" />

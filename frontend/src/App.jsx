@@ -6,6 +6,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import ExplorePage from './pages/ExplorePage.jsx'
 import ProtectedRoute from './routes/ProtectedRoute.jsx'
+import LanguageProvider from './i18n/LanguageProvider.jsx'
+import { useLanguage } from './i18n/useLanguage.js'
 
 // The editor and the public preview are the heaviest screens — together they
 // pull in the entire renderer, all eight AI templates, the schema validators,
@@ -22,20 +24,23 @@ const PublicProfilePage = lazy(() => import('./pages/PublicProfilePage.jsx'))
 const FavoritesPage = lazy(() => import('./pages/FavoritesPage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
+const ReviewPage = lazy(() => import('./pages/ReviewPage.jsx'))
 
 function FullScreenLoading() {
+  const { t } = useLanguage()
   return (
     <div className="flex min-h-screen items-center justify-center text-sm text-gray-400">
-      Loading…
+      {t('Loading…')}
     </div>
   )
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Suspense fallback={<FullScreenLoading />}>
-        <Routes>
+    <LanguageProvider>
+      <BrowserRouter>
+        <Suspense fallback={<FullScreenLoading />}>
+          <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -97,10 +102,12 @@ export default function App() {
             }
           />
           <Route path="/site/:slug" element={<PreviewPage />} />
+          <Route path="/review/:token" element={<ReviewPage />} />
           <Route path="/u/:id" element={<PublicProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </LanguageProvider>
   )
 }

@@ -36,6 +36,7 @@ const QUICK_SECTIONS = [
 ]
 import { useEditorStore } from '../../store/editorStore.js'
 import { LayersIcon, FileCodeIcon, PaletteIcon, PlusIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Per-tab chat history persistence. Kept in localStorage so a refresh while
 // iterating with the assistant doesn't lose the back-and-forth — handy when
@@ -72,6 +73,39 @@ function throttleGate(lastSentRef, ms) {
   return 0
 }
 
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function captureEditorPreviewState() {
+  const state = useEditorStore.getState()
+  return {
+    schema: cloneJson(state.schema),
+    currentPageId: state.currentPageId,
+    selectedId: state.selectedId,
+    selectedIds: [...state.selectedIds],
+    dirty: state.dirty,
+    past: state.past,
+    future: state.future,
+    linkMode: state.linkMode,
+    linkSourceId: state.linkSourceId,
+  }
+}
+
+function restoreEditorPreviewState(snapshot) {
+  useEditorStore.setState({
+    schema: snapshot.schema,
+    currentPageId: snapshot.currentPageId,
+    selectedId: snapshot.selectedId,
+    selectedIds: snapshot.selectedIds,
+    dirty: snapshot.dirty,
+    past: snapshot.past,
+    future: snapshot.future,
+    linkMode: snapshot.linkMode,
+    linkSourceId: snapshot.linkSourceId,
+  })
+}
+
 // Floating chat window for the AI assistant. Toggled from the toolbar via
 // AiBar; positioned fixed in the top-right of the viewport, ~480px wide,
 // resizable in height up to the viewport. Holds its own conversation state
@@ -83,6 +117,7 @@ function throttleGate(lastSentRef, ms) {
 // and the assistant reply). The store still records every tool call, so
 // Ctrl+Z walks the canvas back exactly like a manual edit would.
 export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHtml }) {
+  const { t } = useLanguage()
   const [messages, setMessages] = useState(() => readHistory())
   const lastSendAt = useRef(0)
   const THROTTLE_MS = 2500
@@ -111,6 +146,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
   // common asks don't require typing — and colors apply deterministically.
   const [quickPanel, setQuickPanel] = useState(null) // 'colors' | 'font' | 'section'
   const [pickedColors, setPickedColors] = useState([])
+  const [pendingChange, setPendingChange] = useState(null)
 
   function applyQuickColors() {
     if (!pickedColors.length || busy) return
@@ -121,13 +157,13 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
     const logApplied = (how) =>
       setMessages((m) => [
         ...m,
-        { id: rand(), role: 'user', text: `Theme colors → ${label}` },
+        { id: rand(), role: 'user', text: t('Theme colors → {colors}', { colors: label }) },
         { id: rand(), role: 'assistant', text: how },
       ])
     // Component sites: colors live in the schema theme — set it directly.
     if (!isHtmlSite) {
       executeTool('updateTheme', { patch: { primaryColor: picked[0] } })
-      logApplied('Updated the design theme\'s primary color — instant, no AI call. Undo (Ctrl+Z) brings the old color back.')
+      logApplied(t('Updated the design theme primary color — instant, no AI call. Undo (Ctrl+Z) brings the old color back.'))
       return
     }
     // HTML sites, deterministic path: swap CSS color variables, or recolor
@@ -136,7 +172,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
     const det = currentHtml ? applyPaletteToHtml(currentHtml, picked) : null
     if (det && onApplyHtml) {
       onApplyHtml(det)
-      logApplied('Recolored the theme by updating the page\'s colors directly — instant, no AI call, and nothing else was touched. Undo brings the old colors back.')
+      logApplied(t('Recolored the theme by updating the page colors directly — instant, no AI call, and nothing else was touched. Undo brings the old colors back.'))
       return
     }
     send(`Restyle the site to use this color palette: primary ${picked[0]}${picked[1] ? `, secondary ${picked[1]}` : ''}. Keep every piece of content exactly as it is; change only the CSS.`)
@@ -148,8 +184,8 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       executeTool('updateTheme', { patch: { fontFamily: `'${f}', sans-serif` } })
       setMessages((m) => [
         ...m,
-        { id: rand(), role: 'user', text: `Font → ${f}` },
-        { id: rand(), role: 'assistant', text: `Set the design theme's font to ${f} — applied instantly, no AI call.` },
+        { id: rand(), role: 'user', text: t('Font → {font}', { font: f }) },
+        { id: rand(), role: 'assistant', text: t('Set the design theme font to {font} — applied instantly, no AI call.', { font: f }) },
       ])
       return
     }
@@ -221,14 +257,14 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         ...m,
         { id: rand(), role: 'user', text: trimmed },
         { id: rand(), role: 'assistant', text:
-          'Slash commands:\n'
-          + '/fresh — start a new conversation (keeps scrollback, resets AI memory)\n'
-          + '/clear — wipe this chat\n'
-          + '/undo — undo the last canvas change\n'
-          + '/redo — redo the last undo\n'
-          + '/provider <openrouter|groq|local|gemini> — switch AI provider\n'
-          + '/template <github|dark|apple|minimal-landing|portfolio|blog|dashboard|marketing> — apply preset\n'
-          + '/help — show this list',
+          t('Slash commands:') + '\n'
+          + `/fresh — ${t('start a new conversation (keeps scrollback, resets AI memory)')}\n`
+          + `/clear — ${t('wipe this chat')}\n`
+          + `/undo — ${t('undo the last canvas change')}\n`
+          + `/redo — ${t('redo the last undo')}\n`
+          + `/provider <openrouter|groq|local|gemini> — ${t('switch AI provider')}\n`
+          + `/template <github|dark|apple|minimal-landing|portfolio|blog|dashboard|marketing> — ${t('apply preset')}\n`
+          + `/help — ${t('show this list')}`,
         },
       ])
       return true
@@ -246,7 +282,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       setMessages((m) => [
         ...m,
         { id: rand(), role: 'user', text: trimmed },
-        { id: rand(), role: 'assistant', text: 'Undone — the previous canvas state is back.' },
+        { id: rand(), role: 'assistant', text: t('Undone — the previous canvas state is back.') },
       ])
       return true
     }
@@ -255,7 +291,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       setMessages((m) => [
         ...m,
         { id: rand(), role: 'user', text: trimmed },
-        { id: rand(), role: 'assistant', text: 'Redone.' },
+        { id: rand(), role: 'assistant', text: t('Redone.') },
       ])
       return true
     }
@@ -263,7 +299,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       const next = arg.toLowerCase()
       const valid = AI_PROVIDERS.some((p) => p.id === next)
       if (!valid) {
-        setError(`Unknown provider "${arg}". Use one of: ${AI_PROVIDERS.map((p) => p.id).join(', ')}`)
+        setError(t('Unknown provider "{provider}". Use one of: {list}', { provider: arg, list: AI_PROVIDERS.map((p) => p.id).join(', ') }))
         return true
       }
       setProvider(next)
@@ -271,7 +307,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       setMessages((m) => [
         ...m,
         { id: rand(), role: 'user', text: trimmed },
-        { id: rand(), role: 'assistant', text: `Active provider switched to ${next}.` },
+        { id: rand(), role: 'assistant', text: t('Active provider switched to {provider}.', { provider: next }) },
       ])
       return true
     }
@@ -285,11 +321,11 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       // Don't auto-send — give the user a chance to edit the topic in first.
       setMessages((m) => [
         ...m,
-        { id: rand(), role: 'assistant', text: `Drafted: ${prompt}\nTap Send to run it (or edit it first).` },
+        { id: rand(), role: 'assistant', text: t('Drafted: {prompt}\nTap Send to run it (or edit it first).', { prompt }) },
       ])
       return true
     }
-    setError(`Unknown command /${cmd}. Try /help.`)
+    setError(t('Unknown command /{command}. Try /help.', { command: cmd }))
     return true
   }
 
@@ -299,13 +335,17 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
   // confused when an older topic ("github site") and a newer one ("dark
   // mode blog") blur together in the same context window.
   function freshChat() {
-    setMessages((m) => [...m, { id: rand(), role: 'divider', label: 'New conversation starting here' }])
+    setMessages((m) => [...m, { id: rand(), role: 'divider', label: t('New conversation starting here') }])
     setError('')
   }
 
   async function send(textOverride) {
     const raw = (textOverride ?? draft).trim()
     if (!raw || busy) return
+    if (pendingChange) {
+      setError(t('Accept or reject the current AI preview before sending another request.'))
+      return
+    }
     if (handleSlashCommand(raw)) {
       // For commands that already wrote to the chat, just clear the composer.
       // /template fills draft for the user, so don't wipe it in that case.
@@ -318,7 +358,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
     // surface a hint instead of silently failing.
     const waitSec = throttleGate(lastSendAt, THROTTLE_MS)
     if (waitSec > 0) {
-      setError(`Slow down — wait ${waitSec}s between AI prompts to stay under the free quota.`)
+      setError(t('Slow down — wait {seconds}s between AI prompts to stay under the free quota.', { seconds: waitSec }))
       return
     }
     setError('')
@@ -330,7 +370,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       // ----- HTML mode: ask the model for a full HTML document --------------
       if (effectiveAiMode === 'html') {
         if (!onApplyHtml) {
-          setError('HTML mode is not wired into this editor session.')
+          setError(t('HTML mode is not wired into this editor session.'))
           return
         }
         const lastDivider = messages.findLastIndex((m) => m.role === 'divider')
@@ -348,7 +388,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           setMessages((m) => [
             ...m,
             { id: rand(), role: 'assistant', text:
-              "The model didn't return usable HTML. Try rephrasing (e.g. \"build me a single-page personal portfolio site\") — being specific about sections and style helps a lot.",
+              t('The model did not return usable HTML. Try rephrasing — being specific about sections and style helps a lot.'),
               allFailed: true,
             },
           ])
@@ -372,23 +412,19 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             setMessages((m) => [
               ...m,
               { id: rand(), role: 'assistant', text:
-                `I blocked this change: the model rewrote most of your page content (only ${Math.round(kept * 100)}% survived) while it was asked to restyle. Your site is untouched — try again, or use the Theme colors button below for a safe, instant recolor.`,
+                t('I blocked this change: the model rewrote most of your page content (only {percent}% survived) while it was asked to restyle. Your site is untouched — try again, or use the Theme colors button below for a safe, instant recolor.', { percent: Math.round(kept * 100) }),
                 allFailed: true,
               },
             ])
             return
           }
         }
-        onApplyHtml(finalHtml)
-        setMessages((m) => [
-          ...m,
-          { id: rand(), role: 'assistant', text: repaired
-            ? 'The model tried to rewrite your page while adding — I kept your original content and grafted only the new section onto it (highlighted in the preview).'
-            : doc.grafted
-              ? 'The model sent back just the new part, so I added it to your current page — it should be highlighted in the preview. Say "move it above the hero" or similar to reposition it.'
-              : `Generated ~${Math.round(finalHtml.length / 1024)} KB of HTML and loaded it into the editor. Iterate by saying things like "make the header sticky" or "use Inter font" — I'll rewrite the document.`,
-          },
-        ])
+        const summary = repaired
+          ? t('The model tried to rewrite your page while adding — I kept your original content and grafted only the new section onto it (highlighted in the preview).')
+          : doc.grafted
+            ? t('The model sent back just the new part, so I added it to your current page — it should be highlighted in the preview.')
+            : t('Generated ~{size} KB of HTML and prepared a preview.', { size: Math.round(finalHtml.length / 1024) })
+        setPendingChange({ kind: 'html', html: finalHtml, summary })
         return
       }
       // ----- Components mode (default tool-calling path) --------------------
@@ -403,7 +439,15 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         // Drop the just-added user turn since runAiPrompt re-adds it with the
         // schema snapshot.
         .slice(0, -1)
-      const { text, toolCallCount, calls } = await runAiPrompt(trimmed, { history })
+      const previewBase = captureEditorPreviewState()
+      let aiResult
+      try {
+        aiResult = await runAiPrompt(trimmed, { history })
+      } catch (requestError) {
+        restoreEditorPreviewState(previewBase)
+        throw requestError
+      }
+      const { text, toolCallCount, calls } = aiResult
       const callsArr = calls || []
       const allFailed = callsArr.length > 0 && callsArr.every((c) => c?.result?.ok === false)
       // Last-ditch rescue: the model produced zero usable tool calls (gemma4
@@ -428,8 +472,24 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           }
         }
       }
+      const previewResult = captureEditorPreviewState()
+      const schemaChanged = JSON.stringify(previewBase.schema) !== JSON.stringify(previewResult.schema)
+      restoreEditorPreviewState(previewBase)
+      if (schemaChanged) {
+        const previewCalls = rescued ? [rescued.call] : callsArr
+        const summary = rescued
+          ? `${t(rescued.reason)} ${t('I prepared the recovered action for your review.')}`
+          : text || t('Prepared {count} AI actions for review.', { count: previewCalls.length })
+        setPendingChange({
+          kind: 'schema',
+          editor: previewResult,
+          calls: previewCalls,
+          summary,
+        })
+        return
+      }
       if (callsArr.length > 0 && !rescued) {
-        const summary = allFailed ? buildFailureSummary(callsArr) : text
+        const summary = allFailed ? buildFailureSummary(callsArr, t) : text
         setMessages((m) => [
           ...m,
           { id: rand(), role: 'tools', calls: callsArr },
@@ -444,16 +504,16 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           ...(original.length ? [{ id: rand(), role: 'tools', calls: original }] : []),
           { id: rand(), role: 'tools', calls: [rescued.call] },
           { id: rand(), role: 'assistant', text:
-            `${rescued.reason} Your model didn't emit a usable tool call, so I read your prompt and ran the action directly. `
+            `${t(rescued.reason)} ${t('Your model did not emit a usable tool call, so I read your prompt and ran the action directly.')} `
             + (getProvider() === 'local'
-              ? 'Tip: switch to a tool-tuned model (qwen2.5 or llama3.1) for better results — Settings → Model.'
+              ? t('Tip: switch to a tool-tuned model (qwen2.5 or llama3.1) for better results — Settings → Model.')
               : ''),
           },
         ])
       } else {
         setMessages((m) => [
           ...m,
-          { id: rand(), role: 'assistant', text: text || 'Done.', toolCallCount },
+          { id: rand(), role: 'assistant', text: text || t('Done.'), toolCallCount },
         ])
       }
     } catch (e) {
@@ -466,13 +526,54 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
   function clearChat() {
     setMessages([])
     setError('')
+    setPendingChange(null)
     try { localStorage.removeItem(HISTORY_KEY) } catch { /* ignore */ }
+  }
+
+  function acceptPendingChange() {
+    if (!pendingChange) return
+    if (pendingChange.kind === 'html') onApplyHtml?.(pendingChange.html)
+    if (pendingChange.kind === 'schema') {
+      const store = useEditorStore.getState()
+      store.record('ai-preview')
+      const pageId = pendingChange.editor.schema.pages.some((page) => page.id === pendingChange.editor.currentPageId)
+        ? pendingChange.editor.currentPageId
+        : pendingChange.editor.schema.pages[0]?.id
+      useEditorStore.setState({
+        schema: cloneJson(pendingChange.editor.schema),
+        currentPageId: pageId,
+        selectedId: null,
+        selectedIds: [],
+        dirty: true,
+        future: [],
+      })
+    }
+    setMessages((items) => [
+      ...items,
+      ...(pendingChange.calls?.length ? [{ id: rand(), role: 'tools', calls: pendingChange.calls }] : []),
+      { id: rand(), role: 'assistant', text: `${pendingChange.summary} ${t('Accepted and applied.')}` },
+    ])
+    setPendingChange(null)
+    setError('')
+  }
+
+  function rejectPendingChange() {
+    if (!pendingChange) return
+    setMessages((items) => [
+      ...items,
+      { id: rand(), role: 'assistant', text: t('Change rejected — your site was left untouched.') },
+    ])
+    setPendingChange(null)
+    setError('')
   }
 
   if (!open) return null
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('AI Assistant')}
       className="fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -481,7 +582,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         <span className="text-xs font-bold uppercase tracking-wide opacity-90">AI</span>
         <span
           className="truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px]"
-          title={`Active model: ${modelLabel}`}
+          title={t('Active model: {model}', { model: modelLabel })}
         >
           {modelLabel}
         </span>
@@ -496,16 +597,16 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             onClick={() => setAiMode('components')}
             disabled={isHtmlSite}
             title={isHtmlSite
-              ? 'This site is an HTML document — the AI edits the HTML directly here.'
-              : 'Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B'}
+              ? t('This site is an HTML document — the AI edits the HTML directly here.')
+              : t('Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B')}
             className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'components' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'} disabled:cursor-not-allowed disabled:opacity-40`}
           >
-            <LayersIcon size={11} /> Components
+            <LayersIcon size={11} /> {t('Components')}
           </button>
           <button
             type="button"
             onClick={() => setAiMode('html')}
-            title="Ask the model for a full HTML document — best on Llama 3.1 8B / gemma / phi"
+            title={t('Ask the model for a full HTML document — best on Llama 3.1 8B / gemma / phi')}
             className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'html' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
           >
             <FileCodeIcon size={11} /> HTML
@@ -515,25 +616,25 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           type="button"
           onClick={freshChat}
           disabled={messages.length === 0 || messages[messages.length - 1]?.role === 'divider'}
-          title="Start a new conversation — AI forgets older topics, your scrollback stays"
+          title={t('Start a new conversation — AI forgets older topics, your scrollback stays')}
           className="ml-auto rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
         >
-          New
+          {t('New')}
         </button>
         <button
           type="button"
           onClick={clearChat}
           disabled={messages.length === 0}
-          title="Clear chat history entirely"
+          title={t('Clear chat history entirely')}
           className="rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
         >
-          Clear
+          {t('Clear')}
         </button>
         <button
           type="button"
           onClick={onClose}
-          title="Close"
-          aria-label="Close AI panel"
+          title={t('Close')}
+          aria-label={t('Close AI panel')}
           className="rounded px-2 py-0.5 text-base hover:bg-white/15"
         >
           ×
@@ -543,7 +644,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       {/* Empty state / no API key */}
       {!hasKey && (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Paste a free key for {providerInfo?.label || 'this provider'} (or any other provider) in the right panel — Properties → AI Assistant. Set up more than one and the chat auto-switches when one hits its quota.
+          {t('Paste a free key for {provider} (or any other provider) in the right panel — Properties → AI Assistant. Set up more than one and the chat auto-switches when one hits its quota.', { provider: t(providerInfo?.label || 'this provider') })}
         </div>
       )}
       {/* Weak-model heads-up: gemma / phi base models weren't tuned for
@@ -551,7 +652,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           user a confused round-trip by suggesting a stronger swap up front. */}
       {hasKey && /\b(?:gemma|phi)\b/i.test(modelLabel) && (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <span className="font-semibold">Heads-up:</span> {modelLabel} wasn't trained for tool calling and often invents fake tool names. For the editor's chat, switch to <code className="rounded bg-amber-100 px-1">qwen2.5</code> or <code className="rounded bg-amber-100 px-1">llama3.1</code> via Settings → Model. I'll try to rescue intent from your prompt either way.
+          <span className="font-semibold">{t('Heads-up:')}</span> {t('{model} was not trained for tool calling. Switch to qwen2.5 or llama3.1 via Settings → Model.', { model: modelLabel })}
         </div>
       )}
 
@@ -560,7 +661,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         {messages.length === 0 && (
           <div className="space-y-2">
             <div className="rounded-md border border-dashed border-[#d1d5db] bg-white p-3 text-xs leading-relaxed text-[#6b7280]">
-              <p className="mb-2 font-semibold text-[#374151]">Try a starter:</p>
+              <p className="mb-2 font-semibold text-[#374151]">{t('Try a starter:')}</p>
               <div className="flex flex-wrap gap-1.5">
                 {SUGGESTION_CHIPS.map((chip) => (
                   <button
@@ -568,15 +669,15 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                     type="button"
                     onClick={() => send(chip.prompt)}
                     disabled={!hasKey || busy}
-                    title={chip.prompt}
+                    title={t(chip.label)}
                     className="rounded-full border border-[#c5d4ef] bg-[#eef2ff] px-2.5 py-1 text-[11px] font-medium text-[#4f46e5] hover:bg-[#dde7f7] disabled:opacity-50"
                   >
-                    {chip.label}
+                    {t(chip.label)}
                   </button>
                 ))}
               </div>
               <p className="mt-2 text-[10px] text-[#9ca3af]">
-                Or type a free-form request. Type <code className="rounded bg-[#f3f4f6] px-1">/help</code> for slash commands.
+                {t('Or type a free-form request. Type')} <code className="rounded bg-[#f3f4f6] px-1">/help</code> {t('for slash commands.')}
               </p>
             </div>
           </div>
@@ -597,18 +698,38 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             />
           ),
         )}
+        {pendingChange && (
+          <div className="overflow-hidden rounded-lg border border-[#a5b4fc] bg-white shadow-sm" role="status">
+            <div className="border-b border-[#e5e7eb] bg-[#eef2ff] px-2.5 py-2">
+              <p className="text-xs font-bold text-[#3730a3]">{t('Review AI change')}</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-[#6b7280]">{pendingChange.summary}</p>
+            </div>
+            {pendingChange.kind === 'html' ? (
+              <iframe title={t('AI change preview')} srcDoc={pendingChange.html} sandbox="" className="h-44 w-full border-0 bg-white" />
+            ) : (
+              <div className="space-y-2 p-2.5">
+                <p className="text-[11px] text-[#6b7280]">{t('{count} canvas actions are ready to apply.', { count: pendingChange.calls?.length || 1 })}</p>
+                <ToolsStrip calls={pendingChange.calls || []} />
+              </div>
+            )}
+            <div className="flex gap-2 border-t border-[#e5e7eb] p-2">
+              <button type="button" onClick={rejectPendingChange} className="flex-1 rounded-lg border border-[#d1d5db] px-3 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#f3f4f6]">{t('Reject')}</button>
+              <button type="button" onClick={acceptPendingChange} className="flex-1 rounded-lg bg-[#4f46e5] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#4338ca]">{t('Accept')}</button>
+            </div>
+          </div>
+        )}
         {busy && (
           <div className="flex items-center gap-2 text-xs text-[#6b7280]">
             <span className="h-2 w-2 animate-pulse rounded-full bg-[#2563eb]" />
             <span>
               {messages[messages.length - 1]?.role === 'user'
-                ? `Thinking with ${modelLabel}…`
-                : 'Applying changes to the canvas…'}
+                ? t('Thinking with {model}…', { model: modelLabel })
+                : t('Applying changes to the canvas…')}
             </span>
           </div>
         )}
         {error && (
-          <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">{error}</div>
+          <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">{t(error)}</div>
         )}
       </div>
 
@@ -634,14 +755,14 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                     : 'border-[#e5e7eb] bg-white text-[#6b7280] hover:border-[#d1d5db] hover:text-[#374151]'
                 }`}
               >
-                {QuickIcon && <QuickIcon size={12} />} {label}
+                {QuickIcon && <QuickIcon size={12} />} {t(label)}
               </button>
             ))}
           </div>
           {quickPanel === 'colors' && (
             <div className="mt-1.5 rounded-lg border border-[#e5e7eb] bg-white p-2">
               <div className="mb-1.5 text-[11px] text-[#6b7280]">
-                Pick 1–2 colors — first becomes the primary, second the secondary. Applies instantly, no typing.
+                {t('Pick 1–2 colors — first becomes the primary, second the secondary. Applies instantly, no typing.')}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {THEME_SWATCHES.map(([hex, name]) => {
@@ -682,7 +803,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                   onClick={() => { setPickedColors([]); setQuickPanel(null) }}
                   className="rounded-lg px-2.5 py-1 text-[11px] text-[#6b7280] hover:bg-[#f3f4f6]"
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button
                   type="button"
@@ -690,14 +811,14 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                   onClick={applyQuickColors}
                   className="rounded-lg bg-[#4f46e5] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[#4338ca] disabled:bg-[#9ca3af]"
                 >
-                  Apply colors
+                  {t('Apply colors')}
                 </button>
               </div>
             </div>
           )}
           {quickPanel === 'font' && (
             <div className="mt-1.5 rounded-lg border border-[#e5e7eb] bg-white p-2">
-              <div className="mb-1.5 text-[11px] text-[#6b7280]">Pick a font — typography changes, content stays.</div>
+              <div className="mb-1.5 text-[11px] text-[#6b7280]">{t('Pick a font — typography changes, content stays.')}</div>
               <div className="flex flex-wrap gap-1.5">
                 {QUICK_FONTS.map((f) => (
                   <button
@@ -715,7 +836,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           )}
           {quickPanel === 'section' && (
             <div className="mt-1.5 rounded-lg border border-[#e5e7eb] bg-white p-2">
-              <div className="mb-1.5 text-[11px] text-[#6b7280]">Add a ready-made section — your existing content is preserved.</div>
+              <div className="mb-1.5 text-[11px] text-[#6b7280]">{t('Add a ready-made section — your existing content is preserved.')}</div>
               <div className="flex flex-wrap gap-1.5">
                 {QUICK_SECTIONS.map(([label, prompt]) => (
                   <button
@@ -728,7 +849,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                     }}
                     className="rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1 text-[12px] text-[#374151] hover:border-[#4f46e5] hover:bg-[#eef2ff] disabled:opacity-40"
                   >
-                    {label}
+                    {t(label)}
                   </button>
                 ))}
               </div>
@@ -762,20 +883,20 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           disabled={!hasKey || busy}
           placeholder={
             hasKey
-              ? 'Tell AI what to build (Enter to send, Shift+Enter for newline)…'
-              : 'Set an API key in the right panel first.'
+              ? t('Tell AI what to build (Enter to send, Shift+Enter for newline)…')
+              : t('Set an API key in the right panel first.')
           }
           className="block w-full resize-none rounded-lg border border-[#d1d5db] bg-white px-2 py-1.5 text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#4f46e5] focus:outline-none disabled:bg-[#f3f4f6] disabled:text-[#9ca3af]"
         />
         <div className="mt-1 flex items-center justify-between text-[11px] text-[#6b7280]">
-          <span>Press Ctrl+Z to undo any change the AI made.</span>
+          <span>{t('Press Ctrl+Z to undo any change the AI made.')}</span>
           <button
             type="button"
             onClick={send}
             disabled={!hasKey || busy || !draft.trim()}
             className="rounded-lg bg-[#4f46e5] px-3 py-1 text-xs font-semibold text-white hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
           >
-            {busy ? '…' : 'Send'}
+            {busy ? '…' : t('Send')}
           </button>
         </div>
       </div>
@@ -787,10 +908,11 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
 // is intentionally reset — everything above is reference scrollback the
 // model will NOT see in the next prompt.
 function DividerRow({ label }) {
+  const { t } = useLanguage()
   return (
     <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[#9ca3af]">
       <span className="h-px flex-1 bg-[#e5e7eb]" />
-      <span>{label || 'New conversation'}</span>
+      <span>{label || t('New conversation')}</span>
       <span className="h-px flex-1 bg-[#e5e7eb]" />
     </div>
   )
@@ -799,7 +921,7 @@ function DividerRow({ label }) {
 // Dedupe + cap the per-call error reasons into a one-paragraph message the
 // user can act on. Beats showing the model's hallucinated "Updated the X"
 // reply when none of the changes actually landed.
-function buildFailureSummary(calls) {
+function buildFailureSummary(calls, t) {
   const reasons = new Set()
   for (const c of calls || []) {
     const e = c?.result?.error
@@ -807,9 +929,9 @@ function buildFailureSummary(calls) {
   }
   const list = Array.from(reasons).slice(0, 4).join('\n• ')
   return (
-    `I tried ${calls.length} action${calls.length === 1 ? '' : 's'} but none of them landed. `
-    + `Common causes: the canvas was empty before I started, or I used component IDs that don’t exist yet.\n\n`
-    + `Errors:\n• ${list}\n\nTry rephrasing the request, or hit /undo if anything DID slip through.`
+    t('I tried {count} actions but none of them landed.', { count: calls.length }) + ' '
+    + t('Common causes: the canvas was empty before I started, or I used component IDs that do not exist yet.') + '\n\n'
+    + t('Errors:') + `\n• ${list}\n\n` + t('Try rephrasing the request, or use /undo if anything did slip through.')
   )
 }
 
@@ -824,6 +946,7 @@ function UserBubble({ text }) {
 }
 
 function AssistantBubble({ text, toolCallCount, allFailed }) {
+  const { t } = useLanguage()
   // Failure-aware tinting: red border + light pink background so a wall of
   // ✗ pills above this bubble can't be mistaken for a successful change.
   const bubbleCls = allFailed
@@ -832,11 +955,11 @@ function AssistantBubble({ text, toolCallCount, allFailed }) {
   return (
     <div className="flex flex-col items-start gap-1">
       <div className={bubbleCls}>
-        {text || 'Done.'}
+        {text || t('Done.')}
       </div>
       {toolCallCount === 0 && (
         <span className="text-[10px] italic text-[#a4262c]">
-          No tools called — the canvas was not changed.
+          {t('No tools called — the canvas was not changed.')}
         </span>
       )}
     </div>
@@ -844,6 +967,7 @@ function AssistantBubble({ text, toolCallCount, allFailed }) {
 }
 
 function ToolsStrip({ calls }) {
+  const { t } = useLanguage()
   return (
     <div className="flex flex-col items-start gap-1">
       <div className="flex max-w-full flex-wrap gap-1">
@@ -854,7 +978,7 @@ function ToolsStrip({ calls }) {
           // surfaces the error reason on hover.
           const failed = c.result && c.result.ok === false
           const tooltip = failed
-            ? `Failed: ${c.result?.error || 'unknown'}\n\nArgs:\n${JSON.stringify(c.args, null, 2)}`
+            ? `${t('Failed')}: ${c.result?.error || t('unknown')}\n\n${t('Args')}:\n${JSON.stringify(c.args, null, 2)}`
             : JSON.stringify(c.args, null, 2)
           const cls = failed
             ? 'rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 line-through decoration-red-400'

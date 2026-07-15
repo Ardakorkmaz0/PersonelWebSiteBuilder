@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // A small cheat-sheet modal for the canvas keyboard shortcuts. Opened from the
 // header button or with Ctrl+/ (handled in EditorPage). Esc closes it here —
@@ -31,6 +32,7 @@ const GROUPS = [
 ]
 
 export default function ShortcutsHelp({ onClose }) {
+  const { t } = useLanguage()
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') {
@@ -53,7 +55,7 @@ export default function ShortcutsHelp({ onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold text-[#111827]">⌨ Keyboard shortcuts</h2>
+          <h2 className="text-base font-bold text-[#111827]">⌨ {t('Keyboard shortcuts')}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -66,19 +68,19 @@ export default function ShortcutsHelp({ onClose }) {
           {GROUPS.map(([title, rows]) => (
             <div key={title}>
               <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">
-                {title}
+                {t(title)}
               </div>
               <div className="space-y-1">
                 {rows.map(([label, keys]) => (
                   <div key={label} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-[#374151]">{label}</span>
+                    <span className="text-[#374151]">{t(label)}</span>
                     <span className="flex items-center gap-1">
                       {keys.map((k, i) => (
                         <kbd
                           key={i}
                           className="rounded border border-[#d1d5db] bg-[#f9fafb] px-1.5 py-0.5 font-mono text-[11px] text-[#374151] shadow-sm"
                         >
-                          {k}
+                          {t(k)}
                         </kbd>
                       ))}
                     </span>
@@ -89,8 +91,7 @@ export default function ShortcutsHelp({ onClose }) {
           ))}
         </div>
         <p className="mt-4 text-xs leading-relaxed text-[#9ca3af]">
-          These apply on the component canvas. Shift-drag nudges in 10px steps; the snap guides and
-          “# Grid” toggle help you line things up.
+          {t('These apply on the component canvas. Shift-drag nudges in 10px steps; the snap guides and “# Grid” toggle help you line things up.')}
         </p>
       </div>
     </div>

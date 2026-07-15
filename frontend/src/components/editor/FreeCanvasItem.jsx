@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
-import { ContainerEditor, TabsEditor } from './FlowCanvasItem.jsx'
+import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
 import { snapDraggedRect } from '../../utils/snapping.js'
 import { TrashIcon } from '../icons.jsx'
 import { BRUSH_CURSOR } from './brushCursor.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 const MIN = 20
 const ACCENT = '#4f46e5'
@@ -52,11 +53,13 @@ function resizeEdgeHitZones(rect) {
 
 export default function FreeCanvasItem({
   component,
+  canvasScale = 1,
   brushMode = false,
   brushColor = '#4f46e5',
   brushTarget = 'smart',
   onBrushUse = () => {},
 }) {
+  const { t } = useLanguage()
   const selectedId = useEditorStore((s) => s.selectedId)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const viewport = useEditorStore((s) => s.viewport)
@@ -86,8 +89,18 @@ export default function FreeCanvasItem({
     viewport === 'mobile'
       ? component.mobileLayout || component.layout
       : component.layout
-  const { x, y, w, h } = layout
   const page = useEditorStore(selectCurrentPage)
+  const canvasWidth = viewport === 'mobile' ? page.mobileWidth || 390 : page.canvasWidth || 1000
+  const viewportStretch = component.type === 'region' || (
+    component.type === 'navbar' &&
+    component.props?.navLayout !== 'vertical' &&
+    component.props?.widthMode !== 'boxed'
+  )
+  const stackedRegion = component.type === 'region'
+  const x = viewportStretch ? 0 : layout.x
+  const y = layout.y
+  const w = viewportStretch ? canvasWidth : layout.w
+  const h = layout.h
   const chromeRect = {
     x,
     y,
@@ -96,8 +109,12 @@ export default function FreeCanvasItem({
     maxW: viewport === 'mobile' ? page.mobileWidth || 390 : page.canvasWidth || 1000,
   }
   const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
-  const handles = resizeHandles(chromeRect)
-  const edgeHitZones = resizeEdgeHitZones(chromeRect)
+  const handles = resizeHandles(chromeRect).filter(([dir]) => (
+    stackedRegion ? dir === 's' : !viewportStretch || dir === 'n' || dir === 's'
+  ))
+  const edgeHitZones = resizeEdgeHitZones(chromeRect).filter(([dir]) => (
+    stackedRegion ? dir === 's' : !viewportStretch || dir === 'n' || dir === 's'
+  ))
   const canShowInlineDelete = w >= 34 && h >= 30
   const hidden =
     viewport === 'mobile' ? component.hiddenMobile : component.hidden
@@ -174,6 +191,7 @@ export default function FreeCanvasItem({
     e.stopPropagation()
     // Shift-click toggles multi-selection (no drag).
     if (e.shiftKey) { toggleSelect(component.id); return }
+    if (stackedRegion) { select(component.id); return }
     const state = useEditorStore.getState()
     // Dragging an item that's already part of a multi-selection moves the WHOLE
     // group; otherwise it becomes the single selection first.
@@ -190,8 +208,8 @@ export default function FreeCanvasItem({
       const baseOffX = pinOffsetX
       const baseOffY = pinOffsetY
       const onMovePin = (ev) => {
-        const dx = ev.clientX - sx
-        const dy = ev.clientY - sy
+        const dx = (ev.clientX - sx) / canvasScale
+        const dy = (ev.clientY - sy) / canvasScale
         updateProps(component.id, {
           pinOffsetX: Math.round(baseOffX + (pinX === 'right' ? -dx : dx)),
           pinOffsetY: Math.round(baseOffY + (pinY === 'bottom' ? -dy : dy)),
@@ -228,8 +246,8 @@ export default function FreeCanvasItem({
     }
     function onMove(ev) {
       const base = origins[component.id]
-      const rawX = base.x + (ev.clientX - sx)
-      const rawY = base.y + (ev.clientY - sy)
+      const rawX = viewportStretch ? 0 : base.x + (ev.clientX - sx) / canvasScale
+      const rawY = base.y + (ev.clientY - sy) / canvasScale
       const snap = snapDraggedRect(
         { id: component.id, x: rawX, y: rawY, w, h },
         siblings,
@@ -237,7 +255,7 @@ export default function FreeCanvasItem({
         grid,
       )
       if (groupIds.length === 1) {
-        setLayout(component.id, { x: snap.x, y: snap.y })
+        setLayout(component.id, { x: viewportStretch ? 0 : snap.x, y: snap.y })
       } else {
         const dx = snap.x - base.x
         const dy = snap.y - base.y
@@ -269,8 +287,8 @@ export default function FreeCanvasItem({
     const sy = e.clientY
     const orig = { x, y, w, h }
     function onMove(ev) {
-      const dx = ev.clientX - sx
-      const dy = ev.clientY - sy
+      const dx = (ev.clientX - sx) / canvasScale
+      const dy = (ev.clientY - sy) / canvasScale
       let { x: nx, y: ny, w: nw, h: nh } = orig
       if (dir.includes('e')) nw = Math.max(MIN, orig.w + dx)
       if (dir.includes('s')) nh = Math.max(MIN, orig.h + dy)
@@ -308,7 +326,7 @@ export default function FreeCanvasItem({
         top: y,
         width: w,
         height: h,
-        cursor: brushMode ? BRUSH_CURSOR : linkMode ? 'crosshair' : 'move',
+        cursor: brushMode ? BRUSH_CURSOR : linkMode ? 'crosshair' : stackedRegion ? 'default' : 'move',
         // Pinned items float above the page content while scrolled, mirroring
         // their published z-order; selection chrome still wins.
         zIndex: isSelected || isLinkSource ? 20 : pinMode ? 10 : 1,
@@ -321,10 +339,22 @@ export default function FreeCanvasItem({
         isSelected || linkMode || brushMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'
       }
     >
-      {component.type === 'container' ? (
+      {component.type === 'region' ? (
+        <div className="h-full w-full overflow-visible">
+          <RegionEditor
+            component={component}
+            canvasScale={canvasScale}
+            brushMode={brushMode}
+            brushColor={brushColor}
+            brushTarget={brushTarget}
+            onBrushUse={onBrushUse}
+          />
+        </div>
+      ) : component.type === 'container' ? (
         <div className="h-full w-full overflow-visible">
           <ContainerEditor
             component={component}
+            canvasScale={canvasScale}
             brushMode={brushMode}
             brushColor={brushColor}
             brushTarget={brushTarget}
@@ -335,6 +365,7 @@ export default function FreeCanvasItem({
         <div className="h-full w-full overflow-visible">
           <TabsEditor
             component={component}
+            canvasScale={canvasScale}
             brushMode={brushMode}
             brushColor={brushColor}
             brushTarget={brushTarget}
@@ -352,7 +383,7 @@ export default function FreeCanvasItem({
           style={{ position: 'absolute', top: 2, left: 2, zIndex: 25 }}
           className="rounded-lg bg-[#111827]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
-          Hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}
+          {t('Hidden on {viewport}', { viewport: t(viewport === 'mobile' ? 'mobile' : 'PC') })}
         </span>
       )}
 
@@ -407,8 +438,8 @@ export default function FreeCanvasItem({
           {canShowInlineDelete && (
             <button
               type="button"
-              aria-label="Delete component"
-              title="Delete"
+              aria-label={t('Delete component')}
+              title={t('Delete')}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()

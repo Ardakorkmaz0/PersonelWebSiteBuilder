@@ -5,7 +5,7 @@
 // `viewport` selects which breakpoint to render: 'pc' uses each component's
 // `layout`, 'mobile' uses its independently-designed `mobileLayout`. Components
 // hidden on the active breakpoint are skipped.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { registry, CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import { sanitizeStyles, sanitizeUrl } from '../../utils/sanitize.js'
 import { FULL_BLEED_TYPES, NON_WRAP_LINK_TYPES, TAB_STYLES } from './constants.js'
@@ -21,6 +21,54 @@ import {
   pinnedLayoutStyle,
 } from './layout.js'
 import { componentBoxScale, scaleBoxStyles, scaleCssValue, scaledPx } from './scale.js'
+import { regionContentWidth, responsiveRegionChildLayout } from '../../utils/regionLayout.js'
+
+function isViewportStretch(component) {
+  return component?.type === 'region' || (
+    component?.type === 'navbar' &&
+    component.props?.navLayout !== 'vertical' &&
+    component.props?.widthMode !== 'boxed'
+  )
+}
+
+function RegionRender({ component, style, viewport, editorPreview, canvasDesignWidth }) {
+  const kids = Array.isArray(component.children) ? component.children : []
+  const designW = viewport === 'mobile'
+    ? Math.min(regionContentWidth(component), canvasDesignWidth || MOBILE_CANVAS_WIDTH)
+    : regionContentWidth(component)
+  const ref = useRef(null)
+  const [actualW, setActualW] = useState(designW)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return undefined
+    const update = () => setActualW(el.clientWidth || designW)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [designW])
+  const safeW = Math.max(1, Math.min(designW, actualW || designW))
+  return (
+    <section style={{ ...style, position: 'relative', overflow: style.overflow || 'hidden' }}>
+      <div ref={ref} style={{ position: 'relative', width: '100%', maxWidth: designW, height: '100%', margin: '0 auto', overflow: 'hidden' }}>
+        {kids.map((child) => {
+          if (isHidden(child, viewport)) return null
+          const layout = responsiveRegionChildLayout(child, designW, safeW, viewport)
+          return (
+            <div key={child.id} style={{ position: 'absolute', left: layout.x, top: layout.y, width: layout.w, height: layout.h }}>
+              <RenderComponent
+                component={child}
+                viewport={viewport}
+                editorPreview={editorPreview}
+                canvasDesignWidth={canvasDesignWidth}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
 
 function TabsRender({ component, style, viewport, boxScale = 1, editorPreview = false }) {
   const p = component.props || {}
@@ -147,6 +195,7 @@ export function RenderComponent({
   flowMode = false,
   viewport = 'pc',
   editorPreview = false,
+  canvasDesignWidth,
 }) {
   const def = registry[component.type]
   if (!def) return null
@@ -173,6 +222,18 @@ export function RenderComponent({
         viewport={viewport}
         boxScale={boxScale}
         editorPreview={editorPreview}
+      />
+    )
+  }
+
+  if (component.type === 'region') {
+    return (
+      <RegionRender
+        component={component}
+        style={style}
+        viewport={viewport}
+        editorPreview={editorPreview}
+        canvasDesignWidth={canvasDesignWidth}
       />
     )
   }
@@ -218,8 +279,8 @@ export function RenderComponent({
   // background but center their CONTENT at the component's Max width (layout.w),
   // so "Max width" actually does something on these blocks.
   const contentWidth =
-    flowMode && FULL_BLEED_TYPES.includes(component.type)
-      ? Math.round(component.layout?.w || 0) || undefined
+    FULL_BLEED_TYPES.includes(component.type)
+      ? Math.round(Number(component.props?.contentWidth) || component.layout?.w || 0) || undefined
       : undefined
   const el = (
     <Comp
@@ -259,9 +320,12 @@ export function Renderer({
   flowMode = false,
   fluid = false,
   containFixed = false,
+  designWidth,
 }) {
   const list = Array.isArray(components) ? components : []
   const canvasW = width || (viewport === 'mobile' ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH)
+  const baseDesignW = designWidth || canvasW
+  const designOffset = Math.max(0, (canvasW - baseDesignW) / 2)
   const sidePad = flowSidePad(viewport)
   if (flowMode) {
     return (
@@ -292,7 +356,7 @@ export function Renderer({
           return (
             // id lets in-page links (#componentId) scroll to this component.
             <div key={c.id} id={c.id} style={pinnedLayoutStyle(c, flowItemStyle(c, viewport, canvasW))}>
-              <RenderComponent component={c} flowMode viewport={viewport} />
+              <RenderComponent component={c} flowMode viewport={viewport} canvasDesignWidth={baseDesignW} />
             </div>
           )
         })}
@@ -315,11 +379,12 @@ export function Renderer({
       {list.map((c) => {
         if (isHidden(c, viewport)) return null
         const l = layoutFor(c, viewport) || {}
+        const stretch = isViewportStretch(c)
         const baseStyle = {
           position: 'absolute',
-          left: l.x || 0,
+          left: stretch ? 0 : designOffset + (l.x || 0),
           top: l.y || 0,
-          width: l.w || 200,
+          width: stretch ? canvasW : l.w || 200,
           height: l.h || 80,
         }
         return (
@@ -329,7 +394,7 @@ export function Renderer({
             id={c.id}
             style={pinnedLayoutStyle(c, baseStyle)}
           >
-            <RenderComponent component={c} viewport={viewport} />
+            <RenderComponent component={c} viewport={viewport} canvasDesignWidth={baseDesignW} />
           </div>
         )
       })}

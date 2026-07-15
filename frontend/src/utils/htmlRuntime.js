@@ -67,6 +67,19 @@ const INTERACTIVE_SCRIPT = `
       }
     }
     function onClick(event) {
+      var navToggle = event.target && event.target.closest && event.target.closest('[data-builder-mobile-nav-toggle]');
+      if (navToggle) {
+        var navRoot = navToggle.closest('[data-builder-mobile-nav]');
+        if (navRoot) {
+          event.preventDefault();
+          var open = navRoot.getAttribute('data-mobile-open') !== 'true';
+          navRoot.setAttribute('data-mobile-open', open ? 'true' : 'false');
+          navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+          navToggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+          navToggle.textContent = open ? '×' : '☰';
+        }
+        return;
+      }
       var tab = event.target && event.target.closest && event.target.closest('[role="tab"][data-builder-tab]');
       if (tab) {
         var root = tab.closest('[data-builder-tabs]');
@@ -83,6 +96,16 @@ const INTERACTIVE_SCRIPT = `
       // their default behaviour (open in iframe or via target=_blank).
       var link = event.target && event.target.closest && event.target.closest('a[href]');
       if (!link) return;
+      var openNav = link.closest('[data-builder-mobile-nav]');
+      if (openNav) {
+        openNav.setAttribute('data-mobile-open', 'false');
+        var openNavToggle = openNav.querySelector('[data-builder-mobile-nav-toggle]');
+        if (openNavToggle) {
+          openNavToggle.setAttribute('aria-expanded', 'false');
+          openNavToggle.setAttribute('aria-label', 'Open navigation menu');
+          openNavToggle.textContent = '☰';
+        }
+      }
       var href = String(link.getAttribute('href') || '').trim();
       if (!href) { event.preventDefault(); return; }
       // Double-escape slashes so the emitted regex literal stays escaped —
@@ -114,16 +137,48 @@ const INTERACTIVE_SCRIPT = `
     // actions resolve to about:srcdoc and blank the iframe out — same failure
     // mode the anchor handler defends against. External http(s) actions still
     // submit normally (sandbox blocks the response but the click is intentional).
+    var lastSubmittedForm = null;
+    function formPayload(form) {
+      var data = {};
+      var fields = form.querySelectorAll('input,textarea,select');
+      for (var i = 0; i < fields.length && i < 20; i++) {
+        var field = fields[i];
+        var type = String(field.type || '').toLowerCase();
+        var name = String(field.name || field.id || '').trim();
+        if (!name || type === 'password' || type === 'file' || type === 'hidden') continue;
+        if ((type === 'checkbox' || type === 'radio') && !field.checked) continue;
+        data[name.slice(0, 80)] = String(field.value || '').slice(0, 2000);
+      }
+      return data;
+    }
+    function sendToInbox(form) {
+      lastSubmittedForm = form;
+      try { parent.postMessage({ type: 'pwb-form-submit', data: formPayload(form), page: location.hash || '' }, '*'); } catch (e) {}
+    }
+    function showFormResult(form, ok) {
+      if (!form) return;
+      var result = form.querySelector('[data-pwb-form-status]');
+      if (!result) {
+        result = document.createElement('div');
+        result.setAttribute('data-pwb-form-status', '');
+        result.setAttribute('role', 'status');
+        result.style.cssText = 'margin-top:10px;font:500 13px/1.4 system-ui;color:' + (ok ? '#15803d' : '#b91c1c');
+        form.appendChild(result);
+      }
+      result.textContent = ok ? 'Message sent.' : 'Message could not be sent.';
+    }
     function onSubmit(event) {
       var form = event.target;
       if (!form || form.tagName !== 'FORM') return;
       var action = String(form.getAttribute('action') || '').trim();
       if (!action || action === '#' || action.charAt(0) === '#') {
         event.preventDefault();
+        sendToInbox(form);
         return;
       }
       if (/^https?:\\/\\//i.test(action) || /^mailto:|^tel:/i.test(action)) return;
       event.preventDefault();
+      sendToInbox(form);
     }
     // Sticky components on ABSOLUTE component pages. They keep their absolute
     // design position (no flow exists for native position:sticky), and this
@@ -166,6 +221,11 @@ const INTERACTIVE_SCRIPT = `
     function init() {
       document.addEventListener('click', onClick);
       document.addEventListener('submit', onSubmit);
+      window.addEventListener('message', function (event) {
+        if (event.data && event.data.type === 'pwb-form-result') {
+          showFormResult(lastSubmittedForm, !!event.data.ok);
+        }
+      });
       initSticky();
       // Ensure each tabs widget has exactly one panel visible on load (the one
       // whose tab is marked aria-selected, falling back to the first tab).

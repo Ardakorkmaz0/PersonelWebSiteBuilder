@@ -12,6 +12,12 @@ import { RenderComponent } from '../renderer/Renderer.jsx'
 import { TAB_STYLES } from '../renderer/constants.js'
 import { sanitizeStyles } from '../../utils/sanitize.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
+import {
+  regionContentWidth,
+  regionDisplayPatchToDesign,
+  responsiveRegionChildLayout,
+} from '../../utils/regionLayout.js'
 
 const ACCENT = '#4f46e5'
 const MIN = 20
@@ -87,12 +93,14 @@ function flowResizeEdgeHitZones({ full, viewport }) {
 export default function FlowCanvasItem({
   component,
   canvasWidth,
+  canvasScale = 1,
   parentDirection = 'row',
   brushMode = false,
   brushColor = '#4f46e5',
   brushTarget = 'smart',
   onBrushUse = () => {},
 }) {
+  const { t } = useLanguage()
   const selectedId = useEditorStore((s) => s.selectedId)
   const viewport = useEditorStore((s) => s.viewport)
   const select = useEditorStore((s) => s.selectComponent)
@@ -171,8 +179,8 @@ export default function FlowCanvasItem({
     }
     function onMove(ev) {
       const patch = {}
-      if (dir.includes('e')) patch.w = Math.max(MIN, orig.w + (ev.clientX - sx))
-      if (dir.includes('s')) patch.h = Math.max(MIN, orig.h + (ev.clientY - sy))
+      if (dir.includes('e')) patch.w = Math.max(MIN, orig.w + (ev.clientX - sx) / canvasScale)
+      if (dir.includes('s')) patch.h = Math.max(MIN, orig.h + (ev.clientY - sy) / canvasScale)
       setLayout(component.id, patch)
     }
     function onUp() {
@@ -209,8 +217,8 @@ export default function FlowCanvasItem({
         >
           <BanIcon size={13} aria-hidden />
           <span className="font-medium capitalize">{component.type}</span>
-          <span>· hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}</span>
-          <span className="ml-auto opacity-70">select to show</span>
+          <span>· {t('hidden on {viewport}', { viewport: t(viewport === 'mobile' ? 'mobile' : 'PC') })}</span>
+          <span className="ml-auto opacity-70">{t('select to show')}</span>
         </div>
       </div>
     )
@@ -265,9 +273,19 @@ export default function FlowCanvasItem({
           {pinMode === 'fixed' ? 'Pinned' : 'Sticky'}
         </span>
       )}
-      {component.type === 'container' ? (
+      {component.type === 'region' ? (
+        <RegionEditor
+          component={component}
+          canvasScale={canvasScale}
+          brushMode={brushMode}
+          brushColor={brushColor}
+          brushTarget={brushTarget}
+          onBrushUse={onBrushUse}
+        />
+      ) : component.type === 'container' ? (
         <ContainerEditor
           component={component}
+          canvasScale={canvasScale}
           brushMode={brushMode}
           brushColor={brushColor}
           brushTarget={brushTarget}
@@ -276,6 +294,7 @@ export default function FlowCanvasItem({
       ) : component.type === 'tabs' ? (
         <TabsEditor
           component={component}
+          canvasScale={canvasScale}
           brushMode={brushMode}
           brushColor={brushColor}
           brushTarget={brushTarget}
@@ -316,8 +335,8 @@ export default function FlowCanvasItem({
         canShowInlineDelete && (
           <button
             type="button"
-            aria-label="Delete component"
-            title="Delete"
+            aria-label={t('Delete component')}
+            title={t('Delete')}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
@@ -387,7 +406,102 @@ function useFitToWidth(designW, designH) {
   }, [designW])
   const safeDesign = Math.max(1, designW || 1)
   const scale = actualW < safeDesign ? actualW / safeDesign : 1
-  return { ref, scale, scaledHeight: Math.max(0, designH * scale) }
+  return { ref, actualW, scale, scaledHeight: Math.max(0, designH * scale) }
+}
+
+// Wix-like section: the background fills the browser, while attached elements
+// stay readable inside gridlines. Desktop uses docking; mobile edits the same
+// content through its own layout instead of shrinking the whole section.
+export function RegionEditor({
+  component,
+  canvasScale = 1,
+  brushMode = false,
+  brushColor = '#4f46e5',
+  brushTarget = 'smart',
+  onBrushUse = () => {},
+}) {
+  const { t } = useLanguage()
+  const viewport = useEditorStore((s) => s.viewport)
+  const selectedId = useEditorStore((s) => s.selectedId)
+  const kids = Array.isArray(component.children) ? component.children : []
+  const designW = regionContentWidth(component)
+  const activeRegionLayout = viewport === 'mobile'
+    ? component.mobileLayout || component.layout || {}
+    : component.layout || {}
+  const designH = Math.max(80, Math.round(activeRegionLayout.h || 360))
+  const { setNodeRef, isOver } = useDroppable({ id: component.id })
+  const userStyles = sanitizeStyles(component.styles)
+  const { ref, actualW } = useFitToWidth(designW, designH)
+  const safeW = Math.max(1, Math.min(designW, actualW || designW))
+  const showGrid = selectedId === component.id || isOver || kids.length === 0
+  const setRefs = (el) => {
+    ref.current = el
+    setNodeRef(el)
+  }
+  return (
+    <section
+      style={{
+        ...userStyles,
+        width: '100%',
+        height: '100%',
+        boxSizing: 'border-box',
+        position: 'relative',
+        overflow: userStyles.overflow || 'hidden',
+      }}
+    >
+      <div
+        ref={setRefs}
+        data-builder-droppable-id={component.id}
+        data-builder-fit-scale="1"
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: designW,
+          height: '100%',
+          margin: '0 auto',
+          overflow: 'hidden',
+        }}
+      >
+        {showGrid && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 border-l border-dashed border-[#4f46e5]/55" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 border-r border-dashed border-[#4f46e5]/55" />
+            <span className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-[#4f46e5]/80 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              {t('Content grid')} · {Math.round(safeW)}px
+            </span>
+          </>
+        )}
+        {kids.length === 0 ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-[#6b7280]">
+            {t('Drop components inside the content grid.')}
+          </div>
+        ) : kids.map((c) => {
+          const displayLayout = responsiveRegionChildLayout(c, designW, safeW, viewport)
+          return (
+            <TabsCanvasItem
+              key={c.id}
+              component={c}
+              bounds={{ w: safeW, h: designH }}
+              layoutOverride={displayLayout}
+              layoutMapper={(patch) => regionDisplayPatchToDesign(
+                c,
+                patch,
+                displayLayout,
+                designW,
+                safeW,
+                viewport,
+              )}
+              interactionScale={canvasScale}
+              brushMode={brushMode}
+              brushColor={brushColor}
+              brushTarget={brushTarget}
+              onBrushUse={onBrushUse}
+            />
+          )
+        })}
+      </div>
+    </section>
+  )
 }
 
 // The editable inside of a container: a droppable mini-canvas whose children
@@ -396,11 +510,13 @@ function useFitToWidth(designW, designH) {
 // fits without horizontal scroll AND keeps its proportions.
 export function ContainerEditor({
   component,
+  canvasScale = 1,
   brushMode = false,
   brushColor = '#4f46e5',
   brushTarget = 'smart',
   onBrushUse = () => {},
 }) {
+  const { t } = useLanguage()
   const kids = Array.isArray(component.children) ? component.children : []
   const designW = Math.max(1, Math.round(component.layout?.w || 600))
   const designH = absoluteChildrenHeight(kids, Math.round(component.layout?.h || 160))
@@ -441,7 +557,7 @@ export function ContainerEditor({
       >
         {kids.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center py-4 text-center text-xs text-[#9ca3af]">
-            Drop components here
+            {t('Drop components here')}
           </div>
         ) : (
           kids.map((c) => (
@@ -449,6 +565,7 @@ export function ContainerEditor({
               key={c.id}
               component={c}
               bounds={{ w: designW, h: boundsH }}
+              interactionScale={canvasScale * scale}
               brushMode={brushMode}
               brushColor={brushColor}
               brushTarget={brushTarget}
@@ -464,11 +581,15 @@ export function ContainerEditor({
 function TabsCanvasItem({
   component,
   bounds,
+  layoutOverride = null,
+  layoutMapper = null,
+  interactionScale = 1,
   brushMode = false,
   brushColor = '#4f46e5',
   brushTarget = 'smart',
   onBrushUse = () => {},
 }) {
+  const { t } = useLanguage()
   const selectedId = useEditorStore((s) => s.selectedId)
   const viewport = useEditorStore((s) => s.viewport)
   const select = useEditorStore((s) => s.selectComponent)
@@ -477,7 +598,7 @@ function TabsCanvasItem({
   const paintComponent = useEditorStore((s) => s.paintComponent)
   const isSelected = selectedId === component.id
   const hidden = isHidden(component, viewport)
-  const l = component.layout || {}
+  const l = layoutOverride || component.layout || {}
   const x = Math.round(l.x || 0)
   const y = Math.round(l.y || 0)
   const w = Math.max(MIN, Math.round(l.w || 200))
@@ -494,6 +615,10 @@ function TabsCanvasItem({
   const handles = brushMode ? [] : freeResizeHandles(chromeRect)
   const edgeHitZones = brushMode ? [] : freeResizeEdgeHitZones(chromeRect)
   const canShowInlineDelete = w >= 34 && h >= 30
+  const applyLayout = (patch) => setLayout(
+    component.id,
+    layoutMapper ? layoutMapper(patch, { x, y, w, h }) : patch,
+  )
 
   function startMove(e) {
     if (e.button !== 0) return
@@ -509,9 +634,9 @@ function TabsCanvasItem({
     const sy = e.clientY
     const orig = { x, y }
     function onMove(ev) {
-      setLayout(component.id, {
-        x: orig.x + (ev.clientX - sx),
-        y: orig.y + (ev.clientY - sy),
+      applyLayout({
+        x: orig.x + (ev.clientX - sx) / interactionScale,
+        y: orig.y + (ev.clientY - sy) / interactionScale,
       })
     }
     function onUp() {
@@ -530,8 +655,8 @@ function TabsCanvasItem({
     const sy = e.clientY
     const orig = { x, y, w, h }
     function onMove(ev) {
-      const dx = ev.clientX - sx
-      const dy = ev.clientY - sy
+      const dx = (ev.clientX - sx) / interactionScale
+      const dy = (ev.clientY - sy) / interactionScale
       let nx = orig.x
       let ny = orig.y
       let nw = orig.w
@@ -546,7 +671,7 @@ function TabsCanvasItem({
         nh = Math.max(MIN, orig.h - dy)
         ny = orig.y + (orig.h - nh)
       }
-      setLayout(component.id, { x: nx, y: ny, w: nw, h: nh })
+      applyLayout({ x: nx, y: ny, w: nw, h: nh })
     }
     function onUp() {
       window.removeEventListener('pointermove', onMove)
@@ -571,10 +696,22 @@ function TabsCanvasItem({
       }}
       className={isSelected || brushMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'}
     >
-      {component.type === 'container' ? (
+      {component.type === 'region' ? (
+        <div className="h-full w-full overflow-visible">
+          <RegionEditor
+            component={component}
+            canvasScale={interactionScale}
+            brushMode={brushMode}
+            brushColor={brushColor}
+            brushTarget={brushTarget}
+            onBrushUse={onBrushUse}
+          />
+        </div>
+      ) : component.type === 'container' ? (
         <div className="h-full w-full overflow-visible">
           <ContainerEditor
             component={component}
+            canvasScale={interactionScale}
             brushMode={brushMode}
             brushColor={brushColor}
             brushTarget={brushTarget}
@@ -585,6 +722,7 @@ function TabsCanvasItem({
         <div className="h-full w-full overflow-visible">
           <TabsEditor
             component={component}
+            canvasScale={interactionScale}
             brushMode={brushMode}
             brushColor={brushColor}
             brushTarget={brushTarget}
@@ -602,7 +740,7 @@ function TabsCanvasItem({
           style={{ position: 'absolute', top: 2, left: 2, zIndex: 25 }}
           className="rounded-lg bg-[#111827]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
-          Hidden on {viewport === 'mobile' ? 'mobile' : 'PC'}
+          {t('Hidden on {viewport}', { viewport: t(viewport === 'mobile' ? 'mobile' : 'PC') })}
         </span>
       )}
 
@@ -640,8 +778,8 @@ function TabsCanvasItem({
           {canShowInlineDelete && (
             <button
               type="button"
-              aria-label="Delete component"
-              title="Delete"
+              aria-label={t('Delete component')}
+              title={t('Delete')}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()
@@ -683,11 +821,13 @@ function TabsCanvasItem({
 // to. Static export emits all panels and a tiny JS shim toggles between them.
 export function TabsEditor({
   component,
+  canvasScale = 1,
   brushMode = false,
   brushColor = '#4f46e5',
   brushTarget = 'smart',
   onBrushUse = () => {},
 }) {
+  const { t } = useLanguage()
   const p = component.props || {}
   const tabsList = Array.isArray(p.tabs) && p.tabs.length
     ? p.tabs.filter((t) => t && t.id)
@@ -746,11 +886,11 @@ export function TabsEditor({
       }}
     >
       <div role="tablist" style={tablistStyle}>
-        {tabsList.map((t) => {
-          const sel = t.id === activeId
+        {tabsList.map((tab) => {
+          const sel = tab.id === activeId
           return (
             <button
-              key={t.id}
+              key={tab.id}
               type="button"
               onPointerDown={(e) => {
                 e.stopPropagation()
@@ -758,19 +898,19 @@ export function TabsEditor({
               }}
               onPointerUp={(e) => {
                 e.stopPropagation()
-                if (!sel) setActiveTab(component.id, t.id)
+                if (!sel) setActiveTab(component.id, tab.id)
               }}
               onClick={(e) => {
                 e.stopPropagation()
                 e.preventDefault()
-                if (!sel) setActiveTab(component.id, t.id)
+                if (!sel) setActiveTab(component.id, tab.id)
               }}
               style={{
                 ...tabBaseStyle,
                 ...(sel ? tabActiveStyle : null),
               }}
             >
-              {t.label || 'Tab'}
+              {tab.label || t('Tab')}
             </button>
           )
         })}
@@ -802,7 +942,7 @@ export function TabsEditor({
         >
           {panelKids.length === 0 ? (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center py-4 text-center text-xs text-[#9ca3af]">
-              Drop components here
+              {t('Drop components here')}
             </div>
           ) : (
             panelKids.map((c) => (
@@ -810,6 +950,7 @@ export function TabsEditor({
                 key={c.id}
                 component={c}
                 bounds={{ w: designW, h: boundsH }}
+                interactionScale={canvasScale * scale}
                 brushMode={brushMode}
                 brushColor={brushColor}
                 brushTarget={brushTarget}

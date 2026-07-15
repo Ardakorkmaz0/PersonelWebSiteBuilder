@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
+import { useLanguage } from '../../i18n/useLanguage.js'
 import { canvasHeight, flowCanvasHeight, flowGap, flowSidePad } from '../renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import FreeCanvasItem from './FreeCanvasItem.jsx'
@@ -22,6 +23,7 @@ export default function Canvas({
   pendingPlace = null,
   onPlaceAt = () => {},
 }) {
+  const { t } = useLanguage()
   const page = useEditorStore(selectCurrentPage)
   const components = page.components
   const viewport = useEditorStore((s) => s.viewport)
@@ -40,8 +42,10 @@ export default function Canvas({
   // every component it touches, then align/distribute them. Works in both the PC
   // and Mobile breakpoints (it reads the active viewport's layout).
   const canvasElRef = useRef(null)
+  const scrollElRef = useRef(null)
   const marqueeRef = useRef(null)
   const [marquee, setMarquee] = useState(null)
+  const [editorWidth, setEditorWidth] = useState(0)
   const setCanvasRef = (el) => { canvasElRef.current = el; setNodeRef(el) }
   // The theme's font is what the published page paints in; reflect it on the
   // canvas root so brand-new components inherit it immediately AND the empty
@@ -61,6 +65,17 @@ export default function Canvas({
   const background = isMobile ? bgMobile : bg
   const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
   const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
+  const frameW = canvasW + (isMobile ? 24 : 0)
+  useEffect(() => {
+    const el = scrollElRef.current
+    if (!el) return undefined
+    const update = () => setEditorWidth(Math.max(1, el.clientWidth - 64))
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [isMobile])
+  const canvasScale = !editorWidth ? 1 : Math.min(1, editorWidth / frameW)
 
   // Link-tool connectors: an arrow from each link component to the in-page
   // component it targets (href="#<componentId>"). Drawn in canvas coordinates,
@@ -91,7 +106,7 @@ export default function Canvas({
     if (pendingPlace) {
       if (e.button !== 0) return
       const rect = canvasElRef.current.getBoundingClientRect()
-      onPlaceAt(e.clientX - rect.left, e.clientY - rect.top)
+      onPlaceAt((e.clientX - rect.left) / canvasScale, (e.clientY - rect.top) / canvasScale)
       return
     }
     if (brushMode) {
@@ -111,15 +126,15 @@ export default function Canvas({
       return
     }
     const rect = canvasElRef.current.getBoundingClientRect()
-    const startX = e.clientX - rect.left
-    const startY = e.clientY - rect.top
+    const startX = (e.clientX - rect.left) / canvasScale
+    const startY = (e.clientY - rect.top) / canvasScale
     marqueeRef.current = { startX, startY, curX: startX, curY: startY, moved: false }
 
     const onMove = (ev) => {
       const m = marqueeRef.current
       if (!m) return
-      m.curX = ev.clientX - rect.left
-      m.curY = ev.clientY - rect.top
+      m.curX = (ev.clientX - rect.left) / canvasScale
+      m.curY = (ev.clientY - rect.top) / canvasScale
       if (!m.moved && Math.abs(m.curX - m.startX) + Math.abs(m.curY - m.startY) < 5) return
       m.moved = true
       setMarquee({
@@ -159,6 +174,7 @@ export default function Canvas({
   const canvas = (
     <div
       id="free-canvas"
+      data-builder-canvas-scale={canvasScale}
       ref={setCanvasRef}
       onPointerDown={startMarquee}
       style={{
@@ -203,9 +219,9 @@ export default function Canvas({
     >
       {components.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center text-gray-400">
-          <p className="text-lg font-medium">Your canvas is empty</p>
+          <p className="text-lg font-medium">{t('Your canvas is empty')}</p>
           <p className="text-sm">
-            Drag a component from the left onto the canvas.
+            {t('Drag a component from the left onto the canvas.')}
           </p>
         </div>
       )}
@@ -219,6 +235,7 @@ export default function Canvas({
             brushColor={brushColor}
             brushTarget={brushTarget}
             onBrushUse={onBrushUse}
+            canvasScale={canvasScale}
           />
         ) : (
           <FreeCanvasItem
@@ -228,6 +245,7 @@ export default function Canvas({
             brushColor={brushColor}
             brushTarget={brushTarget}
             onBrushUse={onBrushUse}
+            canvasScale={canvasScale}
           />
         ),
       )}
@@ -254,7 +272,7 @@ export default function Canvas({
         >
           <div className="border-t-2 border-dashed border-amber-500" />
           <span className="absolute right-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-            Visible screen limit · {fold}px
+            {t('Visible screen limit')} · {fold}px
           </span>
         </div>
       )}
@@ -354,25 +372,34 @@ export default function Canvas({
     return (
       <main
         id="canvas-scroll"
-        className="flex-1 overflow-auto bg-gray-100 p-8"
+        ref={scrollElRef}
+        className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-8"
         onClickCapture={preventCanvasAnchorClicks}
       >
-        <div className="mx-auto w-fit">
+        <div
+          className="mx-auto"
+          style={{ width: frameW * canvasScale, height: (minHeight + 24) * canvasScale }}
+        >
           <div
-            className="overflow-hidden rounded-[44px] border-[12px] border-gray-900 bg-white shadow-2xl"
-            style={{ width: canvasW + 24 }}
+            style={{
+              width: frameW,
+              transform: canvasScale < 1 ? `scale(${canvasScale})` : undefined,
+              transformOrigin: 'top left',
+            }}
           >
-            {canvas}
+            <div
+              className="overflow-hidden rounded-[44px] border-[12px] border-gray-900 bg-white shadow-2xl"
+              style={{ width: frameW }}
+            >
+              {canvas}
+            </div>
           </div>
-          <p className="mt-3 max-w-[360px] text-center text-xs text-gray-400">
-            {flowMode ? `Flow layout (${canvasW}px) - the same order adapts to mobile and PC.` : (
-              <>
-            Mobile layout ({canvasW}px) — a separate design from PC. Drag &amp;
-            resize freely, or use "Auto-arrange" in the panel.
-              </>
-            )}
-          </p>
         </div>
+        <p className="mx-auto mt-3 max-w-[360px] text-center text-xs text-gray-400">
+          {flowMode
+            ? t('Flow layout ({width}px) — the same order adapts to mobile and PC.', { width: canvasW })
+            : t('Mobile layout ({width}px) — a separate design from PC. Drag and resize freely, or use "Auto-arrange" in the panel.', { width: canvasW })}
+        </p>
       </main>
     )
   }
@@ -380,10 +407,24 @@ export default function Canvas({
   return (
     <main
       id="canvas-scroll"
-      className="flex-1 overflow-auto bg-gray-100 p-8"
+      ref={scrollElRef}
+      className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-8"
       onClickCapture={preventCanvasAnchorClicks}
     >
-      <div className="mx-auto w-fit">{canvas}</div>
+      <div
+        className="mx-auto"
+        style={{ width: canvasW * canvasScale, height: minHeight * canvasScale }}
+      >
+        <div
+          style={{
+            width: canvasW,
+            transform: canvasScale < 1 ? `scale(${canvasScale})` : undefined,
+            transformOrigin: 'top left',
+          }}
+        >
+          {canvas}
+        </div>
+      </div>
     </main>
   )
 }

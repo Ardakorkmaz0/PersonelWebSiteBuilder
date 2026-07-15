@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { getPublicSite, countSiteView } from '../api/sites.js'
+import { getPublicSite, countSiteView, submitSiteForm } from '../api/sites.js'
 import { Renderer } from '../components/renderer/Renderer.jsx'
 import { canvasHeight } from '../components/renderer/layout.js'
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../components/registry.jsx'
@@ -16,6 +16,7 @@ import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
 import { customCssBlock, safeCustomJs, themeVariablesCss } from '../utils/theme.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import PublicToolbar from '../components/preview/PublicToolbar.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 const MOBILE_BREAKPOINT = 768
 
@@ -64,10 +65,12 @@ function ResponsiveSite({ page }) {
   const designW = isMobileView
     ? page.mobileWidth || MOBILE_CANVAS_WIDTH
     : page.canvasWidth || CANVAS_WIDTH
-  // Absolute mode mirrors the editor canvas: keep the active artboard at 1x on
-  // roomy screens, and only scale down when the viewport is narrower.
+  // Absolute mode keeps the selected design grid at 1x, but lets full-width
+  // sections use all available browser space. Regular elements remain centered
+  // on the original grid; only genuinely narrow screens scale the active design.
+  const renderW = Math.max(designW, width)
   const scale = Math.min(1, width / designW)
-  const left = Math.max(0, (width - designW * scale) / 2)
+  const left = Math.max(0, (width - renderW * scale) / 2)
   const height = canvasHeight(components, viewport) * scale
 
   return (
@@ -81,7 +84,7 @@ function ResponsiveSite({ page }) {
             position: 'absolute',
             top: 0,
             left,
-            width: designW,
+            width: renderW,
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
           }}
@@ -90,7 +93,8 @@ function ResponsiveSite({ page }) {
             components={components}
             background={background}
             viewport={viewport}
-            width={designW}
+            width={renderW}
+            designWidth={designW}
             flowMode={!!page.flowMode}
           />
         </div>
@@ -100,6 +104,7 @@ function ResponsiveSite({ page }) {
 }
 
 export default function PreviewPage() {
+  const { t } = useLanguage()
   const { slug } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const [site, setSite] = useState(null)
@@ -139,6 +144,57 @@ export default function PreviewPage() {
     }
   }, [slug])
 
+  // Apply launch metadata to the public page, so the readiness settings also
+  // drive search results, social previews, and the browser tab.
+  useEffect(() => {
+    if (!site) return undefined
+    const seo = site.site_options?.seo || {}
+    const previousTitle = document.title
+    document.title = seo.title?.trim() || site.title || previousTitle
+    const touched = []
+    const setMeta = (attribute, key, content) => {
+      if (!String(content || '').trim()) return
+      let node = document.head.querySelector(`meta[${attribute}="${key}"]`)
+      const created = !node
+      if (!node) {
+        node = document.createElement('meta')
+        node.setAttribute(attribute, key)
+        document.head.appendChild(node)
+      }
+      touched.push({ node, created, previous: node.getAttribute('content') })
+      node.setAttribute('content', String(content).trim())
+    }
+    setMeta('name', 'description', seo.description)
+    setMeta('property', 'og:title', seo.title || site.title)
+    setMeta('property', 'og:description', seo.description)
+    setMeta('property', 'og:image', seo.socialImage)
+
+    if (String(seo.favicon || '').trim()) {
+      let favicon = document.head.querySelector('link[rel~="icon"]')
+      const created = !favicon
+      if (!favicon) {
+        favicon = document.createElement('link')
+        favicon.setAttribute('rel', 'icon')
+        document.head.appendChild(favicon)
+      }
+      touched.push({ favicon, created, previous: favicon.getAttribute('href') })
+      favicon.setAttribute('href', seo.favicon.trim())
+    }
+
+    return () => {
+      document.title = previousTitle
+      touched.forEach(({ node, favicon, created, previous }) => {
+        const element = node || favicon
+        if (created) element.remove()
+        else if (node) {
+          if (previous == null) node.removeAttribute('content')
+          else node.setAttribute('content', previous)
+        } else if (previous == null) favicon.removeAttribute('href')
+        else favicon.setAttribute('href', previous)
+      })
+    }
+  }, [site])
+
   // Count exactly ONE view per slug per browser tab session. The sessionStorage
   // guard makes this idempotent against React StrictMode's double-effect, the
   // focus/visibility refetches above, and plain refreshes — so a single visit
@@ -150,6 +206,55 @@ export default function PreviewPage() {
     sessionStorage.setItem(key, '1')
     countSiteView(slug).catch(() => sessionStorage.removeItem(key))
   }, [slug])
+
+  useEffect(() => {
+    const send = async (data, page, source) => {
+      try {
+        await submitSiteForm(slug, data, page)
+        source?.postMessage?.({ type: 'pwb-form-result', ok: true }, '*')
+        return true
+      } catch {
+        source?.postMessage?.({ type: 'pwb-form-result', ok: false }, '*')
+        return false
+      }
+    }
+    const onMessage = (event) => {
+      if (event.data?.type === 'pwb-form-submit') {
+        send(event.data.data || {}, event.data.page || activeId || '', event.source)
+      }
+    }
+    const onSubmit = (event) => {
+      const form = event.target
+      if (!form?.matches?.('form') || !form.closest('[data-public-site-canvas]')) return
+      const action = String(form.getAttribute('action') || '').trim()
+      if (/^https?:\/\//i.test(action) || /^mailto:|^tel:/i.test(action)) return
+      event.preventDefault()
+      const data = {}
+      form.querySelectorAll('input,textarea,select').forEach((field) => {
+        const type = String(field.type || '').toLowerCase()
+        const name = String(field.name || field.id || '').trim()
+        if (!name || type === 'password' || type === 'file' || type === 'hidden') return
+        if ((type === 'checkbox' || type === 'radio') && !field.checked) return
+        data[name.slice(0, 80)] = String(field.value || '').slice(0, 2000)
+      })
+      send(data, activeId || '').then((ok) => {
+        let result = form.querySelector('[data-pwb-form-status]')
+        if (!result) {
+          result = document.createElement('div')
+          result.dataset.pwbFormStatus = ''
+          result.setAttribute('role', 'status')
+          form.appendChild(result)
+        }
+        result.textContent = t(ok ? 'Message sent.' : 'Message could not be sent.')
+      })
+    }
+    window.addEventListener('message', onMessage)
+    document.addEventListener('submit', onSubmit, true)
+    return () => {
+      window.removeEventListener('message', onMessage)
+      document.removeEventListener('submit', onSubmit, true)
+    }
+  }, [activeId, slug, t])
 
   // Pick the visible page from the URL hash (#<pageId>) so links/anchors work.
   // Only switch when the hash names a real page — in-page anchors like #top or
@@ -268,7 +373,7 @@ export default function PreviewPage() {
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center text-gray-400">
-        Loading...
+        {t('Loading...')}
       </div>
     )
   }
@@ -277,15 +382,15 @@ export default function PreviewPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-gray-100 text-center">
         <h1 className="text-xl font-semibold text-gray-700">
-          {status === 'notfound' ? 'Site not available' : 'Something went wrong'}
+          {status === 'notfound' ? t('Site not available') : t('Something went wrong')}
         </h1>
         <p className="text-sm text-gray-500">
           {status === 'notfound'
-            ? 'This site does not exist or has not been published yet.'
-            : 'Please try again later.'}
+            ? t('This site does not exist or has not been published yet.')
+            : t('Please try again later.')}
         </p>
         <Link to="/" className="mt-2 text-sm text-blue-600 hover:underline">
-          Go to the builder
+          {t('Go to the builder')}
         </Link>
       </div>
     )
@@ -381,7 +486,7 @@ export default function PreviewPage() {
               staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
-            Static preview
+            {t('Static preview')}
           </button>
           <button
             type="button"
@@ -390,12 +495,12 @@ export default function PreviewPage() {
               !staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
-            Run JavaScript
+            {t('Run JavaScript')}
           </button>
         </div>
         {site.published === false && (
           <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
-            Draft preview — this site is not published yet, only you can see it.
+            {t('Draft preview — this site is not published yet, only you can see it.')}
           </div>
         )}
       </>
@@ -460,7 +565,7 @@ ${customCssBlock(site?.schema?.customCss)}`
               staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
-            Static preview
+            {t('Static preview')}
           </button>
           <button
             type="button"
@@ -469,12 +574,12 @@ ${customCssBlock(site?.schema?.customCss)}`
               !staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
             }`}
           >
-            Run JavaScript
+            {t('Run JavaScript')}
           </button>
         </div>
         {site.published === false && (
           <div className="fixed bottom-4 left-1/2 z-[120] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
-            Draft preview — this site is not published yet, only you can see it.
+            {t('Draft preview — this site is not published yet, only you can see it.')}
           </div>
         )}
       </>
@@ -515,11 +620,13 @@ ${customCssBlock(site?.schema?.customCss)}`
           ))}
         </nav>
       )}
-      <ResponsiveSite key={current.id} page={current} />
+      <div data-public-site-canvas>
+        <ResponsiveSite key={current.id} page={current} />
+      </div>
 
       {site && site.published === false && (
         <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
-          Draft preview — this site is not published yet, only you can see it.
+          {t('Draft preview — this site is not published yet, only you can see it.')}
         </div>
       )}
     </div>

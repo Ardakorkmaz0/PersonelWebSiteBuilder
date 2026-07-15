@@ -24,3 +24,7 @@ export function matchesQuery(query) {
 // scaled displays) fall on the same side of the boundary as Tailwind's lg:
 // (min-width: 1024px) — otherwise the sliver in between mixes both layouts.
 export const NARROW_EDITOR_QUERY = '(max-width: 1023.98px)'
+
+// Phones use a preview-first editor shell. The full drag/drop editor remains
+// available on tablets and desktops where there is enough room to work.
+export const MOBILE_EDITOR_QUERY = '(max-width: 767.98px)'

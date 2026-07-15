@@ -6,6 +6,8 @@ import { apiError } from '../../utils/errors.js'
 import { useGoBack } from '../../utils/useGoBack.js'
 import { schemaToSingleHtml } from '../../utils/schemaToFiles.js'
 import { CodeIcon, SparklesIcon, FlagIcon } from '../icons.jsx'
+import LanguageSwitcher from '../LanguageSwitcher.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 const REPORT_REASONS = [
   ['spam', 'Spam or misleading'],
@@ -45,6 +47,7 @@ function CreatorAvatar({ url, name }) {
 // Floating toolbar on a public site page: view the code, or "Use this" to clone
 // the site into your own account and edit it.
 export default function PublicToolbar({ site }) {
+  const { t } = useLanguage()
   const [showCode, setShowCode] = useState(false)
   const [cloning, setCloning] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -90,7 +93,7 @@ export default function PublicToolbar({ site }) {
       await reportSite(site.id, reason, detail.trim())
       setReported(true)
     } catch (err) {
-      setReportError(apiError(err, 'Could not submit the report.'))
+      setReportError(apiError(err, t('Could not submit the report.')))
     } finally {
       setReporting(false)
     }
@@ -104,7 +107,7 @@ export default function PublicToolbar({ site }) {
         {/* Home logo + a real Back button (goes to the page you came from). */}
         <Link
           to="/"
-          title="Sitebuilder home"
+          title={t('Sitebuilder home')}
           className="brand-mark shadow-lg"
           style={{ width: '2rem', height: '2rem', fontSize: '0.85rem' }}
         >
@@ -113,42 +116,43 @@ export default function PublicToolbar({ site }) {
         <button
           type="button"
           onClick={goBack}
-          title="Go back"
+          title={t('Go back')}
           className="flex items-center gap-1 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
         >
-          &larr; Back
+          &larr; {t('Back')}
         </button>
         <button
           type="button"
           onClick={() => setShowCode(true)}
-          title="View this site's source code"
+          title={t("View this site's source code")}
           className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
         >
-          <CodeIcon size={14} /> Code
+          <CodeIcon size={14} /> {t('Code')}
         </button>
         <button
           type="button"
           onClick={onUse}
           disabled={cloning}
-          title="Copy this site into your account and edit it"
+          title={t('Copy this site into your account and edit it')}
           className="flex items-center gap-1.5 rounded-lg bg-[#4f46e5] px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-[#4338ca] disabled:opacity-60"
         >
-          <SparklesIcon size={14} /> {cloning ? 'Copying…' : 'Use this'}
+          <SparklesIcon size={14} /> {cloning ? t('Copying…') : t('Use this')}
         </button>
         <button
           type="button"
           onClick={onOpenReport}
-          title="Report this site"
+          title={t('Report this site')}
           className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#b91c1c] shadow-lg backdrop-blur hover:bg-white"
         >
-          <FlagIcon size={14} /> Report
+          <FlagIcon size={14} /> {t('Report')}
         </button>
+        <LanguageSwitcher />
         {/* Who made this site — their profile photo, linking to their public
             profile (so a visitor can see the creator's other published sites). */}
         {site?.owner_id && (
           <Link
             to={`/u/${site.owner_id}`}
-            title={`By ${site.owner_display_name || site.owner_username} — see their profile`}
+            title={t('By {name} — see their profile', { name: site.owner_display_name || site.owner_username })}
             className="flex items-center gap-1.5 rounded-full border border-[#d1d5db] bg-white/90 py-1 pl-1 pr-3 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
           >
             <CreatorAvatar url={site.owner_avatar_url} name={site.owner_display_name || site.owner_username} />
@@ -168,7 +172,7 @@ export default function PublicToolbar({ site }) {
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
               <span className="truncate text-sm font-semibold text-gray-200">
-                Source — {site.title}
+                {t('Source')} — {site.title}
               </span>
               <div className="flex shrink-0 items-center gap-2">
                 <button
@@ -180,7 +184,7 @@ export default function PublicToolbar({ site }) {
                   }}
                   className="rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-gray-200 hover:bg-white/10"
                 >
-                  {copied ? 'Copied ✓' : 'Copy'}
+                  {copied ? t('Copied ✓') : t('Copy')}
                 </button>
                 <button
                   type="button"
@@ -208,7 +212,7 @@ export default function PublicToolbar({ site }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#e5e7eb] px-5 py-3">
-              <span className="text-sm font-semibold text-[#111827]">Report this site</span>
+              <span className="text-sm font-semibold text-[#111827]">{t('Report this site')}</span>
               <button
                 type="button"
                 onClick={() => setShowReport(false)}
@@ -221,10 +225,10 @@ export default function PublicToolbar({ site }) {
             {reported ? (
               <div className="space-y-4 p-5">
                 <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-800">
-                  Thanks — our team will review this site.
+                  {t('Thanks — our team will review this site.')}
                 </div>
                 <button onClick={() => setShowReport(false)} className="ms-btn ms-btn-primary w-full py-2.5">
-                  Done
+                  {t('Done')}
                 </button>
               </div>
             ) : (
@@ -235,27 +239,27 @@ export default function PublicToolbar({ site }) {
                   </div>
                 )}
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-[#374151]">Reason</span>
+                  <span className="mb-1.5 block text-sm font-medium text-[#374151]">{t('Reason')}</span>
                   <select className="ms-input" value={reason} onChange={(e) => setReason(e.target.value)}>
                     {REPORT_REASONS.map(([id, label]) => (
-                      <option key={id} value={id}>{label}</option>
+                      <option key={id} value={id}>{t(label)}</option>
                     ))}
                   </select>
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-[#374151]">
-                    Details <span className="font-normal text-[#9ca3af]">(optional)</span>
+                    {t('Details')} <span className="font-normal text-[#9ca3af]">{t('(optional)')}</span>
                   </span>
                   <textarea
                     className="ms-input min-h-[80px] resize-y"
                     maxLength={500}
                     value={detail}
                     onChange={(e) => setDetail(e.target.value)}
-                    placeholder="Anything that helps us review it faster."
+                    placeholder={t('Anything that helps us review it faster.')}
                   />
                 </label>
                 <button type="submit" disabled={reporting} className="ms-btn ms-btn-primary w-full py-2.5">
-                  {reporting ? 'Submitting…' : 'Submit report'}
+                  {reporting ? t('Submitting…') : t('Submit report')}
                 </button>
               </form>
             )}

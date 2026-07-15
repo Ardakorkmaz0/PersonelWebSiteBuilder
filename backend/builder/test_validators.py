@@ -209,3 +209,38 @@ class TestValidateAndCleanSchema:
         # Literal </script must have been escaped (e.g. with a backslash) so
         # the parser doesn't see a script-end inside our wrapper.
         assert '</script' not in code.lower()
+
+    def test_region_children_and_navbar_width_settings_are_preserved(self):
+        clean = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [
+                    {
+                        'id': 'nav1', 'type': 'navbar',
+                        'props': {
+                            'brand': 'Site', 'links': [],
+                            'navLayout': 'centered', 'widthMode': 'boxed',
+                            'contentWidth': 1140,
+                        },
+                        'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 1000, 'h': 64},
+                    },
+                    {
+                        'id': 'region1', 'type': 'region',
+                        'props': {'contentWidth': 1200},
+                        'styles': {}, 'layout': {'x': 0, 'y': 80, 'w': 1200, 'h': 360},
+                        'children': [{
+                            'id': 'heading1', 'type': 'heading',
+                            'props': {'text': 'Inside', 'level': 'h2', 'dockX': 'right'},
+                            'styles': {}, 'layout': {'x': 40, 'y': 40, 'w': 400, 'h': 60},
+                        }],
+                    },
+                ],
+            }],
+        })
+        nav, region = clean['pages'][0]['components']
+        assert nav['props']['navLayout'] == 'centered'
+        assert nav['props']['widthMode'] == 'boxed'
+        assert nav['props']['contentWidth'] == 1140
+        assert region['props']['contentWidth'] == 1200
+        assert region['children'][0]['type'] == 'heading'
+        assert region['children'][0]['props']['dockX'] == 'right'

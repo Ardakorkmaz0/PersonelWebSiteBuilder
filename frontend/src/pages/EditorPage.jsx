@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   DndContext,
   DragOverlay,
@@ -22,8 +22,9 @@ import {
 import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
-import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon, CogIcon, ClockIcon, PaletteIcon } from '../components/icons.jsx'
+import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon, CogIcon, ClockIcon, PaletteIcon, LayersIcon } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
+import CanvasPreview from '../components/editor/CanvasPreview.jsx'
 import BrushControls from '../components/editor/BrushControls.jsx'
 import {
   BRUSH_TARGETS,
@@ -38,15 +39,13 @@ import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
 import { pageFileName } from '../utils/pageFiles.js'
 import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
 import { applyThemeToDocument } from '../utils/htmlTheme.js'
-import { Renderer } from '../components/renderer/Renderer.jsx'
 import { htmlFilesToDocument } from '../utils/htmlFiles.js'
 import { schemaToResponsiveHtml } from '../utils/responsiveHtml.js'
 import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
-import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../utils/htmlRuntime.js'
 import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
-import { NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
+import { MOBILE_EDITOR_QUERY, NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
 import {
   clearLocalFileHandle,
   downloadHtmlFile,
@@ -58,6 +57,11 @@ import {
   supportsLocalFiles,
   writeHtmlToHandle,
 } from '../utils/localFile.js'
+import { localizeTemplateHtml } from '../utils/templateLocalization.js'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
+import MobileEditorPreview from '../components/editor/MobileEditorPreview.jsx'
+import SiteControlCenter from '../components/editor/SiteControlCenter.jsx'
 
 // The three panels below all sit behind a toggle / file-mode switch and most
 // editor sessions never open them. Lazy-loading them keeps the initial
@@ -73,9 +77,10 @@ const NotesPanel = lazy(() => import('../components/editor/NotesPanel.jsx'))
 const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 
 function PanelFallback() {
+  const { t } = useLanguage()
   return (
     <div className="flex h-full items-center justify-center text-xs text-gray-400">
-      Loading panel…
+      {t('Loading panel…')}
     </div>
   )
 }
@@ -115,6 +120,62 @@ function findDroppableElement(id) {
 const DISCOVERY_CATEGORIES = [
   'portfolio', 'business', 'blog', 'landing', 'shop', 'personal', 'other',
 ]
+
+function parseDiscoveryTags(value) {
+  return String(value || '')
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+}
+
+function UnsavedLeaveDialog({ open, saving, onSave, onDiscard, onStay }) {
+  const { t } = useLanguage()
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-[160] grid place-items-center bg-black/40 p-4" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="unsaved-leave-title"
+        className="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-5 shadow-2xl"
+      >
+        <h2 id="unsaved-leave-title" className="text-base font-bold text-[#111827]">
+          {t('Save before leaving?')}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-[#6b7280]">
+          {t('You have unsaved changes. Save them manually before leaving this editor.')}
+        </p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onStay}
+            disabled={saving}
+            className="rounded-lg border border-[#d1d5db] px-3 py-2 text-sm font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
+          >
+            {t('Stay')}
+          </button>
+          <button
+            type="button"
+            onClick={onDiscard}
+            disabled={saving}
+            className="rounded-lg px-3 py-2 text-sm font-medium text-[#b91c1c] hover:bg-red-50 disabled:opacity-50"
+          >
+            {t('Leave without saving')}
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="rounded-lg bg-[#4f46e5] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4338ca] disabled:opacity-50"
+          >
+            {saving ? t('Saving…') : t('Save and leave')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Slim vertical strip shown in place of a collapsed side rail — click to
 // reopen. Keeps a visible affordance so the panel never feels "lost".
@@ -165,6 +226,8 @@ function RailSlot({ side, label, open, narrow, onOpen, onClose, children }) {
 
 export default function EditorPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { t } = useLanguage()
 
   const loadSchema = useEditorStore((s) => s.loadSchema)
   const importSchema = useEditorStore((s) => s.importSchema)
@@ -188,6 +251,7 @@ export default function EditorPage() {
   const authUser = useAuthStore((s) => s.user)
   const goBack = useGoBack('/')
   const theme = useEditorStore((s) => s.schema.theme)
+  const editorSchema = useEditorStore((s) => s.schema)
   const customCss = useEditorStore((s) => s.schema.customCss)
   const customJs = useEditorStore((s) => s.schema.customJs)
   const setPageMode = useEditorStore((s) => s.setPageMode)
@@ -207,9 +271,18 @@ export default function EditorPage() {
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [published, setPublished] = useState(false)
+  const [siteOptions, setSiteOptions] = useState({})
+  const [reviewToken, setReviewToken] = useState('')
+  const [customDomain, setCustomDomain] = useState('')
+  const [domainStatus, setDomainStatus] = useState('not_connected')
   // Discovery metadata (Explore category chips + free tags).
   const [category, setCategory] = useState('other')
-  const [tags, setTags] = useState([])
+  // Keep the raw text while typing. Rebuilding it from a parsed array on every
+  // keypress swallowed commas followed by spaces ("alpha, beta" became
+  // "alphabeta"). Parsing happens only when the value is consumed.
+  const [tagsText, setTagsText] = useState('')
+  const [metaDirty, setMetaDirty] = useState(false)
+  const metaRevisionRef = useRef(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -222,7 +295,17 @@ export default function EditorPage() {
   // restorable version (the History panel), so auto-saved states are recoverable.
   const [autoSaveState, setAutoSaveState] = useState('idle')
   const autoSavingRef = useRef(false)
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(() => {
+    try { return localStorage.getItem('pwb_autosave_' + id) === '1' }
+    catch { return false }
+  })
+  const [leavePromptOpen, setLeavePromptOpen] = useState(false)
+  const leaveActionRef = useRef(null)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
+  const [editorExperience, setEditorExperience] = useState(() => {
+    try { return localStorage.getItem('pwb_editor_experience') === 'advanced' ? 'advanced' : 'simple' }
+    catch { return 'simple' }
+  })
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -230,12 +313,15 @@ export default function EditorPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [controlCenterOpen, setControlCenterOpen] = useState(false)
   // The Import/Tools menus are position:fixed, anchored to their trigger
   // button's on-screen rect (computed on open) — robust regardless of header
   // layout (the single-row strip scrolls horizontally; fixed positioning
   // keeps the menus unclipped by that overflow).
   const importBtnRef = useRef(null)
   const toolsBtnRef = useRef(null)
+  const resolutionWidthRef = useRef(null)
+  const resolutionHeightRef = useRef(null)
   const [menuPos, setMenuPos] = useState({})
   const anchorMenu = (key, ref) => {
     const r = ref.current?.getBoundingClientRect()
@@ -249,6 +335,7 @@ export default function EditorPage() {
   const [canvasMode, setCanvasMode] = useState(() => {
     try {
       const saved = localStorage.getItem('pwb_canvasmode_' + id)
+      if (editorExperience === 'simple') return saved === 'view' ? 'view' : 'edit'
       return ['view', 'edit', 'source'].includes(saved) ? saved : 'edit'
     } catch { return 'edit' }
   }) // 'view' | 'edit' | 'source'
@@ -304,6 +391,32 @@ export default function EditorPage() {
   const currentPageIsHtml =
     (storePages.find((p) => p.id === currentPageId)?.mode || 'empty') === 'html'
   const [htmlDirty, setHtmlDirty] = useState(false)
+  const htmlRevisionRef = useRef(0)
+
+  function markMetaDirty() {
+    metaRevisionRef.current += 1
+    setMetaDirty(true)
+  }
+
+  function changeTitle(value) {
+    setTitle(value)
+    markMetaDirty()
+  }
+
+  function changeCategory(value) {
+    setCategory(value)
+    markMetaDirty()
+  }
+
+  function changeTagsText(value) {
+    setTagsText(value)
+    markMetaDirty()
+  }
+
+  function markHtmlDirty() {
+    htmlRevisionRef.current += 1
+    setHtmlDirty(true)
+  }
   // Element selected inside the HTML edit iframe — drives the right-rail
   // element properties panel (null → site settings).
   const [htmlSelection, setHtmlSelection] = useState(null)
@@ -322,6 +435,7 @@ export default function EditorPage() {
   // preference survives a phone visit. leftOpen/rightOpen are derived, which
   // makes a window resize across the breakpoint reconfigure the rails with no
   // effects involved.
+  const isMobileEditor = useMediaQuery(MOBILE_EDITOR_QUERY)
   const isNarrow = useMediaQuery(NARROW_EDITOR_QUERY)
   const [deskLeftOpen, setDeskLeftOpen] = useState(() => {
     try { return localStorage.getItem('pwb_left_open') !== '0' } catch { return true }
@@ -353,6 +467,12 @@ export default function EditorPage() {
     try { localStorage.setItem('pwb_canvasmode_' + id, canvasMode) } catch { /* ignore */ }
   }, [id, canvasMode])
   useEffect(() => {
+    try { localStorage.setItem('pwb_editor_experience', editorExperience) } catch { /* ignore */ }
+  }, [editorExperience])
+  useEffect(() => {
+    try { localStorage.setItem('pwb_autosave_' + id, autoSaveEnabled ? '1' : '0') } catch { /* ignore */ }
+  }, [id, autoSaveEnabled])
+  useEffect(() => {
     try { localStorage.setItem('pwb_brushcolor_' + id, brushColor) } catch { /* ignore */ }
   }, [id, brushColor])
   useEffect(() => {
@@ -377,6 +497,14 @@ export default function EditorPage() {
     const next = typeof nextMode === 'function' ? nextMode(canvasMode) : nextMode
     setCanvasMode(next)
     if (next !== 'edit') setBrushMode(false)
+  }
+  const changeEditorExperience = (mode) => {
+    setEditorExperience(mode)
+    if (mode !== 'simple') return
+    if (canvasMode === 'source') setCanvasMode('edit')
+    setRightTab('props')
+    setBrushMode(false)
+    if (linkMode) setLinkMode(false)
   }
   // Linked local .html file (File System Access API): every Save also writes
   // the document back to this file. { handle, name } or null. Persisted in
@@ -445,14 +573,14 @@ export default function EditorPage() {
   // Warn before closing/refreshing the tab while there are unsaved changes —
   // losing an edited HTML document or canvas design silently is brutal.
   useEffect(() => {
-    if (!dirty && !htmlDirty) return undefined
+    if (!dirty && !htmlDirty && !metaDirty) return undefined
     const handler = (e) => {
       e.preventDefault()
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [dirty, htmlDirty])
+  }, [dirty, htmlDirty, metaDirty])
 
   // Auto-save only at natural BOUNDARIES — not on every edit (that churned the
   // toolbar and saved constantly). We persist in the background when the tab is
@@ -462,20 +590,46 @@ export default function EditorPage() {
   // manual Save still owns the linked-file write.
   const saveLifecycleRef = useRef(null)
   useEffect(() => {
-    saveLifecycleRef.current = { save, dirty, htmlDirty, published, loading }
+    saveLifecycleRef.current = {
+      save, dirty, htmlDirty, metaDirty, published, loading, autoSaveEnabled,
+    }
   })
   useEffect(() => {
+    if (!autoSaveEnabled || loading || (!dirty && !htmlDirty && !metaDirty)) return undefined
+    const timer = window.setTimeout(() => {
+      const s = saveLifecycleRef.current
+      if (s && s.autoSaveEnabled && !s.loading && (s.dirty || s.htmlDirty || s.metaDirty)) {
+        s.save(s.published, { auto: true })
+      }
+    }, 12000)
+    return () => window.clearTimeout(timer)
+  }, [
+    autoSaveEnabled,
+    loading,
+    dirty,
+    htmlDirty,
+    metaDirty,
+    editorSchema,
+    pageHtmlMap,
+    title,
+    category,
+    tagsText,
+    published,
+  ])
+  useEffect(() => {
+    if (!autoSaveEnabled) return undefined
     const flush = () => {
       const s = saveLifecycleRef.current
-      if (s && !s.loading && (s.dirty || s.htmlDirty)) s.save(s.published, { auto: true })
+      if (s && s.autoSaveEnabled && !s.loading && (s.dirty || s.htmlDirty || s.metaDirty)) {
+        s.save(s.published, { auto: true })
+      }
     }
     const onVisibility = () => { if (document.visibilityState === 'hidden') flush() }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
-      flush() // leaving the editor (unmount) → save anything still pending
     }
-  }, [])
+  }, [autoSaveEnabled])
 
   useEffect(() => {
     let active = true
@@ -486,8 +640,14 @@ export default function EditorPage() {
         setTitle(data.title)
         setSlug(data.slug)
         setPublished(data.published)
+        setSiteOptions(data.site_options || {})
+        setReviewToken(data.review_token || '')
+        setCustomDomain(data.custom_domain || '')
+        setDomainStatus(data.domain_status || 'not_connected')
         setCategory(data.category || 'other')
-        setTags(Array.isArray(data.tags) ? data.tags : [])
+        setTagsText(Array.isArray(data.tags) ? data.tags.join(', ') : '')
+        metaRevisionRef.current = 0
+        setMetaDirty(false)
         // Per-page HTML from the schema; legacy single-document sites carry
         // their html at the site level — map it onto the first page.
         const map = {}
@@ -498,6 +658,7 @@ export default function EditorPage() {
         const firstId = pages[0]?.id
         if (data.html && firstId && !map[firstId]) map[firstId] = data.html
         setPageHtmlMap(map)
+        htmlRevisionRef.current = 0
         setHtmlDirty(false)
         loadSchema(data.schema)
         // Restore the page the user was last editing (per-site) so a refresh
@@ -656,8 +817,10 @@ export default function EditorPage() {
       const targetEl = findDroppableElement(over.id)
       if (targetEl && translated) {
         const rect = targetEl.getBoundingClientRect()
-        x = translated.left - rect.left
-        y = translated.top - rect.top
+        const canvasScale = Number(document.getElementById('free-canvas')?.dataset?.builderCanvasScale) || 1
+        const fitScale = Number(targetEl.dataset?.builderFitScale) || 1
+        x = (translated.left - rect.left) / (canvasScale * fitScale)
+        y = (translated.top - rect.top) / (canvasScale * fitScale)
       }
       addComponent(data.type, Math.max(0, x), Math.max(0, y), over.id, data.preset, { w: data.w, h: data.h })
       return
@@ -669,8 +832,9 @@ export default function EditorPage() {
     const canvasEl = document.getElementById('free-canvas')
     if (canvasEl && translated) {
       const rect = canvasEl.getBoundingClientRect()
-      x = translated.left - rect.left
-      y = translated.top - rect.top
+      const canvasScale = Number(canvasEl.dataset?.builderCanvasScale) || 1
+      x = (translated.left - rect.left) / canvasScale
+      y = (translated.top - rect.top) / canvasScale
     }
 
     // Most visual palette variants carry an HTML snippet. On the free canvas it
@@ -742,7 +906,7 @@ export default function EditorPage() {
     ])
     setHtmlFuture([])
     setSiteHtml(next)
-    setHtmlDirty(true)
+    markHtmlDirty()
     if (reseedWorkspace) workspaceRef.current?.setDocument?.(next)
   }
 
@@ -754,7 +918,7 @@ export default function EditorPage() {
     setHtmlPast(htmlPast.slice(0, -1))
     setHtmlFuture((f) => [...f, { pageId: entry.pageId, html: pageHtmlMap[entry.pageId] || '' }])
     setPageHtmlMap((m) => ({ ...m, [entry.pageId]: entry.html }))
-    setHtmlDirty(true)
+    markHtmlDirty()
     if (entry.pageId === currentPageId) workspaceRef.current?.setDocument?.(entry.html)
   }
 
@@ -767,7 +931,7 @@ export default function EditorPage() {
       { pageId: entry.pageId, html: pageHtmlMap[entry.pageId] || '' },
     ])
     setPageHtmlMap((m) => ({ ...m, [entry.pageId]: entry.html }))
-    setHtmlDirty(true)
+    markHtmlDirty()
     if (entry.pageId === currentPageId) workspaceRef.current?.setDocument?.(entry.html)
   }
 
@@ -796,7 +960,21 @@ export default function EditorPage() {
     ])
     setHtmlFuture([])
     setPageHtmlMap((m) => ({ ...m, [pageId]: htmlText }))
-    setHtmlDirty(true)
+    markHtmlDirty()
+  }
+
+  function applyManagedSchema(nextSchema) {
+    if (!nextSchema || nextSchema === useEditorStore.getState().schema) return
+    const store = useEditorStore.getState()
+    store.record('content-manager')
+    useEditorStore.setState({ schema: nextSchema, dirty: true })
+  }
+
+  function applySitePatch(data) {
+    if (data?.site_options !== undefined) setSiteOptions(data.site_options || {})
+    if (data?.review_token !== undefined) setReviewToken(data.review_token || '')
+    if (data?.custom_domain !== undefined) setCustomDomain(data.custom_domain || '')
+    if (data?.domain_status !== undefined) setDomainStatus(data.domain_status || 'not_connected')
   }
 
   // Theme presets / Apply, on an HTML site: rewrite EVERY page's document
@@ -819,7 +997,7 @@ export default function EditorPage() {
     }
   }
 
-  async function save(nextPublished = published, { auto = false } = {}) {
+  async function save(nextPublished = published, { auto = false, versionSource } = {}) {
     // Auto-save runs in the background: don't stack on a manual save / another
     // auto-save, and don't disable the toolbar buttons while it runs.
     if (auto) {
@@ -829,6 +1007,7 @@ export default function EditorPage() {
     } else {
       setSaving(true)
       setError('')
+      setAutoSaveState('saving')
     }
     try {
       const schemaBase = useEditorStore.getState().schema
@@ -838,7 +1017,12 @@ export default function EditorPage() {
       if (live != null && live !== siteHtml) {
         map[currentPageId] = live
         setSiteHtml(live)
+        markHtmlDirty()
       }
+      // A save may finish after the user has already made another edit. These
+      // snapshots ensure we acknowledge only the exact revision sent below.
+      const htmlRevisionAtSave = htmlRevisionRef.current
+      const metaRevisionAtSave = metaRevisionRef.current
       // Per-page html rides inside the schema; the home page's document is
       // mirrored to site.html so single-page flows (and old data) keep working.
       const schema = {
@@ -851,6 +1035,7 @@ export default function EditorPage() {
       // over 100 chars (model max_length) — save with a safe value instead
       // of failing the whole request over the title input.
       const safeTitle = (title.trim() || 'Untitled site').slice(0, 100)
+      const tags = parseDiscoveryTags(tagsText)
       // Write the linked local file BEFORE the network round-trip: the Save
       // click is a fresh user gesture, so Chrome still allows the readwrite
       // permission re-prompt. After a slow server request the activation can
@@ -869,29 +1054,69 @@ export default function EditorPage() {
           fileError = e?.message || String(e)
         }
       }
-      const data = await updateSite(id, { title: safeTitle, schema, html, published: nextPublished, category, tags })
+      const data = await updateSite(
+        id,
+        { title: safeTitle, schema, html, published: nextPublished, category, tags },
+        { saveSource: versionSource || (auto ? 'auto' : 'manual') },
+      )
       setPublished(data.published)
       setSlug(data.slug)
-      setHtmlDirty(false)
-      markSaved() // clears `dirty` ONLY — undo/redo history is untouched.
+      if (htmlRevisionRef.current === htmlRevisionAtSave) setHtmlDirty(false)
+      if (metaRevisionRef.current === metaRevisionAtSave) {
+        setTitle(data.title || safeTitle)
+        setCategory(data.category || category)
+        setTagsText(Array.isArray(data.tags) ? data.tags.join(', ') : tags.join(', '))
+        setMetaDirty(false)
+      }
+      // Every canvas mutation replaces the Zustand schema object. If it has
+      // changed during this request, its newer revision must remain dirty.
+      if (useEditorStore.getState().schema === schemaBase) markSaved()
       setAutoSaveState('saved')
       if (!auto) {
         setJustSaved(true)
         setTimeout(() => setJustSaved(false), 1500)
         if (fileError) {
-          setError(`Saved to the server, but writing ${localFile.name} failed: ${fileError}`)
+          setError(t('Saved to the server, but writing {name} failed: {error}', { name: localFile.name, error: fileError }))
         }
       }
       return data
     } catch (e) {
-      if (auto) setAutoSaveState('error')
-      else setError(apiError(e))
+      setAutoSaveState('error')
+      if (!auto) setError(apiError(e))
       return null
     } finally {
       if (auto) autoSavingRef.current = false
       else setSaving(false)
     }
   }
+
+  function requestLeave(action) {
+    if (!dirty && !htmlDirty && !metaDirty) {
+      action?.()
+      return
+    }
+    leaveActionRef.current = action
+    setLeavePromptOpen(true)
+  }
+
+  function finishLeave() {
+    const action = leaveActionRef.current
+    leaveActionRef.current = null
+    setLeavePromptOpen(false)
+    action?.()
+  }
+
+  async function saveAndLeave() {
+    const saved = await save()
+    if (saved) finishLeave()
+  }
+
+  function stayInEditor() {
+    leaveActionRef.current = null
+    setLeavePromptOpen(false)
+  }
+
+  const guardedBack = () => requestLeave(goBack)
 
   // Pick an .html file from disk, load it into the editor, and keep the
   // handle so every Save writes back to it (Chromium only).
@@ -901,7 +1126,7 @@ export default function EditorPage() {
       const picked = await openLocalHtmlFile()
       if (
         !window.confirm(
-          `Load "${picked.name}" into the editor and keep it linked? Every Save will also update the file on disk.`,
+          t('Load "{name}" into the editor and keep it linked? Every Save will also update the file on disk.', { name: picked.name }),
         )
       )
         return
@@ -909,7 +1134,7 @@ export default function EditorPage() {
       setPageMode(currentPageId, 'html')
       linkLocalFile(picked.handle, picked.name)
     } catch (e) {
-      if (!isPickerCancel(e)) setError(`Could not open the file: ${e?.message || e}`)
+      if (!isPickerCancel(e)) setError(t('Could not open the file: {error}', { error: e?.message || e }))
     }
   }
 
@@ -926,7 +1151,7 @@ export default function EditorPage() {
       const saved = await saveAsLocalHtmlFile(html, localFile?.name || `${slug || 'index'}.html`)
       linkLocalFile(saved.handle, saved.name)
     } catch (e) {
-      if (!isPickerCancel(e)) setError(`Could not write the file: ${e?.message || e}`)
+      if (!isPickerCancel(e)) setError(t('Could not write the file: {error}', { error: e?.message || e }))
     }
   }
 
@@ -964,7 +1189,7 @@ export default function EditorPage() {
   function convertToResponsiveHtml() {
     if (
       !window.confirm(
-        'Convert the design into a genuinely responsive HTML site? Your component design is kept (use "Remove HTML" to go back). Nothing is saved until you press Save.',
+        t('Convert the design into a genuinely responsive HTML site? Your component design is kept (use "Remove HTML" to go back). Nothing is saved until you press Save.'),
       )
     )
       return
@@ -979,7 +1204,7 @@ export default function EditorPage() {
     if (
       siteHtml.trim() &&
       !window.confirm(
-        'Start from a blank responsive HTML template? This page\'s current content changes (Undo brings it back). Nothing is saved until you press Save.',
+        t('Start from a blank responsive HTML template? This page current content changes (Undo brings it back). Nothing is saved until you press Save.'),
       )
     )
       return
@@ -995,29 +1220,32 @@ export default function EditorPage() {
     if (
       siteHtml.trim() &&
       !window.confirm(
-        'Replace this page with the AI-generated site? Undo brings the old page back, and nothing is saved until you press Save.',
+        t('Replace this page with the AI-generated site? Undo brings the old page back, and nothing is saved until you press Save.'),
       )
     )
       return
     setWizardOpen(false)
     commitHtml(html, { reseedWorkspace: true })
     setPageMode(currentPageId, 'html')
-    if (nextTitle?.trim()) setTitle(nextTitle.trim())
-    if (nextCategory && category === 'other') setCategory(nextCategory)
-    if (nextTags?.length && tags.length === 0) setTags(nextTags.slice(0, 8))
+    if (nextTitle?.trim()) changeTitle(nextTitle.trim())
+    if (nextCategory && category === 'other') changeCategory(nextCategory)
+    if (nextTags?.length && parseDiscoveryTags(tagsText).length === 0) {
+      changeTagsText(nextTags.slice(0, 8).join(', '))
+    }
   }
 
   // Load a ready-made responsive template as the ACTIVE page's HTML.
-  function pickTemplate(tpl) {
+  function pickTemplate(tpl, contentLanguage = 'en') {
     setTemplateOpen(false)
     if (
       siteHtml.trim() &&
       !window.confirm(
-        `Start from the “${tpl.name}” template? This page's current content changes (Undo brings it back). Nothing is saved until you press Save.`,
+        t('Start from the “{name}” template? This page current content changes (Undo brings it back). Nothing is saved until you press Save.', { name: t(tpl.name) }),
       )
     )
       return
-    commitHtml(tpl.build(title || 'My Site', useEditorStore.getState().schema.theme), { reseedWorkspace: true })
+    const built = tpl.build(title || 'My Site', useEditorStore.getState().schema.theme)
+    commitHtml(localizeTemplateHtml(built, contentLanguage), { reseedWorkspace: true })
     setPageMode(currentPageId, 'html')
   }
 
@@ -1029,7 +1257,7 @@ export default function EditorPage() {
     const htmls = files.filter((f) => /\.html?$/i.test(f.name))
     const jsons = files.filter((f) => /\.json$/i.test(f.name))
     if (!htmls.length && !jsons.length) {
-      setError('Drop an HTML file, a project folder, or a project .json.')
+      setError(t('Drop an HTML file, a project folder, or a project .json.'))
       return
     }
     // Importing onto an EMPTY html page replaces nothing — skip the confirm.
@@ -1037,7 +1265,7 @@ export default function EditorPage() {
     if (
       replacesSomething &&
       !window.confirm(
-        'Replace the current design with the imported project? You can Undo, and nothing is saved until you click Save.',
+        t('Replace the current design with the imported project? You can Undo, and nothing is saved until you click Save.'),
       )
     )
       return
@@ -1057,13 +1285,13 @@ export default function EditorPage() {
         setPageHtmlMap({})
         setHtmlPast([])
         setHtmlFuture([])
-        setHtmlDirty(true)
+        markHtmlDirty()
         return 'json'
       }
-      setError('Could not import: no usable design found in those files.')
+      setError(t('Could not import: no usable design found in those files.'))
       return false
     } catch (err) {
-      setError('Import failed: ' + err.message)
+      setError(t('Import failed: {error}', { error: err.message }))
       return false
     }
   }
@@ -1093,13 +1321,49 @@ export default function EditorPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-gray-400">
-        Loading editor...
+        {t('Loading editor...')}
       </div>
     )
   }
 
   const currentPageIndex = Math.max(0, storePages.findIndex((p) => p.id === currentPageId))
   const currentPage = storePages[currentPageIndex] || storePages[0]
+  const leaveDialog = (
+    <UnsavedLeaveDialog
+      open={leavePromptOpen}
+      saving={saving}
+      onSave={saveAndLeave}
+      onDiscard={finishLeave}
+      onStay={stayInEditor}
+    />
+  )
+
+  // Phones are intentionally preview-only. Rendering this branch before the
+  // DnD context, side rails, source tools, and editing canvas keeps the mobile
+  // experience focused on the actual visitor result instead of compressing a
+  // desktop authoring tool into a narrow screen.
+  if (isMobileEditor) {
+    return (
+      <>
+        <MobileEditorPreview
+          title={title}
+          slug={slug}
+          published={published}
+          pages={storePages}
+          currentPageId={currentPageId}
+          pageHtmlMap={pageHtmlMap}
+          theme={theme}
+          customCss={customCss}
+          customJs={customJs}
+          error={error}
+          onSelectPage={switchToPage}
+          onBack={guardedBack}
+        />
+        {leaveDialog}
+      </>
+    )
+  }
+
   const componentViewNeedsIframe = hasFixedComponent(currentPage?.components)
   const componentViewHtml =
     componentViewNeedsIframe && currentPage
@@ -1119,8 +1383,23 @@ export default function EditorPage() {
   const curPresetId =
     sizePresets.find((p) => p.width === curW && p.fold === curFold)?.id || 'custom'
 
+  function applyCustomCanvasResolution() {
+    const widthInput = resolutionWidthRef.current
+    const heightInput = resolutionHeightRef.current
+    const nextWidth = Number.parseInt(widthInput?.value || '', 10)
+    const rawHeight = heightInput?.value?.trim() || ''
+    const nextFold = rawHeight === '' ? 0 : Number.parseInt(rawHeight, 10)
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextFold)) {
+      if (widthInput) widthInput.value = String(curW)
+      if (heightInput) heightInput.value = curFold ? String(curFold) : ''
+      return
+    }
+    setCanvasPreset({ width: nextWidth, fold: nextFold })
+  }
+
   return (
     <div className="flex h-screen flex-col">
+      {leaveDialog}
       {/* Single-row header: never wraps. When the window is too narrow the
           strip scrolls horizontally instead of stacking rows (the File/Tools
           menus are position:fixed, so the overflow never clips them).
@@ -1129,28 +1408,80 @@ export default function EditorPage() {
           below pins the toolbar right when there IS room. */}
       <header className="flex items-center gap-1.5 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm [scrollbar-width:thin]">
         <div className="flex shrink-0 items-center gap-1">
-          <Link to="/" title="Sitebuilder home" className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</Link>
-          <button type="button" onClick={goBack} title="Go back" className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
+          <Link
+            to="/"
+            onClick={(e) => { e.preventDefault(); requestLeave(() => navigate('/')) }}
+            title={t('Sitebuilder home')}
+            className="brand-mark"
+            style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}
+          >S</Link>
+          <button type="button" onClick={guardedBack} title={t('Go back')} className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
         </div>
         <input
           className="min-w-[3rem] max-w-[110px] flex-shrink rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none md:max-w-[160px]"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => changeTitle(e.target.value)}
+          aria-label={t('Site title')}
         />
+        {/* Keep the two destructive/committing actions in the initial phone
+            viewport. The full toolbar remains horizontally scrollable below,
+            but saving no longer requires discovering an off-screen control. */}
+        <div className="flex shrink-0 items-center gap-1 md:hidden">
+          <button
+            type="button"
+            onClick={() => save()}
+            disabled={saving}
+            className="rounded-lg bg-[#4f46e5] px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? t('Saving…') : t('Save')}
+          </button>
+          <button
+            type="button"
+            onClick={() => save(!published)}
+            disabled={saving}
+            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold disabled:opacity-60 ${
+              published
+                ? 'border border-[#d1d5db] text-[#374151]'
+                : 'bg-[#16a34a] text-white'
+            }`}
+          >
+            {published ? t('Unpublish') : t('Publish')}
+          </button>
+          <LanguageSwitcher />
+        </div>
         <span
           className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold md:inline-block ${
             published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
           }`}
         >
-          {published ? 'Published' : 'Draft'}
+          {published ? t('Published') : t('Draft')}
         </span>
+        <div
+          role="group"
+          aria-label={t('Editor mode')}
+          className="hidden shrink-0 items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium md:flex"
+        >
+          {['simple', 'advanced'].map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => changeEditorExperience(mode)}
+              aria-pressed={editorExperience === mode}
+              className={editorExperience === mode
+                ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white'
+                : 'rounded-md px-2.5 py-1 text-[#374151] hover:bg-[#f3f4f6]'}
+            >
+              {t(mode === 'simple' ? 'Simple' : 'Advanced')}
+            </button>
+          ))}
+        </div>
         {/* Which editing surface this page uses — switches as you move between
             pages so the active mode is always obvious. */}
         <span
           title={
             currentPageIsHtml
-              ? 'This page is an uploaded/authored HTML document'
-              : 'This page uses the drag-and-drop component canvas'
+              ? t('This page is an uploaded/authored HTML document')
+              : t('This page uses the drag-and-drop component canvas')
           }
           className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide lg:inline-block ${
             currentPageIsHtml
@@ -1158,42 +1489,48 @@ export default function EditorPage() {
               : 'bg-[#f1f5f9] text-[#475569]'
           }`}
         >
-          {currentPageIsHtml ? 'HTML Upload Mode' : 'Empty Mode'}
+          {currentPageIsHtml ? t('HTML Upload Mode') : t('Canvas Mode')}
         </span>
         {/* Discovery metadata for the Explore feed — category chip + free tags.
             Used once the site is published; saved with the site. */}
         <select
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          title="Explore category (used when published)"
-          className="hidden shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium capitalize text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block"
+          onChange={(e) => changeCategory(e.target.value)}
+          title={t('Explore category (used when published)')}
+          aria-label={t('Explore category (used when published)')}
+          className={editorExperience === 'advanced'
+            ? 'hidden shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium capitalize text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block'
+            : 'hidden'}
         >
           {DISCOVERY_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>{t(c.charAt(0).toUpperCase() + c.slice(1))}</option>
           ))}
         </select>
         <input
-          value={tags.join(', ')}
-          onChange={(e) =>
-            setTags(e.target.value.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 8))
-          }
-          placeholder="tags…"
-          title="Comma-separated tags for discovery"
-          className="hidden w-24 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block"
+          value={tagsText}
+          onChange={(e) => changeTagsText(e.target.value)}
+          placeholder={t('tags…')}
+          title={t('Comma-separated tags for discovery')}
+          aria-label={t('Comma-separated tags for discovery')}
+          className={editorExperience === 'advanced'
+            ? 'hidden w-24 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block'
+            : 'hidden'}
         />
         {/* Save status in a FIXED-WIDTH slot so the changing text never reflows
             the toolbar (the churn the user hit). Auto-save now fires only when
             you leave / refresh, so this mostly just reads Unsaved → Saved. */}
-        <span className="w-20 shrink-0 whitespace-nowrap text-right text-xs font-medium md:w-[6.5rem]">
+        <span role="status" aria-live="polite" className="w-20 shrink-0 whitespace-nowrap text-right text-xs font-medium md:w-[6.5rem]">
           {autoSaveState === 'error' ? (
-            <span className="text-red-500">Save failed</span>
+            <span className="text-red-500">{t('Save failed')}</span>
           ) : saving || autoSaveState === 'saving' ? (
-            <span className="text-[#6b7280]">Saving…</span>
-          ) : (dirty || htmlDirty) ? (
-            <span className="text-amber-500">Unsaved</span>
+            <span className="text-[#6b7280]">{t('Saving…')}</span>
+          ) : (dirty || htmlDirty || metaDirty) ? (
+            <span className="text-amber-500">{t('Unsaved')}</span>
           ) : justSaved || autoSaveState === 'saved' ? (
-            <span className="text-[#15803d]">Saved &#10003;</span>
-          ) : null}
+            <span className="text-[#15803d]">{t('Saved ✓')}</span>
+          ) : (
+            <span className="text-[#15803d]">{t('Saved ✓')}</span>
+          )}
         </span>
 
         {/* Flexible spacer: on a wide screen it expands to pin the toolbar to
@@ -1227,10 +1564,10 @@ export default function EditorPage() {
           <button
             type="button"
             onClick={() => setWizardOpen(true)}
-            title="AI Site Wizard — answer a few questions, get a complete site"
+            title={t('AI Site Wizard — answer a few questions, get a complete site')}
             className="flex h-9 shrink-0 items-center gap-1 rounded-[4px] border border-[#c7d2fe] bg-[#eef2ff] px-2.5 text-xs font-semibold text-[#4f46e5] shadow-sm transition hover:bg-[#e0e7ff]"
           >
-            ✨ <span className="hidden 2xl:inline">Wizard</span>
+            ✨ <span className="hidden 2xl:inline">{t('Wizard')}</span>
           </button>
           {/* Device controls (PC/Mobile + size) live in the canvas/workspace
               toolbar below, next to View/Edit/Source — keeps this header a
@@ -1266,14 +1603,14 @@ export default function EditorPage() {
             }}
             className="hidden"
           />
-          <div className="relative">
+          {editorExperience === 'advanced' && <div className="relative">
             <button
               ref={importBtnRef}
               onClick={() => { anchorMenu('import', importBtnRef); setImportOpen((o) => !o) }}
-              title="Import, export, or remove this page's HTML"
+              title={t("Import, export, or remove this page's HTML")}
               className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
             >
-              File &#9662;
+              {t('File')} &#9662;
             </button>
             {importOpen && (
               <>
@@ -1292,13 +1629,13 @@ export default function EditorPage() {
                     }}
                     className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                   >
-                    Choose a template...
+                    {t('Choose a template...')}
                   </button>
                   <button
                     onClick={startBlankHtml}
                     className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                   >
-                    Start blank HTML
+                    {t('Start blank HTML')}
                   </button>
                   {!currentPageIsHtml && (
                     <button
@@ -1308,17 +1645,17 @@ export default function EditorPage() {
                       }}
                       className="block w-full px-3 py-1.5 text-left text-sm font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                     >
-                      Convert to responsive HTML
+                      {t('Convert to responsive HTML')}
                     </button>
                   )}
                   <div className="my-1 border-t border-[#e5e7eb]" />
                   {supportsLocalFiles() && (
                     <button
                       onClick={openAndLinkLocalFile}
-                      title="Open an HTML file and keep it linked — every Save also updates the file on disk"
+                      title={t('Open an HTML file and keep it linked — every Save also updates the file on disk')}
                       className="block w-full px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
                     >
-                      Open &amp; link HTML file...
+                      {t('Open & link HTML file...')}
                     </button>
                   )}
                   {[
@@ -1334,7 +1671,7 @@ export default function EditorPage() {
                       }}
                       className="block w-full px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
                     >
-                      {label}
+                      {t(label)}
                     </button>
                   ))}
                   {/* Export + Remove live here too so the header stays one row. */}
@@ -1345,16 +1682,16 @@ export default function EditorPage() {
                       if (currentPageIsHtml) exportHtmlToDisk()
                       else exportProject()
                     }}
-                    title={currentPageIsHtml ? 'Export (download) the HTML file' : 'Download this project (.json)'}
+                    title={t(currentPageIsHtml ? 'Export (download) the HTML file' : 'Download this project (.json)')}
                     className="block w-full px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
                   >
-                    {currentPageIsHtml ? 'Export HTML…' : 'Export project (.json)'}
+                    {t(currentPageIsHtml ? 'Export HTML…' : 'Export project (.json)')}
                   </button>
                   {currentPageIsHtml && (
                     <button
                       onClick={() => {
                         setImportOpen(false)
-                        if (window.confirm("Remove this page's HTML and switch it back to the component canvas? (Undo brings the HTML back.)")) {
+                        if (window.confirm(t('Remove this page HTML and switch it back to the component canvas? (Undo brings the HTML back.)'))) {
                           commitHtml('')
                           setPageMode(currentPageId, 'empty')
                           if (localFile?.pageId === currentPageId) unlinkLocalFile()
@@ -1363,21 +1700,21 @@ export default function EditorPage() {
                       }}
                       className="block w-full px-3 py-1.5 text-left text-sm text-[#b91c1c] hover:bg-[#fef2f2]"
                     >
-                      Remove HTML
+                      {t('Remove HTML')}
                     </button>
                   )}
                 </div>
               </>
             )}
-          </div>
+          </div>}
           {/* Linked-file status chip — green means every Save also writes this
               file on disk; click to unlink. Export / Remove HTML now live inside
               the File ▾ menu so the header stays a single row. */}
           {currentPageIsHtml && localFile && (
             <span
-              title={`Linked to ${localFile.name} — every Save also updates this file on disk. Click to unlink.`}
+              title={t('Linked to {name} — every Save also updates this file on disk. Click to unlink.', { name: localFile.name })}
               onClick={() => {
-                if (window.confirm(`Stop updating ${localFile.name} on Save?`)) unlinkLocalFile()
+                if (window.confirm(t('Stop updating {name} on Save?', { name: localFile.name }))) unlinkLocalFile()
               }}
               className="flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3]"
             >
@@ -1390,7 +1727,7 @@ export default function EditorPage() {
             type="button"
             onClick={() => (currentPageIsHtml ? undoHtml() : undo())}
             disabled={currentPageIsHtml ? !htmlPast.length : !canUndo}
-            title="Undo (Ctrl+Z)"
+            title={t('Undo (Ctrl+Z)')}
             className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
           >
             ↶
@@ -1399,7 +1736,7 @@ export default function EditorPage() {
             type="button"
             onClick={() => (currentPageIsHtml ? redoHtml() : redo())}
             disabled={currentPageIsHtml ? !htmlFuture.length : !canRedo}
-            title="Redo (Ctrl+Shift+Z)"
+            title={t('Redo (Ctrl+Shift+Z)')}
             className="rounded-lg px-2.5 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40"
           >
             ↷
@@ -1411,12 +1748,12 @@ export default function EditorPage() {
               type="button"
               ref={toolsBtnRef}
               onClick={() => { anchorMenu('tools', toolsBtnRef); setToolsOpen((o) => !o) }}
-              title="History, shortcuts & notes"
+              title={t('History, shortcuts & notes')}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
                 toolsOpen || historyOpen || notesOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
               }`}
             >
-              <CogIcon size={15} /> Tools &#9662;
+              <CogIcon size={15} /> {t('Tools')} &#9662;
             </button>
             {toolsOpen && (
               <>
@@ -1427,25 +1764,33 @@ export default function EditorPage() {
                 >
                   <button
                     type="button"
+                    onClick={() => { setToolsOpen(false); setControlCenterOpen(true) }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+                  >
+                    ◎ {t('Site control center')}
+                  </button>
+                  <div className="my-1 border-t border-[#e5e7eb]" />
+                  <button
+                    type="button"
                     onClick={() => { setToolsOpen(false); setHistoryOpen(true) }}
                     disabled={saving}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
                   >
-                    <ClockIcon size={15} /> History
+                    <ClockIcon size={15} /> {t('History')}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setToolsOpen(false); setShortcutsOpen(true) }}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
                   >
-                    <KeyboardIcon size={15} /> Shortcuts
+                    <KeyboardIcon size={15} /> {t('Shortcuts')}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setToolsOpen(false); setNotesOpen((o) => !o) }}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#374151] hover:bg-[#f3f4f6]"
                   >
-                    <NoteIcon size={15} /> Notes
+                    <NoteIcon size={15} /> {t('Notes')}
                   </button>
                 </div>
               </>
@@ -1457,37 +1802,39 @@ export default function EditorPage() {
             disabled={saving}
             className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60"
           >
-            Preview
+            {t('Preview')}
           </button>
           <button
             onClick={() => save()}
             disabled={saving}
-            className="rounded-lg bg-[#4f46e5] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca] disabled:opacity-60"
+            className="hidden rounded-lg bg-[#4f46e5] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca] disabled:opacity-60 md:block"
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? t('Saving…') : t('Save')}
           </button>
           {published ? (
             <button
               onClick={() => save(false)}
               disabled={saving}
-              className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60"
+              className="hidden rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60 md:block"
             >
-              Unpublish
+              {t('Unpublish')}
             </button>
           ) : (
             <button
               onClick={() => save(true)}
               disabled={saving}
-              className="rounded-lg bg-[#16a34a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-60"
+              className="hidden rounded-lg bg-[#16a34a] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-60 md:block"
             >
-              Publish
+              {t('Publish')}
             </button>
           )}
+          <LanguageSwitcher className="hidden md:flex" />
           {/* Your profile — a quick hop to /profile (and your published sites).
               Hidden on phones: it alone pushed the toolbar onto a third row. */}
           <Link
             to="/profile"
-            title="Your profile"
+            onClick={(e) => { e.preventDefault(); requestLeave(() => navigate('/profile')) }}
+            title={t('Your profile')}
             className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#4f46e5] ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe] md:grid"
           >
             {(authUser?.username || '?').trim().charAt(0).toUpperCase()}
@@ -1553,7 +1900,7 @@ export default function EditorPage() {
                   chrome, with the starter card where the page would show. */}
               <Suspense fallback={<PanelFallback />}>
                 <HtmlWorkspace
-                  key={currentPageId}
+                  key={`${currentPageId}-${editorExperience}`}
                   ref={workspaceRef}
                   persistKey={id}
                   html={siteHtml}
@@ -1570,7 +1917,7 @@ export default function EditorPage() {
                               : 'px-2.5 py-1 text-[#374151]'
                           }
                         >
-                          PC
+                          {t('PC')}
                         </button>
                         <button
                           onClick={() => setHtmlDevice('iphone15')}
@@ -1580,13 +1927,13 @@ export default function EditorPage() {
                               : 'px-2.5 py-1 text-[#374151]'
                           }
                         >
-                          Mobile
+                          {t('Mobile')}
                         </button>
                       </div>
                       <select
                         value={htmlDevice}
                         onChange={(e) => setHtmlDevice(e.target.value)}
-                        title="Screen / device width"
+                        title={t('Screen / device width')}
                         className="hidden max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
                       >
                         {DEVICES.map((d) => (
@@ -1618,6 +1965,7 @@ export default function EditorPage() {
                   onBrushColor={chooseBrushColor}
                   onBrushTarget={setBrushTarget}
                   onBrushUse={rememberBrushColor}
+                  simpleMode={editorExperience === 'simple'}
                 />
               </Suspense>
               {/* Right rail in HTML mode: element properties when something
@@ -1638,7 +1986,7 @@ export default function EditorPage() {
                     <button
                       type="button"
                       onClick={() => setRail('right', false)}
-                      title="Hide panel"
+                      title={t('Hide panel')}
                       className="rounded-md px-1.5 py-0.5 text-xs text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
                     >
                       »
@@ -1658,7 +2006,7 @@ export default function EditorPage() {
                         onClose={() => workspaceRef.current?.clearSelection?.()}
                       />
                     ) : (
-                      <PropertiesPanel htmlMode onApplyThemeToHtml={applyThemeToAllHtmlPages} />
+                      <PropertiesPanel simpleMode={editorExperience === 'simple'} htmlMode onApplyThemeToHtml={applyThemeToAllHtmlPages} />
                     )}
                   </div>
                 </div>
@@ -1700,7 +2048,10 @@ export default function EditorPage() {
               <div className="flex min-w-0 flex-1 flex-col">
                 <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
                   <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
-                    {[['view', 'View'], ['edit', 'Edit'], ['source', 'Source']].map(([id, label]) => (
+                    {(editorExperience === 'advanced'
+                      ? [['view', 'View'], ['edit', 'Edit'], ['source', 'Source']]
+                      : [['view', 'View'], ['edit', 'Edit']]
+                    ).map(([id, label]) => (
                       <button
                         key={id}
                         onClick={() => switchCanvasMode(id)}
@@ -1710,7 +2061,7 @@ export default function EditorPage() {
                             : 'px-2.5 py-1 text-[#374151]'
                         }
                       >
-                        {label}
+                      {t(label)}
                       </button>
                     ))}
                   </div>
@@ -1725,7 +2076,7 @@ export default function EditorPage() {
                           : 'px-2.5 py-1 text-[#374151]'
                       }
                     >
-                      PC
+                      {t('PC')}
                     </button>
                     <button
                       onClick={() => setViewport('mobile')}
@@ -1735,7 +2086,7 @@ export default function EditorPage() {
                           : 'px-2.5 py-1 text-[#374151]'
                       }
                     >
-                      Mobile
+                      {t('Mobile')}
                     </button>
                   </div>
                   <select
@@ -1746,42 +2097,102 @@ export default function EditorPage() {
                     }}
                     title={
                       viewport === 'mobile'
-                        ? 'Phone screen size'
-                        : 'Screen ratio / artboard size'
+                        ? t('Phone screen size')
+                        : t('Preview screen size')
                     }
                     className="hidden rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
                   >
                     {sizePresets.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.label}
+                        {t(p.label)}
                       </option>
                     ))}
                     {curPresetId === 'custom' && (
-                      <option value="custom">Custom - {curW}px</option>
+                      <option value="custom">{t('Custom')} - {curW}px</option>
                     )}
                   </select>
-                  {canvasMode === 'edit' && (
+                  <div
+                    className="hidden items-center gap-1 rounded-lg border border-[#d1d5db] bg-white px-1.5 py-0.5 text-xs text-[#6b7280] md:flex"
+                    aria-label={t('Custom resolution')}
+                  >
+                    <span aria-hidden>W</span>
+                    <input
+                      ref={resolutionWidthRef}
+                      key={`canvas-width-${viewport}-${curW}`}
+                      type="number"
+                      inputMode="numeric"
+                      min={viewport === 'mobile' ? 240 : 320}
+                      max={viewport === 'mobile' ? 1200 : 4000}
+                      defaultValue={curW}
+                      aria-label={t('Custom width (px)')}
+                      title={t('Custom width (px)')}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') applyCustomCanvasResolution()
+                      }}
+                      className="w-16 rounded border-0 bg-[#f9fafb] px-1.5 py-1 text-center font-medium text-[#374151] outline-none ring-[#4f46e5] focus:ring-1"
+                    />
+                    <span aria-hidden>×</span>
+                    <span aria-hidden>H</span>
+                    <input
+                      ref={resolutionHeightRef}
+                      key={`canvas-height-${viewport}-${curFold}`}
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      max="20000"
+                      defaultValue={curFold || ''}
+                      placeholder="—"
+                      aria-label={t('Custom height (px)')}
+                      title={t('Custom height (px)')}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') applyCustomCanvasResolution()
+                      }}
+                      className="w-16 rounded border-0 bg-[#f9fafb] px-1.5 py-1 text-center font-medium text-[#374151] outline-none ring-[#4f46e5] focus:ring-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCustomCanvasResolution}
+                      aria-label={t('Apply custom resolution')}
+                      title={t('Apply custom resolution')}
+                      className="rounded bg-[#eef2ff] px-1.5 py-1 font-semibold text-[#4f46e5] hover:bg-[#e0e7ff]"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!curFold}
+                      onClick={() => setCanvasPreset({ width: curFold, fold: curW })}
+                      aria-label={t('Swap width and height')}
+                      title={t('Swap width and height')}
+                      className="rounded px-1.5 py-1 text-sm text-[#4f46e5] hover:bg-[#eef2ff] disabled:cursor-not-allowed disabled:text-[#d1d5db]"
+                    >
+                      ↔
+                    </button>
+                  </div>
+                  {editorExperience === 'advanced' && canvasMode === 'edit' && (
                     <button
                       type="button"
                       onClick={() => setGridStep(gridStep ? 0 : 10)}
-                      title="Snap dragged items to a 10px grid"
+                      title={t('Snap dragged items to a 10px grid')}
                       className={
                         gridStep
                           ? 'hidden rounded-lg bg-[#4f46e5] px-2.5 py-1 text-xs font-medium text-white md:block'
                           : 'hidden rounded-lg border border-[#d1d5db] px-2.5 py-1 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] md:block'
                       }
                     >
-                      # Grid
+                      # {t('Grid')}
                     </button>
                   )}
                   {/* Link tool — mirrors the HTML workspace's Link sub-tool:
                       click a button/link component, then click its target
                       component (or a page in the Files panel). */}
-                  {canvasMode === 'edit' && (
+                  {editorExperience === 'advanced' && canvasMode === 'edit' && (
                     <>
                       <button
                         type="button"
-                        title="Connect a button/link to a target component or page"
+                        title={t('Connect a button/link to a target component or page')}
                         onClick={() => {
                           setBrushMode(false)
                           setLinkMode(!linkMode)
@@ -1792,11 +2203,11 @@ export default function EditorPage() {
                             : 'border-[#d1d5db] text-[#374151] hover:bg-[#f3f4f6]'
                         }`}
                       >
-                        <LinkIcon size={13} /> Link
+                        <LinkIcon size={13} /> {t('Link')}
                       </button>
                       <button
                         type="button"
-                        title="Paint colors onto elements"
+                        title={t('Paint colors onto elements')}
                         onClick={() => {
                           const next = !brushMode
                           setBrushMode(next)
@@ -1808,20 +2219,38 @@ export default function EditorPage() {
                             : 'border-[#d1d5db] text-[#374151] hover:bg-[#f3f4f6]'
                         }`}
                       >
-                        <PaletteIcon size={13} /> Brush
+                        <PaletteIcon size={13} /> {t('Brush')}
+                      </button>
+                      <button
+                        type="button"
+                        title={t('Add a full-width responsive region')}
+                        onClick={() => {
+                          setBrushMode(false)
+                          setLinkMode(false)
+                          const bottom = (currentPage?.components || []).reduce((max, component) => {
+                            const layout = viewport === 'mobile'
+                              ? component.mobileLayout || component.layout || {}
+                              : component.layout || {}
+                            return Math.max(max, (layout.y || 0) + (layout.h || 0))
+                          }, 0)
+                          addComponent('region', 0, bottom)
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] px-2.5 py-1 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
+                      >
+                        <LayersIcon size={13} /> {t('Region')}
                       </button>
                     </>
                   )}
-                  <span className="ml-auto text-xs text-[#6b7280]">
+                  <span className="ml-auto hidden min-w-0 truncate text-xs text-[#6b7280] 2xl:block">
                     {canvasMode === 'view'
-                      ? 'Read-only preview of this page'
+                      ? t('Read-only preview of this page')
                       : canvasMode === 'source'
                         ? 'Page schema & custom code'
                         : brushMode
-                          ? 'Brush tool: choose target + color, then click items'
-                        : linkMode
-                          ? 'Link tool: pick a link, then its target'
-                          : 'Drag, resize, and edit components'}
+                          ? t('Brush tool: choose target + color, then click items')
+                          : linkMode
+                          ? t('Link tool: pick a link, then its target')
+                          : t('Drag, resize, and edit components')}
                   </span>
                 </div>
                 {canvasMode === 'edit' && brushMode && (
@@ -1837,14 +2266,14 @@ export default function EditorPage() {
                 {canvasMode === 'edit' && pendingPlace && (
                   <div className="flex items-center gap-2 border-b border-[#c7d2fe] bg-[#eef2ff] px-4 py-1.5 text-xs text-[#3730a3]">
                     <span className="min-w-0 truncate">
-                      Placing “{pendingPlace.label || 'component'}” — tap or click a spot on the canvas.
+                      {t('Placing “{name}” — tap or click a spot on the canvas.', { name: t(pendingPlace.label || 'component') })}
                     </span>
                     <button
                       type="button"
                       onClick={() => setPendingPlace(null)}
                       className="ml-auto shrink-0 rounded-lg border border-[#a5b4fc] bg-white px-2 py-0.5 font-medium text-[#3730a3] hover:bg-[#e0e7ff]"
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                   </div>
                 )}
@@ -1854,15 +2283,15 @@ export default function EditorPage() {
                     <LinkIcon size={13} aria-hidden />
                     <span>
                       {linkSourceId
-                        ? 'Now click the target component — or click a PAGE in the left Files panel to link to another page.'
-                        : 'Click a button or link component to start, then click where it should jump to.'}
+                        ? t('Now click the target component — or click a PAGE in the left Files panel to link to another page.')
+                        : t('Click a button or link component to start, then click where it should jump to.')}
                     </span>
                     <button
                       type="button"
                       onClick={() => setLinkMode(false)}
                       className="ml-auto rounded-lg border border-[#93c5fd] bg-white px-2 py-0.5 font-medium text-[#1e40af] hover:bg-[#dbeafe]"
                     >
-                      Done
+                      {t('Done')}
                     </button>
                   </div>
                 )}
@@ -1876,39 +2305,20 @@ export default function EditorPage() {
                     onPlaceAt={placePendingAt}
                   />
                 ) : canvasMode === 'view' ? (
-                  componentViewNeedsIframe ? (
-                    <main className="min-h-0 flex-1 overflow-auto bg-gray-100 p-8">
-                      <iframe
-                        key={`${currentPage.id}-${viewport}-fixed-preview`}
-                        title={`${currentPage.name || 'Page'} preview`}
-                        srcDoc={componentViewHtml}
-                        sandbox={PUBLIC_HTML_SANDBOX}
-                        allow={HTML_ALLOW}
-                        allowFullScreen
-                        className="mx-auto block h-full min-h-[640px] border-0 bg-white shadow"
-                        style={{ width: viewport === 'mobile' ? mobileW : pcWidth }}
-                      />
-                    </main>
-                  ) : (
-                    <main className="min-h-0 flex-1 overflow-auto bg-gray-100 p-8">
-                      <div
-                        className="mx-auto bg-white shadow"
-                        style={{ width: viewport === 'mobile' ? mobileW : pcWidth }}
-                      >
-                        <Renderer
-                          components={currentPage.components || []}
-                          background={
-                            viewport === 'mobile'
-                              ? currentPage.backgroundMobile || currentPage.background || '#ffffff'
-                              : currentPage.background || '#ffffff'
-                          }
-                          viewport={viewport}
-                          width={viewport === 'mobile' ? mobileW : pcWidth}
-                          flowMode={!!currentPage.flowMode}
-                        />
-                      </div>
-                    </main>
-                  )
+                  <CanvasPreview
+                    key={`${currentPage.id}-${viewport}-${componentViewNeedsIframe ? 'iframe' : 'renderer'}`}
+                    page={currentPage}
+                    viewport={viewport}
+                    width={curW}
+                    fold={curFold}
+                    background={
+                      viewport === 'mobile'
+                        ? currentPage.backgroundMobile || currentPage.background || '#ffffff'
+                        : currentPage.background || '#ffffff'
+                    }
+                    iframeHtml={componentViewHtml}
+                    title={`${currentPage.name || 'Page'} preview`}
+                  />
                 ) : (
                   <div className="min-h-0 flex-1 bg-white">
                     <Suspense fallback={<PanelFallback />}>
@@ -1919,7 +2329,7 @@ export default function EditorPage() {
               </div>
               <RailSlot
                 side="right"
-                label="Properties"
+                label={t('Properties')}
                 open={rightOpen}
                 narrow={isNarrow}
                 onOpen={() => setRail('right', true)}
@@ -1940,9 +2350,9 @@ export default function EditorPage() {
                         : 'text-[#6b7280] hover:text-[#111827]'
                     }`}
                   >
-                    Properties
+                    {t('Properties')}
                   </button>
-                  <button
+                  {editorExperience === 'advanced' && <button
                     type="button"
                     onClick={() => setRightTab('code')}
                     className={`flex-1 py-2 font-mono ${
@@ -1951,12 +2361,12 @@ export default function EditorPage() {
                         : 'text-[#6b7280] hover:text-[#111827]'
                     }`}
                   >
-                    &lt;/&gt; Code
-                  </button>
+                    &lt;/&gt; {t('Code')}
+                  </button>}
                   <button
                     type="button"
                     onClick={() => setRail('right', false)}
-                    title="Hide panel"
+                    title={t('Hide panel')}
                     className="px-2 py-2 text-xs text-[#9ca3af] hover:text-[#374151]"
                   >
                     »
@@ -1968,7 +2378,7 @@ export default function EditorPage() {
                       <CodePanel />
                     </Suspense>
                   ) : (
-                    <PropertiesPanel />
+                    <PropertiesPanel simpleMode={editorExperience === 'simple'} />
                   )}
                 </div>
               </div>
@@ -1979,7 +2389,7 @@ export default function EditorPage() {
           {dragOver && (
             <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#4f46e5]/10">
               <div className="rounded-lg border-2 border-dashed border-[#4f46e5] bg-white/95 px-6 py-4 text-center text-sm font-medium text-[#4f46e5] shadow-lg">
-                Drop an HTML file or project .json (HTML is imported as a file)
+                {t('Drop an HTML file or project .json (HTML is imported as a file)')}
               </div>
             </div>
           )}
@@ -2009,6 +2419,26 @@ export default function EditorPage() {
         </Suspense>
       )}
 
+      {controlCenterOpen && <SiteControlCenter
+        open={controlCenterOpen}
+        onClose={() => setControlCenterOpen(false)}
+        site={{
+          id,
+          title,
+          slug,
+          published,
+          site_options: siteOptions,
+          review_token: reviewToken,
+          custom_domain: customDomain,
+          domain_status: domainStatus,
+        }}
+        schema={editorSchema}
+        pageHtmlMap={pageHtmlMap}
+        onSitePatch={applySitePatch}
+        onHtmlContentChange={importHtmlIntoPage}
+        onSchemaContentChange={applyManagedSchema}
+      />}
+
       {wizardOpen && (
         <Suspense fallback={null}>
           <AiWizard
@@ -2035,7 +2465,9 @@ export default function EditorPage() {
             open={historyOpen}
             siteId={id}
             onClose={() => setHistoryOpen(false)}
-            onSave={() => save()}
+            onSave={(options) => save(published, options)}
+            autoSaveEnabled={autoSaveEnabled}
+            onAutoSaveEnabled={setAutoSaveEnabled}
             onRestored={(fresh) => {
               // The restore endpoint returns the full site after the
               // rollback — push the schema + html back into the editor
@@ -2054,8 +2486,17 @@ export default function EditorPage() {
                 setPageHtmlMap(map)
                 setHtmlPast([])
                 setHtmlFuture([])
+                htmlRevisionRef.current = 0
                 setHtmlDirty(false)
               }
+              if (fresh?.title !== undefined) setTitle(fresh.title)
+              if (fresh?.slug !== undefined) setSlug(fresh.slug)
+              if (fresh?.category !== undefined) setCategory(fresh.category || 'other')
+              if (fresh?.tags !== undefined) {
+                setTagsText(Array.isArray(fresh.tags) ? fresh.tags.join(', ') : '')
+              }
+              metaRevisionRef.current = 0
+              setMetaDirty(false)
               if (fresh?.published !== undefined) setPublished(fresh.published)
               markSaved()
             }}

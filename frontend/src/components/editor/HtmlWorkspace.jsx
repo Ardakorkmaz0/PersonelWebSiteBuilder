@@ -42,6 +42,7 @@ import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
 import BrushControls from './BrushControls.jsx'
 import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon } from '../icons.jsx'
+import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
 // - View: real document in a sandboxed iframe with scripts enabled.
@@ -354,6 +355,7 @@ function HtmlWorkspace({
   onBrushColor,
   onBrushTarget,
   onBrushUse,
+  simpleMode = false,
   // Code-project mode: when set, the View document and Edit seed are produced
   // by this async hook (HTML with its linked CSS/JS resolved from sibling
   // files) instead of using `html` verbatim. `assembleDeps` is a value that,
@@ -379,6 +381,7 @@ function HtmlWorkspace({
   // be statically rendered (bundled app / server template) — points at ● Live.
   viewNotice,
 }, ref) {
+  const { t } = useLanguage()
   // The view/edit/source surface and the edit sub-tool are restored from
   // localStorage (per site) so a browser refresh lands the user back exactly
   // where they were — index.html in, say, edit + link — instead of resetting
@@ -386,7 +389,10 @@ function HtmlWorkspace({
   const lsGet = (k, def) => {
     try { return localStorage.getItem(`pwb_${k}_${persistKey}`) || def } catch { return def }
   }
-  const [mode, setMode] = useState(() => lsGet('htmlmode', 'view'))
+  const [mode, setMode] = useState(() => {
+    const saved = lsGet('htmlmode', 'view')
+    return simpleMode && saved === 'source' ? 'edit' : saved
+  })
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
@@ -398,7 +404,7 @@ function HtmlWorkspace({
   const [liveNonce, setLiveNonce] = useState(0)
   // Edit sub-tool (only meaningful in edit mode): 'text' = click-to-type,
   // 'rearrange' = drag blocks to reorder, 'link' = connect a link to a target.
-  const [editTool, setEditTool] = useState(() => lsGet('htmltool', 'text'))
+  const [editTool, setEditTool] = useState(() => simpleMode ? 'text' : lsGet('htmltool', 'text'))
   // Bumped on every iframe load so the tool manager rebinds AFTER the document
   // is ready — needed when edit/link is restored on mount (the first effect run
   // happens before the iframe body exists).
@@ -1188,7 +1194,7 @@ function HtmlWorkspace({
     <iframe
       key={`${mode}-${nonce}`}
       ref={iframeRef}
-      title="site"
+      title={t('site')}
       srcDoc={srcDoc}
       sandbox={sandbox}
       allow={HTML_ALLOW}
@@ -1216,21 +1222,23 @@ function HtmlWorkspace({
         <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
           <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
             <button onClick={() => switchMode('view')} className={toggleBtn(mode === 'view')}>
-              View
+              {t('View')}
             </button>
             <button onClick={() => switchMode('edit')} className={toggleBtn(mode === 'edit')}>
-              Edit
+              {t('Edit')}
             </button>
-            <button onClick={() => switchMode('source')} className={toggleBtn(mode === 'source')}>
-              Source
-            </button>
+            {!simpleMode && (
+              <button onClick={() => switchMode('source')} className={toggleBtn(mode === 'source')}>
+                {t('Source')}
+              </button>
+            )}
             {liveUrl && (
               <button
                 onClick={() => switchMode('live')}
-                title="Preview the real running dev server (with its database content)"
+                title={t('Preview the real running dev server (with its database content)')}
                 className={toggleBtn(mode === 'live')}
               >
-                ● Live
+                ● {t('Live')}
               </button>
             )}
           </div>
@@ -1238,7 +1246,7 @@ function HtmlWorkspace({
           {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
               empty page: there's no document to act on, so the starter card is
               the single clear action instead of dead chips. */}
-          {mode === 'edit' && !placing && !!String(html || '').trim() && (
+          {!simpleMode && mode === 'edit' && !placing && !!String(html || '').trim() && (
             <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
               {[
                 ['text', EditIcon, 'Text', 'Click any text and type'],
@@ -1249,11 +1257,11 @@ function HtmlWorkspace({
                 <button
                   key={id}
                   type="button"
-                  title={title}
-                  onClick={() => { setEditTool(id); setLinkHint(id === 'link' ? 'Click a LINK (nav item / button-link), then click its target.' : null) }}
+                  title={t(title)}
+                  onClick={() => { setEditTool(id); setLinkHint(id === 'link' ? t('Click a LINK (nav item / button-link), then click its target.') : null) }}
                   className={`flex items-center gap-1 ${editTool === id ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}`}
                 >
-                  <ToolIcon size={13} /> {label}
+                  <ToolIcon size={13} /> {t(label)}
                 </button>
               ))}
             </div>
@@ -1269,45 +1277,45 @@ function HtmlWorkspace({
                 setNonce((n) => n + 1)
                 onRequestSave?.()
               }}
-              title="Apply the source code and save — to the server AND the linked local file (the disk chip in the toolbar)"
+              title={t('Apply the source code and save — to the server AND the linked local file (the disk chip in the toolbar)')}
               className="rounded-lg bg-[#4f46e5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca]"
             >
-              Apply &amp; Save
+              {t('Apply & Save')}
             </button>
           )}
           {mode === 'live' && liveUrl ? (
             <div className="ml-auto flex items-center gap-1.5">
-              <span className="text-xs text-[#6b7280]">Real running dev server</span>
+              <span className="text-xs text-[#6b7280]">{t('Real running dev server')}</span>
               <button
                 type="button"
                 onClick={() => setLiveNonce((n) => n + 1)}
-                title="Reload the embedded preview"
+                title={t('Reload the embedded preview')}
                 className="rounded-lg border border-[#d1d5db] px-2.5 py-1 text-xs text-[#374151] hover:bg-[#f3f4f6]"
               >
-                ↻ Reload
+                ↻ {t('Reload')}
               </button>
               <button
                 type="button"
                 onClick={() => onOpenLiveWindow?.()}
-                title="Open the dev server in a real window — works even when embedding is blocked (Django), and auto-reloads on Save"
+                title={t('Open the dev server in a real window — works even when embedding is blocked (Django), and auto-reloads on Save')}
                 className="rounded-lg border border-[#4f46e5] bg-[#eef2ff] px-2.5 py-1 text-xs font-medium text-[#4f46e5] hover:bg-[#e0e7ff]"
               >
-                Open live window ↗
+                {t('Open live window')} ↗
               </button>
             </div>
           ) : (
             <span className="ml-auto text-xs text-[#6b7280]">
               {mode === 'view'
-                ? 'Live preview: JavaScript, links, forms, and scrolling are enabled'
+                ? t('Live preview: JavaScript, links, forms, and scrolling are enabled')
                 : mode === 'source'
-                  ? `${fileName} source file`
+                  ? t('{name} source file', { name: fileName })
                   : editTool === 'rearrange'
-                    ? 'Drag any block to reorder it'
+                    ? t('Drag any block to reorder it')
                     : editTool === 'link'
-                      ? 'Connect a link to a target'
+                      ? t('Connect a link to a target')
                       : editTool === 'brush'
-                        ? 'Brush: choose target + color, then click elements'
-                        : 'Click any text in the page and type — like a document'}
+                        ? t('Brush: choose target + color, then click elements')
+                        : t('Click any text in the page and type — like a document')}
             </span>
           )}
         </div>
@@ -1317,13 +1325,13 @@ function HtmlWorkspace({
         {mode === 'view' && viewNotice && (
           <div className="flex items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-1.5 text-xs text-[#92400e]">
             <WarningIcon size={14} aria-hidden className="shrink-0" />
-            <span className="min-w-0 flex-1">{viewNotice}</span>
+            <span className="min-w-0 flex-1">{t(viewNotice)}</span>
             <button
               type="button"
               onClick={() => switchMode('live')}
               className="shrink-0 rounded-lg border border-[#fbbf24] bg-white px-2 py-0.5 font-medium text-[#92400e] hover:bg-[#fef3c7]"
             >
-              Switch to ● Live
+              {t('Switch to ● Live')}
             </button>
           </div>
         )}
@@ -1343,7 +1351,7 @@ function HtmlWorkspace({
         {mode === 'edit' && editTool === 'link' && !placing && (
           <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
             <LinkIcon size={13} aria-hidden />
-            <span>{linkHint || 'Click a LINK (nav item / button-link), then click the element it should jump to.'}</span>
+            <span>{linkHint || t('Click a LINK (nav item / button-link), then click the element it should jump to.')}</span>
           </div>
         )}
 
@@ -1352,14 +1360,14 @@ function HtmlWorkspace({
           <div className="flex items-center gap-2 border-b border-[#bfdbfe] bg-[#eff6ff] px-4 py-1.5 text-xs text-[#1e40af]">
             <PinIcon size={13} aria-hidden />
             <span>
-              Click in the page to place the <strong>{pendingType}</strong>, or drag it onto the spot.
+              {t('Click in the page to place the')} <strong>{t(pendingType)}</strong>{t(', or drag it onto the spot.')}
             </span>
             <button
               type="button"
               onClick={() => onCancelPlacement?.()}
               className="ml-auto rounded-lg border border-[#93c5fd] bg-white px-2 py-0.5 font-medium text-[#1e40af] hover:bg-[#dbeafe]"
             >
-              Cancel (Esc)
+              {t('Cancel (Esc)')}
             </button>
           </div>
         )}
@@ -1370,14 +1378,12 @@ function HtmlWorkspace({
               <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-[#fffbe6] px-4 py-1.5 text-xs text-[#7a5d00]">
                 <LightbulbIcon size={14} aria-hidden className="shrink-0" />
                 <span className="truncate">
-                  Embedded preview of <span className="font-mono">{liveUrl}</span>. Blank? Many servers
-                  (Django) block embedding — click <strong>Open live window</strong>; it stays in sync
-                  and auto-reloads every time you Save.
+                  {t('Embedded preview of')} <span className="font-mono">{liveUrl}</span>. {t('Blank? Many servers (Django) block embedding — click')} <strong>{t('Open live window')}</strong>; {t('it stays in sync and auto-reloads every time you Save.')}
                 </span>
               </div>
               <iframe
                 key={`live-${liveNonce}-${liveReloadKey}`}
-                title="live"
+                title={t('live')}
                 src={liveUrl}
                 className="min-h-0 w-full flex-1 border-0 bg-white"
                 allow={HTML_ALLOW}
@@ -1386,7 +1392,7 @@ function HtmlWorkspace({
             </main>
           ) : (
             <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6 text-sm text-[#9ca3af]">
-              Enter your dev-server URL in the header, then this tab shows the real running page.
+              {t('Enter your dev-server URL in the header, then this tab shows the real running page.')}
             </main>
           )
         ) : mode === 'source' ? (
@@ -1398,7 +1404,7 @@ function HtmlWorkspace({
               value={sourceDraft}
               onChange={(e) => setSourceDraft(e.target.value)}
               spellCheck={false}
-              placeholder="This page has no HTML yet — paste or write a full document here, then Apply & Save."
+              placeholder={t('This page has no HTML yet — paste or write a full document here, then Apply & Save.')}
               className="min-h-0 flex-1 resize-none bg-[#1e1e1e] p-4 font-mono text-sm leading-relaxed text-gray-100 outline-none placeholder:text-gray-500"
             />
           </main>
@@ -1411,20 +1417,19 @@ function HtmlWorkspace({
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-[#4f46e5]">
                 <FileCodeIcon size={24} />
               </div>
-              <h2 className="text-base font-bold text-[#111827]">{fileName} is empty</h2>
+              <h2 className="text-base font-bold text-[#111827]">{t('{name} is empty', { name: fileName })}</h2>
               <p className="mt-1 text-sm text-[#6b7280]">
-                Give this page its own HTML — every page of the site is its own file. You can also
-                switch to Source and paste code directly.
+                {t('Give this page its own HTML — every page of the site is its own file. You can also switch to Source and paste code directly.')}
               </p>
               <div className="mt-5 flex flex-col gap-2">
                 <button onClick={onStartBlank} className="ms-btn ms-btn-primary w-full py-2">
-                  Start blank HTML
+                  {t('Start blank HTML')}
                 </button>
                 <button onClick={onOpenTemplates} className="ms-btn w-full py-2">
-                  Choose a template…
+                  {t('Choose a template…')}
                 </button>
                 <button onClick={onImportFile} className="ms-btn w-full py-2">
-                  Import an HTML file…
+                  {t('Import an HTML file…')}
                 </button>
               </div>
             </div>

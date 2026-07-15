@@ -21,21 +21,24 @@ import { FolderOpenIcon, CogIcon, LightbulbIcon, PaletteIcon } from '../componen
 import HtmlWorkspace from '../components/editor/HtmlWorkspace.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import CodeFileEditor from '../components/editor/CodeFileEditor.jsx'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { useLanguage } from '../i18n/useLanguage.js'
 
 // Slim strip shown when a side rail is collapsed (mirrors the editor's).
 function CollapsedRail({ side, label, onOpen }) {
+  const { t } = useLanguage()
   return (
     <button
       type="button"
       onClick={onOpen}
-      title={`Show ${label}`}
+      title={t('Show {label}', { label: t(label) })}
       className={`flex w-7 shrink-0 flex-col items-center gap-2 bg-white py-3 text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
         side === 'left' ? 'border-r border-[#e5e7eb]' : 'border-l border-[#e5e7eb]'
       }`}
     >
       <span className="text-sm font-bold">{side === 'left' ? '»' : '«'}</span>
       <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ writingMode: 'vertical-rl' }}>
-        {label}
+        {t(label)}
       </span>
     </button>
   )
@@ -45,15 +48,16 @@ function CollapsedRail({ side, label, onOpen }) {
 // CSS/JS editor — so you tweak source and watch the real app update beside it
 // (Vite HMR reflects CSS instantly; a Save bumps reloadKey for full reloads).
 function LivePane({ url, reloadKey, onReload, onOpenWindow }) {
+  const { t } = useLanguage()
   return (
     <div className="flex min-w-0 flex-1 flex-col border-l border-[#e5e7eb] bg-[#0b0b0b]">
       <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-white px-3 py-1.5">
-        <span className="shrink-0 text-xs font-semibold text-[#374151]">● Live</span>
+        <span className="shrink-0 text-xs font-semibold text-[#374151]">● {t('Live')}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-[#9ca3af]">{url}</span>
         <button
           type="button"
           onClick={onReload}
-          title="Reload the embedded preview"
+          title={t('Reload the embedded preview')}
           className="shrink-0 rounded-lg border border-[#d1d5db] px-2 py-0.5 text-[11px] text-[#374151] hover:bg-[#f3f4f6]"
         >
           ↻
@@ -61,16 +65,16 @@ function LivePane({ url, reloadKey, onReload, onOpenWindow }) {
         <button
           type="button"
           onClick={() => onOpenWindow?.()}
-          title="Open in a real window — works even when embedding is blocked (Django), and auto-reloads on Save"
+          title={t('Open in a real window — works even when embedding is blocked (Django), and auto-reloads on Save')}
           className="shrink-0 rounded-lg border border-[#4f46e5] bg-[#eef2ff] px-2 py-0.5 text-[11px] font-medium text-[#4f46e5] hover:bg-[#e0e7ff]"
         >
-          Live window ↗
+          {t('Live window')} ↗
         </button>
       </div>
       <div className="border-b border-[#e5e7eb] bg-[#fffbeb] px-3 py-1 text-[10px] leading-snug text-[#92400e]">
-        Blank? Many servers (Django) block embedding — click <strong>Live window</strong>; it auto-reloads on Save.
+        {t('Blank? Many servers (Django) block embedding — click')} <strong>{t('Live window')}</strong>{t('; it auto-reloads on Save.')}
       </div>
-      <iframe key={`livepane-${reloadKey}`} title="live-pane" src={url} className="min-h-0 w-full flex-1 border-0 bg-white" />
+      <iframe key={`livepane-${reloadKey}`} title={t('Live preview')} src={url} className="min-h-0 w-full flex-1 border-0 bg-white" />
     </div>
   )
 }
@@ -81,6 +85,7 @@ function LivePane({ url, reloadKey, onReload, onOpenWindow }) {
 // panel + component placement + device frames), and a right-rail element panel
 // — but operates on an in-memory file map (projectStore), not a server Site.
 export default function CodeProjectPage() {
+  const { t } = useLanguage()
   const goBack = useGoBack('/')
   const rootHandle = useProjectStore((s) => s.rootHandle)
   const rootName = useProjectStore((s) => s.rootName)
@@ -132,6 +137,30 @@ export default function CodeProjectPage() {
 
   const activeFile = activePath ? files.get(activePath) : null
   const isHtml = activeFile?.kind === 'html'
+  const hasUnsaved = dirty.size > 0
+
+  const confirmDiscard = () =>
+    !hasUnsaved || window.confirm(t('Discard the unsaved changes in this local project?'))
+
+  const guardedGoBack = () => {
+    if (confirmDiscard()) goBack()
+  }
+
+  const guardedCloseProject = () => {
+    if (confirmDiscard()) closeProject()
+  }
+
+  // A browser refresh/close bypasses the in-app navigation buttons, so keep
+  // the platform-level warning active while any local file differs from disk.
+  useEffect(() => {
+    if (!hasUnsaved) return undefined
+    const handler = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsaved])
 
   // When the open page can't be statically rendered (a built SPA, or a
   // server-side template), tell the user why View is blank/partial and send
@@ -272,6 +301,7 @@ export default function CodeProjectPage() {
   }, [liveUrl])
 
   async function openFolder() {
+    if (!confirmDiscard()) return
     setError('')
     setBusy(true)
     try {
@@ -289,7 +319,7 @@ export default function CodeProjectPage() {
     setBusy(true)
     try {
       if (!(await ensureReadPermission(lastHandle))) {
-        setError('Folder access was declined.')
+        setError(t('Folder access was declined.'))
         return
       }
       setProject(await readProject(lastHandle))
@@ -306,7 +336,7 @@ export default function CodeProjectPage() {
     try {
       const target = await chooseTargetFolder()
       if (await saveCopy(target)) {
-        setCopyMsg(`Copied to “${target.name}”`)
+        setCopyMsg(t('Copied to “{name}”', { name: target.name }))
         setTimeout(() => setCopyMsg(''), 2500)
       }
     } catch (e) {
@@ -319,39 +349,37 @@ export default function CodeProjectPage() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f3f4f6] p-6">
         <div className="ms-card w-full max-w-md p-8 text-center">
           <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-[#4f46e5]"><FolderOpenIcon size={24} /></div>
-          <h1 className="text-lg font-bold text-[#111827]">Open a local project</h1>
+          <h1 className="text-lg font-bold text-[#111827]">{t('Open a local project')}</h1>
           <p className="mt-1 text-sm text-[#6b7280]">
-            Pick a folder on your computer. Only its web files (HTML, CSS, JS,
-            images) are shown — edit them and save the changes straight back to
-            disk.
+            {t('Pick a folder on your computer. Only its web files (HTML, CSS, JS, images) are shown — edit them and save the changes straight back to disk.')}
           </p>
           <p className="mt-2 rounded-lg bg-[#f3f4f6] px-3 py-2 text-xs leading-relaxed text-[#6b7280]">
-            <strong className="text-[#374151]">Best for static sites</strong> (plain HTML/CSS/JS) —
-            full visual View &amp; Edit. For <strong className="text-[#374151]">React / Django</strong>
-            {' '}apps it’s a code editor + live preview: the page renders from your dev server, shown via
-            the <strong>● Live</strong> tab / window.
+            <strong className="text-[#374151]">{t('Best for static sites')}</strong>{' '}
+            {t('(plain HTML/CSS/JS) — full visual View & Edit. For')}{' '}
+            <strong className="text-[#374151]">React / Django</strong>{' '}
+            {t('apps it’s a code editor + live preview: the page renders from your dev server, shown via the')}{' '}
+            <strong>● {t('Live')}</strong> {t('tab / window.')}
           </p>
           {supported ? (
             <div className="mt-5 flex flex-col gap-2">
               <button onClick={openFolder} disabled={busy} className="ms-btn ms-btn-primary w-full py-2">
-                {busy ? 'Opening…' : 'Open folder…'}
+                {busy ? t('Loading…') : t('Open folder…')}
               </button>
               {lastHandle && (
                 <button onClick={reopen} disabled={busy} className="ms-btn w-full py-2">
-                  Reopen “{lastHandle.name}”
+                  {t('Reopen “{name}”', { name: lastHandle.name })}
                 </button>
               )}
             </div>
           ) : (
             <p className="mt-5 rounded-lg bg-[#fff4ce] px-3 py-2 text-xs text-[#5d4a06]">
-              This needs the File System Access API — please use a Chromium
-              browser (Chrome, Edge).
+              {t('This needs the File System Access API — please use a Chromium browser (Chrome, Edge).')}
             </p>
           )}
           {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
         </div>
-        <button type="button" onClick={goBack} className="text-sm text-[#6b7280] hover:text-[#111827]">
-          &larr; Back
+        <button type="button" onClick={guardedGoBack} className="text-sm text-[#6b7280] hover:text-[#111827]">
+          &larr; {t('Back')}
         </button>
       </div>
     )
@@ -363,16 +391,24 @@ export default function CodeProjectPage() {
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
         <div className="flex shrink-0 items-center gap-1">
-          <Link to="/" title="Sitebuilder home" className="brand-mark" style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}>S</Link>
-          <button type="button" onClick={goBack} title="Go back" className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
+          <Link
+            to="/"
+            title={t('Sitebuilder home')}
+            onClick={(event) => {
+              if (!confirmDiscard()) event.preventDefault()
+            }}
+            className="brand-mark"
+            style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}
+          >S</Link>
+          <button type="button" onClick={guardedGoBack} title={t('Go back')} className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
         </div>
         <span className="flex shrink-0 items-center gap-1.5 truncate text-sm font-semibold text-[#111827]"><FolderOpenIcon size={15} className="text-[#6b7280]" /> {rootName}</span>
         <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-[#475569]">
-          Code Project
+          {t('Code Project')}
         </span>
         {dirty.size > 0 && (
           <span className="shrink-0 whitespace-nowrap text-xs text-amber-500">
-            {dirty.size} unsaved file{dirty.size > 1 ? 's' : ''}
+            {t(dirty.size > 1 ? '{count} unsaved files' : '{count} unsaved file', { count: dirty.size })}
           </span>
         )}
         {copyMsg && <span className="shrink-0 whitespace-nowrap text-xs text-[#15803d]">{copyMsg}</span>}
@@ -383,24 +419,24 @@ export default function CodeProjectPage() {
               fill the URL and show the exact command to start it. */}
           <div className="relative flex items-center gap-1">
             <span
-              title={liveUrl.trim() && liveUp ? 'Dev server is up' : 'Dev server not reachable'}
+              title={liveUrl.trim() && liveUp ? t('Dev server is up') : t('Dev server not reachable')}
               className={`h-2 w-2 shrink-0 rounded-full ${liveUrl.trim() && liveUp ? 'bg-[#16a34a]' : 'bg-[#d1d5db]'}`}
             />
             <input
               value={liveUrl}
               onChange={(e) => updateLiveUrl(e.target.value)}
-              placeholder="Live URL — e.g. http://localhost:8000"
-              title="Run your dev server, put its URL here, then use the ● Live tab to preview the real page"
+              placeholder={t('Live URL — e.g. http://localhost:8000')}
+              title={t('Run your dev server, put its URL here, then use the ● Live tab to preview the real page')}
               className="w-44 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none"
             />
             <button
               type="button"
               onClick={runDetect}
               disabled={detecting}
-              title="Detect this project's dev server and fill the URL"
+              title={t("Detect this project's dev server and fill the URL")}
               className="flex shrink-0 items-center gap-1 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
             >
-              {detecting ? '…' : <><CogIcon size={13} /> Detect</>}
+              {detecting ? '…' : <><CogIcon size={13} /> {t('Detect')}</>}
             </button>
             {detectOpen && (
               <>
@@ -411,9 +447,9 @@ export default function CodeProjectPage() {
                       <div key={i} className="mb-1.5 rounded-md border border-[#e5e7eb] p-2 last:mb-0">
                         <div className="flex items-center justify-between gap-2">
                           <span className="min-w-0 truncate text-xs font-semibold text-[#111827]">
-                            {c.label}{c.cwd ? ` · ${c.cwd}/` : ''}
+                            {t(c.label)}{c.cwd ? ` · ${c.cwd}/` : ''}
                             {c.busy && (
-                              <span className="ml-1 rounded bg-[#fef3c7] px-1 py-px text-[10px] font-medium text-[#92400e]">in use</span>
+                              <span className="ml-1 rounded bg-[#fef3c7] px-1 py-px text-[10px] font-medium text-[#92400e]">{t('in use')}</span>
                             )}
                           </span>
                           <button
@@ -421,7 +457,7 @@ export default function CodeProjectPage() {
                             onClick={() => { updateLiveUrl(c.url); setDetectOpen(false) }}
                             className="shrink-0 rounded border border-[#4f46e5] px-2 py-0.5 text-[11px] font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                           >
-                            Use {c.url.replace(/^https?:\/\//, '')}
+                            {t('Use')} {c.url.replace(/^https?:\/\//, '')}
                           </button>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5">
@@ -429,22 +465,22 @@ export default function CodeProjectPage() {
                           <button
                             type="button"
                             onClick={() => navigator.clipboard?.writeText(c.command)}
-                            title="Copy command"
+                            title={t('Copy command')}
                             className="shrink-0 rounded border border-[#d1d5db] px-1.5 py-0.5 text-[11px] text-[#374151] hover:bg-[#f3f4f6]"
                           >
-                            Copy
+                            {t('Copy')}
                           </button>
                         </div>
                         {c.busy && c.altUrl && (
                           <div className="mt-1.5 rounded bg-[#fffbeb] p-1.5">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] text-[#92400e]">Busy — run this project on a free port:</span>
+                              <span className="text-[10px] text-[#92400e]">{t('Busy — run this project on a free port:')}</span>
                               <button
                                 type="button"
                                 onClick={() => { updateLiveUrl(c.altUrl); setDetectOpen(false) }}
                                 className="shrink-0 rounded border border-[#fbbf24] bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#92400e] hover:bg-[#fef3c7]"
                               >
-                                Use {c.altUrl.replace(/^https?:\/\//, '')}
+                                {t('Use')} {c.altUrl.replace(/^https?:\/\//, '')}
                               </button>
                             </div>
                             <div className="mt-1 flex items-center gap-1.5">
@@ -452,10 +488,10 @@ export default function CodeProjectPage() {
                               <button
                                 type="button"
                                 onClick={() => navigator.clipboard?.writeText(c.altCommand)}
-                                title="Copy command"
+                                title={t('Copy command')}
                                 className="shrink-0 rounded border border-[#d1d5db] px-1.5 py-0.5 text-[10px] text-[#374151] hover:bg-[#f3f4f6]"
                               >
-                                Copy
+                                {t('Copy')}
                               </button>
                             </div>
                           </div>
@@ -464,12 +500,11 @@ export default function CodeProjectPage() {
                     ))
                   ) : (
                     <p className="p-1 text-xs text-[#6b7280]">
-                      No dev server detected — looks like a static site. Just open an HTML file in View.
+                      {t('No dev server detected — looks like a static site. Just open an HTML file in View.')}
                     </p>
                   )}
                   <p className="mt-1 px-1 text-[10px] leading-snug text-[#9ca3af]">
-                    A browser can’t start it for you — run the command in your terminal. The ● dot turns
-                    green once it’s up, then the ● Live tab works.
+                    {t('A browser can’t start it for you — run the command in your terminal. The ● dot turns green once it’s up, then the ● Live tab works.')}
                   </p>
                 </div>
               </>
@@ -484,58 +519,59 @@ export default function CodeProjectPage() {
                   onClick={() => setHtmlDevice('fit')}
                   className={!isMobileDevice(htmlDevice) ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}
                 >
-                  PC
+                  {t('PC')}
                 </button>
                 <button
                   onClick={() => setHtmlDevice('iphone15')}
                   className={isMobileDevice(htmlDevice) ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}
                 >
-                  Mobile
+                  {t('Mobile')}
                 </button>
               </div>
               <select
                 value={htmlDevice}
                 onChange={(e) => setHtmlDevice(e.target.value)}
-                title="Screen / device width"
+                title={t('Screen / device width')}
                 className="max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none"
               >
                 {DEVICES.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.label}
+                    {t(d.label)}
                   </option>
                 ))}
               </select>
             </>
           )}
           <button onClick={openFolder} className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]">
-            Open folder…
+            {t('Open folder…')}
           </button>
-          <button onClick={closeProject} className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]">
-            Close
+          <button onClick={guardedCloseProject} className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]">
+            {t('Close')}
           </button>
           <button
             onClick={saveCopyToFolder}
-            title="Write a copy of the whole project (with your edits) into a folder you pick — the original is left untouched"
+            title={t('Write a copy of the whole project (with your edits) into a folder you pick — the original is left untouched')}
             className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6]"
           >
-            Save a copy…
+            {t('Save a copy…')}
           </button>
           <button
             onClick={saveActiveFile}
             disabled={saving || !activeDirty}
-            title="Write just the open file back to disk"
+            title={t('Write just the open file back to disk')}
             className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-50"
           >
-            Save file
+            {t('Save file')}
           </button>
           <button
             onClick={saveEverything}
             disabled={saving || dirty.size === 0}
-            title="Write every changed file back to its folder on disk"
+            title={t('Write every changed file back to its folder on disk')}
             className="rounded-lg bg-[#16a34a] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'Save to folder'}
+            {saving ? t('Saving…') : t('Save to folder')}
           </button>
+          <LanguageSwitcher />
         </div>
       </header>
 
@@ -549,25 +585,22 @@ export default function CodeProjectPage() {
         <div className="flex items-start gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2 text-xs text-[#92400e]">
           <LightbulbIcon size={14} aria-hidden className="mt-px shrink-0" />
           <div className="min-w-0 flex-1 leading-relaxed">
-            <strong>{projectInfo.framework || 'App'} project.</strong>{' '}
-            Its pages are built/served at runtime, so the static <em>View</em> stays blank or partial —
-            here <strong>/code is a code editor + live preview</strong>. To see the real page: start your
-            dev server, click <strong>Detect</strong> to fill the URL, then <strong>Open live window</strong>
-            {' '}(it auto-reloads every Save). Editing CSS/JS &amp; the template markup still works great.
+            <strong>{t('{framework} project.', { framework: projectInfo.framework || 'App' })}</strong>{' '}
+            {t('Its pages are built/served at runtime, so the static View stays blank or partial — here /code is a code editor + live preview. To see the real page: start your dev server, click Detect to fill the URL, then Open live window (it auto-reloads every Save). Editing CSS/JS & the template markup still works great.')}
           </div>
           <button
             type="button"
             onClick={runDetect}
             className="flex shrink-0 items-center gap-1 rounded-lg border border-[#fbbf24] bg-white px-2 py-1 font-medium text-[#92400e] hover:bg-[#fef3c7]"
           >
-            <CogIcon size={13} /> Detect
+            <CogIcon size={13} /> {t('Detect')}
           </button>
           <button
             type="button"
             onClick={dismissBanner}
             className="shrink-0 rounded-lg px-2 py-1 font-medium text-[#92400e] hover:bg-[#fef3c7]"
           >
-            Got it
+            {t('Got it')}
           </button>
         </div>
       )}
@@ -588,7 +621,7 @@ export default function CodeProjectPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           {!activeFile ? (
             <div className="flex flex-1 items-center justify-center text-sm text-[#9ca3af]">
-              Select a file from the explorer to open it.
+              {t('Select a file from the explorer to open it.')}
             </div>
           ) : isHtml ? (
             <HtmlWorkspace
@@ -629,12 +662,12 @@ export default function CodeProjectPage() {
             <div className="flex w-72 shrink-0 flex-col border-l border-gray-200 bg-white">
               <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-                  {htmlSelection ? 'Element' : 'Properties'}
+                  {htmlSelection ? t('Element') : t('Properties')}
                 </span>
                 <button
                   type="button"
                   onClick={() => setRightOpen(false)}
-                  title="Hide panel"
+                  title={t('Hide panel')}
                   className="rounded-md px-1.5 py-0.5 text-xs text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
                 >
                   »
@@ -649,7 +682,7 @@ export default function CodeProjectPage() {
                     {matchedCss.length > 0 && (
                       <div className="border-b border-[#e5e7eb] bg-[#f9fafb] p-3">
                         <div className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
-                          <PaletteIcon size={11} /> Styled by — open the CSS rule
+                          <PaletteIcon size={11} /> {t('Styled by — open the CSS rule')}
                         </div>
                         <div className="space-y-1">
                           {matchedCss.map((r) => (
@@ -657,7 +690,7 @@ export default function CodeProjectPage() {
                               key={r.path + ':' + r.index}
                               type="button"
                               onClick={() => openRule(r)}
-                              title={`${r.path} — open this rule in the CSS editor`}
+                              title={t('{path} — open this rule in the CSS editor', { path: r.path })}
                               className="flex w-full items-center justify-between gap-2 rounded-md border border-[#e5e7eb] bg-white px-2 py-1 text-left hover:border-[#4f46e5] hover:bg-[#eef2ff]"
                             >
                               <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-[#4f46e5]">{r.selector}</span>
@@ -681,9 +714,8 @@ export default function CodeProjectPage() {
                   </>
                 ) : (
                   <p className="p-4 text-sm leading-relaxed text-[#9ca3af]">
-                    Switch to <span className="font-semibold text-[#6b7280]">Edit</span> and click any
-                    element in the page to change its text, link, colors, border, spacing and layout
-                    here. Or drag a component from the left onto the page.
+                    {t('Switch to')} <span className="font-semibold text-[#6b7280]">{t('Edit')}</span>{' '}
+                    {t('and click any element in the page to change its text, link, colors, border, spacing and layout here. Or drag a component from the left onto the page.')}
                   </p>
                 )}
               </div>

@@ -132,6 +132,35 @@ describe('applyElementPatch', () => {
     expect(img.getAttribute('alt')).toBe('B')
   })
 
+  it('alignBlock sets auto side margins and round-trips via describeElement', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { alignBlock: 'right' })
+    expect(p.style.marginLeft).toBe('auto')
+    expect(p.style.marginRight).toBe('0px')
+    expect(describeElement(p).alignBlock).toBe('right')
+
+    applyElementPatch(p, { alignBlock: 'center' })
+    expect(p.style.marginLeft).toBe('auto')
+    expect(p.style.marginRight).toBe('auto')
+    expect(describeElement(p).alignBlock).toBe('center')
+
+    applyElementPatch(p, { alignBlock: 'left' })
+    expect(p.style.marginRight).toBe('auto')
+    expect(describeElement(p).alignBlock).toBe('left')
+
+    applyElementPatch(p, { alignBlock: '' })
+    expect(p.style.marginLeft).toBe('')
+    expect(p.style.marginRight).toBe('')
+    expect(describeElement(p).alignBlock).toBe('')
+  })
+
+  it('alignBlock promotes inline elements to a shrink-wrapped block', () => {
+    const a = document.getElementById('link') // <a> computes as inline in jsdom
+    applyElementPatch(a, { alignBlock: 'center' })
+    expect(a.style.display).toBe('block')
+    expect(a.style.width).toBe('fit-content')
+  })
+
   it('sets and clears inline styles', () => {
     const p = document.getElementById('para')
     applyElementPatch(p, { fontSize: 24, color: '#ff0000', textAlign: 'center', fontWeight: '700' })

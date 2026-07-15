@@ -32,6 +32,17 @@ function isVerticalNavbar(c) {
   return c?.type === 'navbar' && c.props?.navLayout === 'vertical'
 }
 
+// Links position inside a horizontal navbar ('right' is the space-between
+// default). Auto margins absorb the free row space before justify-content,
+// which is what slides the links block left / center.
+function navbarLinksAlignCss(c) {
+  if (c?.type !== 'navbar' || (c.props?.navLayout || 'horizontal') !== 'horizontal') return ''
+  const v = c.props?.linksAlign
+  if (v === 'left') return 'margin-right:auto;'
+  if (v === 'center') return 'margin-left:auto;margin-right:auto;'
+  return ''
+}
+
 function isViewportStretch(c) {
   return c?.type === 'region' || (
     c?.type === 'navbar' && !isVerticalNavbar(c) && c.props?.widthMode !== 'boxed'
@@ -548,17 +559,20 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
     }
     for (const c of comps) {
       const hide = c.hidden ? ' display:none;' : ''
+      const linksAlign = navbarLinksAlignCss(c)
       if (page.flowMode) {
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
         css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, true))} overflow:${fixed ? 'hidden' : 'visible'}; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
         if (FLOW_FULL_WIDTH_TYPES.has(c.type) && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner, .c-${c.id} > .section-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }
+        if (linksAlign) css += `.c-${c.id} > .nav-inner > .links { ${linksAlign} }\n`
       } else {
         css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false))} ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
         if (c.type === 'navbar' && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }
+        if (linksAlign) css += `.c-${c.id} > .nav-inner > .links { ${linksAlign} }\n`
       }
     }
   }

@@ -50,6 +50,7 @@ export const registry = {
         { label: 'Contact', href: '#contact' },
       ],
       navLayout: 'horizontal',
+      linksAlign: 'right',
       mobileNavMode: 'menu',
       widthMode: 'full',
       contentWidth: 980,
@@ -71,6 +72,16 @@ export const registry = {
           ['centered', 'Centered'],
           ['twoRow', 'Two row'],
           ['vertical', 'Vertical'],
+        ],
+      },
+      {
+        key: 'linksAlign',
+        label: 'Links position',
+        control: 'select',
+        options: [
+          ['right', 'Right (opposite the brand)'],
+          ['center', 'Centered'],
+          ['left', 'Next to the brand'],
         ],
       },
       {
@@ -266,8 +277,9 @@ export const registry = {
       { key: 'contentWidth', label: 'Max content width (desktop)', control: 'px' },
     ],
     editableStyles: [
-      'backgroundColor', 'backgroundImage', 'color', 'padding', 'borderRadius',
-      'borderWidth', 'borderStyle', 'borderColor', 'boxShadow', 'opacity',
+      'backgroundColor', 'backgroundImage', 'color', 'textAlign', 'padding',
+      'borderRadius', 'borderWidth', 'borderStyle', 'borderColor', 'boxShadow',
+      'opacity',
     ],
   },
 

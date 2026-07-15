@@ -97,6 +97,57 @@ function SectionTitle({ children }) {
   )
 }
 
+// Tiny inline align glyphs (text lines / a box inside its row) — the panel is
+// 288px wide, so icon buttons beat three word-buttons per row.
+function TextAlignGlyph({ side }) {
+  const x = side === 'center' ? [2, 4, 3] : side === 'right' ? [2, 6, 4] : [2, 2, 2]
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d={`M${x[0]} 4h${14 - x[0]}M${x[1]} 8h${14 - 2 * (x[1] - 2)}M${x[2]} 12h${12 - x[2]}`} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function BoxAlignGlyph({ side }) {
+  const bx = side === 'center' ? 5.5 : side === 'right' ? 9 : 2
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M1 2v12M15 2v12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.55" />
+      <rect x={bx} y="5" width="5" height="6" rx="1.2" fill="currentColor" />
+    </svg>
+  )
+}
+
+// One row of segmented icon buttons; clicking the active choice clears it.
+function AlignButtons({ label, value, onPick, kind, t }) {
+  const Glyph = kind === 'text' ? TextAlignGlyph : BoxAlignGlyph
+  const titles = kind === 'text'
+    ? { left: t('Align text left'), center: t('Align text center'), right: t('Align text right') }
+    : { left: t('Place at the left'), center: t('Place in the center'), right: t('Place at the right') }
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-[#374151]">{label}</span>
+      <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5">
+        {['left', 'center', 'right'].map((side) => (
+          <button
+            key={side}
+            type="button"
+            title={titles[side]}
+            onClick={() => onPick(value === side ? '' : side)}
+            className={
+              value === side
+                ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white'
+                : 'rounded-md px-2.5 py-1 text-[#374151] hover:bg-[#f3f4f6]'
+            }
+          >
+            <Glyph side={side} />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Properties panel for the element selected inside the HTML edit iframe.
 // Mirrors the component-mode panel: content, typography, colours, then the
 // duplicate/move/delete actions. All edits hit the live DOM via the
@@ -212,6 +263,31 @@ export default function HtmlElementPanel({
           </div>
         </>
       )}
+
+      {/* One-click alignment — the answer to "shift this left/right". Text
+          nudges the writing; Element slides the whole box inside its row
+          (auto side margins, which also work on flex children like navbar
+          links — no Display/Justify digging required). */}
+      <SectionTitle>{t('Align')}</SectionTitle>
+      <div className="space-y-2">
+        <AlignButtons
+          label={t('Text')}
+          kind="text"
+          value={info.textAlign === 'start' ? 'left' : info.textAlign === 'end' ? 'right' : info.textAlign}
+          onPick={(v) => onChange({ textAlign: v })}
+          t={t}
+        />
+        <AlignButtons
+          label={t('Element')}
+          kind="box"
+          value={info.alignBlock}
+          onPick={(v) => onChange({ alignBlock: v })}
+          t={t}
+        />
+        <p className="text-[11px] leading-snug text-[#9ca3af]">
+          {t('Element slides the whole box inside its row — e.g. push the navbar links to the left or center.')}
+        </p>
+      </div>
 
       <SectionTitle>{t('Typography')}</SectionTitle>
       <div className="space-y-2">

@@ -125,6 +125,15 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
             flexDirection: mobileMenu || linkColumn ? 'column' : 'row',
             alignItems: centered ? 'center' : linkColumn ? 'stretch' : 'center',
             justifyContent: centered ? 'center' : undefined,
+            // Links position (horizontal layout): auto margins absorb the free
+            // space before justify-content, so 'left' parks the links next to
+            // the brand and 'center' centers them in the remaining row.
+            marginLeft:
+              !stacked && !mobileMenu && props.linksAlign === 'center' ? 'auto' : undefined,
+            marginRight:
+              !stacked && !mobileMenu && ['center', 'left'].includes(props.linksAlign)
+                ? 'auto'
+                : undefined,
             gap: scaledPx(mobileMenu || linkColumn ? 6 : isMobile ? 16 : 20, boxScale),
             rowGap: scaledPx(6, boxScale),
             flexWrap: 'wrap',

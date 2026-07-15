@@ -104,6 +104,17 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     justifyContent: cs ? String(cs.justifyContent || '') : '',
     alignItems: cs ? String(cs.alignItems || '') : '',
     gap: cs ? px(cs.columnGap || cs.gap) : 0,
+    // One-click horizontal placement inside the parent (auto side margins).
+    // Read from the INLINE style: computed styles resolve `auto` to pixels,
+    // so only our own writes round-trip — which is exactly what we want.
+    alignBlock:
+      el.style.marginLeft === 'auto' && el.style.marginRight === 'auto'
+        ? 'center'
+        : el.style.marginLeft === 'auto'
+          ? 'right'
+          : el.style.marginRight === 'auto'
+            ? 'left'
+            : '',
   }
 }
 
@@ -227,6 +238,36 @@ export function applyElementPatch(el, patch = {}) {
   if (patch.overflow !== undefined) {
     if (patch.overflow && patch.overflow !== 'visible') setImp('overflow', patch.overflow)
     else el.style.removeProperty('overflow')
+  }
+  // One-click horizontal placement inside the parent. Auto side margins work
+  // for BOTH block elements and flex children (auto margins absorb the free
+  // space before justify-content distributes it — this is exactly how you
+  // push a navbar's links left/center/right). Inline elements are promoted to
+  // a shrink-wrapped block first, since margins can't move them otherwise.
+  if (patch.alignBlock !== undefined) {
+    if (patch.alignBlock) {
+      try {
+        const view = el.ownerDocument?.defaultView
+        const disp = view ? view.getComputedStyle(el).display : ''
+        if (disp === 'inline') {
+          setImp('display', 'block')
+          setImp('width', 'fit-content')
+        }
+      } catch { /* ignore — margins still apply */ }
+    }
+    if (patch.alignBlock === 'left') {
+      setImp('margin-left', '0')
+      setImp('margin-right', 'auto')
+    } else if (patch.alignBlock === 'center') {
+      setImp('margin-left', 'auto')
+      setImp('margin-right', 'auto')
+    } else if (patch.alignBlock === 'right') {
+      setImp('margin-left', 'auto')
+      setImp('margin-right', '0')
+    } else {
+      el.style.removeProperty('margin-left')
+      el.style.removeProperty('margin-right')
+    }
   }
   // Flex layout controls (only take effect on flex/inline-flex containers, but
   // harmless otherwise) — the practical way to space/align a navbar's items.

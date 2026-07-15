@@ -156,10 +156,18 @@ function navbar(c) {
       return `<a href="${esc(href || '#')}"${linkAttrs(href)}>${esc(l.label)}</a>`
     })
     .join('\n          ')
+  // Links position (horizontal only): auto margins slide the links block
+  // left / center inside the row; 'right' is the space-between default.
+  const align =
+    layout === 'horizontal' && p.linksAlign === 'left'
+      ? ' style="margin-right:auto"'
+      : layout === 'horizontal' && p.linksAlign === 'center'
+        ? ' style="margin-left:auto;margin-right:auto"'
+        : ''
   return `<header class="rh-navbar"${styleAttr(c)}>
       <div class="rh-container rh-nav-inner rh-nav-${layout}">
         <span class="rh-brand">${esc(p.brand)}</span>
-        <nav class="rh-links">\n          ${links}\n        </nav>
+        <nav class="rh-links"${align}>\n          ${links}\n        </nav>
       </div>
     </header>`
 }

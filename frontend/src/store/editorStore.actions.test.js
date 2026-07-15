@@ -167,6 +167,16 @@ describe('selection invariants', () => {
 })
 
 describe('native tabs drops', () => {
+  it('creates the Bootstrap palette choice as editable native tabs', () => {
+    freshTwoPageSchema()
+    s().addComponent('tabs', 0, 0, null, 'bootstrap')
+    const tabs = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(tabs.type).toBe('tabs')
+    expect(tabs.props.activeId).toBe('home')
+    expect(tabs.props.tabs.map((t) => t.label)).toEqual(['Home', 'Profile', 'Contact'])
+    expect(tabs.props.activeTabBorderColor).toBe('#dee2e6')
+  })
+
   it('creates palette tab presets as native tabs with matching labels', () => {
     freshTwoPageSchema()
     s().addComponent('tabs', 0, 0, null, 'simple')
@@ -190,6 +200,18 @@ describe('native tabs drops', () => {
 })
 
 describe('native navbar drops', () => {
+  it('creates the Bootstrap palette choice as an editable responsive navbar', () => {
+    freshTwoPageSchema()
+    s().addComponent('navbar', 0, 0, null, 'bootstrap')
+    const nav = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(nav.type).toBe('navbar')
+    expect(nav.props.brand).toBe('Navbar')
+    expect(nav.props.mobileNavMode).toBe('menu')
+    expect(nav.props.widthMode).toBe('full')
+    expect(nav.props.links.map((l) => l.label)).toEqual(['Home', 'Features', 'Pricing'])
+    expect(nav.styles).toMatchObject({ backgroundColor: '#f8f9fa', color: '#212529' })
+  })
+
   it('creates vertical navbar presets with editable links and compact size', () => {
     freshTwoPageSchema()
     s().addComponent('navbar', 0, 0, null, 'vertical', { w: 220, h: 320 })

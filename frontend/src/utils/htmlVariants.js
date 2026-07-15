@@ -170,32 +170,62 @@ const dividers = [
   ['dot', 'Centered dot', `<div style="display:flex;align-items:center;gap:14px;margin:32px 0;color:#cbd5e1;"><span style="flex:1;height:1px;background:#e2e8f0;"></span><span style="font-size:18px;">•</span><span style="flex:1;height:1px;background:#e2e8f0;"></span></div>`],
 ]
 
+// Canonical Bootstrap markup with small inline fallbacks. The class names remain
+// useful when a project later loads Bootstrap, while the editor/export still
+// looks correct without making Bootstrap a runtime dependency of the builder.
+const bootstrapVariants = {
+  navbar: ['bootstrap', 'Bootstrap Navbar', `<nav class="navbar navbar-expand-lg bg-body-tertiary" style="display:flex;align-items:center;padding:12px 20px;background:#f8f9fa;color:#212529;border-bottom:1px solid #dee2e6;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;"><div class="container-fluid" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:20px;"><a class="navbar-brand" href="#" style="color:#212529;font-size:20px;font-weight:600;text-decoration:none;">Navbar</a><div class="navbar-nav" style="display:flex;align-items:center;gap:18px;"><a class="nav-link active" aria-current="page" href="#" style="color:#212529;text-decoration:none;">Home</a><a class="nav-link" href="#features" style="color:#495057;text-decoration:none;">Features</a><a class="nav-link" href="#pricing" style="color:#495057;text-decoration:none;">Pricing</a></div></div></nav>`, { foundation: 'bootstrap', recommended: true }],
+  heading: ['bootstrap', 'Bootstrap Heading', `<h1 class="display-4" style="margin:0;color:#212529;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:clamp(2.5rem,5vw,3.5rem);font-weight:300;line-height:1.2;">Bootstrap heading</h1>`, { foundation: 'bootstrap', recommended: true }],
+  text: ['bootstrap', 'Bootstrap Lead Text', `<p class="lead" style="margin:0;color:#212529;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:1.25rem;font-weight:300;line-height:1.5;">This is a lead paragraph. It stands out from regular body text.</p>`, { foundation: 'bootstrap', recommended: true }],
+  button: ['bootstrap', 'Bootstrap Button', `<button type="button" class="btn btn-primary" style="display:inline-block;padding:.5rem 1rem;border:1px solid #0d6efd;border-radius:.375rem;background:#0d6efd;color:#fff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:1rem;font-weight:400;line-height:1.5;text-align:center;cursor:pointer;">Primary</button>`, { foundation: 'bootstrap', recommended: true }],
+  linkbutton: ['bootstrap', 'Bootstrap Link Button', `<a href="#" class="btn btn-link" role="button" style="display:inline-block;padding:.5rem 1rem;border-radius:.375rem;color:#0d6efd;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:1rem;line-height:1.5;text-align:center;text-decoration:underline;">Link button</a>`, { foundation: 'bootstrap', recommended: true }],
+  image: ['bootstrap', 'Bootstrap Image', `<img class="img-fluid rounded" src="https://picsum.photos/seed/bootstrap/800/450" alt="Responsive example" style="display:block;max-width:100%;height:auto;border-radius:.375rem;" />`, { foundation: 'bootstrap', recommended: true }],
+  section: ['bootstrap', 'Bootstrap Section', `<section class="container py-5" style="box-sizing:border-box;width:100%;max-width:1140px;margin:0 auto;padding:3rem 1.5rem;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;"><h2 style="margin:0 0 .75rem;color:#212529;font-size:2rem;">Section title</h2><p style="margin:0;color:#6c757d;font-size:1rem;line-height:1.5;">A responsive Bootstrap-style content section.</p></section>`, { foundation: 'bootstrap', recommended: true }],
+  card: ['bootstrap', 'Bootstrap Card', `<div class="card" style="max-width:320px;border:1px solid rgba(0,0,0,.175);border-radius:.375rem;background:#fff;color:#212529;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;overflow:hidden;"><img class="card-img-top" src="https://picsum.photos/seed/bootstrap-card/640/320" alt="" style="display:block;width:100%;height:150px;object-fit:cover;"><div class="card-body" style="padding:1rem;"><h5 class="card-title" style="margin:0 0 .5rem;font-size:1.25rem;">Card title</h5><p class="card-text" style="margin:0 0 1rem;line-height:1.5;">Supporting text for the Bootstrap card.</p><a href="#" class="btn btn-primary" style="display:inline-block;padding:.375rem .75rem;border-radius:.375rem;background:#0d6efd;color:#fff;text-decoration:none;">Go somewhere</a></div></div>`, { foundation: 'bootstrap', recommended: true }],
+  list: ['bootstrap', 'Bootstrap List Group', `<div class="list-group" style="display:flex;max-width:420px;flex-direction:column;border-radius:.375rem;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;overflow:hidden;"><a href="#" class="list-group-item list-group-item-action active" aria-current="true" style="padding:.75rem 1rem;border:1px solid #0d6efd;background:#0d6efd;color:#fff;text-decoration:none;">Active item</a><a href="#" class="list-group-item list-group-item-action" style="padding:.75rem 1rem;border:1px solid rgba(0,0,0,.125);border-top:0;background:#fff;color:#212529;text-decoration:none;">Second item</a><a href="#" class="list-group-item list-group-item-action" style="padding:.75rem 1rem;border:1px solid rgba(0,0,0,.125);border-top:0;background:#fff;color:#212529;text-decoration:none;">Third item</a></div>`, { foundation: 'bootstrap', recommended: true }],
+  quote: ['bootstrap', 'Bootstrap Blockquote', `<figure style="margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;"><blockquote class="blockquote" style="margin:0 0 1rem;color:#212529;font-size:1.25rem;"><p style="margin:0;">A well-known quote contained in a blockquote element.</p></blockquote><figcaption class="blockquote-footer" style="color:#6c757d;font-size:.875rem;">Someone famous in <cite title="Source Title">Source Title</cite></figcaption></figure>`, { foundation: 'bootstrap', recommended: true }],
+  badge: ['bootstrap', 'Bootstrap Badge', `<span class="badge text-bg-primary" style="display:inline-block;padding:.35em .65em;border-radius:.375rem;background:#0d6efd;color:#fff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:.75em;font-weight:700;line-height:1;">New</span>`, { foundation: 'bootstrap', recommended: true }],
+  input: ['bootstrap', 'Bootstrap Form Control', `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;"><label for="bootstrap-email" class="form-label" style="display:block;margin-bottom:.5rem;color:#212529;">Email address</label><input id="bootstrap-email" type="email" class="form-control" placeholder="name@example.com" style="display:block;box-sizing:border-box;width:100%;padding:.375rem .75rem;border:1px solid #ced4da;border-radius:.375rem;background:#fff;color:#212529;font-size:1rem;line-height:1.5;" /></div>`, { foundation: 'bootstrap', recommended: true }],
+  select: ['bootstrap', 'Bootstrap Select', `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;"><label for="bootstrap-select" class="form-label" style="display:block;margin-bottom:.5rem;color:#212529;">Choose an option</label><select id="bootstrap-select" class="form-select" style="display:block;box-sizing:border-box;width:100%;padding:.375rem 2.25rem .375rem .75rem;border:1px solid #ced4da;border-radius:.375rem;background:#fff;color:#212529;font-size:1rem;line-height:1.5;"><option selected>Open this menu</option><option>One</option><option>Two</option><option>Three</option></select></div>`, { foundation: 'bootstrap', recommended: true }],
+  alert: ['bootstrap', 'Bootstrap Alert', `<div class="alert alert-primary" role="alert" style="padding:1rem;border:1px solid #b6d4fe;border-radius:.375rem;background:#cfe2ff;color:#084298;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.5;">A simple primary alert—check it out!</div>`, { foundation: 'bootstrap', recommended: true }],
+  accordion: ['bootstrap', 'Bootstrap Accordion', `<div class="accordion" style="max-width:680px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;"><details class="accordion-item" open style="border:1px solid rgba(0,0,0,.125);background:#fff;"><summary class="accordion-button" style="padding:1rem 1.25rem;color:#052c65;background:#cfe2ff;font-weight:500;cursor:pointer;">Accordion Item #1</summary><div class="accordion-body" style="padding:1rem 1.25rem;color:#212529;line-height:1.5;">This item uses Bootstrap's accordion structure and remains usable without extra JavaScript.</div></details><details class="accordion-item" style="border:1px solid rgba(0,0,0,.125);border-top:0;background:#fff;"><summary class="accordion-button collapsed" style="padding:1rem 1.25rem;color:#212529;font-weight:500;cursor:pointer;">Accordion Item #2</summary><div class="accordion-body" style="padding:1rem 1.25rem;color:#212529;line-height:1.5;">Add another answer here.</div></details></div>`, { foundation: 'bootstrap', recommended: true }],
+  container: ['bootstrap', 'Bootstrap Container', `<div class="container" style="box-sizing:border-box;width:100%;max-width:1140px;min-height:140px;margin:0 auto;padding:1.5rem;border:1px solid #dee2e6;border-radius:.375rem;background:#fff;color:#212529;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;"><h3 style="margin:0 0 .5rem;">Responsive container</h3><p style="margin:0;color:#6c757d;line-height:1.5;">Place grouped content inside this Bootstrap container.</p></div>`, { foundation: 'bootstrap', recommended: true }],
+  tabs: ['bootstrap', 'Bootstrap Tabs', `<div data-builder-tabs="tabs-bootstrap" style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;--builder-tab-bg:transparent;--builder-tab-color:#495057;--builder-tab-active-bg:#fff;--builder-tab-active-color:#495057;--builder-tab-active-border:#dee2e6;--builder-tab-padding:.5rem 1rem;--builder-tab-radius:.375rem .375rem 0 0;"><div class="nav nav-tabs" role="tablist" style="display:flex;gap:0;border-bottom:1px solid #dee2e6;"><button type="button" class="nav-link active" role="tab" data-builder-tab="home" aria-selected="true">Home</button><button type="button" class="nav-link" role="tab" data-builder-tab="profile" aria-selected="false">Profile</button><button type="button" class="nav-link" role="tab" data-builder-tab="contact" aria-selected="false">Contact</button></div><div class="tab-content" style="padding:1rem 0;"><div class="tab-pane active" role="tabpanel" data-builder-panel="home">Home tab content.</div><div class="tab-pane" role="tabpanel" data-builder-panel="profile" hidden>Profile tab content.</div><div class="tab-pane" role="tabpanel" data-builder-panel="contact" hidden>Contact tab content.</div></div></div>`, { foundation: 'bootstrap', recommended: true }],
+  divider: ['bootstrap', 'Bootstrap Divider', `<hr class="border border-secondary border-1 opacity-25" style="margin:1rem 0;border:0;border-top:1px solid #6c757d;opacity:.25;" />`, { foundation: 'bootstrap', recommended: true }],
+  spacer: ['bootstrap', 'Bootstrap Spacing', `<div class="py-4" aria-hidden="true" style="box-sizing:border-box;height:48px;"></div>`, { foundation: 'bootstrap', recommended: true }],
+}
+
 function toEntries(list) {
-  return list.map(([id, label, html]) => ({ id, label, html }))
+  return list.map(([id, label, html, metadata = {}]) => ({ id, label, html, ...metadata }))
+}
+
+function withBootstrap(type, list) {
+  const recommended = bootstrapVariants[type]
+  return toEntries(recommended ? [recommended, ...list] : list)
 }
 
 export const HTML_VARIANTS = {
-  button: toEntries(buttons),
-  linkbutton: toEntries(linkbuttons),
-  navbar: toEntries(navbars),
-  card: toEntries(cards),
-  badge: toEntries(badges),
-  heading: toEntries(headings),
-  text: toEntries(texts),
-  image: toEntries(images),
-  quote: toEntries(quotes),
-  list: toEntries(lists),
-  input: toEntries(inputs),
-  select: toEntries(selects),
-  alert: toEntries(alerts),
-  accordion: toEntries(accordions),
-  tabs: toEntries(tabs),
-  container: toEntries(containers),
+  button: withBootstrap('button', buttons),
+  linkbutton: withBootstrap('linkbutton', linkbuttons),
+  navbar: withBootstrap('navbar', navbars),
+  card: withBootstrap('card', cards),
+  badge: withBootstrap('badge', badges),
+  heading: withBootstrap('heading', headings),
+  text: withBootstrap('text', texts),
+  image: withBootstrap('image', images),
+  quote: withBootstrap('quote', quotes),
+  list: withBootstrap('list', lists),
+  input: withBootstrap('input', inputs),
+  select: withBootstrap('select', selects),
+  alert: withBootstrap('alert', alerts),
+  accordion: withBootstrap('accordion', accordions),
+  tabs: withBootstrap('tabs', tabs),
+  container: withBootstrap('container', containers),
   icon: toEntries(icons),
   html: toEntries(htmlEmbeds),
-  spacer: toEntries(spacers),
-  section: toEntries(sections),
-  divider: toEntries(dividers),
+  spacer: withBootstrap('spacer', spacers),
+  section: withBootstrap('section', sections),
+  divider: withBootstrap('divider', dividers),
 }
 
 export function htmlVariantsFor(type) {

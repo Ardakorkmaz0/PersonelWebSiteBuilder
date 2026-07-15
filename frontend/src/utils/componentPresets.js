@@ -2,6 +2,7 @@ import { normalizeTheme } from './theme.js'
 
 export const COMPONENT_PRESETS = {
   navbar: [
+    { id: 'bootstrap', label: 'Bootstrap Navbar' },
     { id: 'dark', label: 'Dark bar' },
     { id: 'light', label: 'Light bar' },
     { id: 'cta', label: 'With button' },
@@ -117,6 +118,18 @@ export const COMPONENT_PRESETS = {
 // componentPresetProps returns a props patch merged in at create time.
 export const COMPONENT_PRESET_PROPS = {
   navbar: {
+    bootstrap: {
+      brand: 'Navbar',
+      links: [
+        { label: 'Home', href: '#' },
+        { label: 'Features', href: '#features' },
+        { label: 'Pricing', href: '#pricing' },
+      ],
+      navLayout: 'horizontal',
+      mobileNavMode: 'menu',
+      widthMode: 'full',
+      contentWidth: 960,
+    },
     dark: {
       brand: 'Brand',
       links: [
@@ -229,6 +242,29 @@ export const COMPONENT_PRESET_PROPS = {
     underline: { fieldBorderRadius: '0px', fieldBorderColor: 'transparent', fieldBackgroundColor: 'transparent', fieldBoxShadow: 'inset 0 -2px 0 #cbd5e1' },
   },
   tabs: {
+    bootstrap: {
+      tabs: [
+        { id: 'home', label: 'Home' },
+        { id: 'profile', label: 'Profile' },
+        { id: 'contact', label: 'Contact' },
+      ],
+      activeId: 'home',
+      tabBackgroundColor: 'transparent',
+      tabTextColor: '#495057',
+      activeTabBackgroundColor: '#ffffff',
+      activeTabColor: '#495057',
+      activeTabBorderColor: '#dee2e6',
+      tabBorderRadius: '6px 6px 0 0',
+      tabPadding: '8px 16px',
+      tabGap: '0px',
+      tablistBackgroundColor: 'transparent',
+      tablistBorderColor: '#dee2e6',
+      tablistPadding: '0px',
+      panelBackgroundColor: '#ffffff',
+      panelBorderColor: 'transparent',
+      panelBorderRadius: '0px',
+      panelPadding: '16px 0',
+    },
     simple: {
       tabs: [
         { id: 'overview', label: 'Overview' },
@@ -298,6 +334,15 @@ export function componentPresetStyles(type, presetId, theme) {
 
   const map = {
     navbar: {
+      bootstrap: {
+        backgroundColor: '#f8f9fa',
+        color: '#212529',
+        borderRadius: '0px',
+        borderWidth: '0px',
+        borderStyle: 'none',
+        boxShadow: 'inset 0 -1px 0 #dee2e6',
+        padding: '12px 20px',
+      },
       dark: { backgroundColor: t.headerColor, color: t.headerTextColor, boxShadow: none },
       light: {
         backgroundColor: t.surfaceColor,
@@ -604,6 +649,15 @@ export function componentPresetStyles(type, presetId, theme) {
       underline: { fontFamily: t.fontFamily },
     },
     tabs: {
+      bootstrap: {
+        backgroundColor: '#ffffff',
+        borderRadius: '0px',
+        padding: '0px',
+        borderWidth: '0px',
+        borderStyle: 'none',
+        borderColor: transparent,
+        boxShadow: none,
+      },
       simple: {
         backgroundColor: '#ffffff',
         borderRadius: '14px',

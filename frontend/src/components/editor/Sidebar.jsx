@@ -145,12 +145,14 @@ function PalettePreviewPanel({ preview, onClose }) {
 //  - Free canvas (no `onPick`): most variants carry HTML + size and become an
 //    editable HtmlEmbed; structural widgets can carry native component data.
 function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
+  const { t } = useLanguage()
   const [w, h] = htmlSize(type, variant)
   const nativeCanvas = !onPick && NATIVE_CANVAS_TYPES.has(type)
   const preset = variant.id === 'default' ? null : variant.id
+  const variantLabel = t(variant.label)
   const inspect = () => onInspect?.({
     type,
-    label: variant.label,
+    label: variantLabel,
     html: variant.html,
     wide,
     size: `${w} x ${h}`,
@@ -159,13 +161,21 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `palette-${type}-${variant.id}`,
     data: nativeCanvas
-      ? { from: 'palette', type, preset, w, h, label: variant.label }
-      : { from: 'palette', type, preset, html: variant.html, w, h, label: variant.label },
+      ? { from: 'palette', type, preset, w, h, label: variantLabel }
+      : { from: 'palette', type, preset, html: variant.html, w, h, label: variantLabel },
   })
   const preview = (
     <>
       <HtmlPreview html={variant.html} wide={wide} />
-      <div className="mt-1 truncate text-center text-[10px] text-[#6b7280]">{variant.label}</div>
+      <div className="mt-1 min-h-6 break-words text-center text-[10px] leading-3 text-[#6b7280]">{variantLabel}</div>
+      {variant.recommended && (
+        <div
+          title={t('Recommended component')}
+          className="mx-auto mt-1 flex w-fit items-center gap-1 rounded-full bg-[#dcfce7] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[#15803d]"
+        >
+          <span aria-hidden="true">✓</span> {t('Recommended')}
+        </div>
+      )}
     </>
   )
   if (onPick) {
@@ -175,7 +185,7 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
         onDragStart={(e) => {
           inspect()
           e.dataTransfer.setData(DRAG_MIME, type)
-          e.dataTransfer.setData('text/plain', variant.label)
+          e.dataTransfer.setData('text/plain', variantLabel)
           e.dataTransfer.effectAllowed = 'copy'
           window.setTimeout(() => onPick(type, variant.html), 0)
         }}
@@ -184,8 +194,8 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
           inspect()
           onPick(type, variant.html)
         }}
-        title={`Click to place, or drag onto the page — ${variant.label}`}
-        className="cursor-pointer rounded-lg border border-[#e5e7eb] bg-white p-1.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing"
+        title={`Click to place, or drag onto the page — ${variantLabel}`}
+        className={`cursor-pointer rounded-lg border p-1.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${variant.recommended ? 'border-[#86efac] bg-[#f7fff9]' : 'border-[#e5e7eb] bg-white'}`}
       >
         {preview}
       </div>
@@ -203,13 +213,13 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
         // arm the placement, then a tap on the canvas drops the component.
         onArm?.(
           nativeCanvas
-            ? { type, preset, w, h, label: variant.label }
-            : { type, preset, html: variant.html, w, h, label: variant.label },
+            ? { type, preset, w, h, label: variantLabel }
+            : { type, preset, html: variant.html, w, h, label: variantLabel },
         )
       }}
-      title={`Click to place, or drag onto the canvas — ${variant.label}`}
+      title={`Click to place, or drag onto the canvas — ${variantLabel}`}
       style={{ touchAction: 'manipulation' }}
-      className={`cursor-grab rounded-lg border border-[#e5e7eb] bg-white p-1.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
+      className={`cursor-grab rounded-lg border p-1.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${variant.recommended ? 'border-[#86efac] bg-[#f7fff9]' : 'border-[#e5e7eb] bg-white'} ${isDragging ? 'opacity-40' : ''}`}
     >
       {preview}
     </div>
@@ -218,6 +228,7 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
 
 // A component category: click the row to reveal its variants. Same in both modes.
 function PaletteCategory({ item, onPick, onArm, onInspect, open, onToggle }) {
+  const { t } = useLanguage()
   const variants = variantsForType(item.type)
   const wide = WIDE_HTML.has(item.type)
   const firstVariant = variants[0]
@@ -244,7 +255,7 @@ function PaletteCategory({ item, onPick, onArm, onInspect, open, onToggle }) {
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f3f4f6] text-base text-[#374151]">
           {item.icon}
         </span>
-        <span className="flex-1 text-left font-medium text-[#374151]">{item.label}</span>
+        <span className="min-w-0 flex-1 truncate text-left font-medium text-[#374151]">{t(item.label)}</span>
         {variants.length > 0 && <span className="text-[11px] text-[#9ca3af]">{variants.length}</span>}
         {variants.length > 0 && <span className="w-3 text-[10px] text-[#9ca3af]">{open ? '▾' : '▸'}</span>}
       </button>
@@ -536,6 +547,20 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
               {t('Components')}
             </h2>
+            <div className="mb-3 flex gap-2 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-2.5 text-[#166534]">
+              <span
+                aria-hidden="true"
+                className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#22c55e] text-[11px] font-black text-white"
+              >
+                ✓
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold">{t('Bootstrap variants')}</p>
+                <p className="mt-0.5 text-[10px] leading-relaxed text-[#15803d]">
+                  {t('Bootstrap variants use Bootstrap class markup and include dependency-free fallback styles.')}
+                </p>
+              </div>
+            </div>
             <div className="space-y-2">
               {paletteItems.map((item) => (
                 <PaletteCategory

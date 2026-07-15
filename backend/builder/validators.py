@@ -355,6 +355,13 @@ def sanitize_component(comp, depth=0):
         'hidden': bool(comp.get('hidden')),
         'hiddenMobile': bool(comp.get('hiddenMobile')),
     }
+    # Per-breakpoint style overrides (edited while the Mobile viewport is
+    # active): a partial style dict merged over `styles` on phones. Same
+    # whitelist as the base styles; omitted entirely when empty so legacy
+    # schemas stay byte-identical.
+    styles_mobile = sanitize_styles(comp.get('stylesMobile'))
+    if styles_mobile:
+        clean['stylesMobile'] = styles_mobile
     # Containers / tabs hold nested components (children), recursively cleaned
     # with a depth + count cap. Invalid children are dropped instead of failing
     # the save. Tabs children also carry an optional tabId pointing at one of

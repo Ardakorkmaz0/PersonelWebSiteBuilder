@@ -210,6 +210,34 @@ class TestValidateAndCleanSchema:
         # the parser doesn't see a script-end inside our wrapper.
         assert '</script' not in code.lower()
 
+    def test_styles_mobile_preserved_and_sanitized(self):
+        clean = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [
+                    {
+                        'id': 'h1', 'type': 'heading',
+                        'props': {'text': 'Hi', 'level': 'h1'},
+                        'styles': {'fontSize': '44px'},
+                        'stylesMobile': {
+                            'fontSize': '28px',
+                            'filter': 'expression(alert(1))',  # must be dropped
+                        },
+                        'layout': {'x': 0, 'y': 0, 'w': 600, 'h': 60},
+                    },
+                    {
+                        'id': 'h2', 'type': 'heading',
+                        'props': {'text': 'Plain', 'level': 'h2'},
+                        'styles': {}, 'layout': {'x': 0, 'y': 80, 'w': 600, 'h': 60},
+                    },
+                ],
+            }],
+        })
+        overridden, plain = clean['pages'][0]['components']
+        assert overridden['stylesMobile'] == {'fontSize': '28px'}
+        # No overrides → the key is omitted so legacy schemas stay identical.
+        assert 'stylesMobile' not in plain
+
     def test_region_children_and_navbar_width_settings_are_preserved(self):
         clean = validate_and_clean_schema({
             'pages': [{

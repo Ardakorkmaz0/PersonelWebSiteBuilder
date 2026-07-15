@@ -533,3 +533,48 @@ describe('clipboard + selection shortcuts', () => {
     expect(s().selectedIds).toEqual([])
   })
 })
+
+describe('per-breakpoint styles (stylesMobile)', () => {
+  it('writes style edits to stylesMobile while the mobile viewport is active', () => {
+    freshTwoPageSchema()
+    s().setViewport('pc')
+    s().addComponent('heading', 10, 10)
+    const id = selectCurrentPage(useEditorStore.getState()).components[0].id
+    s().updateStyles(id, { fontSize: '44px' })
+    s().setViewport('mobile')
+    s().updateStyles(id, { fontSize: '28px' })
+    const comp = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(comp.styles.fontSize).toBe('44px') // desktop untouched
+    expect(comp.stylesMobile.fontSize).toBe('28px')
+    s().setViewport('pc')
+  })
+
+  it('clearing a mobile field removes the override (falls back to desktop)', () => {
+    freshTwoPageSchema()
+    s().addComponent('heading', 10, 10)
+    const id = selectCurrentPage(useEditorStore.getState()).components[0].id
+    s().setViewport('mobile')
+    s().updateStyles(id, { fontSize: '28px', color: '#ff0000' })
+    s().updateStyles(id, { fontSize: '' })
+    let comp = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(comp.stylesMobile.fontSize).toBeUndefined()
+    expect(comp.stylesMobile.color).toBe('#ff0000')
+    // Removing the last override drops the whole key.
+    s().updateStyles(id, { color: '' })
+    comp = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(comp.stylesMobile).toBeUndefined()
+    s().setViewport('pc')
+  })
+
+  it('clearMobileStyles drops every override at once', () => {
+    freshTwoPageSchema()
+    s().addComponent('heading', 10, 10)
+    const id = selectCurrentPage(useEditorStore.getState()).components[0].id
+    s().setViewport('mobile')
+    s().updateStyles(id, { fontSize: '28px', color: '#ff0000' })
+    s().clearMobileStyles(id)
+    const comp = selectCurrentPage(useEditorStore.getState()).components[0]
+    expect(comp.stylesMobile).toBeUndefined()
+    s().setViewport('pc')
+  })
+})

@@ -477,8 +477,10 @@ const _FS = { heading: 30, text: 18, card: 17, button: 17, linkbutton: 17, navba
 
 // Estimate the height a component needs at the given (narrow) mobile box width so
 // re-wrapped text isn't clipped. Falls back to the desktop height for non-text.
+// Reads the MOBILE-effective styles: per-breakpoint overrides (stylesMobile)
+// change the font size the auto layout has to make room for.
 function estMobileHeight(c, boxW) {
-  const s = c.styles || {}
+  const s = { ...(c.styles || {}), ...(c.stylesMobile || {}) }
   const p = c.props || {}
   const padTB = _padTB(s.padding)
   const innerW = Math.max(40, boxW - _padLR(s.padding))
@@ -1753,14 +1755,43 @@ export const useEditorStore = create((set, get) => ({
     })
   },
 
+  // Style edits are breakpoint-scoped: while the MOBILE viewport is active
+  // (on a non-flow page) they land in `stylesMobile`, a partial override
+  // merged over the base `styles` only on phones — so "make the heading
+  // smaller on mobile" never touches the desktop design. Clearing a field on
+  // mobile removes the override and the desktop value shows through again.
   updateStyles: (id, patch) => {
     get().record('style-' + id)
     set((state) => {
       const page = selectCurrentPage(state)
-      const components = mapTree(page.components, id, (c) => ({
-        ...c,
-        styles: { ...c.styles, ...patch },
-      }))
+      const mobileScope = state.viewport === 'mobile' && !page.flowMode
+      const components = mapTree(page.components, id, (c) => {
+        if (!mobileScope) return { ...c, styles: { ...c.styles, ...patch } }
+        const over = { ...(c.stylesMobile || {}) }
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === '' || value === null || value === undefined) delete over[key]
+          else over[key] = value
+        }
+        const next = { ...c }
+        if (Object.keys(over).length) next.stylesMobile = over
+        else delete next.stylesMobile
+        return next
+      })
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
+    })
+  },
+
+  // Drop every mobile style override on a component — back to "mobile follows
+  // the desktop styles".
+  clearMobileStyles: (id) => {
+    get().record('style-' + id)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const components = mapTree(page.components, id, (c) => {
+        const next = { ...c }
+        delete next.stylesMobile
+        return next
+      })
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
   },

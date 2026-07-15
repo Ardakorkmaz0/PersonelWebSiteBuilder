@@ -70,6 +70,16 @@ export function layoutFor(component, viewport) {
   return component.layout
 }
 
+// Effective styles for a breakpoint: on mobile the per-breakpoint overrides
+// (stylesMobile — edited while the Mobile viewport is active) merge over the
+// base desktop styles; every other viewport sees the base styles untouched.
+export function stylesFor(component, viewport = 'pc') {
+  const base = component?.styles || {}
+  const over = component?.stylesMobile
+  if (viewport !== 'mobile' || !over) return base
+  return { ...base, ...over }
+}
+
 export function isHidden(component, viewport) {
   return viewport === 'mobile' ? !!component.hiddenMobile : !!component.hidden
 }

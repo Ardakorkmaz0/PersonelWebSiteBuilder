@@ -588,11 +588,14 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
     }
     for (const c of comps) {
       const hide = c.hiddenMobile ? ' display:none;' : ''
+      // Per-breakpoint style overrides (stylesMobile) ride the same media
+      // block — the cascade merges them over the desktop rule above.
+      const mobileStyles = c.stylesMobile ? ` ${styleBlock(c.stylesMobile)}` : ''
       if (page.flowMode) {
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
-        css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, true))} overflow:${fixed ? 'hidden' : 'visible'};${hide} }\n`
+        css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, true))} overflow:${fixed ? 'hidden' : 'visible'};${mobileStyles}${hide} }\n`
       } else {
-        css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, false, 'mobileLayout'))}${hide} }\n`
+        css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, false, 'mobileLayout'))}${mobileStyles}${hide} }\n`
       }
       if (c.type === 'region') {
         for (const child of c.children || []) {

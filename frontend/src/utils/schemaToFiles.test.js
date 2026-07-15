@@ -123,3 +123,40 @@ describe('schemaToSingleHtml mobile navbar', () => {
     expect(html).toContain("navRoot.setAttribute('data-mobile-open'")
   })
 })
+
+describe('schemaToSingleHtml per-breakpoint styles', () => {
+  it('emits stylesMobile overrides inside the mobile media block only', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [
+        {
+          id: 'p1',
+          name: 'Home',
+          mode: 'empty',
+          flowMode: false,
+          canvasWidth: 1000,
+          mobileWidth: 390,
+          components: [
+            {
+              id: 'title1',
+              type: 'heading',
+              props: { text: 'Hello', level: 'h1' },
+              styles: { fontSize: '44px', color: '#111111' },
+              stylesMobile: { fontSize: '28px' },
+              layout: { x: 60, y: 80, w: 600, h: 60 },
+              mobileLayout: { x: 16, y: 60, w: 358, h: 60 },
+            },
+          ],
+        },
+      ],
+    }, 'Site')
+    // Desktop rule keeps the base size; the media block carries the override.
+    const mediaStart = html.indexOf('@media (max-width: 768px)')
+    expect(mediaStart).toBeGreaterThan(-1)
+    const desktop = html.slice(0, mediaStart)
+    const media = html.slice(mediaStart)
+    expect(media).toContain('font-size: 28px')
+    expect(desktop).toContain('font-size: 44px')
+    expect(desktop).not.toContain('font-size: 28px')
+  })
+})

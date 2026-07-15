@@ -758,6 +758,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const viewport = useEditorStore((s) => s.viewport)
   const updateProps = useEditorStore((s) => s.updateProps)
   const updateStyles = useEditorStore((s) => s.updateStyles)
+  const clearMobileStyles = useEditorStore((s) => s.clearMobileStyles)
   const updateTheme = useEditorStore((s) => s.updateTheme)
   const applyTheme = useEditorStore((s) => s.applyTheme)
   const setCustomCss = useEditorStore((s) => s.setCustomCss)
@@ -1527,6 +1528,25 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           />
         </section>
 
+        {/* Mobile viewport = per-breakpoint styling: controls read the merged
+            view (override ?? desktop) and writes land in stylesMobile only. */}
+        {isMobile && !isFlow && (
+          <div className="space-y-2 rounded-lg bg-[#eef2ff] px-3 py-2">
+            <p className="text-[11px] leading-snug text-[#4f46e5]">
+              {t('Style edits here apply to MOBILE only. Clear a field to fall back to the PC value.')}
+            </p>
+            {component.stylesMobile && Object.keys(component.stylesMobile).length > 0 && (
+              <button
+                type="button"
+                onClick={() => clearMobileStyles(component.id)}
+                className="rounded-lg border border-[#4f46e5] bg-white px-2 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#e0e7ff]"
+              >
+                {t('Reset mobile styles')} ({Object.keys(component.stylesMobile).length})
+              </button>
+            )}
+          </div>
+        )}
+
         {visibleStyleGroups(def.editableStyles || [], propertiesMode).map((group) => (
           <section key={group.title} className="space-y-3">
             <SectionTitle>{t(group.title)}</SectionTitle>
@@ -1534,7 +1554,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               <StyleControl
                 key={styleKey}
                 styleKey={styleKey}
-                value={component.styles[styleKey]}
+                value={
+                  isMobile && !isFlow
+                    ? (component.stylesMobile?.[styleKey] ?? component.styles[styleKey])
+                    : component.styles[styleKey]
+                }
                 onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
               />
             ))}
@@ -1548,7 +1572,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               <StyleControl
                 key={styleKey}
                 styleKey={styleKey}
-                value={component.styles[styleKey]}
+                value={
+                  isMobile && !isFlow
+                    ? (component.stylesMobile?.[styleKey] ?? component.styles[styleKey])
+                    : component.styles[styleKey]
+                }
                 onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
               />
             ))}

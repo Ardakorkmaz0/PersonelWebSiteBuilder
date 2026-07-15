@@ -7,6 +7,7 @@ import {
   flowItemStyle,
   isHidden,
   isFlowFullWidth,
+  stylesFor,
 } from '../renderer/layout.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { TAB_STYLES } from '../renderer/constants.js'
@@ -430,7 +431,7 @@ export function RegionEditor({
     : component.layout || {}
   const designH = Math.max(80, Math.round(activeRegionLayout.h || 360))
   const { setNodeRef, isOver } = useDroppable({ id: component.id })
-  const userStyles = sanitizeStyles(component.styles)
+  const userStyles = sanitizeStyles(stylesFor(component, viewport))
   const { ref, actualW } = useFitToWidth(designW, designH)
   const safeW = Math.max(1, Math.min(designW, actualW || designW))
   const showGrid = selectedId === component.id || isOver || kids.length === 0
@@ -517,12 +518,13 @@ export function ContainerEditor({
   onBrushUse = () => {},
 }) {
   const { t } = useLanguage()
+  const viewport = useEditorStore((s) => s.viewport)
   const kids = Array.isArray(component.children) ? component.children : []
   const designW = Math.max(1, Math.round(component.layout?.w || 600))
   const designH = absoluteChildrenHeight(kids, Math.round(component.layout?.h || 160))
   const boundsH = Math.max(1, Math.round(component.layout?.h || designH))
   const { setNodeRef, isOver } = useDroppable({ id: component.id })
-  const userStyles = sanitizeStyles(component.styles)
+  const userStyles = sanitizeStyles(stylesFor(component, viewport))
   const { ref, scale, scaledHeight } = useFitToWidth(designW, designH)
   const setRefs = (el) => {
     ref.current = el
@@ -828,6 +830,7 @@ export function TabsEditor({
   onBrushUse = () => {},
 }) {
   const { t } = useLanguage()
+  const tabsViewport = useEditorStore((s) => s.viewport)
   const p = component.props || {}
   const tabsList = Array.isArray(p.tabs) && p.tabs.length
     ? p.tabs.filter((t) => t && t.id)
@@ -877,7 +880,7 @@ export function TabsEditor({
   return (
     <div
       style={{
-        ...sanitizeStyles(component.styles),
+        ...sanitizeStyles(stylesFor(component, tabsViewport)),
         width: '100%',
         minHeight: '100%',
         boxSizing: 'border-box',

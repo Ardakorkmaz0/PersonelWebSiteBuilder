@@ -19,6 +19,7 @@ import {
   isHidden,
   layoutFor,
   pinnedLayoutStyle,
+  stylesFor,
 } from './layout.js'
 import { componentBoxScale, scaleBoxStyles, scaleCssValue, scaledPx } from './scale.js'
 import { regionContentWidth, responsiveRegionChildLayout } from '../../utils/regionLayout.js'
@@ -207,7 +208,7 @@ export function RenderComponent({
     ...(flowMode ? (fixedFlow ? { height: '100%' } : { minHeight: '100%' }) : { height: '100%' }),
     boxSizing: 'border-box',
     overflow: flowMode ? 'visible' : 'hidden',
-    ...scaleBoxStyles(sanitizeStyles(component.styles), boxScale),
+    ...scaleBoxStyles(sanitizeStyles(stylesFor(component, viewport)), boxScale),
   }
 
   // Tabs: header strip + one panel per tab. In the public renderer (no
@@ -247,7 +248,7 @@ export function RenderComponent({
       <div
         style={{
           ...style,
-          overflow: sanitizeStyles(component.styles).overflow || 'visible',
+          overflow: sanitizeStyles(stylesFor(component, viewport)).overflow || 'visible',
           display: 'block',
           position: 'relative',
           minHeight,

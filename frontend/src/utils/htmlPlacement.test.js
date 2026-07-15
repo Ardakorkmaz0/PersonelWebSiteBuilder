@@ -11,13 +11,17 @@ import {
   ensurePlacementChrome,
   firstNewChildIndex,
   flashNode,
+  hideDropLine,
   insertPositionForY,
   insertSnippet,
   parseHtmlDocument,
   relocateAppendedAfterAnchor,
   serializeDocument,
   setHoverTarget,
+  setThinElementHover,
+  showDropLine,
   snippetToNode,
+  thinSelectableAtPoint,
 } from './htmlPlacement.js'
 
 describe('closestPlaceableBlock', () => {
@@ -208,6 +212,32 @@ describe('placement chrome + serializeDocument', () => {
     expect(out).not.toContain('data-pwb-edit-chrome')
     expect(document.querySelector('style[data-pwb-edit-chrome]')).not.toBeNull()
   })
+
+  it('selects a sub-pixel divider from the surrounding edit band without changing its layout', () => {
+    document.body.innerHTML = '<section><hr id="thin"></section>'
+    const divider = document.getElementById('thin')
+    divider.getBoundingClientRect = () => ({ top: 100, bottom: 101, left: 20, right: 320, width: 300, height: 1 })
+
+    expect(thinSelectableAtPoint(document, 120, 94)).toBe(divider)
+    expect(thinSelectableAtPoint(document, 120, 107)).toBe(divider)
+    expect(thinSelectableAtPoint(document, 120, 91)).toBeNull()
+    expect(thinSelectableAtPoint(document, 10, 100)).toBeNull()
+
+    ensureEditHintChrome(document)
+    const editChrome = document.querySelector('style[data-pwb-edit-chrome]')
+    expect(editChrome.textContent).not.toContain('hr::after')
+    expect(editChrome.textContent).not.toContain('position: relative')
+  })
+
+  it('keeps thin-element hover chrome out of serialized HTML', () => {
+    document.body.innerHTML = '<hr id="thin">'
+    const divider = document.getElementById('thin')
+    setThinElementHover(document, divider)
+    expect(divider.hasAttribute('data-pwb-thin-hover')).toBe(true)
+    expect(serializeDocument(document)).not.toContain('data-pwb-thin-hover')
+    setThinElementHover(document, null)
+    expect(divider.hasAttribute('data-pwb-thin-hover')).toBe(false)
+  })
 })
 
 const OLD_DOC = `<!DOCTYPE html><html><head><title>t</title></head><body>
@@ -273,5 +303,39 @@ describe('relocateAppendedAfterAnchor', () => {
     const appended = [doc.getElementById('n')]
     relocateAppendedAfterAnchor(doc, appended, 1)
     expect([...doc.body.children].map((c) => c.id)).toEqual(['a', 'n'])
+  })
+})
+
+describe('drop-position indicator', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<section id="s1">One</section><section id="s2">Two</section>'
+  })
+
+  it('creates one reusable chrome-marked line and positions it at the target edge', () => {
+    const s1 = document.getElementById('s1')
+    s1.getBoundingClientRect = () => ({ top: 100, bottom: 160, left: 10, width: 300, height: 60 })
+    showDropLine(document, s1, 'beforebegin')
+    const line = document.querySelector('[data-pwb-dropline]')
+    expect(line).not.toBeNull()
+    expect(line.hasAttribute('data-pwb-chrome')).toBe(true)
+    expect(line.style.position).toBe('fixed')
+    expect(line.parentElement).toBe(document.documentElement)
+    expect(line.style.left).toBe('10px')
+    expect(line.style.top).toBe('98px') // rect.top - 2 (scrollY 0 in jsdom)
+    showDropLine(document, s1, 'afterend')
+    expect(document.querySelectorAll('[data-pwb-dropline]')).toHaveLength(1) // reused
+    expect(line.style.top).toBe('158px') // rect.bottom - 2
+  })
+
+  it('hides on body/null targets and is stripped from serialization', () => {
+    const s1 = document.getElementById('s1')
+    s1.getBoundingClientRect = () => ({ top: 0, bottom: 40, left: 0, width: 100, height: 40 })
+    showDropLine(document, s1, 'afterend')
+    showDropLine(document, null)
+    expect(document.querySelector('[data-pwb-dropline]').style.display).toBe('none')
+    showDropLine(document, s1, 'afterend')
+    expect(serializeDocument(document)).not.toContain('data-pwb-dropline')
+    hideDropLine(document)
+    expect(document.querySelector('[data-pwb-dropline]')).toBeNull()
   })
 })

@@ -412,6 +412,8 @@ export const TURKISH_TRANSLATIONS = {
   'Place at the right': 'Sağa yerleştir',
   'Element slides the whole box inside its row — e.g. push the navbar links to the left or center.': 'Öğe, kutuyu satırı içinde kaydırır — örn. navbar linklerini sola veya ortaya itin.',
   'Links position': 'Linklerin konumu',
+  'Delete saved block': 'Kayıtlı bloğu sil',
+  'Saved block deleted': 'Kayıtlı blok silindi',
   'Style edits here apply to MOBILE only. Clear a field to fall back to the PC value.': 'Buradaki stil düzenlemeleri yalnızca MOBİL için geçerlidir. Bir alanı temizlerseniz PC değerine dönülür.',
   'Reset mobile styles': 'Mobil stilleri sıfırla',
   'Right (opposite the brand)': 'Sağda (markanın karşısında)',

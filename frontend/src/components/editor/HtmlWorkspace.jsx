@@ -15,14 +15,18 @@ import {
   ensurePlacementChrome,
   firstNewChildIndex,
   flashNode,
+  hideDropLine,
   insertPositionForY,
   insertSnippet,
   relocateAppendedAfterAnchor,
   removePlacementChrome,
   serializeDocument,
   setHoverTarget,
+  showDropLine,
   setLinkSource,
   setSelectedElement,
+  setThinElementHover,
+  thinSelectableAtPoint,
   visibleAnchorIndex,
 } from '../../utils/htmlPlacement.js'
 import {
@@ -453,6 +457,24 @@ function HtmlWorkspace({
   const selectedRef = useRef(null)
   const selectRefreshTimer = useRef(null)
 
+  // Palette clicks leave keyboard focus in the parent document, so the iframe
+  // listener alone cannot receive Escape. Cover both focus locations and clear
+  // the transient insertion marker immediately.
+  useEffect(() => {
+    if (!placing) return undefined
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      const doc = iframeRef.current?.contentDocument
+      if (doc) {
+        setHoverTarget(doc, null)
+        hideDropLine(doc)
+      }
+      onCancelPlacement?.()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [placing, onCancelPlacement])
+
   const clearSelection = useCallback(() => {
     selectedRef.current = null
     try {
@@ -837,6 +859,13 @@ function HtmlWorkspace({
       const hit = doc.elementFromPoint(x, y)
       const target = closestPlaceableBlock(hit, doc.body)
       setHoverTarget(doc, target === doc.body ? null : target)
+      // Insertion indicator: show exactly which edge the snippet will land on.
+      if (target && target !== doc.body) {
+        const rect = target.getBoundingClientRect()
+        showDropLine(doc, target, insertPositionForY(rect.top, rect.height, y))
+      } else {
+        showDropLine(doc, null)
+      }
     }
     const onClick = (e) => {
       if (!pendingRef.current) return
@@ -852,6 +881,10 @@ function HtmlWorkspace({
       if (!pendingRef.current) return
       autoScroll(e.clientY)
       hover(e.clientX, e.clientY)
+    }
+    const onMouseLeave = () => {
+      setHoverTarget(doc, null)
+      hideDropLine(doc)
     }
     const onDragOver = (e) => {
       if (!pendingRef.current) return
@@ -869,12 +902,14 @@ function HtmlWorkspace({
     doc.addEventListener('click', onClick, true)
     doc.addEventListener('keydown', onKey, true)
     doc.addEventListener('mousemove', onMouseMove, true)
+    doc.documentElement.addEventListener('mouseleave', onMouseLeave, true)
     doc.addEventListener('dragover', onDragOver, true)
     doc.addEventListener('drop', onDrop, true)
     return () => {
       doc.removeEventListener('click', onClick, true)
       doc.removeEventListener('keydown', onKey, true)
       doc.removeEventListener('mousemove', onMouseMove, true)
+      doc.documentElement.removeEventListener('mouseleave', onMouseLeave, true)
       doc.removeEventListener('dragover', onDragOver, true)
       doc.removeEventListener('drop', onDrop, true)
       removePlacementChrome(doc)
@@ -911,7 +946,16 @@ function HtmlWorkspace({
       if (e.clientY > win.innerHeight - EDGE) win.scrollBy({ top: 18, behavior: 'instant' })
       else if (e.clientY < EDGE && win.scrollY > 0) win.scrollBy({ top: -18, behavior: 'instant' })
       const target = closestPlaceableBlock(doc.elementFromPoint(e.clientX, e.clientY), doc.body)
-      setHoverTarget(doc, target && target !== doc.body && target !== dragging ? target : null)
+      const valid = target && target !== doc.body && target !== dragging && !dragging.contains(target)
+      setHoverTarget(doc, valid ? target : null)
+      // Insertion indicator: the bar marks the exact before/after edge the
+      // block will land on, so the user aims instead of guessing.
+      if (valid) {
+        const rect = target.getBoundingClientRect()
+        showDropLine(doc, target, insertPositionForY(rect.top, rect.height, e.clientY))
+      } else {
+        showDropLine(doc, null)
+      }
     }
     const onDrop = (e) => {
       if (!dragging) return
@@ -920,6 +964,7 @@ function HtmlWorkspace({
       const node = dragging
       dragging = null
       setHoverTarget(doc, null)
+      hideDropLine(doc)
       if (moved) {
         disarm()
         removePlacementChrome(doc)
@@ -930,17 +975,24 @@ function HtmlWorkspace({
         ensurePlacementChrome(doc)
       }
     }
-    const onDragEnd = () => { dragging = null; setHoverTarget(doc, null) }
+    const onDragEnd = () => { dragging = null; setHoverTarget(doc, null); hideDropLine(doc) }
+    const onMouseLeave = () => {
+      if (!dragging) return
+      setHoverTarget(doc, null)
+      hideDropLine(doc)
+    }
     doc.addEventListener('dragstart', onDragStart, true)
     doc.addEventListener('dragover', onDragOver, true)
     doc.addEventListener('drop', onDrop, true)
     doc.addEventListener('dragend', onDragEnd, true)
+    doc.documentElement.addEventListener('mouseleave', onMouseLeave, true)
     return () => {
       disarm()
       doc.removeEventListener('dragstart', onDragStart, true)
       doc.removeEventListener('dragover', onDragOver, true)
       doc.removeEventListener('drop', onDrop, true)
       doc.removeEventListener('dragend', onDragEnd, true)
+      doc.documentElement.removeEventListener('mouseleave', onMouseLeave, true)
       removePlacementChrome(doc)
     }
   }, [onCommit])
@@ -1105,13 +1157,25 @@ function HtmlWorkspace({
         clearSelection()
         return
       }
-      const el = resolveSelectableElement(e.target, doc.body)
+      const thinHit = thinSelectableAtPoint(doc, e.clientX, e.clientY)
+      const el = thinHit || resolveSelectableElement(e.target, doc.body)
+      if (thinHit) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
       selectedRef.current = el
       setSelectedElement(doc, el)
       if (el) installSelectionResizeChrome(doc, el, startSelectedElementResize)
       else removeSelectionResizeChrome(doc)
       onElementSelect?.(el ? describeElement(el) : null)
     })
+    doc.addEventListener('mousemove', (e) => {
+      if (pendingRef.current || editToolRef.current !== 'text') {
+        setThinElementHover(doc, null)
+        return
+      }
+      setThinElementHover(doc, thinSelectableAtPoint(doc, e.clientX, e.clientY))
+    }, true)
     doc.addEventListener('input', () => {
       const el = selectedRef.current
       if (!el) return

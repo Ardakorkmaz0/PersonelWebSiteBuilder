@@ -673,14 +673,14 @@ export default function CodeProjectPage() {
                   »
                 </button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 {htmlSelection ? (
-                  <>
+                  <div className="flex h-full min-h-0 flex-col">
                     {/* "Jump to CSS": the stylesheet rules that style this
                         element — click to open the file at that rule, so you
                         edit the real CSS instead of inline-styling the template. */}
                     {matchedCss.length > 0 && (
-                      <div className="border-b border-[#e5e7eb] bg-[#f9fafb] p-3">
+                      <div className="max-h-40 shrink-0 overflow-y-auto border-b border-[#e5e7eb] bg-[#f9fafb] p-3">
                         <div className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">
                           <PaletteIcon size={11} /> {t('Styled by — open the CSS rule')}
                         </div>
@@ -700,18 +700,20 @@ export default function CodeProjectPage() {
                         </div>
                       </div>
                     )}
-                    <HtmlElementPanel
-                      info={htmlSelection}
-                      pages={[]}
-                      onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
-                      onSelectParent={() => workspaceRef.current?.selectParent?.()}
-                      onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
-                      onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
-                      onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}
-                      onDelete={() => workspaceRef.current?.deleteSelected?.()}
-                      onClose={() => workspaceRef.current?.clearSelection?.()}
-                    />
-                  </>
+                    <div className="min-h-0 flex-1">
+                      <HtmlElementPanel
+                        info={htmlSelection}
+                        pages={[]}
+                        onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
+                        onSelectParent={() => workspaceRef.current?.selectParent?.()}
+                        onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
+                        onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
+                        onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}
+                        onDelete={() => workspaceRef.current?.deleteSelected?.()}
+                        onClose={() => workspaceRef.current?.clearSelection?.()}
+                      />
+                    </div>
+                  </div>
                 ) : (
                   <p className="p-4 text-sm leading-relaxed text-[#9ca3af]">
                     {t('Switch to')} <span className="font-semibold text-[#6b7280]">{t('Edit')}</span>{' '}

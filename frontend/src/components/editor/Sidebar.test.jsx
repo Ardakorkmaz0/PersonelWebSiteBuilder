@@ -68,4 +68,33 @@ describe('Sidebar component recommendations', () => {
       expect(HTML_VARIANTS[type].some((variant) => variant.recommended)).toBe(false)
     }
   })
+
+  it('hides Region creation while preserving its registry support for existing projects', () => {
+    renderSidebar()
+
+    expect(paletteItems.some((item) => item.type === 'region')).toBe(true)
+    expect(screen.queryByText('Region')).not.toBeInTheDocument()
+  })
+
+  it('deletes a saved custom block accessibly and can undo the deletion', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('pwb_custom_blocks', JSON.stringify([{
+      id: 'custom-test',
+      label: 'Reusable hero',
+      desc: 'Saved custom HTML',
+      html: '<section>Hero</section>',
+    }]))
+    renderSidebar()
+
+    await user.click(screen.getByRole('button', { name: /Custom HTML/ }))
+    await user.click(screen.getByRole('button', { name: 'Delete saved block: Reusable hero' }))
+
+    expect(screen.queryByText('Reusable hero')).not.toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('pwb_custom_blocks'))).toEqual([])
+    expect(screen.getByText('Saved block deleted: Reusable hero').closest('[role="status"]')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(screen.getByText('Reusable hero')).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('pwb_custom_blocks'))).toHaveLength(1)
+  })
 })

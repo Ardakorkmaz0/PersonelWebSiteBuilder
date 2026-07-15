@@ -138,6 +138,72 @@ const HOVER_ATTR = 'data-pwb-hover'
 const FLASH_ATTR = 'data-pwb-flash'
 const SELECTED_ATTR = 'data-pwb-selected'
 const LINK_SRC_ATTR = 'data-pwb-linksrc'
+const THIN_HOVER_ATTR = 'data-pwb-thin-hover'
+const DROP_LINE_ATTR = 'data-pwb-dropline'
+
+// Browser pseudo-elements do not reliably enlarge a sub-pixel element's hit
+// area. Resolve clicks near visible dividers geometrically instead, without
+// mutating the imported page's layout.
+export function thinSelectableAtPoint(doc, clientX, clientY, padding = 8) {
+  if (!doc?.body || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null
+  let best = null
+  let bestDistance = Infinity
+  doc.body.querySelectorAll('hr').forEach((el) => {
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0 || rect.right < rect.left) return
+    const style = doc.defaultView?.getComputedStyle?.(el)
+    if (style?.display === 'none' || style?.visibility === 'hidden' || style?.pointerEvents === 'none') return
+    if (clientX < rect.left || clientX > rect.right) return
+    if (clientY < rect.top - padding || clientY > rect.bottom + padding) return
+    const distance = Math.abs(clientY - ((rect.top + rect.bottom) / 2))
+    if (distance < bestDistance) {
+      best = el
+      bestDistance = distance
+    }
+  })
+  return best
+}
+
+export function setThinElementHover(doc, el) {
+  if (!doc?.documentElement) return
+  doc.querySelectorAll(`[${THIN_HOVER_ATTR}]`).forEach((node) => {
+    if (node !== el) node.removeAttribute(THIN_HOVER_ATTR)
+  })
+  if (el && el !== doc.body) el.setAttribute(THIN_HOVER_ATTR, '')
+}
+
+// Live insertion indicator: a thick indigo bar at the exact edge (top or
+// bottom of the target block) where the dragged/placed element will land —
+// so the user aims BEFORE dropping instead of discovering afterwards.
+export function showDropLine(doc, target, position) {
+  if (!doc?.documentElement) return
+  let line = doc.querySelector(`[${DROP_LINE_ATTR}]`)
+  if (!target || target === doc.body) {
+    if (line) line.style.display = 'none'
+    return
+  }
+  if (!line) {
+    line = doc.createElement('div')
+    line.setAttribute(DROP_LINE_ATTR, '')
+    line.setAttribute('data-pwb-chrome', '')
+    line.style.cssText = [
+      'position:fixed', 'z-index:2147483200', 'height:4px',
+      'background:#2563eb', 'border-radius:99px', 'pointer-events:none',
+      'box-shadow:0 0 0 1px rgba(255,255,255,0.9), 0 1px 8px rgba(37,99,235,0.55)',
+    ].join(';')
+    doc.documentElement.appendChild(line)
+  }
+  const rect = target.getBoundingClientRect()
+  const y = position === 'beforebegin' ? rect.top : rect.bottom
+  line.style.display = 'block'
+  line.style.left = `${Math.max(0, Math.round(rect.left))}px`
+  line.style.width = `${Math.max(24, Math.round(rect.width))}px`
+  line.style.top = `${Math.round(y - 2)}px`
+}
+
+export function hideDropLine(doc) {
+  doc?.querySelectorAll?.(`[${DROP_LINE_ATTR}]`).forEach((el) => el.remove())
+}
 
 export function ensurePlacementChrome(doc) {
   if (!doc?.documentElement) return
@@ -178,6 +244,13 @@ export function ensureEditHintChrome(doc) {
     figcaption:hover, td:hover, th:hover, label:hover {
       box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.45);
       cursor: text;
+    }
+    /* Thin elements (divider <hr>, skinny spacers) are a 1-2px click target —
+       practically unselectable. HtmlWorkspace resolves a larger geometric hit
+       band; this editor-only attribute makes that target visible on hover. */
+    hr:hover, [${THIN_HOVER_ATTR}] {
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35) !important;
+      cursor: pointer !important;
     }
     [${SELECTED_ATTR}] {
       box-shadow: inset 0 0 0 2px #2563eb !important;
@@ -242,6 +315,8 @@ export function removePlacementChrome(doc) {
   doc.querySelectorAll(`[${HOVER_ATTR}]`).forEach((el) => el.removeAttribute(HOVER_ATTR))
   doc.querySelectorAll(`[${FLASH_ATTR}]`).forEach((el) => el.removeAttribute(FLASH_ATTR))
   doc.querySelectorAll(`[${LINK_SRC_ATTR}]`).forEach((el) => el.removeAttribute(LINK_SRC_ATTR))
+  doc.querySelectorAll(`[${THIN_HOVER_ATTR}]`).forEach((el) => el.removeAttribute(THIN_HOVER_ATTR))
+  hideDropLine(doc)
 }
 
 // Move the hover highlight to `el` (or clear it when el is null/body).
@@ -280,12 +355,13 @@ export function serializeDocument(doc) {
     .querySelectorAll(`style[${CHROME_STYLE_ATTR}], style[${EDIT_CHROME_ATTR}]`)
     .forEach((el) => el.remove())
   root
-    .querySelectorAll(`[${HOVER_ATTR}], [${FLASH_ATTR}], [${SELECTED_ATTR}], [${LINK_SRC_ATTR}]`)
+    .querySelectorAll(`[${HOVER_ATTR}], [${FLASH_ATTR}], [${SELECTED_ATTR}], [${LINK_SRC_ATTR}], [${THIN_HOVER_ATTR}]`)
     .forEach((el) => {
       el.removeAttribute(HOVER_ATTR)
       el.removeAttribute(FLASH_ATTR)
       el.removeAttribute(SELECTED_ATTR)
       el.removeAttribute(LINK_SRC_ATTR)
+      el.removeAttribute(THIN_HOVER_ATTR)
     })
   // The rearrange tool sets draggable on blocks; never let that leak into
   // saved HTML. Drop the marker + the draggable attribute it added.
@@ -294,9 +370,10 @@ export function serializeDocument(doc) {
     el.removeAttribute('draggable')
   })
   // Strip the transient SVG connection lines drawn by the link tool — both the
-  // current marker and any stale ones baked in by older app versions.
+  // current marker and any stale ones baked in by older app versions — and the
+  // drag drop-position indicator, in case a commit races its removal.
   root
-    .querySelectorAll('svg[data-pwb-chrome], svg[data-pwb-connections]')
+    .querySelectorAll(`svg[data-pwb-chrome], svg[data-pwb-connections], [${DROP_LINE_ATTR}]`)
     .forEach((el) => el.remove())
   root.querySelectorAll('[data-pwb-resize-overlay]').forEach((el) => el.remove())
   // Strip styles/scripts the Code-project preview injected for visual fidelity

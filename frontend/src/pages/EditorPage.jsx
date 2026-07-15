@@ -22,7 +22,7 @@ import {
 import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
-import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon, CogIcon, ClockIcon, PaletteIcon, LayersIcon } from '../components/icons.jsx'
+import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon, CogIcon, ClockIcon, PaletteIcon } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import CanvasPreview from '../components/editor/CanvasPreview.jsx'
 import BrushControls from '../components/editor/BrushControls.jsx'
@@ -1992,7 +1992,7 @@ export default function EditorPage() {
                       »
                     </button>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto">
+                  <div className="min-h-0 flex-1 overflow-hidden">
                     {htmlSelection ? (
                       <HtmlElementPanel
                         info={htmlSelection}
@@ -2220,24 +2220,6 @@ export default function EditorPage() {
                         }`}
                       >
                         <PaletteIcon size={13} /> {t('Brush')}
-                      </button>
-                      <button
-                        type="button"
-                        title={t('Add a full-width responsive region')}
-                        onClick={() => {
-                          setBrushMode(false)
-                          setLinkMode(false)
-                          const bottom = (currentPage?.components || []).reduce((max, component) => {
-                            const layout = viewport === 'mobile'
-                              ? component.mobileLayout || component.layout || {}
-                              : component.layout || {}
-                            return Math.max(max, (layout.y || 0) + (layout.h || 0))
-                          }, 0)
-                          addComponent('region', 0, bottom)
-                        }}
-                        className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] px-2.5 py-1 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6]"
-                      >
-                        <LayersIcon size={13} /> {t('Region')}
                       </button>
                     </>
                   )}

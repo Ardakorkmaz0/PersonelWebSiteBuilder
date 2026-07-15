@@ -180,7 +180,8 @@ export default function HtmlElementPanel({
   if (!info) return null
   const label = t(TAG_LABELS[info.tag] || `<${info.tag}>`)
   return (
-    <div className="p-3">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <div className="mb-1 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-[#111827]">{label}</div>
@@ -446,40 +447,47 @@ export default function HtmlElementPanel({
         </>
       )}
 
-      <SectionTitle>{t('Arrange')}</SectionTitle>
-      <div className="grid grid-cols-2 gap-2">
+      <p className="mt-3 text-xs leading-relaxed text-[#d1d5db]">
+        {t('Tip: you can also click into the page and type directly. Style changes here are applied to this element only.')}
+      </p>
+      </div>
+
+      <div
+        role="region"
+        aria-label={t('Arrange')}
+        className="shrink-0 border-t border-[#e5e7eb] bg-white p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.06)]"
+      >
+        <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={onDuplicate}
-          className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-2 py-1.5 text-sm text-[#374151] hover:bg-[#e5e7eb]"
+          className="rounded-lg bg-[#f3f4f6] px-2 py-2 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
         >
           {t('Duplicate')}
         </button>
         <button
           type="button"
           onClick={onMoveUp}
-          className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-2 py-1.5 text-sm text-[#374151] hover:bg-[#e5e7eb]"
+          className="rounded-lg bg-[#f3f4f6] px-2 py-2 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
         >
           {t('Move up')}
         </button>
         <button
           type="button"
           onClick={onMoveDown}
-          className="rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] px-2 py-1.5 text-sm text-[#374151] hover:bg-[#e5e7eb]"
+          className="rounded-lg bg-[#f3f4f6] px-2 py-2 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
         >
           {t('Move down')}
         </button>
+        </div>
         <button
           type="button"
           onClick={onDelete}
-          className="rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+          className="mt-2 w-full rounded-lg border border-[#d69ca5] bg-[#fde7e9] px-2 py-2 text-sm font-medium text-[#a4262c] hover:bg-[#f6d5d9]"
         >
-          {t('Delete')}
+          {t('Delete component')}
         </button>
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-[#d1d5db]">
-        {t('Tip: you can also click into the page and type directly. Style changes here are applied to this element only.')}
-      </p>
     </div>
   )
 }

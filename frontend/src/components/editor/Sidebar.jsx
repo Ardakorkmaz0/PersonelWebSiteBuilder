@@ -20,6 +20,9 @@ function variantsForType(type) {
 // as editable HTML embeds on the free canvas, but structural widgets that need
 // editor-owned children stay native there.
 const NATIVE_CANVAS_TYPES = new Set(['tabs', 'navbar', 'region'])
+// Region creation is intentionally hidden until the Wix-like section model is
+// redesigned. Keeping the registry type preserves existing saved projects.
+const ADDABLE_PALETTE_ITEMS = paletteItems.filter((item) => item.type !== 'region')
 
 // Types whose snippets are wide (full-width-ish) — previewed scaled-down from the
 // top-left; the rest are inline and shown a bit larger, centered.
@@ -342,6 +345,7 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
   const [label, setLabel] = useState('Custom block')
   const [html, setHtml] = useState(DEFAULT_CUSTOM_HTML)
   const [saved, setSaved] = useState(() => readCustomBlocks())
+  const [deleted, setDeleted] = useState(null)
   const hasHtml = html.trim().length > 0
 
   const placeCustom = (customHtml = html) => {
@@ -366,6 +370,28 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
     const next = [nextBlock, ...saved].slice(0, 24)
     setSaved(next)
     writeCustomBlocks(next)
+    setDeleted(null)
+  }
+
+  const deleteCustom = (block) => {
+    const index = saved.findIndex((item) => item.id === block.id)
+    if (index < 0) return
+    const next = saved.filter((item) => item.id !== block.id)
+    setSaved(next)
+    writeCustomBlocks(next)
+    setDeleted({ block, index })
+  }
+
+  const undoDeleteCustom = () => {
+    if (!deleted) return
+    setSaved((current) => {
+      if (current.some((item) => item.id === deleted.block.id)) return current
+      const next = [...current]
+      next.splice(Math.min(deleted.index, next.length), 0, deleted.block)
+      writeCustomBlocks(next)
+      return next
+    })
+    setDeleted(null)
   }
 
   return (
@@ -421,9 +447,33 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">{t('Saved snippets')}</div>
               <div className="grid grid-cols-2 gap-2">
                 {saved.map((block) => (
-                  <BlockCard key={block.id} block={block} onPick={onPick} onArm={onArm} onInspect={onInspect} theme={theme} />
+                  <div key={block.id} className="group relative">
+                    <BlockCard block={block} onPick={onPick} onArm={onArm} onInspect={onInspect} theme={theme} />
+                    {/* Delete a saved snippet — hover-revealed so the cards
+                        stay clean, always visible on touch (no hover there). */}
+                    <button
+                      type="button"
+                      title={t('Delete saved block')}
+                      aria-label={`${t('Delete saved block')}: ${block.label}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteCustom(block)
+                      }}
+                      className="absolute right-1.5 top-1.5 z-10 grid h-5 w-5 place-items-center rounded-md bg-[#111827]/70 text-[10px] leading-none text-white opacity-0 transition hover:bg-[#a4262c] focus:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
+            </div>
+          )}
+          {deleted && (
+            <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-lg border border-[#dbeafe] bg-[#eff6ff] px-2.5 py-2 text-xs text-[#1e40af]">
+              <span className="min-w-0 flex-1 truncate">{t('Saved block deleted')}: {deleted.block.label}</span>
+              <button type="button" onClick={undoDeleteCustom} className="shrink-0 font-semibold underline underline-offset-2">
+                {t('Undo')}
+              </button>
             </div>
           )}
         </div>
@@ -562,7 +612,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
               </div>
             </div>
             <div className="space-y-2">
-              {paletteItems.map((item) => (
+              {ADDABLE_PALETTE_ITEMS.map((item) => (
                 <PaletteCategory
                   key={item.type}
                   item={item}

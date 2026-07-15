@@ -57,7 +57,7 @@ export function blankResponsiveSite(title = 'My Site', theme) {
       .btn-ghost:hover { border-color: var(--ink); filter: none; }
 
       /* Hero */
-      .hero { padding: 110px 0 90px; }
+      .hero { padding-top: 110px; padding-bottom: 90px; }
       .hero-badge { display: inline-block; background: color-mix(in srgb, var(--accent) 10%, #fff); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 25%, #fff); font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 999px; margin: 0 0 22px; }
       .hero h1 { font-size: clamp(36px, 6.5vw, 64px); line-height: 1.06; letter-spacing: -0.025em; margin: 0 0 20px; max-width: 760px; }
       .hero h1 b { color: var(--accent); }
@@ -99,7 +99,7 @@ export function blankResponsiveSite(title = 'My Site', theme) {
 
       @media (max-width: 768px) {
         section { padding: 64px 0; }
-        .hero { padding: 72px 0 56px; }
+        .hero { padding-top: 72px; padding-bottom: 56px; }
         .hero-cta { margin-bottom: 40px; }
         .stats { gap: 28px; }
         .nav-burger { display: flex; }
@@ -264,25 +264,25 @@ export function portfolioTemplate(title = 'My Site', theme) {
       .brand { font-weight: 800; letter-spacing: -0.02em; }
       .nav nav a { margin-left: 22px; color: var(--muted); font-size: 15px; }
       .nav nav a:hover { color: var(--ink); }
-      .hero { padding: 96px 0 56px; max-width: 760px; }
+      .hero { padding-top: 96px; padding-bottom: 56px; max-width: 760px; }
       .hero .eyebrow { color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; margin: 0 0 14px; }
       .hero h1 { font-size: clamp(36px, 7vw, 68px); line-height: 1.02; letter-spacing: -0.03em; margin: 0 0 18px; }
       .hero p { font-size: clamp(17px, 2.4vw, 21px); color: var(--muted); margin: 0; }
-      .works { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding: 24px 0 88px; }
+      .works { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding-top: 24px; padding-bottom: 88px; }
       .work-shot { aspect-ratio: 4 / 3; border-radius: var(--radius); }
       .work-meta { display: flex; align-items: baseline; justify-content: space-between; padding: 12px 4px 0; }
       .work-meta span { color: var(--muted); font-size: 14px; }
       .work { transition: transform .15s ease; }
       .work:hover { transform: translateY(-4px); }
       .band { background: var(--soft); }
-      .about { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding: 88px 0; }
+      .about { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding-top: 88px; padding-bottom: 88px; }
       .about h2 { font-size: clamp(26px, 4vw, 40px); margin: 0 0 16px; letter-spacing: -0.02em; }
       .about p { color: var(--muted); margin: 0 0 14px; }
-      .contact { text-align: center; padding: 96px 0; }
+      .contact { text-align: center; padding-top: 96px; padding-bottom: 96px; }
       .contact h2 { font-size: clamp(28px, 5vw, 48px); margin: 0 0 12px; letter-spacing: -0.02em; }
       .contact a.btn { display: inline-block; margin-top: 18px; background: var(--ink); color: #fff; padding: 15px 32px; border-radius: var(--radius); font-weight: 600; }
-      footer { color: var(--muted); font-size: 14px; padding: 28px 0; border-top: 1px solid #eee; display: flex; justify-content: space-between; }
-      @media (max-width: 860px) { .works { grid-template-columns: repeat(2, 1fr); } .about { grid-template-columns: 1fr; gap: 28px; padding: 56px 0; } }
+      footer { color: var(--muted); font-size: 14px; padding-top: 28px; padding-bottom: 28px; border-top: 1px solid #eee; display: flex; justify-content: space-between; }
+      @media (max-width: 860px) { .works { grid-template-columns: repeat(2, 1fr); } .about { grid-template-columns: 1fr; gap: 28px; padding-top: 56px; padding-bottom: 56px; } }
       @media (max-width: 520px) { .works { grid-template-columns: 1fr; } footer { flex-direction: column; gap: 8px; } }
     </style>
   </head>
@@ -374,7 +374,7 @@ export function landingTemplate(title = 'My Site', theme) {
       .nav .spacer { flex: 1; }
       .nav a.link { color: var(--muted); font-size: 15px; }
       .nav a.cta { background: var(--accent); color: #fff; padding: 9px 18px; border-radius: var(--radius); font-weight: 600; font-size: 14px; }
-      .hero { text-align: center; padding: 92px 0 64px; }
+      .hero { text-align: center; padding-top: 92px; padding-bottom: 64px; }
       .pill { display: inline-block; background: var(--soft); color: var(--accent); font-weight: 600; font-size: 13px; padding: 6px 14px; border-radius: 999px; margin-bottom: 22px; }
       .hero h1 { font-size: clamp(38px, 7vw, 72px); line-height: 1.03; letter-spacing: -0.03em; margin: 0 auto 20px; max-width: 14ch; }
       .hero p { font-size: clamp(17px, 2.6vw, 22px); color: var(--muted); margin: 0 auto 30px; max-width: 56ch; }
@@ -383,7 +383,7 @@ export function landingTemplate(title = 'My Site', theme) {
       .btn.primary { background: var(--accent); color: #fff; }
       .btn.ghost { background: var(--soft); color: var(--ink); }
       .shot { margin: 56px auto 0; max-width: 980px; aspect-ratio: 16 / 9; border-radius: 20px; background: linear-gradient(135deg,#dbeafe,#eff6ff); border: 1px solid #e2e8f0; }
-      .features { padding: 88px 0; }
+      .features { padding-top: 88px; padding-bottom: 88px; }
       .features h2 { text-align: center; font-size: clamp(28px, 4.5vw, 42px); letter-spacing: -0.02em; margin: 0 0 8px; }
       .features .lead { text-align: center; color: var(--muted); margin: 0 0 48px; }
       .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
@@ -393,7 +393,7 @@ export function landingTemplate(title = 'My Site', theme) {
       .cta-band { background: var(--ink); color: #fff; text-align: center; padding: 80px 0; }
       .cta-band h2 { font-size: clamp(28px, 5vw, 46px); letter-spacing: -0.02em; margin: 0 0 22px; }
       .cta-band .btn.primary { background: #fff; color: var(--ink); }
-      footer { color: var(--muted); font-size: 14px; padding: 32px 0; text-align: center; }
+      footer { color: var(--muted); font-size: 14px; padding-top: 32px; padding-bottom: 32px; text-align: center; }
       @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
     </style>
   </head>

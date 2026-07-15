@@ -173,11 +173,11 @@ function baseCss(p) {
   @media (max-width: 768px) {
     section { padding:60px 0; }
     .nav-burger { display:flex; }
-    .nav-links { position:absolute; top:64px; left:-24px; right:-24px; flex-direction:column;
+    .nav-links { position:absolute; top:64px; left:0; right:0; flex-direction:column;
       align-items:flex-start; gap:0; background:${p.dark ? '#0d1020' : '#fff'};
       border-bottom:1px solid var(--border); max-height:0; overflow:hidden; transition:max-height .25s ease; }
     .nav-links a { width:100%; padding:14px 24px; }
-    .nav-links .btn { margin:8px 24px 16px; }
+    .nav-links .btn { margin:8px 24px 16px; width:auto; }
     .nav-toggle:checked ~ .nav-links { max-height:420px; }
     .f-grid { grid-template-columns:1fr; gap:28px; }
     .stats { gap:26px; }

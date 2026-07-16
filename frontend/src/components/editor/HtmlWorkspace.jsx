@@ -45,7 +45,7 @@ import { componentToHtml } from '../../utils/componentToHtml.js'
 import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
 import BrushControls from './BrushControls.jsx'
-import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon } from '../icons.jsx'
+import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
@@ -501,6 +501,7 @@ function HtmlWorkspace({
   // Edit sub-tool (only meaningful in edit mode): 'text' = click-to-type,
   // 'rearrange' = drag blocks to reorder, 'link' = connect a link to a target.
   const [editTool, setEditTool] = useState(() => simpleMode ? 'text' : lsGet('htmltool', 'text'))
+  const [toolMenuOpen, setToolMenuOpen] = useState(false)
   // Bumped on every iframe load so the tool manager rebinds AFTER the document
   // is ready — needed when edit/link is restored on mount (the first effect run
   // happens before the iframe body exists).
@@ -1428,15 +1429,15 @@ function HtmlWorkspace({
   )
 
   const toggleBtn = (active) =>
-    active ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'
+    `studio-segment-btn ${active ? 'studio-segment-btn-active' : ''}`
 
   return (
     <div className="flex min-h-0 flex-1">
       {/* The page/file list lives in the editor's left rail (Files tab) —
           the workspace itself is just the toolbar + stage. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
-          <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+        <div className="studio-toolbar flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
+          <div className="studio-segment shrink-0">
             <button onClick={() => switchMode('view')} className={toggleBtn(mode === 'view')}>
               {t('View')}
             </button>
@@ -1463,8 +1464,22 @@ function HtmlWorkspace({
               empty page: there's no document to act on, so the starter card is
               the single clear action instead of dead chips. */}
           {!simpleMode && mode === 'edit' && !placing && !!String(html || '').trim() && (
-            <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
-              {[
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setToolMenuOpen((open) => !open)}
+                className="studio-btn studio-btn-secondary"
+                title={t('Editing tools')}
+              >
+                {editTool === 'text' ? <EditIcon size={13} /> : editTool === 'rearrange' ? <MoveIcon size={13} /> : editTool === 'link' ? <LinkIcon size={13} /> : <PaletteIcon size={13} />}
+                <span className="hidden xl:inline">{t(editTool === 'text' ? 'Text' : editTool === 'rearrange' ? 'Move' : editTool === 'link' ? 'Link' : 'Brush')}</span>
+                <MoreHorizontalIcon size={14} />
+              </button>
+              {toolMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setToolMenuOpen(false)} />
+                  <div className="studio-menu absolute left-0 top-[calc(100%+6px)] z-40 w-56 p-1.5">
+                    {[
                 ['text', EditIcon, 'Text', 'Click any text and type'],
                 ['rearrange', MoveIcon, 'Move', 'Drag a block to reorder it'],
                 ['link', LinkIcon, 'Link', 'Click a link, then click where it should go'],
@@ -1474,12 +1489,15 @@ function HtmlWorkspace({
                   key={id}
                   type="button"
                   title={t(title)}
-                  onClick={() => { setEditTool(id); setLinkHint(id === 'link' ? t('Click a LINK (nav item / button-link), then click its target.') : null) }}
-                  className={`flex items-center gap-1 ${editTool === id ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}`}
+                  onClick={() => { setEditTool(id); setToolMenuOpen(false); setLinkHint(id === 'link' ? t('Click a LINK (nav item / button-link), then click its target.') : null) }}
+                  className={`studio-menu-item ${editTool === id ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
                 >
                   <ToolIcon size={13} /> {t(label)}
                 </button>
-              ))}
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
           {mode === 'source' && (
@@ -1494,7 +1512,7 @@ function HtmlWorkspace({
                 onRequestSave?.()
               }}
               title={t('Apply the source code and save — to the server AND the linked local file (the disk chip in the toolbar)')}
-              className="rounded-lg bg-[#4f46e5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca]"
+              className="studio-btn studio-btn-primary"
             >
               {t('Apply & Save')}
             </button>
@@ -1520,7 +1538,7 @@ function HtmlWorkspace({
               </button>
             </div>
           ) : (
-            <span className="ml-auto text-xs text-[#6b7280]">
+            <span className="ml-auto hidden min-w-0 truncate text-xs text-[var(--studio-text-muted)] 2xl:block">
               {mode === 'view'
                 ? t('Live preview: JavaScript, links, forms, and scrolling are enabled')
                 : mode === 'source'

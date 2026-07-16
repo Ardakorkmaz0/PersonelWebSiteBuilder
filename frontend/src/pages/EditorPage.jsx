@@ -385,6 +385,7 @@ export default function EditorPage() {
       return ['view', 'edit', 'source'].includes(saved) ? saved : 'edit'
     } catch { return 'edit' }
   }) // 'view' | 'edit' | 'source'
+  const [canvasToolsOpen, setCanvasToolsOpen] = useState(false)
   const [brushMode, setBrushMode] = useState(false)
   const [brushColor, setBrushColor] = useState(() => {
     try { return normalizeBrushColor(localStorage.getItem('pwb_brushcolor_' + id)) || theme?.primaryColor || '#4f46e5' } catch { return '#4f46e5' }
@@ -2075,13 +2076,13 @@ export default function EditorPage() {
                   landscape={htmlLandscape}
                   deviceControls={
                     <>
-                      <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+                      <div className="studio-segment shrink-0">
                         <button
                           onClick={() => { chooseHtmlDevice(readHtmlDevice('pc')); setHtmlLandscape(false) }}
                           className={
                             !isMobileDevice(htmlDevice)
-                              ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                              : 'px-2.5 py-1 text-[#374151]'
+                              ? 'studio-segment-btn studio-segment-btn-active'
+                              : 'studio-segment-btn'
                           }
                         >
                           {t('PC')}
@@ -2090,8 +2091,8 @@ export default function EditorPage() {
                           onClick={() => chooseHtmlDevice(readHtmlDevice('mobile'))}
                           className={
                             isMobileDevice(htmlDevice)
-                              ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                              : 'px-2.5 py-1 text-[#374151]'
+                              ? 'studio-segment-btn studio-segment-btn-active'
+                              : 'studio-segment-btn'
                           }
                         >
                           {t('Mobile')}
@@ -2101,7 +2102,7 @@ export default function EditorPage() {
                         value={htmlDevice}
                         onChange={(e) => chooseHtmlDevice(e.target.value)}
                         title={t('Screen / device width')}
-                        className="hidden max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
+                        className="studio-input hidden max-w-[150px] truncate px-2 py-1.5 text-xs font-medium md:block"
                       >
                         {DEVICES.map((d) => (
                           <option key={d.id} value={d.id}>
@@ -2114,14 +2115,14 @@ export default function EditorPage() {
                         onClick={() => chooseDefaultViewport(isMobileDevice(htmlDevice) ? 'mobile' : 'pc')}
                         title={t('Make this the default editor screen')}
                         aria-label={t('Make this the default editor screen')}
-                        className={`rounded-lg border px-2 py-1 text-xs font-medium ${
+                        className={`studio-icon-btn shrink-0 ${
                           defaultViewport === (isMobileDevice(htmlDevice) ? 'mobile' : 'pc')
-                            ? 'border-amber-300 bg-amber-50 text-amber-700'
-                            : 'border-[#d1d5db] text-[#6b7280] hover:bg-[#f3f4f6]'
+                            ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                            : ''
                         }`}
                       >
                         {defaultViewport === (isMobileDevice(htmlDevice) ? 'mobile' : 'pc') ? '★' : '☆'}
-                        <span className="ml-1 hidden xl:inline">{t('Default')}</span>
+                        <span className="sr-only">{t('Default')}</span>
                       </button>
                     </>
                   }
@@ -2226,16 +2227,16 @@ export default function EditorPage() {
               {/* Canvas column with the same View/Edit/Source bar the HTML
                   workspace has — identical chrome in both editor modes. */}
               <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
-                  <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+                <div className="studio-toolbar relative flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
+                  <div className="studio-segment shrink-0">
                     {[['view', 'View'], ['edit', 'Edit'], ['source', 'Source']].map(([id, label]) => (
                       <button
                         key={id}
                         onClick={() => switchCanvasMode(id)}
                         className={
                           canvasMode === id
-                            ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                            : 'px-2.5 py-1 text-[#374151]'
+                            ? 'studio-segment-btn studio-segment-btn-active'
+                            : 'studio-segment-btn'
                         }
                       >
                       {t(label)}
@@ -2244,13 +2245,13 @@ export default function EditorPage() {
                   </div>
                   {/* Device controls — moved out of the app header so it stays
                       one row; they act on the canvas this bar belongs to. */}
-                  <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
+                  <div className="studio-segment shrink-0">
                     <button
                       onClick={() => setViewport('pc')}
                       className={
                         viewport === 'pc'
-                          ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                          : 'px-2.5 py-1 text-[#374151]'
+                          ? 'studio-segment-btn studio-segment-btn-active'
+                          : 'studio-segment-btn'
                       }
                     >
                       {t('PC')}
@@ -2259,8 +2260,8 @@ export default function EditorPage() {
                       onClick={() => setViewport('mobile')}
                       className={
                         viewport === 'mobile'
-                          ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
-                          : 'px-2.5 py-1 text-[#374151]'
+                          ? 'studio-segment-btn studio-segment-btn-active'
+                          : 'studio-segment-btn'
                       }
                     >
                       {t('Mobile')}
@@ -2277,7 +2278,7 @@ export default function EditorPage() {
                         ? t('Phone screen size')
                         : t('Preview screen size')
                     }
-                    className="hidden rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
+                    className="studio-input hidden max-w-[190px] px-2 py-1.5 text-xs font-medium md:block"
                   >
                     {sizePresets.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -2289,7 +2290,7 @@ export default function EditorPage() {
                     )}
                   </select>
                   <div
-                    className="hidden items-center gap-1 rounded-lg border border-[#d1d5db] bg-white px-1.5 py-0.5 text-xs text-[#6b7280] md:flex"
+                    className="hidden"
                     aria-label={t('Custom resolution')}
                   >
                     <span aria-hidden>W</span>
@@ -2353,16 +2354,16 @@ export default function EditorPage() {
                     onClick={() => chooseDefaultViewport(viewport)}
                     title={t('Make this the default editor screen')}
                     aria-label={t('Make this the default editor screen')}
-                    className={`rounded-lg border px-2 py-1 text-xs font-medium ${
+                    className={`studio-icon-btn shrink-0 ${
                       defaultViewport === viewport
-                        ? 'border-amber-300 bg-amber-50 text-amber-700'
-                        : 'border-[#d1d5db] text-[#6b7280] hover:bg-[#f3f4f6]'
+                        ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                        : ''
                     }`}
                   >
                     {defaultViewport === viewport ? '★' : '☆'}
-                    <span className="ml-1 hidden xl:inline">{t('Default')}</span>
+                    <span className="sr-only">{t('Default')}</span>
                   </button>
-                  {canvasMode === 'edit' && (
+                  {canvasMode === 'legacy' && (
                     <button
                       type="button"
                       onClick={() => setGridStep(gridStep ? 0 : 10)}
@@ -2379,7 +2380,7 @@ export default function EditorPage() {
                   {/* Link tool — mirrors the HTML workspace's Link sub-tool:
                       click a button/link component, then click its target
                       component (or a page in the Files panel). */}
-                  {canvasMode === 'edit' && (
+                  {canvasMode === 'legacy' && (
                     <>
                       <button
                         type="button"
@@ -2414,7 +2415,39 @@ export default function EditorPage() {
                       </button>
                     </>
                   )}
-                  <span className="ml-auto hidden min-w-0 truncate text-xs text-[#6b7280] 2xl:block">
+                  <div className="relative ml-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setCanvasToolsOpen((open) => !open)}
+                      title={t('Canvas tools')}
+                      aria-label={t('Canvas tools')}
+                      className={`studio-icon-btn ${canvasToolsOpen ? 'bg-[var(--studio-control-hover)] text-[var(--studio-text)]' : ''}`}
+                    >
+                      <MoreHorizontalIcon size={17} />
+                    </button>
+                    {canvasToolsOpen && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setCanvasToolsOpen(false)} />
+                        <div className="studio-menu absolute right-0 top-[calc(100%+6px)] z-40 w-72 p-2">
+                          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--studio-text-faint)]">{t('Custom resolution')}</div>
+                          <div className="mb-2 flex items-center gap-1.5">
+                            <input ref={resolutionWidthRef} key={`tool-width-${viewport}-${curW}`} type="number" min={viewport === 'mobile' ? 240 : 320} max={viewport === 'mobile' ? 1200 : 4000} defaultValue={curW} aria-label={t('Custom width (px)')} className="studio-input min-w-0 flex-1 px-2 py-1.5 text-xs" />
+                            <span className="text-xs text-[var(--studio-text-faint)]">×</span>
+                            <input ref={resolutionHeightRef} key={`tool-height-${viewport}-${curFold}`} type="number" min="0" max="20000" defaultValue={curFold || ''} placeholder="—" aria-label={t('Custom height (px)')} className="studio-input min-w-0 flex-1 px-2 py-1.5 text-xs" />
+                            <button type="button" onClick={applyCustomCanvasResolution} className="studio-btn studio-btn-secondary px-2">{t('Apply')}</button>
+                          </div>
+                          {canvasMode === 'edit' && (
+                            <div className="space-y-1">
+                              <button type="button" onClick={() => setGridStep(gridStep ? 0 : 10)} className={`studio-menu-item ${gridStep ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}># {t('Grid')}</button>
+                              <button type="button" onClick={() => { setBrushMode(false); setLinkMode(!linkMode); setCanvasToolsOpen(false) }} className={`studio-menu-item ${linkMode ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}><LinkIcon size={13} /> {t('Link')}</button>
+                              <button type="button" onClick={() => { const next = !brushMode; setBrushMode(next); if (next) setLinkMode(false); setCanvasToolsOpen(false) }} className={`studio-menu-item ${brushMode ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}><PaletteIcon size={13} /> {t('Brush')}</button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <span className="hidden min-w-0 truncate text-xs text-[var(--studio-text-muted)] 2xl:block">
                     {canvasMode === 'view'
                       ? t('Read-only preview of this page')
                       : canvasMode === 'source'

@@ -1684,6 +1684,8 @@ export const TURKISH_TRANSLATIONS = {
   'Light': 'Açık',
   'Appearance': 'Görünüm',
   'More actions': 'Diğer işlemler',
+  'Editing tools': 'Düzenleme araçları',
+  'Canvas tools': 'Tuval araçları',
   'Icon top': 'Üstte simge',
   'Image card': 'Görsel kartı',
   'Stat': 'İstatistik',

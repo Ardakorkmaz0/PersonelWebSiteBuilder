@@ -192,6 +192,30 @@ body {
   .studio-divider {
     border-color: var(--studio-border);
   }
+  .studio-segment {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1875rem;
+    border: 1px solid var(--studio-border);
+    border-radius: var(--studio-radius);
+    background: var(--studio-control);
+  }
+  .studio-segment-btn {
+    min-height: 1.7rem;
+    padding: 0.25rem 0.62rem;
+    border-radius: var(--studio-radius-sm);
+    color: var(--studio-text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .studio-segment-btn:hover {
+    color: var(--studio-text);
+  }
+  .studio-segment-btn-active {
+    background: var(--studio-panel-raised);
+    color: var(--studio-text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
   .ms-btn {
     display: inline-flex;
     align-items: center;

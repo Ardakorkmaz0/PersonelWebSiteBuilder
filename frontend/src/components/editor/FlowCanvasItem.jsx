@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore } from '../../store/editorStore.js'
-import { BanIcon, TrashIcon } from '../icons.jsx'
+import { BanIcon } from '../icons.jsx'
 import {
   absoluteChildrenHeight,
   flowItemStyle,
@@ -13,6 +13,7 @@ import { RenderComponent } from '../renderer/Renderer.jsx'
 import { TAB_STYLES } from '../renderer/constants.js'
 import { sanitizeStyles } from '../../utils/sanitize.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
+import CanvasSelectionActions from './CanvasSelectionActions.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import {
   regionContentWidth,
@@ -96,6 +97,7 @@ export default function FlowCanvasItem({
   canvasWidth,
   canvasScale = 1,
   parentDirection = 'row',
+  placeActionsInside = false,
   brushMode = false,
   brushColor = '#4f46e5',
   brushTarget = 'smart',
@@ -105,7 +107,6 @@ export default function FlowCanvasItem({
   const selectedId = useEditorStore((s) => s.selectedId)
   const viewport = useEditorStore((s) => s.viewport)
   const select = useEditorStore((s) => s.selectComponent)
-  const remove = useEditorStore((s) => s.removeComponent)
   const setLayout = useEditorStore((s) => s.setLayout)
   const paintComponent = useEditorStore((s) => s.paintComponent)
 
@@ -113,7 +114,6 @@ export default function FlowCanvasItem({
   const hidden = isHidden(component, viewport)
   const fixedHeight = FIXED_HEIGHT_TYPES.has(component.type)
   const full = isFlowFullWidth(component)
-  const canShowInlineDelete = Math.round(component.layout?.w || 240) >= 34 && Math.round(component.layout?.h || 80) >= 30
 
   // Pinned behavior mirrored in the edit canvas (same idea as FreeCanvasItem):
   // sticky uses NATIVE position:sticky — flow items are in flow, so it engages
@@ -333,22 +333,14 @@ export default function FlowCanvasItem({
       )}
 
       {isSelected && !brushMode && (
-        canShowInlineDelete && (
-          <button
-            type="button"
-            aria-label={t('Delete component')}
-            title={t('Delete')}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              remove(component.id)
-            }}
-            style={{ position: 'absolute', top: 3, right: 3, zIndex: 30 }}
-            className="flex h-6 w-6 items-center justify-center rounded-md bg-[#a4262c] text-white shadow"
-          >
-            <TrashIcon size={13} />
-          </button>
-        )
+        <CanvasSelectionActions
+          componentId={component.id}
+          style={{
+            top: placeActionsInside ? 8 : -40,
+            left: '50%',
+            transform: 'translateX(-50%)',
+          }}
+        />
       )}
 
       {edgeHitZones.map(([dir, pos, cursor]) => (
@@ -596,7 +588,6 @@ function TabsCanvasItem({
   const viewport = useEditorStore((s) => s.viewport)
   const select = useEditorStore((s) => s.selectComponent)
   const setLayout = useEditorStore((s) => s.setLayout)
-  const remove = useEditorStore((s) => s.removeComponent)
   const paintComponent = useEditorStore((s) => s.paintComponent)
   const isSelected = selectedId === component.id
   const hidden = isHidden(component, viewport)
@@ -616,7 +607,12 @@ function TabsCanvasItem({
   const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
   const handles = brushMode ? [] : freeResizeHandles(chromeRect)
   const edgeHitZones = brushMode ? [] : freeResizeEdgeHitZones(chromeRect)
-  const canShowInlineDelete = w >= 34 && h >= 30
+  const actionBarWidth = 168
+  const actionBarLeft = Math.max(
+    4 - x,
+    Math.min((w - actionBarWidth) / 2, (bounds?.w || w) - x - actionBarWidth - 4),
+  )
+  const actionBarTop = y >= 44 ? -40 : 8
   const applyLayout = (patch) => setLayout(
     component.id,
     layoutMapper ? layoutMapper(patch, { x, y, w, h }) : patch,
@@ -748,6 +744,10 @@ function TabsCanvasItem({
 
       {isSelected && !brushMode && (
         <>
+          <CanvasSelectionActions
+            componentId={component.id}
+            style={{ top: actionBarTop, left: actionBarLeft }}
+          />
           <div
             aria-hidden="true"
             style={{
@@ -777,22 +777,6 @@ function TabsCanvasItem({
               }}
             />
           ))}
-          {canShowInlineDelete && (
-            <button
-              type="button"
-              aria-label={t('Delete component')}
-              title={t('Delete')}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                remove(component.id)
-              }}
-              style={{ position: 'absolute', top: 3, right: 3, zIndex: 30 }}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-[#a4262c] text-white shadow"
-            >
-              <TrashIcon size={13} />
-            </button>
-          )}
           {handles.map(([dir, pos, cursor]) => (
             <div
               key={dir}

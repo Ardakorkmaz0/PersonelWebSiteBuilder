@@ -208,6 +208,10 @@ function findParentInTree(components, id) {
   return null
 }
 
+export function selectComponentParent(state, id) {
+  return findParentInTree(selectCurrentPage(state)?.components || [], id)
+}
+
 function parentDesignWidth(parent, mobileWidth) {
   if (parent?.type === 'region') {
     return mobileWidth || regionContentWidth(parent)
@@ -1340,6 +1344,12 @@ export const useEditorStore = create((set, get) => ({
   },
 
   selectComponent: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+
+  selectParentComponent: (id) =>
+    set((state) => {
+      const parent = selectComponentParent(state, id)
+      return parent ? { selectedId: parent.id, selectedIds: [parent.id] } : {}
+    }),
 
   // Shift-click: add/remove a component from the multi-selection. The primary
   // (`selectedId`, what the properties panel shows) becomes the just-toggled id

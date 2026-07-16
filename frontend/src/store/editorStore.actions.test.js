@@ -119,6 +119,39 @@ describe('custom canvas resolution', () => {
 })
 
 describe('selection invariants', () => {
+  it('selects the containing canvas component without changing the design', () => {
+    s().loadSchema({
+      theme: {},
+      pages: [{
+        id: 'p1',
+        name: 'Home',
+        components: [{
+          id: 'parent',
+          type: 'container',
+          props: {},
+          styles: {},
+          layout: { x: 0, y: 0, w: 600, h: 300 },
+          children: [{
+            id: 'child',
+            type: 'text',
+            props: { text: 'Nested' },
+            styles: {},
+            layout: { x: 10, y: 10, w: 120, h: 40 },
+          }],
+        }],
+      }],
+    })
+    const schemaBefore = s().schema
+
+    s().selectComponent('child')
+    s().selectParentComponent('child')
+
+    expect(s().selectedId).toBe('parent')
+    expect(s().selectedIds).toEqual(['parent'])
+    expect(s().schema).toBe(schemaBefore)
+    expect(s().dirty).toBe(false)
+  })
+
   it('keeps single and multi-selection aligned after add and duplicate', () => {
     freshTwoPageSchema()
     s().addComponent('button', 10, 10)

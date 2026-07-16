@@ -47,6 +47,10 @@ import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import { MOBILE_EDITOR_QUERY, NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
 import {
+  shouldBlockEditorUnload,
+  shouldRunEditorAutoSave,
+} from '../utils/editorLeave.js'
+import {
   clearLocalFileHandle,
   downloadHtmlFile,
   isPickerCancel,
@@ -301,6 +305,8 @@ export default function EditorPage() {
   })
   const [leavePromptOpen, setLeavePromptOpen] = useState(false)
   const leaveActionRef = useRef(null)
+  const leaveConfirmedRef = useRef(false)
+  const discardLeaveRef = useRef(false)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
   const [editorExperience, setEditorExperience] = useState(() => {
     try { return localStorage.getItem('pwb_editor_experience') === 'advanced' ? 'advanced' : 'simple' }
@@ -575,6 +581,10 @@ export default function EditorPage() {
   useEffect(() => {
     if (!dirty && !htmlDirty && !metaDirty) return undefined
     const handler = (e) => {
+      if (!shouldBlockEditorUnload(
+        { dirty, htmlDirty, metaDirty },
+        leaveConfirmedRef.current,
+      )) return
       e.preventDefault()
       e.returnValue = ''
     }
@@ -595,10 +605,13 @@ export default function EditorPage() {
     }
   })
   useEffect(() => {
-    if (!autoSaveEnabled || loading || (!dirty && !htmlDirty && !metaDirty)) return undefined
+    if (!shouldRunEditorAutoSave(
+      { autoSaveEnabled, loading, dirty, htmlDirty, metaDirty },
+      discardLeaveRef.current,
+    )) return undefined
     const timer = window.setTimeout(() => {
       const s = saveLifecycleRef.current
-      if (s && s.autoSaveEnabled && !s.loading && (s.dirty || s.htmlDirty || s.metaDirty)) {
+      if (shouldRunEditorAutoSave(s, discardLeaveRef.current)) {
         s.save(s.published, { auto: true })
       }
     }, 12000)
@@ -620,7 +633,7 @@ export default function EditorPage() {
     if (!autoSaveEnabled) return undefined
     const flush = () => {
       const s = saveLifecycleRef.current
-      if (s && s.autoSaveEnabled && !s.loading && (s.dirty || s.htmlDirty || s.metaDirty)) {
+      if (shouldRunEditorAutoSave(s, discardLeaveRef.current)) {
         s.save(s.published, { auto: true })
       }
     }
@@ -1095,15 +1108,23 @@ export default function EditorPage() {
       action?.()
       return
     }
+    leaveConfirmedRef.current = false
+    discardLeaveRef.current = false
     leaveActionRef.current = action
     setLeavePromptOpen(true)
   }
 
-  function finishLeave() {
+  function finishLeave({ discard = false } = {}) {
     const action = leaveActionRef.current
     leaveActionRef.current = null
+    leaveConfirmedRef.current = true
+    discardLeaveRef.current = discard
     setLeavePromptOpen(false)
     action?.()
+  }
+
+  function discardAndLeave() {
+    finishLeave({ discard: true })
   }
 
   async function saveAndLeave() {
@@ -1113,6 +1134,8 @@ export default function EditorPage() {
 
   function stayInEditor() {
     leaveActionRef.current = null
+    leaveConfirmedRef.current = false
+    discardLeaveRef.current = false
     setLeavePromptOpen(false)
   }
 
@@ -1333,7 +1356,7 @@ export default function EditorPage() {
       open={leavePromptOpen}
       saving={saving}
       onSave={saveAndLeave}
-      onDiscard={finishLeave}
+      onDiscard={discardAndLeave}
       onStay={stayInEditor}
     />
   )

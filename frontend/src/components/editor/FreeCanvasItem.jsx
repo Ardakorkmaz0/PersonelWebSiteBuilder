@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
+import CanvasSelectionActions from './CanvasSelectionActions.jsx'
 import { snapDraggedRect } from '../../utils/snapping.js'
-import { TrashIcon } from '../icons.jsx'
 import { BRUSH_CURSOR } from './brushCursor.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
@@ -70,7 +70,6 @@ export default function FreeCanvasItem({
   const updateProps = useEditorStore((s) => s.updateProps)
   const setDragGuides = useEditorStore((s) => s.setDragGuides)
   const clearDragGuides = useEditorStore((s) => s.clearDragGuides)
-  const remove = useEditorStore((s) => s.removeComponent)
   const paintComponent = useEditorStore((s) => s.paintComponent)
 
   // Component-canvas link tool: when armed, a click picks this component as the
@@ -115,7 +114,12 @@ export default function FreeCanvasItem({
   const edgeHitZones = resizeEdgeHitZones(chromeRect).filter(([dir]) => (
     stackedRegion ? dir === 's' : !viewportStretch || dir === 'n' || dir === 's'
   ))
-  const canShowInlineDelete = w >= 34 && h >= 30
+  const actionBarWidth = 168
+  const actionBarLeft = Math.max(
+    4 - x,
+    Math.min((w - actionBarWidth) / 2, canvasWidth - x - actionBarWidth - 4),
+  )
+  const actionBarTop = y >= 44 ? -40 : 8
   const hidden =
     viewport === 'mobile' ? component.hiddenMobile : component.hidden
 
@@ -421,6 +425,10 @@ export default function FreeCanvasItem({
 
       {isPrimarySingle && !linkMode && (
         <>
+          <CanvasSelectionActions
+            componentId={component.id}
+            style={{ top: actionBarTop, left: actionBarLeft }}
+          />
           {edgeHitZones.map(([dir, pos, cursor]) => (
             <div
               key={`edge-${dir}`}
@@ -435,22 +443,6 @@ export default function FreeCanvasItem({
               }}
             />
           ))}
-          {canShowInlineDelete && (
-            <button
-              type="button"
-              aria-label={t('Delete component')}
-              title={t('Delete')}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                remove(component.id)
-              }}
-              style={{ position: 'absolute', top: 3, right: 3, zIndex: 30 }}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-[#a4262c] text-white shadow"
-            >
-              <TrashIcon size={13} />
-            </button>
-          )}
           {handles.map(([dir, pos, cursor]) => (
             <div
               key={dir}

@@ -860,7 +860,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
 
   if (selectedLayoutItems.length > 1) {
     return (
-      <div className="studio-properties-panel flex h-full flex-col">
+      <div className="studio-properties-panel flex h-full min-w-0 flex-col overflow-hidden">
         <div className="border-b border-[#e5e7eb] px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -972,7 +972,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
 
   if (!component) {
     return (
-      <div className="studio-properties-panel flex h-full flex-col">
+      <div className="studio-properties-panel flex h-full min-w-0 flex-col overflow-hidden">
         <div className="border-b border-[#e5e7eb] px-4 py-3">
           <h2 className="text-sm font-semibold text-[#111827]">{t('Page')}</h2>
           <p className="text-xs text-[#6b7280]">
@@ -1020,7 +1020,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           </section>
 
           <section className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
               <SectionTitle>{t('Theme')}</SectionTitle>
               <button
                 type="button"
@@ -1028,7 +1028,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                 title={htmlMode
                   ? t('Apply this palette + font to every HTML page')
                   : t('Apply the theme to every component')}
-                className="rounded-lg border border-[#4f46e5] px-2 py-1 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
+                className="shrink-0 rounded-lg border border-[var(--studio-accent)] px-2 py-1 text-xs font-semibold text-[var(--studio-accent-hover)] hover:bg-[var(--studio-accent-soft)]"
               >
                 {htmlMode ? t('Apply to pages') : t('Apply to design')}
               </button>
@@ -1047,7 +1047,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                     if (htmlMode) onApplyThemeToHtml?.(normalizeTheme(p.theme))
                     else applyTheme()
                   }}
-                  className="flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-left text-[11px] font-medium text-[#374151] transition hover:border-[#4f46e5] hover:bg-[#eef2ff]"
+                  className="flex min-w-0 items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-left text-[11px] font-medium text-[#374151] transition hover:border-[#4f46e5] hover:bg-[#eef2ff]"
                 >
                   <span className="flex shrink-0 -space-x-1">
                     {[p.theme.primaryColor, p.theme.headerColor, p.theme.softColor].map((c, i) => (
@@ -1250,7 +1250,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   ) : null
 
   return (
-    <div className="studio-properties-panel flex h-full flex-col">
+    <div className="studio-properties-panel flex h-full min-w-0 flex-col overflow-hidden">
       <div className="border-b border-[#e5e7eb] px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

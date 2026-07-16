@@ -19,6 +19,7 @@ export const TURKISH_TRANSLATIONS = {
   'Cancel': 'İptal',
   'Delete': 'Sil',
   'Edit': 'Düzenle',
+  'Apply': 'Uygula',
   'View': 'Görüntüle',
   'Source': 'Kaynak',
   'Text': 'Metin',

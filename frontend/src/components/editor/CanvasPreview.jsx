@@ -84,7 +84,7 @@ export default function CanvasPreview({
     <main
       ref={workspaceRef}
       data-testid="component-view-workspace"
-      className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-8"
+      className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[var(--studio-shell)] p-8"
     >
       <div
         className="mx-auto"

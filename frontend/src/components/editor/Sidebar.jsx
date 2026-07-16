@@ -174,7 +174,7 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
       {variant.recommended && (
         <div
           title={t('Recommended component')}
-          className="mx-auto mt-1 flex w-fit items-center gap-1 rounded-full bg-[#dcfce7] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[#15803d]"
+          className="mx-auto mt-1 flex w-fit items-center gap-1 rounded-full bg-[var(--studio-accent-soft)] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[var(--studio-accent-hover)]"
         >
           <span aria-hidden="true">✓</span> {t('Recommended')}
         </div>
@@ -198,7 +198,7 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
           onPick(type, variant.html)
         }}
         title={`Click to place, or drag onto the page — ${variantLabel}`}
-        className={`cursor-pointer rounded-lg border p-1.5 transition select-none hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${variant.recommended ? 'border-[#86efac] bg-[#f7fff9]' : 'border-[#e5e7eb] bg-white'}`}
+        className={`cursor-pointer rounded-lg border p-1.5 transition select-none hover:border-[var(--studio-accent)] hover:bg-[var(--studio-control-hover)] active:cursor-grabbing ${variant.recommended ? 'border-[var(--studio-accent)] bg-[var(--studio-control)]' : 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)]'}`}
       >
         {preview}
       </div>
@@ -222,7 +222,7 @@ function VariantSwatch({ type, variant, onPick, onArm, onInspect, wide }) {
       }}
       title={`Click to place, or drag onto the canvas — ${variantLabel}`}
       style={{ touchAction: 'manipulation' }}
-      className={`cursor-grab rounded-lg border p-1.5 transition hover:border-[#4f46e5] hover:bg-[#fafaff] active:cursor-grabbing ${variant.recommended ? 'border-[#86efac] bg-[#f7fff9]' : 'border-[#e5e7eb] bg-white'} ${isDragging ? 'opacity-40' : ''}`}
+      className={`cursor-grab rounded-lg border p-1.5 transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-control-hover)] active:cursor-grabbing ${variant.recommended ? 'border-[var(--studio-accent)] bg-[var(--studio-control)]' : 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)]'} ${isDragging ? 'opacity-40' : ''}`}
     >
       {preview}
     </div>

@@ -636,7 +636,7 @@ function HtmlWorkspace({
     win.addEventListener('pointerup', onUp)
   }, [onElementSelect])
 
-  function selectionChromeLabels() {
+  const selectionChromeLabels = useCallback(() => {
     return {
       toolbar: t('Arrange'),
       parent: t('Select parent'),
@@ -645,22 +645,23 @@ function HtmlWorkspace({
       down: t('Move down'),
       delete: t('Delete component'),
     }
-  }
+  }, [t])
 
-  function installSelectedElementChrome(doc, el) {
+  const selectionActionRef = useRef(null)
+  const installSelectedElementChrome = useCallback((doc, el) => {
     installSelectionResizeChrome(
       doc,
       el,
       startSelectedElementResize,
-      handleSelectionChromeAction,
+      selectionActionRef.current,
       selectionChromeLabels(),
     )
-  }
+  }, [selectionChromeLabels, startSelectedElementResize])
 
   // Common element actions live directly on the selection outline. This is
   // deliberately the same mutation path as the right panel, so undo/save and
   // the inspector snapshot stay in sync regardless of where the action began.
-  function handleSelectionChromeAction(action) {
+  const handleSelectionChromeAction = useCallback((action) => {
     const doc = iframeRef.current?.contentDocument
     const el = selectedRef.current
     if (!doc?.body || !el?.isConnected) return
@@ -693,7 +694,10 @@ function HtmlWorkspace({
     else removeSelectionResizeChrome(doc)
     if (changed) onCommitRef.current?.(serializeDocument(doc))
     onElementSelect?.(next ? describeElement(next) : null)
-  }
+  }, [installSelectedElementChrome, onElementSelect])
+  useEffect(() => {
+    selectionActionRef.current = handleSelectionChromeAction
+  }, [handleSelectionChromeAction])
   // Topmost visible body-child index reported by the view iframe (it has an
   // opaque origin, so it tells us via postMessage). null = unknown.
   const viewAnchorRef = useRef(null)
@@ -884,7 +888,7 @@ function HtmlWorkspace({
     // arrows in sync while the Link tool is showing them.
     if (editToolRef.current === 'link') paintConnections(doc)
     onElementSelect?.(next ? describeElement(next) : null)
-  }, [clearSelection, onCommit, onElementSelect, startSelectedElementResize])
+  }, [clearSelection, installSelectedElementChrome, onCommit, onElementSelect])
 
   // Replace the open document wholesale (undo/redo, template load) — without
   // this, an open edit/source surface would clobber the new HTML with its
@@ -957,7 +961,7 @@ function HtmlWorkspace({
       flashNode(doc, anchor)
       return true
     },
-  }), [applyAiHtml, clearSelection, mode, mutateSelected, onCommit, onElementSelect, onLinkArmedChange, readHtml, setDocument, switchMode])
+  }), [applyAiHtml, clearSelection, installSelectedElementChrome, mode, mutateSelected, onCommit, onElementSelect, onLinkArmedChange, readHtml, setDocument, switchMode])
 
   const device = DEVICES.find((d) => d.id === deviceId) || DEVICES[0]
   const isFit = device.id === 'fit'
@@ -1432,7 +1436,7 @@ function HtmlWorkspace({
     `studio-segment-btn ${active ? 'studio-segment-btn-active' : ''}`
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 min-w-0 flex-1">
       {/* The page/file list lives in the editor's left rail (Files tab) —
           the workspace itself is just the toolbar + stage. */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -1625,7 +1629,7 @@ function HtmlWorkspace({
               />
             </main>
           ) : (
-            <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6 text-sm text-[#9ca3af]">
+            <main className="flex min-h-0 flex-1 items-center justify-center bg-[var(--studio-shell)] p-6 text-sm text-[var(--studio-text-faint)]">
               {t('Enter your dev-server URL in the header, then this tab shows the real running page.')}
             </main>
           )
@@ -1646,7 +1650,7 @@ function HtmlWorkspace({
           /* Empty page: keep the full workspace chrome (toolbar, device bar)
              and put the starter actions where the page would render — the
              editor looks identical whether a page has HTML yet or not. */
-          <main className="flex min-h-0 flex-1 items-center justify-center bg-[#f3f4f6] p-6">
+          <main className="flex min-h-0 flex-1 items-center justify-center bg-[var(--studio-shell)] p-6">
             <div className="ms-card w-full max-w-md p-8 text-center">
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-[#4f46e5]">
                 <FileCodeIcon size={24} />
@@ -1671,7 +1675,7 @@ function HtmlWorkspace({
         ) : (
           <main
             ref={stageRef}
-            className="relative flex flex-1 items-start justify-center overflow-hidden bg-[#f3f4f6] p-3"
+            className="relative flex flex-1 items-start justify-center overflow-hidden bg-[var(--studio-shell)] p-3"
           >
             {isFit ? (
               // Responsive ("area width") preview: the iframe simply FILLS the

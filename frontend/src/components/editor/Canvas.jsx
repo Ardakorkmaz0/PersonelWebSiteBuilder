@@ -374,7 +374,7 @@ export default function Canvas({
       <main
         id="canvas-scroll"
         ref={scrollElRef}
-        className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-8"
+        className="flex-1 overflow-x-hidden overflow-y-auto bg-[var(--studio-shell)] p-8"
         onClickCapture={preventCanvasAnchorClicks}
       >
         <div
@@ -409,7 +409,7 @@ export default function Canvas({
     <main
       id="canvas-scroll"
       ref={scrollElRef}
-      className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-8"
+      className="flex-1 overflow-x-hidden overflow-y-auto bg-[var(--studio-shell)] p-8"
       onClickCapture={preventCanvasAnchorClicks}
     >
       <div

@@ -8,15 +8,13 @@ import {
 } from '../../utils/htmlQuickEdit.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
-// Small, reusable form controls used by the PropertiesPanel:
-// square 2px corners, neutral borders, blue focus.
-const inputCls =
-  'w-full rounded-lg border border-[#d1d5db] px-2 py-1 text-sm text-[#111827] focus:border-[#4f46e5] focus:outline-none'
-const labelCls = 'block text-xs font-semibold text-[#6b7280] mb-1'
+// Shared property controls inherit the active Studio theme.
+const inputCls = 'studio-input min-w-0 w-full px-2.5 py-2 text-sm'
+const labelCls = 'mb-1 block text-xs font-semibold text-[var(--studio-text-muted)]'
 
 export function LabeledText({ label, value, onChange, placeholder }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className={labelCls}>{label}</span>
       <input
         type="text"
@@ -286,9 +284,9 @@ function ImageLibrary({ value, onPick }) {
 export function LabeledColor({ label, value, onChange }) {
   const hex = /^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#000000'
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className={labelCls}>{label}</span>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <input
           type="color"
           className="h-8 w-10 cursor-pointer rounded-lg border border-[#d1d5db]"

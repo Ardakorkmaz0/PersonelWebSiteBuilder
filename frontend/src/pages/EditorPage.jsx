@@ -1470,6 +1470,7 @@ export default function EditorPage() {
       : hasUnsavedChanges
         ? { label: t('Unsaved'), tone: 'var(--studio-warning)' }
         : { label: t('Saved'), tone: 'var(--studio-success)' }
+  const showLegacyHeader = false
 
   return (
     <div className="studio-shell flex h-screen flex-col">
@@ -1621,8 +1622,40 @@ export default function EditorPage() {
           </div>
         </div>
       </header>
+      <input
+        ref={jsonInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={(event) => {
+          importFiles(event.target.files)
+          event.target.value = ''
+        }}
+        className="hidden"
+      />
+      <input
+        ref={htmlInputRef}
+        type="file"
+        accept=".html,.htm"
+        multiple
+        onChange={(event) => {
+          importFiles(event.target.files)
+          event.target.value = ''
+        }}
+        className="hidden"
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        onChange={(event) => {
+          importFiles(event.target.files)
+          event.target.value = ''
+        }}
+        className="hidden"
+      />
       {/* One focused editing mode. Secondary metadata lives under Tools and
           nonessential labels collapse before this row could overflow. */}
+      {showLegacyHeader && (
       <header className="hidden">
         <div className="flex shrink-0 items-center gap-1">
           <Link
@@ -2009,6 +2042,7 @@ export default function EditorPage() {
           </Link>
         </div>
       </header>
+      )}
 
       {error && (
         <div className="bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>
@@ -2159,7 +2193,7 @@ export default function EditorPage() {
                 onOpen={() => setRail('right', true)}
                 onClose={() => setRail('right', false)}
               >
-                <div className="studio-panel flex w-72 max-w-full shrink-0 flex-col border-l">
+                <div className="studio-panel flex w-72 min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l">
                   <div className="flex items-center justify-between border-b border-[var(--studio-border)] px-3 py-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
                       {htmlSelection ? 'Element' : 'Site settings'}
@@ -2542,7 +2576,7 @@ export default function EditorPage() {
                 onClose={() => setRail('right', false)}
               >
               <div
-                className={`studio-panel flex max-w-full shrink-0 flex-col border-l ${
+                className={`studio-panel flex min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l ${
                   rightTab === 'code' ? 'w-[480px]' : 'w-72'
                 }`}
               >

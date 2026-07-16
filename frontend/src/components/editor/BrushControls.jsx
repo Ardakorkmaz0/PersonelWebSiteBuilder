@@ -9,15 +9,15 @@ import { useLanguage } from '../../i18n/useLanguage.js'
 // utils/brush.js so this file only exports the component (fast-refresh).
 
 const swatchCls = (active) =>
-  `h-6 w-6 rounded-md border ${active ? 'border-[#4f46e5] ring-2 ring-[#c7d2fe]' : 'border-[#d1d5db]'}`
+  `h-6 w-6 rounded-md border ${active ? 'border-[var(--studio-accent)] ring-2 ring-[var(--studio-accent-soft)]' : 'border-[var(--studio-border-strong)]'}`
 
 // `onColor(color)` is expected to both set the brush color AND remember it (the
 // caller's chooseBrushColor). `onTarget(key)` switches what gets recolored.
 export default function BrushControls({ brushColor, brushTarget, recentColors = [], onColor, onTarget }) {
   const { t } = useLanguage()
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-[#f8fafc] px-4 py-1.5 text-xs text-[#374151]">
-      <div className="flex items-center rounded-lg border border-[#d1d5db] bg-white p-0.5 font-medium">
+    <div className="studio-toolbar flex flex-wrap items-center gap-2 border-b px-3 py-1.5 text-xs">
+      <div className="studio-segment flex items-center p-0.5 font-medium">
         {BRUSH_TARGETS.map(([key, label]) => (
           <button
             key={key}
@@ -25,8 +25,8 @@ export default function BrushControls({ brushColor, brushTarget, recentColors = 
             onClick={() => onTarget(key)}
             className={
               brushTarget === key
-                ? 'rounded-md bg-[#111827] px-2 py-0.5 text-white'
-                : 'px-2 py-0.5 text-[#4b5563] hover:text-[#111827]'
+                ? 'rounded-md bg-[var(--studio-accent)] px-2 py-0.5 text-white'
+                : 'rounded-md px-2 py-0.5 text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
             }
           >
             {t(label)}
@@ -47,8 +47,8 @@ export default function BrushControls({ brushColor, brushTarget, recentColors = 
         ))}
       </div>
       {recentColors.length > 0 && (
-        <div className="flex items-center gap-1 border-l border-[#d1d5db] pl-2">
-          <span className="text-[11px] font-medium text-[#6b7280]">{t('Recent')}</span>
+        <div className="flex items-center gap-1 border-l border-[var(--studio-border)] pl-2">
+          <span className="text-[11px] font-medium text-[var(--studio-text-muted)]">{t('Recent')}</span>
           {recentColors.map((color) => (
             <button
               key={color}
@@ -62,7 +62,7 @@ export default function BrushControls({ brushColor, brushTarget, recentColors = 
           ))}
         </div>
       )}
-      <label className="ml-auto flex h-7 items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white px-2 font-medium">
+      <label className="ml-auto flex h-7 items-center gap-1.5 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-control)] px-2 font-medium text-[var(--studio-text)]">
         <PaletteIcon size={13} aria-hidden />
         <input
           type="color"

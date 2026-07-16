@@ -66,8 +66,19 @@ class TestSnapshotHelper:
         for i in range(cap + 5):
             site.schema = {'theme': {}, 'pages': [{'id': f'p{i}', 'name': str(i), 'components': []}]}
             site.save()
-            SiteVersion.snapshot(site)
-        assert SiteVersion.objects.filter(site=site).count() == cap
+            SiteVersion.snapshot(site, source='auto')
+        assert SiteVersion.objects.filter(site=site, source='auto').count() == cap
+
+    def test_autosave_fifo_never_evicts_manual_history(self, alice):
+        owner, _ = alice
+        site = _make_site(owner)
+        manual = SiteVersion.snapshot(site, source='manual', force=True)
+        for i in range(SiteVersion.MAX_VERSIONS_PER_SITE + 5):
+            site.schema = {'theme': {}, 'pages': [{'id': f'auto-{i}', 'name': str(i), 'components': []}]}
+            site.save()
+            SiteVersion.snapshot(site, source='auto')
+        assert SiteVersion.objects.filter(pk=manual.pk, source='manual').exists()
+        assert SiteVersion.objects.filter(site=site, source='auto').count() == SiteVersion.MAX_VERSIONS_PER_SITE
 
     def test_two_sites_kept_independent(self, alice):
         owner, _ = alice
@@ -242,9 +253,9 @@ class TestCheckpoints:
         for i in range(SiteVersion.MAX_VERSIONS_PER_SITE + 5):
             site.schema = {'theme': {}, 'pages': [{'id': f'p{i}', 'name': str(i), 'components': []}]}
             site.save()
-            SiteVersion.snapshot(site)
+            SiteVersion.snapshot(site, source='auto')
         assert SiteVersion.objects.filter(site=site, pinned=True, label='keep me').exists()
-        assert SiteVersion.objects.filter(site=site, pinned=False).count() == SiteVersion.MAX_VERSIONS_PER_SITE
+        assert SiteVersion.objects.filter(site=site, pinned=False, source='auto').count() == SiteVersion.MAX_VERSIONS_PER_SITE
 
     def test_overwrite_replaces_slot_contents(self, client, alice):
         site_id = self._create_site(client, alice[1])

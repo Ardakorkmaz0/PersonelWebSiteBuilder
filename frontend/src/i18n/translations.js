@@ -819,6 +819,7 @@ export const TURKISH_TRANSLATIONS = {
   'to create a checkpoint you can return to anytime.': 'düğmesine basarak istediğiniz zaman dönebileceğiniz bir kontrol noktası oluşturun.',
   'Load': 'Yükle',
   'Save over': 'Üzerine kaydet',
+  'Recovery points': 'Kurtarma noktaları',
   'Auto-saves': 'Otomatik kayıtlar',
   'Auto-saves appear here as you work (the editor keeps the last 30).': 'Çalışırken otomatik kayıtlar burada görünür (editör son 30 kaydı tutar).',
   'Snapshot source: {source}': 'Anlık görüntü kaynağı: {source}',

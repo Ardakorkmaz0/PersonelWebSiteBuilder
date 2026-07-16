@@ -64,6 +64,8 @@ import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import { MOBILE_EDITOR_QUERY, NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
 import {
+  EDITOR_AUTO_SAVE_DELAY_MS,
+  isEditorSaveShortcut,
   shouldBlockEditorUnload,
   shouldRunEditorAutoSave,
 } from '../utils/editorLeave.js'
@@ -441,6 +443,7 @@ export default function EditorPage() {
     (storePages.find((p) => p.id === currentPageId)?.mode || 'empty') === 'html'
   const [htmlDirty, setHtmlDirty] = useState(false)
   const [workspaceDirty, setWorkspaceDirty] = useState(false)
+  const [workspaceSession, setWorkspaceSession] = useState(0)
   const htmlRevisionRef = useRef(0)
 
   function markMetaDirty() {
@@ -641,11 +644,12 @@ export default function EditorPage() {
   // once-bound listeners never fire a stale closure. Undo is unaffected, and the
   // manual Save still owns the linked-file write.
   const saveLifecycleRef = useRef(null)
-  useEffect(() => {
-    saveLifecycleRef.current = {
-      save, performSave, dirty, htmlDirty, metaDirty, workspaceDirty, published, loading, autoSaveEnabled,
-    }
-  })
+  // Assign during render rather than in a passive effect. A fast edit followed
+  // immediately by Ctrl+S/click Save must observe this render's title, HTML map
+  // and dirty flags instead of the previous render's closure.
+  saveLifecycleRef.current = {
+    save, performSave, dirty, htmlDirty, metaDirty, workspaceDirty, published, loading, autoSaveEnabled,
+  }
   useEffect(() => {
     if (!shouldRunEditorAutoSave(
       { autoSaveEnabled, loading, dirty, htmlDirty, metaDirty, workspaceDirty },
@@ -656,7 +660,7 @@ export default function EditorPage() {
       if (shouldRunEditorAutoSave(s, discardLeaveRef.current)) {
         s.save(s.published, { auto: true })
       }
-    }, 12000)
+    }, EDITOR_AUTO_SAVE_DELAY_MS)
     return () => window.clearTimeout(timer)
   }, [
     autoSaveEnabled,
@@ -783,6 +787,12 @@ export default function EditorPage() {
         const h = htmlHistoryRef.current
         if (h.currentPageIsHtml) h.redoHtml?.()
         else redo()
+        return
+      }
+      if (isEditorSaveShortcut(e)) {
+        e.preventDefault()
+        const lifecycle = saveLifecycleRef.current
+        if (!lifecycle?.loading) lifecycle?.save(lifecycle.published)
         return
       }
       if (typing) return
@@ -1131,11 +1141,9 @@ export default function EditorPage() {
   }
 
   async function save(nextPublished = published, { auto = false, versionSource } = {}) {
-    // Every server write goes through one queue. An automatic save is
-    // disposable while another write is active; an explicit Save/Publish waits
-    // and then invokes the latest render's performSave so it cannot send a stale
-    // title, page map, or schema after a slow request.
-    if (auto && saveQueueRef.current.isBusy()) return null
+    // Every server write goes through one queue. Automatic saves wait behind an
+    // active write instead of being dropped; each queued task invokes the latest
+    // render's performSave so slow requests cannot lose newer work.
     if (!auto) {
       manualSaveCountRef.current += 1
       setSaving(true)
@@ -1147,7 +1155,6 @@ export default function EditorPage() {
           const latestSave = saveLifecycleRef.current?.performSave || performSave
           return latestSave(nextPublished, { auto, versionSource })
         },
-        { dropIfBusy: auto },
       )
     } catch (e) {
       setAutoSaveState('error')
@@ -2118,7 +2125,7 @@ export default function EditorPage() {
                   chrome, with the starter card where the page would show. */}
               <Suspense fallback={<PanelFallback />}>
                 <HtmlWorkspace
-                  key={currentPageId}
+                  key={`${currentPageId}:${workspaceSession}`}
                   ref={workspaceRef}
                   persistKey={id}
                   html={siteHtml}
@@ -2745,6 +2752,11 @@ export default function EditorPage() {
                 setHtmlFuture([])
                 htmlRevisionRef.current = 0
                 setHtmlDirty(false)
+                setWorkspaceDirty(false)
+                // Remount the HTML workspace so a source textarea or editable
+                // iframe cannot retain the pre-restore document and auto-save it
+                // back over the version the user just loaded.
+                setWorkspaceSession((session) => session + 1)
               }
               if (fresh?.title !== undefined) setTitle(fresh.title)
               if (fresh?.slug !== undefined) setSlug(fresh.slug)

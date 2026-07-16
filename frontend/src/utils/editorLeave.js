@@ -1,3 +1,9 @@
+export const EDITOR_AUTO_SAVE_DELAY_MS = 2500
+
+export function isEditorSaveShortcut(event = {}) {
+  return Boolean((event.ctrlKey || event.metaKey) && String(event.key || '').toLowerCase() === 's')
+}
+
 export function hasUnsavedEditorChanges(state = {}) {
   return Boolean(state.dirty || state.htmlDirty || state.metaDirty || state.workspaceDirty)
 }

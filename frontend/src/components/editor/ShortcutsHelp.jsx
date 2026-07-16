@@ -10,6 +10,7 @@ const MOD = isMac ? '⌘' : 'Ctrl'
 
 const GROUPS = [
   ['Edit', [
+    ['Save', [MOD, 'S']],
     ['Copy', [MOD, 'C']],
     ['Cut', [MOD, 'X']],
     ['Paste', [MOD, 'V']],

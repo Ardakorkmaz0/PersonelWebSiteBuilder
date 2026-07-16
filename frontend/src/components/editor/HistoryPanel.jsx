@@ -8,6 +8,7 @@ import {
   deleteVersion,
 } from '../../api/versions.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { groupSiteVersions } from '../../utils/versionGroups.js'
 
 // Resident-Evil-style save slots. The History panel has two sections:
 //   • Checkpoints — pinned, named saves the auto-save FIFO never evicts. You
@@ -98,8 +99,7 @@ export default function HistoryPanel({
 
   if (!open) return null
 
-  const manualSaves = (rows || []).filter((r) => r.source === 'manual')
-  const autosaves = (rows || []).filter((r) => r.source !== 'manual')
+  const { manualSaves, autosaves, recoverySaves } = groupSiteVersions(rows)
 
   return (
     <div
@@ -204,6 +204,24 @@ export default function HistoryPanel({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {recoverySaves.length > 0 && (
+              <>
+                <SectionTitle>{t('Recovery points')} ({recoverySaves.length})</SectionTitle>
+                <ul className="space-y-1.5">
+                  {recoverySaves.map((v) => (
+                    <li key={v.id} className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white p-2">
+                      <SourceBadge source={v.source} pinned={v.pinned} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-medium text-[#111827]">{v.label || labelForSource(v.source, t)}</p>
+                        <p className="text-[10px] text-[#6b7280]">{formatWhen(v.created_at, language)}</p>
+                      </div>
+                      <SlotBtn disabled={busy} onClick={() => restore(v.id)}>{t('Load')}</SlotBtn>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </>
         )}

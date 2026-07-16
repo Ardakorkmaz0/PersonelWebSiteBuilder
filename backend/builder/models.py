@@ -282,8 +282,9 @@ class SiteVersion(models.Model):
     column.
     """
 
-    MAX_VERSIONS_PER_SITE = 30      # auto-save snapshots (FIFO)
-    MAX_CHECKPOINTS_PER_SITE = 25   # pinned, named "save slots" the user keeps
+    MAX_VERSIONS_PER_SITE = 30        # auto-save snapshots (FIFO)
+    MAX_MANUAL_VERSIONS_PER_SITE = 50 # unpinned manual/recovery snapshots
+    MAX_CHECKPOINTS_PER_SITE = 25     # pinned, named "save slots" the user keeps
     SOURCE_CHOICES = (
         ('save', 'Legacy save'),
         ('auto', 'Auto save'),
@@ -314,18 +315,19 @@ class SiteVersion(models.Model):
 
     @classmethod
     def _prune(cls, site):
-        """Cap auto-saves and checkpoints INDEPENDENTLY, so a burst of
-        auto-saves can never evict a checkpoint the user pinned."""
-        for is_pinned, cap in (
-            (False, cls.MAX_VERSIONS_PER_SITE),
-            (True, cls.MAX_CHECKPOINTS_PER_SITE),
-        ):
+        """Cap autos, ordinary manual/recovery rows, and checkpoints
+        independently. A background-save burst must never evict a manual save
+        merely because both rows happen to be unpinned."""
+        groups = (
+            (cls.objects.filter(site=site, pinned=False, source='auto'), cls.MAX_VERSIONS_PER_SITE),
+            (cls.objects.filter(site=site, pinned=False).exclude(source='auto'), cls.MAX_MANUAL_VERSIONS_PER_SITE),
+            (cls.objects.filter(site=site, pinned=True), cls.MAX_CHECKPOINTS_PER_SITE),
+        )
+        for rows, cap in groups:
             keep = list(
-                cls.objects.filter(site=site, pinned=is_pinned)
-                .order_by('-created_at')
-                .values_list('id', flat=True)[:cap]
+                rows.order_by('-created_at').values_list('id', flat=True)[:cap]
             )
-            cls.objects.filter(site=site, pinned=is_pinned).exclude(id__in=keep).delete()
+            rows.exclude(id__in=keep).delete()
 
     @classmethod
     def snapshot(cls, site, source='save', label='', pinned=False, force=False):

@@ -28,16 +28,20 @@ describe('site save queue', () => {
     expect(queue.isBusy()).toBe(false)
   })
 
-  it('drops an automatic save while another write is pending', async () => {
+  it('runs a trailing automatic save after an active write instead of losing it', async () => {
     const queue = createSaveQueue()
     let release
     const gate = new Promise((resolve) => { release = resolve })
     const active = queue.run(() => gate)
-    const backgroundTask = vi.fn()
+    const backgroundTask = vi.fn(async () => 'auto-saved')
+    const background = queue.run(backgroundTask)
 
-    await expect(queue.run(backgroundTask, { dropIfBusy: true })).resolves.toBeNull()
+    await Promise.resolve()
     expect(backgroundTask).not.toHaveBeenCalled()
     release('done')
     await active
+    await expect(background).resolves.toBe('auto-saved')
+    expect(backgroundTask).toHaveBeenCalledOnce()
+    expect(queue.isBusy()).toBe(false)
   })
 })

@@ -44,6 +44,7 @@ import {
 import { componentToHtml } from '../../utils/componentToHtml.js'
 import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
+import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
 import BrushControls from './BrushControls.jsx'
 import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
@@ -432,6 +433,7 @@ function HtmlWorkspace({
   persistKey,
   onCommit,
   onRequestSave,
+  onDraftDirtyChange,
   onElementSelect,
   onLinkArmedChange,
   onStartBlank,
@@ -492,6 +494,11 @@ function HtmlWorkspace({
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
+  const sourceDraftDirty = hasUnsavedSourceDraft(mode, sourceDraft, html)
+  useEffect(() => {
+    onDraftDirtyChange?.(sourceDraftDirty)
+  }, [onDraftDirtyChange, sourceDraftDirty])
+  useEffect(() => () => onDraftDirtyChange?.(false), [onDraftDirtyChange])
   // Code-project mode only: the resolved View document (CSS/JS inlined from the
   // sibling files). Recomputed by an effect whenever the file or a linked file
   // changes; ignored entirely when `assemble` is absent.

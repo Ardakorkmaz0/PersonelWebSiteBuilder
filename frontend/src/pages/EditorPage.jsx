@@ -67,6 +67,7 @@ import {
   shouldBlockEditorUnload,
   shouldRunEditorAutoSave,
 } from '../utils/editorLeave.js'
+import { createSaveQueue } from '../utils/saveQueue.js'
 import {
   clearLocalFileHandle,
   downloadHtmlFile,
@@ -338,7 +339,8 @@ export default function EditorPage() {
   // can still undo after a save — and every save the server keeps as a
   // restorable version (the History panel), so auto-saved states are recoverable.
   const [autoSaveState, setAutoSaveState] = useState('idle')
-  const autoSavingRef = useRef(false)
+  const saveQueueRef = useRef(createSaveQueue())
+  const manualSaveCountRef = useRef(0)
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(() => {
     try { return localStorage.getItem('pwb_autosave_' + id) === '1' }
     catch { return false }
@@ -438,6 +440,7 @@ export default function EditorPage() {
   const currentPageIsHtml =
     (storePages.find((p) => p.id === currentPageId)?.mode || 'empty') === 'html'
   const [htmlDirty, setHtmlDirty] = useState(false)
+  const [workspaceDirty, setWorkspaceDirty] = useState(false)
   const htmlRevisionRef = useRef(0)
 
   function markMetaDirty() {
@@ -618,10 +621,10 @@ export default function EditorPage() {
   // Warn before closing/refreshing the tab while there are unsaved changes —
   // losing an edited HTML document or canvas design silently is brutal.
   useEffect(() => {
-    if (!dirty && !htmlDirty && !metaDirty) return undefined
+    if (!dirty && !htmlDirty && !metaDirty && !workspaceDirty) return undefined
     const handler = (e) => {
       if (!shouldBlockEditorUnload(
-        { dirty, htmlDirty, metaDirty },
+        { dirty, htmlDirty, metaDirty, workspaceDirty },
         leaveConfirmedRef.current,
       )) return
       e.preventDefault()
@@ -629,7 +632,7 @@ export default function EditorPage() {
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [dirty, htmlDirty, metaDirty])
+  }, [dirty, htmlDirty, metaDirty, workspaceDirty])
 
   // Auto-save only at natural BOUNDARIES — not on every edit (that churned the
   // toolbar and saved constantly). We persist in the background when the tab is
@@ -640,12 +643,12 @@ export default function EditorPage() {
   const saveLifecycleRef = useRef(null)
   useEffect(() => {
     saveLifecycleRef.current = {
-      save, dirty, htmlDirty, metaDirty, published, loading, autoSaveEnabled,
+      save, performSave, dirty, htmlDirty, metaDirty, workspaceDirty, published, loading, autoSaveEnabled,
     }
   })
   useEffect(() => {
     if (!shouldRunEditorAutoSave(
-      { autoSaveEnabled, loading, dirty, htmlDirty, metaDirty },
+      { autoSaveEnabled, loading, dirty, htmlDirty, metaDirty, workspaceDirty },
       discardLeaveRef.current,
     )) return undefined
     const timer = window.setTimeout(() => {
@@ -661,6 +664,7 @@ export default function EditorPage() {
     dirty,
     htmlDirty,
     metaDirty,
+    workspaceDirty,
     editorSchema,
     pageHtmlMap,
     title,
@@ -1052,19 +1056,8 @@ export default function EditorPage() {
     }
   }
 
-  async function save(nextPublished = published, { auto = false, versionSource } = {}) {
-    // Auto-save runs in the background: don't stack on a manual save / another
-    // auto-save, and don't disable the toolbar buttons while it runs.
-    if (auto) {
-      if (saving || autoSavingRef.current) return null
-      autoSavingRef.current = true
+  async function performSave(nextPublished = published, { auto = false, versionSource } = {}) {
       setAutoSaveState('saving')
-    } else {
-      setSaving(true)
-      setError('')
-      setAutoSaveState('saving')
-    }
-    try {
       const schemaBase = useEditorStore.getState().schema
       // Fold the open workspace surface's html into the active page first.
       const live = workspaceRef.current?.getHtml?.()
@@ -1135,18 +1128,41 @@ export default function EditorPage() {
         }
       }
       return data
+  }
+
+  async function save(nextPublished = published, { auto = false, versionSource } = {}) {
+    // Every server write goes through one queue. An automatic save is
+    // disposable while another write is active; an explicit Save/Publish waits
+    // and then invokes the latest render's performSave so it cannot send a stale
+    // title, page map, or schema after a slow request.
+    if (auto && saveQueueRef.current.isBusy()) return null
+    if (!auto) {
+      manualSaveCountRef.current += 1
+      setSaving(true)
+      setError('')
+    }
+    try {
+      return await saveQueueRef.current.run(
+        () => {
+          const latestSave = saveLifecycleRef.current?.performSave || performSave
+          return latestSave(nextPublished, { auto, versionSource })
+        },
+        { dropIfBusy: auto },
+      )
     } catch (e) {
       setAutoSaveState('error')
       if (!auto) setError(apiError(e))
       return null
     } finally {
-      if (auto) autoSavingRef.current = false
-      else setSaving(false)
+      if (!auto) {
+        manualSaveCountRef.current = Math.max(0, manualSaveCountRef.current - 1)
+        if (manualSaveCountRef.current === 0) setSaving(false)
+      }
     }
   }
 
   function requestLeave(action) {
-    if (!dirty && !htmlDirty && !metaDirty) {
+    if (!dirty && !htmlDirty && !metaDirty && !workspaceDirty) {
       action?.()
       return
     }
@@ -1462,7 +1478,7 @@ export default function EditorPage() {
     setCanvasPreset({ width: nextWidth, fold: nextFold })
   }
 
-  const hasUnsavedChanges = dirty || htmlDirty || metaDirty
+  const hasUnsavedChanges = dirty || htmlDirty || metaDirty || workspaceDirty
   const saveStatus = autoSaveState === 'error'
     ? { label: t('Save failed'), tone: 'var(--studio-danger)' }
     : saving || autoSaveState === 'saving'
@@ -1518,7 +1534,7 @@ export default function EditorPage() {
           <button type="button" onClick={previewCurrentSite} disabled={saving} className="studio-btn hidden lg:inline-flex">
             <EyeIcon size={15} /> {t('Preview')}
           </button>
-          <button type="button" onClick={() => save()} disabled={saving || !hasUnsavedChanges} className="studio-btn studio-btn-secondary">
+          <button type="button" onClick={() => save()} disabled={saving} className="studio-btn studio-btn-secondary">
             <SaveIcon size={14} /> <span className="hidden xl:inline">{t('Save')}</span>
           </button>
           <button type="button" onClick={() => save(!published)} disabled={saving} className={published ? 'studio-btn studio-btn-secondary' : 'studio-btn studio-btn-primary'} title={published ? t('Unpublish') : t('Publish')}>
@@ -1704,7 +1720,7 @@ export default function EditorPage() {
             <span className="text-red-500">{t('Save failed')}</span>
           ) : saving || autoSaveState === 'saving' ? (
             <span className="text-[#6b7280]">{t('Saving…')}</span>
-          ) : (dirty || htmlDirty || metaDirty) ? (
+          ) : (dirty || htmlDirty || metaDirty || workspaceDirty) ? (
             <span className="text-amber-500">{t('Unsaved')}</span>
           ) : justSaved || autoSaveState === 'saved' ? (
             <span className="text-[#15803d]">{t('Saved ✓')}</span>
@@ -2166,6 +2182,7 @@ export default function EditorPage() {
                   }
                   onCommit={(h) => commitHtml(h)}
                   onRequestSave={() => save()}
+                  onDraftDirtyChange={setWorkspaceDirty}
                   onElementSelect={setHtmlSelection}
                   onLinkArmedChange={setLinkArmed}
                   onStartBlank={startBlankHtml}

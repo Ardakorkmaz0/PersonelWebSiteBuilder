@@ -1,5 +1,5 @@
 export function hasUnsavedEditorChanges(state = {}) {
-  return Boolean(state.dirty || state.htmlDirty || state.metaDirty)
+  return Boolean(state.dirty || state.htmlDirty || state.metaDirty || state.workspaceDirty)
 }
 
 export function shouldBlockEditorUnload(state, leaveConfirmed = false) {

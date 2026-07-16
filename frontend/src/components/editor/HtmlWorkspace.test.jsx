@@ -2,6 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
 import { serializeDocument } from '../../utils/htmlPlacement.js'
 import { installSelectionResizeChrome } from './HtmlWorkspace.jsx'
+import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
+
+describe('HTML source save state', () => {
+  it('marks only changed source drafts as unsaved', () => {
+    expect(hasUnsavedSourceDraft('source', '<p>new</p>', '<p>old</p>')).toBe(true)
+    expect(hasUnsavedSourceDraft('source', '<p>same</p>', '<p>same</p>')).toBe(false)
+    expect(hasUnsavedSourceDraft('view', '<p>new</p>', '<p>old</p>')).toBe(false)
+  })
+})
 
 describe('HTML selection quick actions', () => {
   beforeEach(() => {

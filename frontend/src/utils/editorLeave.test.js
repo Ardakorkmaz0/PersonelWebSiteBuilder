@@ -18,6 +18,7 @@ describe('editor leave decisions', () => {
     expect(hasUnsavedEditorChanges(dirty)).toBe(true)
     expect(hasUnsavedEditorChanges({ htmlDirty: true })).toBe(true)
     expect(hasUnsavedEditorChanges({ metaDirty: true })).toBe(true)
+    expect(hasUnsavedEditorChanges({ workspaceDirty: true })).toBe(true)
     expect(hasUnsavedEditorChanges({})).toBe(false)
   })
 

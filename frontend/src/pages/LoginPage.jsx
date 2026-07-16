@@ -45,7 +45,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center p-4"
+      className="themed-auth-page flex min-h-screen items-center justify-center p-4"
       style={{
         background:
           'radial-gradient(900px 500px at 80% -10%, rgba(99,102,241,0.14), transparent 60%), radial-gradient(700px 420px at -10% 110%, rgba(67,56,202,0.10), transparent 60%), #f7f8fa',

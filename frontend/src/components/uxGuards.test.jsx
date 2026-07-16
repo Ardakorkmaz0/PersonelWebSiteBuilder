@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import LanguageProvider from '../i18n/LanguageProvider.jsx'
+import UiThemeProvider from '../ui/UiThemeProvider.jsx'
 import ExplorePage from '../pages/ExplorePage.jsx'
 import TemplatePicker from './editor/TemplatePicker.jsx'
 import MobileEditorPreview from './editor/MobileEditorPreview.jsx'
@@ -47,7 +48,11 @@ beforeEach(() => {
 })
 
 function renderWithShell(ui) {
-  return render(<LanguageProvider><MemoryRouter>{ui}</MemoryRouter></LanguageProvider>)
+  return render(
+    <UiThemeProvider>
+      <LanguageProvider><MemoryRouter>{ui}</MemoryRouter></LanguageProvider>
+    </UiThemeProvider>,
+  )
 }
 
 describe('responsive and accessibility guards', () => {

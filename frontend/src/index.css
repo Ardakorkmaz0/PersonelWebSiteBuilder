@@ -86,6 +86,57 @@
   color: var(--studio-text) !important;
 }
 
+/* Main application surfaces share the editor theme without touching authored
+   website previews. Route-level app-theme-surface wrappers provide the scope. */
+:root[data-ui-theme="dark"] .app-theme-surface .bg-white,
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-white/"] {
+  background-color: var(--studio-panel-raised) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-[#f7f8fa]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-[#f8fafc]"] {
+  background-color: var(--studio-shell) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-[#f9fafb]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-[#f3f4f6]"] {
+  background-color: var(--studio-control) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-[#eef2ff]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-[#e0e7ff]"] {
+  background-color: var(--studio-accent-soft) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="bg-[#111827]"] {
+  background-color: var(--studio-accent) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="border-[#e5e7eb]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="border-[#d1d5db]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="border-[#c7d2fe]"] {
+  border-color: var(--studio-border) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="text-[#111827]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="text-[#1f2937]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="text-[#374151]"] {
+  color: var(--studio-text) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="text-[#4b5563]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="text-[#6b7280]"],
+:root[data-ui-theme="dark"] .app-theme-surface [class*="text-[#9ca3af]"] {
+  color: var(--studio-text-muted) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface [class*="text-[#4f46e5]"] {
+  color: var(--studio-accent-hover) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface :where(input:not([type="color"]), textarea, select) {
+  border-color: var(--studio-border-strong) !important;
+  background-color: var(--studio-control) !important;
+  color: var(--studio-text) !important;
+}
+:root[data-ui-theme="dark"] .app-theme-surface .themed-auth-page {
+  background:
+    radial-gradient(900px 500px at 80% -10%, color-mix(in srgb, var(--studio-accent) 18%, transparent), transparent 60%),
+    radial-gradient(700px 420px at -10% 110%, color-mix(in srgb, var(--studio-accent) 12%, transparent), transparent 60%),
+    var(--studio-shell) !important;
+}
+
 :root[data-ui-theme="dark"] {
   --studio-accent: #7868ff;
   --studio-accent-hover: #8b7dff;
@@ -268,7 +319,7 @@ body {
     justify-content: center;
     gap: 0.4rem;
     border: 1px solid var(--ms-border-strong);
-    background: #fff;
+    background: var(--studio-panel-raised);
     color: var(--ms-text);
     padding: 0.4rem 0.8rem;
     font-size: 0.875rem;
@@ -304,7 +355,7 @@ body {
   .ms-input {
     width: 100%;
     border: 1px solid var(--ms-border-strong);
-    background: #fff;
+    background: var(--studio-panel-raised);
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
     border-radius: 0.5rem;

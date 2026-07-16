@@ -36,6 +36,10 @@ function FullScreenLoading() {
   )
 }
 
+function ThemedPage({ children }) {
+  return <div className="app-theme-surface contents">{children}</div>
+}
+
 export default function App() {
   return (
     <UiThemeProvider>
@@ -43,15 +47,15 @@ export default function App() {
         <BrowserRouter>
           <Suspense fallback={<FullScreenLoading />}>
             <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/login" element={<ThemedPage><LoginPage /></ThemedPage>} />
+          <Route path="/register" element={<ThemedPage><RegisterPage /></ThemedPage>} />
+          <Route path="/forgot-password" element={<ThemedPage><ForgotPasswordPage /></ThemedPage>} />
+          <Route path="/reset-password" element={<ThemedPage><ResetPasswordPage /></ThemedPage>} />
           <Route
             path="/"
             element={
               <ProtectedRoute>
-                <ExplorePage />
+                <ThemedPage><ExplorePage /></ThemedPage>
               </ProtectedRoute>
             }
           />
@@ -67,7 +71,7 @@ export default function App() {
             path="/code"
             element={
               <ProtectedRoute>
-                <CodeProjectPage />
+                <ThemedPage><CodeProjectPage /></ThemedPage>
               </ProtectedRoute>
             }
           />
@@ -75,7 +79,7 @@ export default function App() {
             path="/profile"
             element={
               <ProtectedRoute>
-                <ProfilePage />
+                <ThemedPage><ProfilePage /></ThemedPage>
               </ProtectedRoute>
             }
           />
@@ -83,7 +87,7 @@ export default function App() {
             path="/favorites"
             element={
               <ProtectedRoute>
-                <FavoritesPage />
+                <ThemedPage><FavoritesPage /></ThemedPage>
               </ProtectedRoute>
             }
           />
@@ -91,7 +95,7 @@ export default function App() {
             path="/admin"
             element={
               <ProtectedRoute>
-                <AdminPage />
+                <ThemedPage><AdminPage /></ThemedPage>
               </ProtectedRoute>
             }
           />
@@ -99,13 +103,13 @@ export default function App() {
             path="/admin/settings"
             element={
               <ProtectedRoute>
-                <SettingsPage />
+                <ThemedPage><SettingsPage /></ThemedPage>
               </ProtectedRoute>
             }
           />
           <Route path="/site/:slug" element={<PreviewPage />} />
           <Route path="/review/:token" element={<ReviewPage />} />
-          <Route path="/u/:id" element={<PublicProfilePage />} />
+          <Route path="/u/:id" element={<ThemedPage><PublicProfilePage /></ThemedPage>} />
           <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

@@ -5,6 +5,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
 import LanguageProvider from './LanguageProvider.jsx'
 import { LANGUAGE_STORAGE_KEY, translate } from './language.js'
 import { useLanguage } from './useLanguage.js'
+import UiThemeProvider from '../ui/UiThemeProvider.jsx'
 
 function Probe() {
   const { t } = useLanguage()
@@ -26,10 +27,12 @@ describe('language selection', () => {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, 'en')
     const user = userEvent.setup()
     render(
-      <LanguageProvider>
-        <LanguageSwitcher />
-        <Probe />
-      </LanguageProvider>,
+      <UiThemeProvider>
+        <LanguageProvider>
+          <LanguageSwitcher />
+          <Probe />
+        </LanguageProvider>
+      </UiThemeProvider>,
     )
 
     expect(screen.getByText('Welcome back')).toBeInTheDocument()
@@ -39,5 +42,20 @@ describe('language selection', () => {
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('tr')
     expect(document.documentElement.lang).toBe('tr')
     expect(screen.getByRole('combobox', { name: 'Dil' })).toHaveValue('tr')
+  })
+
+  it('changes the shared application theme from the main menu control', async () => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, 'en')
+    localStorage.setItem('pwb_ui_theme', 'light')
+    const user = userEvent.setup()
+    render(
+      <UiThemeProvider>
+        <LanguageProvider><LanguageSwitcher /></LanguageProvider>
+      </UiThemeProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Appearance: Light' }))
+    expect(document.documentElement.dataset.uiTheme).toBe('dark')
+    expect(localStorage.getItem('pwb_ui_theme')).toBe('dark')
   })
 })

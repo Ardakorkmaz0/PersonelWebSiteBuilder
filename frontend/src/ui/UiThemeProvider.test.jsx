@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import UiThemeProvider, { readUiThemePreference, useUiTheme } from './UiThemeProvider.jsx'
+import UiThemeProvider from './UiThemeProvider.jsx'
+import { readUiThemePreference } from './uiTheme.js'
+import { useUiTheme } from './useUiTheme.js'
 
 describe('UiThemeProvider', () => {
   beforeEach(() => localStorage.clear())

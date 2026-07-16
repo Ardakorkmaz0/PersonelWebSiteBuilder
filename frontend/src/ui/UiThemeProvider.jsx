@@ -1,19 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-
-const STORAGE_KEY = 'pwb_ui_theme'
-const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)'
-const VALID_PREFERENCES = new Set(['light', 'dark', 'system'])
-
-const UiThemeContext = createContext(null)
-
-export function readUiThemePreference(storage = globalThis.localStorage) {
-  try {
-    const saved = storage?.getItem(STORAGE_KEY)
-    return VALID_PREFERENCES.has(saved) ? saved : 'dark'
-  } catch {
-    return 'dark'
-  }
-}
+import { useEffect, useMemo, useState } from 'react'
+import { UiThemeContext } from './uiThemeContext.js'
+import { readUiThemePreference, SYSTEM_DARK_QUERY, UI_THEME_STORAGE_KEY } from './uiTheme.js'
 
 function systemTheme() {
   return globalThis.matchMedia?.(SYSTEM_DARK_QUERY).matches ? 'dark' : 'light'
@@ -35,15 +22,9 @@ export default function UiThemeProvider({ children }) {
   useEffect(() => {
     document.documentElement.dataset.uiTheme = theme
     document.documentElement.style.colorScheme = theme
-    try { localStorage.setItem(STORAGE_KEY, preference) } catch { /* storage unavailable */ }
+    try { localStorage.setItem(UI_THEME_STORAGE_KEY, preference) } catch { /* storage unavailable */ }
   }, [preference, theme])
 
   const value = useMemo(() => ({ preference, setPreference, theme }), [preference, theme])
   return <UiThemeContext.Provider value={value}>{children}</UiThemeContext.Provider>
-}
-
-export function useUiTheme() {
-  const value = useContext(UiThemeContext)
-  if (!value) throw new Error('useUiTheme must be used inside UiThemeProvider')
-  return value
 }

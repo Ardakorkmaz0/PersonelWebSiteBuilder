@@ -1682,6 +1682,8 @@ export const TURKISH_TRANSLATIONS = {
   'Full width': 'Tam genişlik',
   'Minimal link': 'Minimal bağlantı',
   'Light': 'Açık',
+  'Appearance': 'Görünüm',
+  'More actions': 'Diğer işlemler',
   'Icon top': 'Üstte simge',
   'Image card': 'Görsel kartı',
   'Stat': 'İstatistik',

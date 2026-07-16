@@ -22,7 +22,24 @@ import {
 import AiBar from '../components/editor/AiBar.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
-import { SaveIcon, NoteIcon, KeyboardIcon, LinkIcon, CogIcon, ClockIcon, PaletteIcon } from '../components/icons.jsx'
+import {
+  ArrowLeftIcon,
+  ClockIcon,
+  CogIcon,
+  EyeIcon,
+  KeyboardIcon,
+  LinkIcon,
+  MonitorIcon,
+  MoonIcon,
+  MoreHorizontalIcon,
+  NoteIcon,
+  PaletteIcon,
+  RedoIcon,
+  SaveIcon,
+  SparklesIcon,
+  SunIcon,
+  UndoIcon,
+} from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import CanvasPreview from '../components/editor/CanvasPreview.jsx'
 import BrushControls from '../components/editor/BrushControls.jsx'
@@ -62,8 +79,9 @@ import {
   writeHtmlToHandle,
 } from '../utils/localFile.js'
 import { localizeTemplateHtml } from '../utils/templateLocalization.js'
-import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
 import { useLanguage } from '../i18n/useLanguage.js'
+import { useUiTheme } from '../ui/useUiTheme.js'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
 import MobileEditorPreview from '../components/editor/MobileEditorPreview.jsx'
 import SiteControlCenter from '../components/editor/SiteControlCenter.jsx'
 
@@ -252,7 +270,8 @@ function RailSlot({ side, label, open, narrow, onOpen, onClose, children }) {
 export default function EditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { t } = useLanguage()
+  const { language, setLanguage, t } = useLanguage()
+  const { preference: uiThemePreference, setPreference: setUiThemePreference } = useUiTheme()
 
   const loadSchema = useEditorStore((s) => s.loadSchema)
   const importSchema = useEditorStore((s) => s.importSchema)
@@ -330,6 +349,8 @@ export default function EditorPage() {
   const leaveConfirmedRef = useRef(false)
   const discardLeaveRef = useRef(false)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -342,6 +363,8 @@ export default function EditorPage() {
   // button's on-screen rect (computed on open) — robust regardless of header
   // layout (the single-row strip scrolls horizontally; fixed positioning
   // keeps the menus unclipped by that overflow).
+  const moreBtnRef = useRef(null)
+  const accountBtnRef = useRef(null)
   const importBtnRef = useRef(null)
   const toolsBtnRef = useRef(null)
   const resolutionWidthRef = useRef(null)
@@ -1438,12 +1461,168 @@ export default function EditorPage() {
     setCanvasPreset({ width: nextWidth, fold: nextFold })
   }
 
+  const hasUnsavedChanges = dirty || htmlDirty || metaDirty
+  const saveStatus = autoSaveState === 'error'
+    ? { label: t('Save failed'), tone: 'var(--studio-danger)' }
+    : saving || autoSaveState === 'saving'
+      ? { label: t('Saving…'), tone: 'var(--studio-text-faint)' }
+      : hasUnsavedChanges
+        ? { label: t('Unsaved'), tone: 'var(--studio-warning)' }
+        : { label: t('Saved'), tone: 'var(--studio-success)' }
+
   return (
-    <div className="flex h-screen flex-col">
+    <div className="studio-shell flex h-screen flex-col">
       {leaveDialog}
+      <header className="studio-topbar relative z-30 flex h-[52px] shrink-0 items-center gap-2 border-b px-3">
+        <button type="button" onClick={guardedBack} title={t('Go back')} className="studio-icon-btn shrink-0">
+          <ArrowLeftIcon size={17} />
+        </button>
+        <Link
+          to="/"
+          onClick={(event) => { event.preventDefault(); requestLeave(() => navigate('/')) }}
+          title={t('Sitebuilder home')}
+          className="brand-mark shrink-0"
+          style={{ width: '1.75rem', height: '1.75rem', fontSize: '0.78rem', borderRadius: '8px', boxShadow: 'none' }}
+        >S</Link>
+        <div className="min-w-0">
+          <input
+            className="block w-[150px] truncate border-0 bg-transparent p-0 text-sm font-semibold text-[var(--studio-text)] outline-none hover:text-[var(--studio-accent-hover)]"
+            value={title}
+            onChange={(event) => changeTitle(event.target.value)}
+            aria-label={t('Site title')}
+          />
+          <div role="status" aria-live="polite" className="flex items-center gap-1.5 text-[10px] text-[var(--studio-text-muted)]">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: saveStatus.tone }} />
+            {saveStatus.label}
+            {currentPageIsHtml && localFile ? <span className="hidden xl:inline">· {localFile.name}</span> : null}
+          </div>
+        </div>
+
+        <div className="ml-auto flex min-w-0 items-center gap-1">
+          <AiBar
+            currentHtml={siteHtml}
+            onApplyHtml={(html) => {
+              const placed = workspaceRef.current?.applyAiHtml?.(html) ?? html
+              commitHtml(placed)
+            }}
+          />
+          <span className="mx-1 hidden h-5 w-px bg-[var(--studio-border)] lg:block" aria-hidden />
+          <button type="button" onClick={() => (currentPageIsHtml ? undoHtml() : undo())} disabled={currentPageIsHtml ? !htmlPast.length : !canUndo} title={t('Undo (Ctrl+Z)')} className="studio-icon-btn hidden md:inline-flex">
+            <UndoIcon size={16} />
+          </button>
+          <button type="button" onClick={() => (currentPageIsHtml ? redoHtml() : redo())} disabled={currentPageIsHtml ? !htmlFuture.length : !canRedo} title={t('Redo (Ctrl+Shift+Z)')} className="studio-icon-btn hidden md:inline-flex">
+            <RedoIcon size={16} />
+          </button>
+          <button type="button" onClick={previewCurrentSite} disabled={saving} className="studio-btn hidden lg:inline-flex">
+            <EyeIcon size={15} /> {t('Preview')}
+          </button>
+          <button type="button" onClick={() => save()} disabled={saving || !hasUnsavedChanges} className="studio-btn studio-btn-secondary">
+            <SaveIcon size={14} /> <span className="hidden xl:inline">{t('Save')}</span>
+          </button>
+          <button type="button" onClick={() => save(!published)} disabled={saving} className={published ? 'studio-btn studio-btn-secondary' : 'studio-btn studio-btn-primary'} title={published ? t('Unpublish') : t('Publish')}>
+            {published ? t('Published') : t('Publish')}
+          </button>
+
+          <div className="relative">
+            <button
+              ref={moreBtnRef}
+              type="button"
+              onClick={() => { anchorMenu('more', moreBtnRef); setAccountOpen(false); setMoreOpen((open) => !open) }}
+              title={t('More actions')}
+              aria-label={t('More actions')}
+              className={`studio-icon-btn ${moreOpen ? 'bg-[var(--studio-control-hover)] text-[var(--studio-text)]' : ''}`}
+            >
+              <MoreHorizontalIcon size={18} />
+            </button>
+            {moreOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+                <div style={{ position: 'fixed', top: menuPos.more?.top, right: menuPos.more?.right }} className="studio-menu z-50 max-h-[calc(100vh-70px)] w-72 overflow-y-auto p-1.5">
+                  <button type="button" onClick={() => { setMoreOpen(false); setWizardOpen(true) }} className="studio-menu-item font-semibold text-[var(--studio-accent-hover)]"><SparklesIcon size={15} /> {t('AI Site Wizard')}</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); setControlCenterOpen(true) }} className="studio-menu-item"><CogIcon size={15} /> {t('Site control center')}</button>
+                  <div className="studio-divider my-1 border-t" />
+                  <button type="button" onClick={() => { setMoreOpen(false); setTemplateOpen(true) }} className="studio-menu-item">{t('Choose a template...')}</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); startBlankHtml() }} className="studio-menu-item">{t('Start blank HTML')}</button>
+                  {!currentPageIsHtml && <button type="button" onClick={() => { setMoreOpen(false); convertToResponsiveHtml() }} className="studio-menu-item">{t('Convert to responsive HTML')}</button>}
+                  {supportsLocalFiles() && <button type="button" onClick={() => { setMoreOpen(false); openAndLinkLocalFile() }} className="studio-menu-item">{t('Open & link HTML file...')}</button>}
+                  {[['HTML file...', htmlInputRef], ['Project folder...', folderInputRef], ['Project JSON...', jsonInputRef]].map(([label, ref]) => (
+                    <button key={label} type="button" onClick={() => { setMoreOpen(false); ref.current?.click() }} className="studio-menu-item">{t(label)}</button>
+                  ))}
+                  <button type="button" onClick={() => { setMoreOpen(false); currentPageIsHtml ? exportHtmlToDisk() : exportProject() }} className="studio-menu-item">{t(currentPageIsHtml ? 'Export HTML…' : 'Export project (.json)')}</button>
+                  {currentPageIsHtml && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        if (!window.confirm(t('Remove this page HTML and switch it back to the component canvas? (Undo brings the HTML back.)'))) return
+                        commitHtml('')
+                        setPageMode(currentPageId, 'empty')
+                        if (localFile?.pageId === currentPageId) unlinkLocalFile()
+                        setHtmlSelection(null)
+                      }}
+                      className="studio-menu-item text-[var(--studio-danger)]"
+                    >{t('Remove HTML')}</button>
+                  )}
+                  <div className="studio-divider my-1 border-t" />
+                  <div className="space-y-2 px-2 py-1.5">
+                    <select value={category} onChange={(event) => changeCategory(event.target.value)} className="studio-input w-full px-2 py-1.5 text-xs capitalize">
+                      {DISCOVERY_CATEGORIES.map((item) => <option key={item} value={item}>{t(item.charAt(0).toUpperCase() + item.slice(1))}</option>)}
+                    </select>
+                    <input value={tagsText} onChange={(event) => changeTagsText(event.target.value)} placeholder={t('Comma-separated tags for discovery')} className="studio-input w-full px-2 py-1.5 text-xs" />
+                  </div>
+                  <div className="studio-divider my-1 border-t" />
+                  <button type="button" onClick={() => { setMoreOpen(false); setHistoryOpen(true) }} disabled={saving} className="studio-menu-item disabled:opacity-40"><ClockIcon size={15} /> {t('History')}</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); setShortcutsOpen(true) }} className="studio-menu-item"><KeyboardIcon size={15} /> {t('Shortcuts')}</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); setNotesOpen(true) }} className="studio-menu-item"><NoteIcon size={15} /> {t('Notes')}</button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              ref={accountBtnRef}
+              type="button"
+              onClick={() => { anchorMenu('account', accountBtnRef); setMoreOpen(false); setAccountOpen((open) => !open) }}
+              title={t('Your profile')}
+              className="ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--studio-accent-soft)] text-xs font-bold text-[var(--studio-accent-hover)]"
+            >
+              {(authUser?.username || '?').trim().charAt(0).toUpperCase()}
+            </button>
+            {accountOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setAccountOpen(false)} />
+                <div style={{ position: 'fixed', top: menuPos.account?.top, right: menuPos.account?.right }} className="studio-menu z-50 w-64 p-2">
+                  <div className="px-2 py-1.5">
+                    <div className="truncate text-sm font-semibold">{authUser?.username || t('Your profile')}</div>
+                    <div className="text-[11px] text-[var(--studio-text-muted)]">{t('Appearance')}</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 rounded-lg bg-[var(--studio-control)] p-1">
+                    {[
+                      ['light', 'Light', SunIcon],
+                      ['dark', 'Dark', MoonIcon],
+                      ['system', 'System', MonitorIcon],
+                    ].map(([value, label, ThemeIcon]) => (
+                      <button key={value} type="button" onClick={() => setUiThemePreference(value)} title={t(label)} className={`flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[10px] font-medium ${uiThemePreference === value ? 'bg-[var(--studio-panel-raised)] text-[var(--studio-accent-hover)] shadow-sm' : 'text-[var(--studio-text-muted)] hover:text-[var(--studio-text)]'}`}>
+                        <ThemeIcon size={14} /> {t(label)}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="mt-2 flex items-center justify-between gap-3 px-2 py-1.5 text-xs text-[var(--studio-text-muted)]">
+                    {t('Language')}
+                    <select value={language} onChange={(event) => setLanguage(event.target.value)} className="studio-input px-2 py-1 text-xs font-semibold"><option value="tr">TR</option><option value="en">EN</option></select>
+                  </label>
+                  <div className="studio-divider my-1 border-t" />
+                  <button type="button" onClick={() => { setAccountOpen(false); requestLeave(() => navigate('/profile')) }} className="studio-menu-item">{t('Your profile')}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
       {/* One focused editing mode. Secondary metadata lives under Tools and
           nonessential labels collapse before this row could overflow. */}
-      <header className="flex min-w-0 items-center gap-1.5 overflow-visible border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
+      <header className="hidden">
         <div className="flex shrink-0 items-center gap-1">
           <Link
             to="/"

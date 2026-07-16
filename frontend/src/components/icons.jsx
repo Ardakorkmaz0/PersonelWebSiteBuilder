@@ -76,6 +76,55 @@ export const EyeIcon = (p) => (
   </Icon>
 )
 
+export const ArrowLeftIcon = (p) => (
+  <Icon {...p}>
+    <path d="M19 12H5" />
+    <path d="m11 18-6-6 6-6" />
+  </Icon>
+)
+
+export const UndoIcon = (p) => (
+  <Icon {...p}>
+    <path d="M9 8 4 12l5 4" />
+    <path d="M5 12h8a6 6 0 0 1 6 6" />
+  </Icon>
+)
+
+export const RedoIcon = (p) => (
+  <Icon {...p}>
+    <path d="m15 8 5 4-5 4" />
+    <path d="M19 12h-8a6 6 0 0 0-6 6" />
+  </Icon>
+)
+
+export const MoreHorizontalIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
+  </Icon>
+)
+
+export const SunIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </Icon>
+)
+
+export const MoonIcon = (p) => (
+  <Icon {...p}>
+    <path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5z" />
+  </Icon>
+)
+
+export const MonitorIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="13" rx="2" />
+    <path d="M8 21h8M12 17v4" />
+  </Icon>
+)
+
 export const StarIcon = ({ filled = false, ...p }) => (
   <Icon {...p} fill={filled ? 'currentColor' : 'none'}>
     <path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8L4.5 9.7l5.9-.9z" />

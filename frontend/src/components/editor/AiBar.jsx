@@ -58,10 +58,10 @@ export default function AiBar({ currentHtml = '', onApplyHtml }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         title={hasKey ? t('Open AI assistant') : t('Set an AI provider key first')}
-        className={`flex h-9 items-center gap-1.5 rounded-[4px] px-2.5 text-xs font-semibold shadow-sm transition ${
+        className={`studio-btn h-8 shrink-0 ${
           open
-            ? 'bg-[#1e4079] text-white'
-            : 'bg-gradient-to-br from-[#4f46e5] to-[#2563eb] text-white hover:from-[#4338ca] hover:to-[#1e4079]'
+            ? 'studio-btn-primary'
+            : 'studio-btn-accent'
         }`}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -71,7 +71,7 @@ export default function AiBar({ currentHtml = '', onApplyHtml }) {
             opacity="0.9"
           />
         </svg>
-        <span>AI</span>
+        <span className="hidden lg:inline">AI</span>
         {!hasKey && <span className="ml-0.5 rounded bg-white/20 px-1 text-[9px]">{t('setup')}</span>}
       </button>
       <AiChatPanel

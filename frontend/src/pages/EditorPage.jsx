@@ -80,6 +80,27 @@ const HistoryPanel = lazy(() => import('../components/editor/HistoryPanel.jsx'))
 const NotesPanel = lazy(() => import('../components/editor/NotesPanel.jsx'))
 const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 
+const DEFAULT_VIEWPORT_KEY = 'pwb_default_editor_viewport'
+const HTML_DEVICE_KEYS = {
+  pc: 'pwb_last_html_pc_device',
+  mobile: 'pwb_last_html_mobile_device',
+}
+
+function readDefaultViewport() {
+  try { return localStorage.getItem(DEFAULT_VIEWPORT_KEY) === 'mobile' ? 'mobile' : 'pc' }
+  catch { return 'pc' }
+}
+
+function readHtmlDevice(viewport) {
+  const fallback = viewport === 'mobile' ? 'iphone15' : 'fit'
+  try {
+    const saved = localStorage.getItem(HTML_DEVICE_KEYS[viewport])
+    return DEVICES.some((device) => device.id === saved) && isMobileDevice(saved) === (viewport === 'mobile')
+      ? saved
+      : fallback
+  } catch { return fallback }
+}
+
 function PanelFallback() {
   const { t } = useLanguage()
   return (
@@ -303,15 +324,12 @@ export default function EditorPage() {
     try { return localStorage.getItem('pwb_autosave_' + id) === '1' }
     catch { return false }
   })
+  const [defaultViewport, setDefaultViewport] = useState(readDefaultViewport)
   const [leavePromptOpen, setLeavePromptOpen] = useState(false)
   const leaveActionRef = useRef(null)
   const leaveConfirmedRef = useRef(false)
   const discardLeaveRef = useRef(false)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
-  const [editorExperience, setEditorExperience] = useState(() => {
-    try { return localStorage.getItem('pwb_editor_experience') === 'advanced' ? 'advanced' : 'simple' }
-    catch { return 'simple' }
-  })
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -334,14 +352,13 @@ export default function EditorPage() {
     if (r) setMenuPos((m) => ({ ...m, [key]: { top: Math.round(r.bottom + 6), right: Math.round(window.innerWidth - r.right) } }))
   }
   // HTML mode device frame (selector lives in the shared header).
-  const [htmlDevice, setHtmlDevice] = useState('fit')
+  const [htmlDevice, setHtmlDevice] = useState(() => readHtmlDevice(readDefaultViewport()))
   const [htmlLandscape, setHtmlLandscape] = useState(false)
   // Component mode View/Edit/Source bar (mirrors the HTML workspace bar).
   // Restored from localStorage so a refresh keeps the surface you were on.
   const [canvasMode, setCanvasMode] = useState(() => {
     try {
       const saved = localStorage.getItem('pwb_canvasmode_' + id)
-      if (editorExperience === 'simple') return saved === 'view' ? 'view' : 'edit'
       return ['view', 'edit', 'source'].includes(saved) ? saved : 'edit'
     } catch { return 'edit' }
   }) // 'view' | 'edit' | 'source'
@@ -473,9 +490,6 @@ export default function EditorPage() {
     try { localStorage.setItem('pwb_canvasmode_' + id, canvasMode) } catch { /* ignore */ }
   }, [id, canvasMode])
   useEffect(() => {
-    try { localStorage.setItem('pwb_editor_experience', editorExperience) } catch { /* ignore */ }
-  }, [editorExperience])
-  useEffect(() => {
     try { localStorage.setItem('pwb_autosave_' + id, autoSaveEnabled ? '1' : '0') } catch { /* ignore */ }
   }, [id, autoSaveEnabled])
   useEffect(() => {
@@ -504,13 +518,14 @@ export default function EditorPage() {
     setCanvasMode(next)
     if (next !== 'edit') setBrushMode(false)
   }
-  const changeEditorExperience = (mode) => {
-    setEditorExperience(mode)
-    if (mode !== 'simple') return
-    if (canvasMode === 'source') setCanvasMode('edit')
-    setRightTab('props')
-    setBrushMode(false)
-    if (linkMode) setLinkMode(false)
+  const chooseHtmlDevice = (deviceId) => {
+    setHtmlDevice(deviceId)
+    const deviceViewport = isMobileDevice(deviceId) ? 'mobile' : 'pc'
+    try { localStorage.setItem(HTML_DEVICE_KEYS[deviceViewport], deviceId) } catch { /* ignore */ }
+  }
+  const chooseDefaultViewport = (nextViewport) => {
+    setDefaultViewport(nextViewport)
+    try { localStorage.setItem(DEFAULT_VIEWPORT_KEY, nextViewport) } catch { /* ignore */ }
   }
   // Linked local .html file (File System Access API): every Save also writes
   // the document back to this file. { handle, name } or null. Persisted in
@@ -674,6 +689,9 @@ export default function EditorPage() {
         htmlRevisionRef.current = 0
         setHtmlDirty(false)
         loadSchema(data.schema)
+        // A site's saved schema must not decide which device the editor opens
+        // on. Apply the user's global PC/Mobile preference after every load.
+        useEditorStore.getState().setViewport(readDefaultViewport())
         // Restore the page the user was last editing (per-site) so a refresh
         // stays put instead of bouncing back to the home page. Uses the value
         // captured at mount (savedPageOnMount), not a fresh read — the persist
@@ -1423,13 +1441,9 @@ export default function EditorPage() {
   return (
     <div className="flex h-screen flex-col">
       {leaveDialog}
-      {/* Single-row header: never wraps. When the window is too narrow the
-          strip scrolls horizontally instead of stacking rows (the File/Tools
-          menus are position:fixed, so the overflow never clips them).
-          Secondary meta (mode chip, category, tags, size presets) still hides
-          below lg/md so there is less to scroll on a phone. The grow spacer
-          below pins the toolbar right when there IS room. */}
-      <header className="flex items-center gap-1.5 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm [scrollbar-width:thin]">
+      {/* One focused editing mode. Secondary metadata lives under Tools and
+          nonessential labels collapse before this row could overflow. */}
+      <header className="flex min-w-0 items-center gap-1.5 overflow-visible border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
         <div className="flex shrink-0 items-center gap-1">
           <Link
             to="/"
@@ -1446,58 +1460,13 @@ export default function EditorPage() {
           onChange={(e) => changeTitle(e.target.value)}
           aria-label={t('Site title')}
         />
-        {/* Keep the two destructive/committing actions in the initial phone
-            viewport. The full toolbar remains horizontally scrollable below,
-            but saving no longer requires discovering an off-screen control. */}
-        <div className="flex shrink-0 items-center gap-1 md:hidden">
-          <button
-            type="button"
-            onClick={() => save()}
-            disabled={saving}
-            className="rounded-lg bg-[#4f46e5] px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-          >
-            {saving ? t('Saving…') : t('Save')}
-          </button>
-          <button
-            type="button"
-            onClick={() => save(!published)}
-            disabled={saving}
-            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold disabled:opacity-60 ${
-              published
-                ? 'border border-[#d1d5db] text-[#374151]'
-                : 'bg-[#16a34a] text-white'
-            }`}
-          >
-            {published ? t('Unpublish') : t('Publish')}
-          </button>
-          <LanguageSwitcher />
-        </div>
         <span
-          className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold md:inline-block ${
+          className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold 2xl:inline-block ${
             published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
           }`}
         >
           {published ? t('Published') : t('Draft')}
         </span>
-        <div
-          role="group"
-          aria-label={t('Editor mode')}
-          className="hidden shrink-0 items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium md:flex"
-        >
-          {['simple', 'advanced'].map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => changeEditorExperience(mode)}
-              aria-pressed={editorExperience === mode}
-              className={editorExperience === mode
-                ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white'
-                : 'rounded-md px-2.5 py-1 text-[#374151] hover:bg-[#f3f4f6]'}
-            >
-              {t(mode === 'simple' ? 'Simple' : 'Advanced')}
-            </button>
-          ))}
-        </div>
         {/* Which editing surface this page uses — switches as you move between
             pages so the active mode is always obvious. */}
         <span
@@ -1506,7 +1475,7 @@ export default function EditorPage() {
               ? t('This page is an uploaded/authored HTML document')
               : t('This page uses the drag-and-drop component canvas')
           }
-          className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide lg:inline-block ${
+          className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide 2xl:inline-block ${
             currentPageIsHtml
               ? 'bg-[#eef2ff] text-[#4f46e5]'
               : 'bg-[#f1f5f9] text-[#475569]'
@@ -1514,35 +1483,10 @@ export default function EditorPage() {
         >
           {currentPageIsHtml ? t('HTML Upload Mode') : t('Canvas Mode')}
         </span>
-        {/* Discovery metadata for the Explore feed — category chip + free tags.
-            Used once the site is published; saved with the site. */}
-        <select
-          value={category}
-          onChange={(e) => changeCategory(e.target.value)}
-          title={t('Explore category (used when published)')}
-          aria-label={t('Explore category (used when published)')}
-          className={editorExperience === 'advanced'
-            ? 'hidden shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium capitalize text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block'
-            : 'hidden'}
-        >
-          {DISCOVERY_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{t(c.charAt(0).toUpperCase() + c.slice(1))}</option>
-          ))}
-        </select>
-        <input
-          value={tagsText}
-          onChange={(e) => changeTagsText(e.target.value)}
-          placeholder={t('tags…')}
-          title={t('Comma-separated tags for discovery')}
-          aria-label={t('Comma-separated tags for discovery')}
-          className={editorExperience === 'advanced'
-            ? 'hidden w-24 shrink-0 rounded-lg border border-[#d1d5db] px-2 py-1 text-xs text-[#374151] focus:border-[#4f46e5] focus:outline-none lg:block'
-            : 'hidden'}
-        />
         {/* Save status in a FIXED-WIDTH slot so the changing text never reflows
             the toolbar (the churn the user hit). Auto-save now fires only when
             you leave / refresh, so this mostly just reads Unsaved → Saved. */}
-        <span role="status" aria-live="polite" className="w-20 shrink-0 whitespace-nowrap text-right text-xs font-medium md:w-[6.5rem]">
+        <span role="status" aria-live="polite" className="hidden w-[6.5rem] shrink-0 whitespace-nowrap text-right text-xs font-medium xl:block">
           {autoSaveState === 'error' ? (
             <span className="text-red-500">{t('Save failed')}</span>
           ) : saving || autoSaveState === 'saving' ? (
@@ -1556,16 +1500,13 @@ export default function EditorPage() {
           )}
         </span>
 
-        {/* Flexible spacer: on a wide screen it expands to pin the toolbar to
-            the right edge; when the strip overflows it collapses to zero so
-            the header scrolls horizontally with no dead gap in the middle. */}
+        {/* The spacer pins actions right; responsive labels collapse on narrow
+            desktop windows so the header never needs side scrolling. */}
         <div className="grow shrink basis-0" aria-hidden />
 
-        {/* Action toolbar — the spacer pins it to the right when there's room.
-            shrink-0 keeps every control at its natural size; on a too-narrow
-            window the whole header strip scrolls sideways instead of wrapping,
-            so the top bar is always exactly one row tall. */}
-        <div className="flex shrink-0 items-center gap-1.5">
+        {/* Primary actions stay on one row; secondary labels progressively
+            collapse while their functions remain available. */}
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1">
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}
@@ -1626,7 +1567,7 @@ export default function EditorPage() {
             }}
             className="hidden"
           />
-          {editorExperience === 'advanced' && <div className="relative">
+          <div className="relative">
             <button
               ref={importBtnRef}
               onClick={() => { anchorMenu('import', importBtnRef); setImportOpen((o) => !o) }}
@@ -1729,7 +1670,7 @@ export default function EditorPage() {
                 </div>
               </>
             )}
-          </div>}
+          </div>
           {/* Linked-file status chip — green means every Save also writes this
               file on disk; click to unlink. Export / Remove HTML now live inside
               the File ▾ menu so the header stays a single row. */}
@@ -1739,7 +1680,7 @@ export default function EditorPage() {
               onClick={() => {
                 if (window.confirm(t('Stop updating {name} on Save?', { name: localFile.name }))) unlinkLocalFile()
               }}
-              className="flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3]"
+              className="hidden shrink-0 cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3] xl:flex"
             >
               <SaveIcon size={13} /> {localFile.name}
             </span>
@@ -1772,18 +1713,18 @@ export default function EditorPage() {
               ref={toolsBtnRef}
               onClick={() => { anchorMenu('tools', toolsBtnRef); setToolsOpen((o) => !o) }}
               title={t('History, shortcuts & notes')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm hover:bg-[#f3f4f6] ${
+              className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm hover:bg-[#f3f4f6] ${
                 toolsOpen || historyOpen || notesOpen ? 'bg-[#eef2ff] text-[#4f46e5]' : 'text-[#374151]'
               }`}
             >
-              <CogIcon size={15} /> {t('Tools')} &#9662;
+              <CogIcon size={15} /> <span className="hidden xl:inline">{t('Tools')}</span> &#9662;
             </button>
             {toolsOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setToolsOpen(false)} />
                 <div
                   style={{ position: 'fixed', top: menuPos.tools?.top, right: menuPos.tools?.right }}
-                  className="z-50 w-44 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
+                  className="z-50 w-64 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
                 >
                   <button
                     type="button"
@@ -1792,6 +1733,30 @@ export default function EditorPage() {
                   >
                     ◎ {t('Site control center')}
                   </button>
+                  <div className="my-1 border-t border-[#e5e7eb]" />
+                  <div className="space-y-2 px-3 py-2">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#6b7280]">
+                      {t('Explore category (used when published)')}
+                      <select
+                        value={category}
+                        onChange={(event) => changeCategory(event.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-medium capitalize text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+                      >
+                        {DISCOVERY_CATEGORIES.map((item) => (
+                          <option key={item} value={item}>{t(item.charAt(0).toUpperCase() + item.slice(1))}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#6b7280]">
+                      {t('Tags')}
+                      <input
+                        value={tagsText}
+                        onChange={(event) => changeTagsText(event.target.value)}
+                        placeholder={t('Comma-separated tags for discovery')}
+                        className="mt-1 block w-full rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-[#374151] focus:border-[#4f46e5] focus:outline-none"
+                      />
+                    </label>
+                  </div>
                   <div className="my-1 border-t border-[#e5e7eb]" />
                   <button
                     type="button"
@@ -1823,7 +1788,7 @@ export default function EditorPage() {
             type="button"
             onClick={previewCurrentSite}
             disabled={saving}
-            className="rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60"
+            className="hidden rounded-lg px-3 py-1.5 text-sm text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-60 xl:block"
           >
             {t('Preview')}
           </button>
@@ -1858,7 +1823,7 @@ export default function EditorPage() {
             to="/profile"
             onClick={(e) => { e.preventDefault(); requestLeave(() => navigate('/profile')) }}
             title={t('Your profile')}
-            className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#4f46e5] ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe] md:grid"
+            className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-bold text-[#4f46e5] ring-offset-2 hover:ring-2 hover:ring-[#c7d2fe] 2xl:grid"
           >
             {(authUser?.username || '?').trim().charAt(0).toUpperCase()}
           </Link>
@@ -1923,7 +1888,7 @@ export default function EditorPage() {
                   chrome, with the starter card where the page would show. */}
               <Suspense fallback={<PanelFallback />}>
                 <HtmlWorkspace
-                  key={`${currentPageId}-${editorExperience}`}
+                  key={currentPageId}
                   ref={workspaceRef}
                   persistKey={id}
                   html={siteHtml}
@@ -1933,7 +1898,7 @@ export default function EditorPage() {
                     <>
                       <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
                         <button
-                          onClick={() => { setHtmlDevice('fit'); setHtmlLandscape(false) }}
+                          onClick={() => { chooseHtmlDevice(readHtmlDevice('pc')); setHtmlLandscape(false) }}
                           className={
                             !isMobileDevice(htmlDevice)
                               ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
@@ -1943,7 +1908,7 @@ export default function EditorPage() {
                           {t('PC')}
                         </button>
                         <button
-                          onClick={() => setHtmlDevice('iphone15')}
+                          onClick={() => chooseHtmlDevice(readHtmlDevice('mobile'))}
                           className={
                             isMobileDevice(htmlDevice)
                               ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white'
@@ -1955,7 +1920,7 @@ export default function EditorPage() {
                       </div>
                       <select
                         value={htmlDevice}
-                        onChange={(e) => setHtmlDevice(e.target.value)}
+                        onChange={(e) => chooseHtmlDevice(e.target.value)}
                         title={t('Screen / device width')}
                         className="hidden max-w-[140px] truncate rounded-lg border border-[#d1d5db] px-2 py-1 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none md:block"
                       >
@@ -1965,6 +1930,20 @@ export default function EditorPage() {
                           </option>
                         ))}
                       </select>
+                      <button
+                        type="button"
+                        onClick={() => chooseDefaultViewport(isMobileDevice(htmlDevice) ? 'mobile' : 'pc')}
+                        title={t('Make this the default editor screen')}
+                        aria-label={t('Make this the default editor screen')}
+                        className={`rounded-lg border px-2 py-1 text-xs font-medium ${
+                          defaultViewport === (isMobileDevice(htmlDevice) ? 'mobile' : 'pc')
+                            ? 'border-amber-300 bg-amber-50 text-amber-700'
+                            : 'border-[#d1d5db] text-[#6b7280] hover:bg-[#f3f4f6]'
+                        }`}
+                      >
+                        {defaultViewport === (isMobileDevice(htmlDevice) ? 'mobile' : 'pc') ? '★' : '☆'}
+                        <span className="ml-1 hidden xl:inline">{t('Default')}</span>
+                      </button>
                     </>
                   }
                   fileName={
@@ -1988,7 +1967,6 @@ export default function EditorPage() {
                   onBrushColor={chooseBrushColor}
                   onBrushTarget={setBrushTarget}
                   onBrushUse={rememberBrushColor}
-                  simpleMode={editorExperience === 'simple'}
                 />
               </Suspense>
               {/* Right rail in HTML mode: element properties when something
@@ -2029,7 +2007,7 @@ export default function EditorPage() {
                         onClose={() => workspaceRef.current?.clearSelection?.()}
                       />
                     ) : (
-                      <PropertiesPanel simpleMode={editorExperience === 'simple'} htmlMode onApplyThemeToHtml={applyThemeToAllHtmlPages} />
+                      <PropertiesPanel htmlMode onApplyThemeToHtml={applyThemeToAllHtmlPages} />
                     )}
                   </div>
                 </div>
@@ -2071,10 +2049,7 @@ export default function EditorPage() {
               <div className="flex min-w-0 flex-1 flex-col">
                 <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-white px-4 py-1.5">
                   <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
-                    {(editorExperience === 'advanced'
-                      ? [['view', 'View'], ['edit', 'Edit'], ['source', 'Source']]
-                      : [['view', 'View'], ['edit', 'Edit']]
-                    ).map(([id, label]) => (
+                    {[['view', 'View'], ['edit', 'Edit'], ['source', 'Source']].map(([id, label]) => (
                       <button
                         key={id}
                         onClick={() => switchCanvasMode(id)}
@@ -2194,7 +2169,21 @@ export default function EditorPage() {
                       ↔
                     </button>
                   </div>
-                  {editorExperience === 'advanced' && canvasMode === 'edit' && (
+                  <button
+                    type="button"
+                    onClick={() => chooseDefaultViewport(viewport)}
+                    title={t('Make this the default editor screen')}
+                    aria-label={t('Make this the default editor screen')}
+                    className={`rounded-lg border px-2 py-1 text-xs font-medium ${
+                      defaultViewport === viewport
+                        ? 'border-amber-300 bg-amber-50 text-amber-700'
+                        : 'border-[#d1d5db] text-[#6b7280] hover:bg-[#f3f4f6]'
+                    }`}
+                  >
+                    {defaultViewport === viewport ? '★' : '☆'}
+                    <span className="ml-1 hidden xl:inline">{t('Default')}</span>
+                  </button>
+                  {canvasMode === 'edit' && (
                     <button
                       type="button"
                       onClick={() => setGridStep(gridStep ? 0 : 10)}
@@ -2211,7 +2200,7 @@ export default function EditorPage() {
                   {/* Link tool — mirrors the HTML workspace's Link sub-tool:
                       click a button/link component, then click its target
                       component (or a page in the Files panel). */}
-                  {editorExperience === 'advanced' && canvasMode === 'edit' && (
+                  {canvasMode === 'edit' && (
                     <>
                       <button
                         type="button"
@@ -2357,7 +2346,7 @@ export default function EditorPage() {
                   >
                     {t('Properties')}
                   </button>
-                  {editorExperience === 'advanced' && <button
+                  <button
                     type="button"
                     onClick={() => setRightTab('code')}
                     className={`flex-1 py-2 font-mono ${
@@ -2367,7 +2356,7 @@ export default function EditorPage() {
                     }`}
                   >
                     &lt;/&gt; {t('Code')}
-                  </button>}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setRail('right', false)}
@@ -2383,7 +2372,7 @@ export default function EditorPage() {
                       <CodePanel />
                     </Suspense>
                   ) : (
-                    <PropertiesPanel simpleMode={editorExperience === 'simple'} />
+                    <PropertiesPanel />
                   )}
                 </div>
               </div>

@@ -46,8 +46,23 @@ describe('CanvasSelectionActions', () => {
     expect(screen.getByRole('button', { name: 'Backward' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Forward' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete component' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Backward' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Forward' })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: 'Select parent' }))
     expect(useEditorStore.getState().selectedId).toBe('parent')
+  })
+
+  it('keeps its physical size when a large canvas is scaled down', () => {
+    localStorage.setItem('pwb_language', 'en')
+    loadNestedCanvas()
+
+    render(
+      <LanguageProvider>
+        <CanvasSelectionActions componentId="child" canvasScale={0.5} />
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByRole('toolbar', { name: 'Arrange' })).toHaveStyle({ zoom: '2' })
   })
 })

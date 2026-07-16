@@ -97,6 +97,11 @@ function esc(s) {
   )
 }
 
+// Preserve deliberate line breaks from textareas without allowing user HTML.
+function multiline(s) {
+  return esc(s).replace(/\r?\n/g, '<br>')
+}
+
 function cssValue(v) {
   return String(v).replace(/[;{}<]/g, '').trim()
 }
@@ -159,7 +164,7 @@ function controlFieldCss(props = {}) {
 
 function iconTextHtml(props = {}) {
   const icon = props.icon ? `<span aria-hidden="true" style="display:inline-flex;line-height:0">${iconSvg(props.icon)}</span>` : ''
-  return `${icon}<span>${esc(props.text)}</span>`
+  return `${icon}<span>${multiline(props.text)}</span>`
 }
 
 function linkAttrs(href) {
@@ -172,13 +177,13 @@ function sectionInnerHtml(props = {}, styles = {}) {
   const bg = safeCssProp(styles.backgroundColor, '#ffffff')
   return `<div class="section-inner">${
     props.eyebrow
-      ? `<p style="margin:0 0 10px;font-size:.78em;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.72">${esc(props.eyebrow)}</p>`
+      ? `<p style="margin:0 0 10px;font-size:.78em;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.72">${multiline(props.eyebrow)}</p>`
       : ''
-  }${props.heading ? `<h2 class="m0">${esc(props.heading)}</h2>` : ''}${
-    props.text ? `<p class="m0" style="margin-top:${props.heading ? '12px' : '0'};line-height:1.6;opacity:.78">${esc(props.text)}</p>` : ''
+  }${props.heading ? `<h2 class="m0">${multiline(props.heading)}</h2>` : ''}${
+    props.text ? `<p class="m0" style="margin-top:${props.heading ? '12px' : '0'};line-height:1.6;opacity:.78">${multiline(props.text)}</p>` : ''
   }${
     props.buttonText
-      ? `<a href="${esc(href || '#')}"${linkAttrs(href)} style="display:inline-flex;align-items:center;justify-content:center;margin-top:20px;padding:.72em 1.2em;border-radius:.65em;background:${color};color:${bg};text-decoration:none;font-weight:700">${esc(props.buttonText)}</a>`
+      ? `<a href="${esc(href || '#')}"${linkAttrs(href)} style="display:inline-flex;align-items:center;justify-content:center;margin-top:20px;padding:.72em 1.2em;border-radius:.65em;background:${color};color:${bg};text-decoration:none;font-weight:700">${multiline(props.buttonText)}</a>`
       : ''
   }</div>`
 }
@@ -311,7 +316,7 @@ function inlineNode(c) {
         (t) =>
           `<button type="button" role="tab" data-builder-tab="${esc(t.id)}" aria-selected="${
             t.id === activeId ? 'true' : 'false'
-          }">${esc(t.label || 'Tab')}</button>`,
+          }">${multiline(t.label || 'Tab')}</button>`,
       )
       .join('')
     const panels = safeTabs
@@ -337,17 +342,17 @@ function inlineNode(c) {
   if (c.type === 'select') {
     const opts = String(p.options || '').split('\n').map((s) => s.trim()).filter(Boolean)
     return `<label style="display:flex;flex-direction:column;gap:6px;min-width:0;${styleStr}">${
-      p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+      p.label ? `<span style="font-weight:600">${multiline(p.label)}</span>` : ''
     }<select style="${controlFieldCss(p)}">${
       p.placeholder ? `<option value="" disabled selected>${esc(p.placeholder)}</option>` : ''
     }${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`
   }
   if (c.type === 'alert') {
     const v = ALERT_VARIANTS[p.variant] || ALERT_VARIANTS.info
-    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;border:1px solid ${v.border};background:${v.bg};color:${v.color};${styleStr}">${iconSvg(p.icon || 'check')}<span>${esc(p.text)}</span></div>`
+    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;border:1px solid ${v.border};background:${v.bg};color:${v.color};${styleStr}">${iconSvg(p.icon || 'check')}<span>${multiline(p.text)}</span></div>`
   }
   if (c.type === 'accordion') {
-    return `<details style="border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px;${styleStr}"><summary style="cursor:pointer;font-weight:600;padding:12px 0">${esc(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${esc(p.text)}</div></details>`
+    return `<details style="border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px;${styleStr}"><summary style="cursor:pointer;font-weight:600;padding:12px 0">${multiline(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${multiline(p.text)}</div></details>`
   }
   if (c.type === 'html') {
     const code = typeof p.code === 'string' ? p.code : ''
@@ -392,27 +397,27 @@ function innerHtml(c) {
           const ext = /^https?:\/\//i.test(href)
             ? ' target="_blank" rel="noopener noreferrer"'
             : ''
-          return `<a href="${esc(href || '#')}"${ext}>${esc(l.label)}</a>`
+          return `<a href="${esc(href || '#')}"${ext}>${multiline(l.label)}</a>`
         })
         .join('\n        ')
       const mobileMode = p.mobileNavMode === 'stack' ? 'stack' : 'menu'
       const menuBackground = cssValue(c.styles?.backgroundColor || '#1d1d1f')
-      return `<div class="nav-inner nav-${layout} nav-mobile-${mobileMode}" data-builder-mobile-nav style="--builder-nav-menu-bg:${menuBackground}">\n        <span class="brand">${esc(p.brand)}</span>\n        <button type="button" class="mobile-nav-toggle" data-builder-mobile-nav-toggle aria-label="Open navigation menu" aria-expanded="false">☰</button>\n        <div class="links">\n          ${items}\n        </div>\n      </div>`
+      return `<div class="nav-inner nav-${layout} nav-mobile-${mobileMode}" data-builder-mobile-nav style="--builder-nav-menu-bg:${menuBackground}">\n        <span class="brand">${multiline(p.brand)}</span>\n        <button type="button" class="mobile-nav-toggle" data-builder-mobile-nav-toggle aria-label="Open navigation menu" aria-expanded="false">☰</button>\n        <div class="links">\n          ${items}\n        </div>\n      </div>`
     }
     case 'heading': {
       const lvl = ['h1', 'h2', 'h3'].includes(p.level) ? p.level : 'h2'
-      return `<${lvl} class="m0">${esc(p.text)}</${lvl}>`
+      return `<${lvl} class="m0">${multiline(p.text)}</${lvl}>`
     }
     case 'text':
-      return `<p class="m0">${esc(p.text)}</p>`
+      return `<p class="m0">${multiline(p.text)}</p>`
     case 'button':
     case 'linkbutton':
       return iconTextHtml(p)
     case 'section':
       return sectionInnerHtml(p, c.styles || {})
     case 'card':
-      return `${p.title ? `<h3 class="card-title">${esc(p.title)}</h3>` : ''}${
-        p.text ? `\n      <p class="m0">${esc(p.text)}</p>` : ''
+      return `${p.title ? `<h3 class="card-title">${multiline(p.title)}</h3>` : ''}${
+        p.text ? `\n      <p class="m0">${multiline(p.text)}</p>` : ''
       }`
     case 'list': {
       const items = String(p.text || '').split('\n').map((s) => s.trim()).filter(Boolean)
@@ -422,19 +427,19 @@ function innerHtml(c) {
         .join('')}</${tag}>`
     }
     case 'quote':
-      return `<p class="m0">${esc(p.text)}</p>${
+      return `<p class="m0">${multiline(p.text)}</p>${
         p.author
-          ? `<footer style="margin-top:8px;font-style:normal;font-size:.85em;opacity:.7">— ${esc(p.author)}</footer>`
+          ? `<footer style="margin-top:8px;font-style:normal;font-size:.85em;opacity:.7">— ${multiline(p.author)}</footer>`
           : ''
       }`
     case 'badge':
-      return esc(p.text)
+      return multiline(p.text)
     case 'icon':
       return iconSvg(p.name)
     case 'input': {
       const t = ['text', 'email', 'number', 'tel', 'url'].includes(p.inputType) ? p.inputType : 'text'
       return `${
-        p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+        p.label ? `<span style="font-weight:600">${multiline(p.label)}</span>` : ''
       }<input type="${t}" placeholder="${esc(p.placeholder)}" style="${controlFieldCss(p)}" />`
     }
     default:

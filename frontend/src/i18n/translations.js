@@ -1164,6 +1164,8 @@ export const TURKISH_TRANSLATIONS = {
   'Spacing': 'Boşluklar',
   'Advanced': 'Gelişmiş',
   'Default': 'Varsayılan',
+  'Make this the default editor screen': 'Bunu varsayılan editör ekranı yap',
+  'Tags': 'Etiketler',
   'Dark bar': 'Koyu çubuk',
   'Light bar': 'Açık çubuk',
   'With button': 'Düğmeli',

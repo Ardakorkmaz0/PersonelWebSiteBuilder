@@ -23,6 +23,18 @@ function renderType(type, scale = 2) {
 }
 
 describe('RenderComponent box scaling', () => {
+  it('preserves entered line breaks in visible text', () => {
+    const html = renderToStaticMarkup(
+      <RenderComponent component={{
+        ...expandedComponent('heading', 1),
+        props: { text: 'First line\nSecond line', level: 'h2' },
+      }} />,
+    )
+
+    expect(html).toContain('white-space:pre-wrap')
+    expect(html).toContain('First line\nSecond line')
+  })
+
   it('renders every registered component when the box is resized larger', () => {
     for (const type of Object.keys(registry)) {
       expect(renderType(type)).toContain('width:100%')

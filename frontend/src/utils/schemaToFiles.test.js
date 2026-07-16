@@ -1,6 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { schemaToSingleHtml } from './schemaToFiles.js'
 
+describe('schemaToSingleHtml multiline copy', () => {
+  it('preserves Enter as a safe line break', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'p1',
+        name: 'Home',
+        mode: 'empty',
+        components: [{
+          id: 'heading_multiline',
+          type: 'heading',
+          props: { text: 'First line\nSecond <line>', level: 'h2' },
+          styles: {},
+          layout: { x: 0, y: 0, w: 400, h: 80 },
+        }],
+      }],
+    })
+
+    expect(html).toContain('First line<br>Second &lt;line&gt;')
+    expect(html).not.toContain('Second <line>')
+  })
+})
+
 describe('schemaToSingleHtml fixed components', () => {
   it('keeps fixed components outside the scaled page transform', () => {
     const html = schemaToSingleHtml({

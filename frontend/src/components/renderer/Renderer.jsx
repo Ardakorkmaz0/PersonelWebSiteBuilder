@@ -137,6 +137,8 @@ function TabsRender({ component, style, viewport, boxScale = 1, editorPreview = 
               }}
               style={{
                 ...tabBaseStyle,
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'break-word',
                 ...(sel ? tabActiveStyle : null),
               }}
             >

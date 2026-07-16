@@ -61,7 +61,7 @@ export const registry = {
       padding: '18px 28px',
     },
     editableProps: [
-      { key: 'brand', label: 'Brand', control: 'text' },
+      { key: 'brand', label: 'Brand', control: 'textarea' },
       { key: 'links', label: 'Links', control: 'links' },
       {
         key: 'navLayout',
@@ -121,7 +121,7 @@ export const registry = {
       padding: '4px',
     },
     editableProps: [
-      { key: 'text', label: 'Text', control: 'text' },
+      { key: 'text', label: 'Text', control: 'textarea' },
       {
         key: 'level',
         label: 'Level',
@@ -173,7 +173,7 @@ export const registry = {
       fontWeight: '500',
     },
     editableProps: [
-      { key: 'text', label: 'Button text', control: 'text' },
+      { key: 'text', label: 'Button text', control: 'textarea' },
       { key: 'href', label: 'Link (href)', control: 'text' },
       { key: 'icon', label: 'Icon', control: 'select', options: OPTIONAL_ICON_OPTIONS },
     ],
@@ -197,7 +197,7 @@ export const registry = {
       textDecoration: 'none',
     },
     editableProps: [
-      { key: 'text', label: 'Link text', control: 'text' },
+      { key: 'text', label: 'Link text', control: 'textarea' },
       { key: 'href', label: 'Link (href)', control: 'text' },
       { key: 'icon', label: 'Icon', control: 'select', options: OPTIONAL_ICON_OPTIONS },
     ],
@@ -249,10 +249,10 @@ export const registry = {
       textAlign: 'center',
     },
     editableProps: [
-      { key: 'eyebrow', label: 'Eyebrow', control: 'text' },
-      { key: 'heading', label: 'Heading', control: 'text' },
+      { key: 'eyebrow', label: 'Eyebrow', control: 'textarea' },
+      { key: 'heading', label: 'Heading', control: 'textarea' },
       { key: 'text', label: 'Text', control: 'textarea' },
-      { key: 'buttonText', label: 'Button text', control: 'text' },
+      { key: 'buttonText', label: 'Button text', control: 'textarea' },
       { key: 'buttonHref', label: 'Button link', control: 'link' },
     ],
     editableStyles: [
@@ -301,7 +301,7 @@ export const registry = {
       boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
     },
     editableProps: [
-      { key: 'title', label: 'Title', control: 'text' },
+      { key: 'title', label: 'Title', control: 'textarea' },
       { key: 'text', label: 'Text', control: 'textarea' },
     ],
     editableStyles: [
@@ -350,7 +350,7 @@ export const registry = {
     defaultStyles: { fontSize: '20px', color: '#374151' },
     editableProps: [
       { key: 'text', label: 'Quote', control: 'textarea' },
-      { key: 'author', label: 'Author', control: 'text' },
+      { key: 'author', label: 'Author', control: 'textarea' },
     ],
     editableStyles: [
       'color', 'fontSize', 'fontWeight', 'fontStyle', 'fontFamily',
@@ -373,7 +373,7 @@ export const registry = {
       padding: '4px 12px',
       borderRadius: '999px',
     },
-    editableProps: [{ key: 'text', label: 'Text', control: 'text' }],
+    editableProps: [{ key: 'text', label: 'Text', control: 'textarea' }],
     editableStyles: [
       'backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily',
       'textTransform', 'letterSpacing', 'padding', 'borderRadius',
@@ -417,7 +417,7 @@ export const registry = {
     },
     defaultStyles: { fontSize: '15px', color: '#1d1d1f' },
     editableProps: [
-      { key: 'label', label: 'Label', control: 'text' },
+      { key: 'label', label: 'Label', control: 'textarea' },
       { key: 'placeholder', label: 'Placeholder', control: 'text' },
       {
         key: 'inputType',
@@ -464,7 +464,7 @@ export const registry = {
     },
     defaultStyles: { fontSize: '15px', color: '#1d1d1f' },
     editableProps: [
-      { key: 'label', label: 'Label', control: 'text' },
+      { key: 'label', label: 'Label', control: 'textarea' },
       { key: 'options', label: 'Options (one per line)', control: 'textarea' },
       { key: 'placeholder', label: 'Placeholder', control: 'text' },
       { key: 'fieldBackgroundColor', label: 'Field background', control: 'color' },
@@ -521,7 +521,7 @@ export const registry = {
     },
     defaultStyles: { fontSize: '15px', color: '#1d1d1f' },
     editableProps: [
-      { key: 'title', label: 'Title', control: 'text' },
+      { key: 'title', label: 'Title', control: 'textarea' },
       { key: 'text', label: 'Content', control: 'textarea' },
     ],
     editableStyles: [

@@ -39,6 +39,12 @@ function InlineIcon({ name }) {
   )
 }
 
+const multilineTextStyle = {
+  whiteSpace: 'pre-wrap',
+  overflowWrap: 'break-word',
+  wordBreak: 'break-word',
+}
+
 // The full region body is rendered by Renderer/RegionEditor because it owns
 // the centered, droppable inner design surface. This registry fallback keeps
 // isolated component previews valid.
@@ -91,7 +97,7 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
           position: 'relative',
         }}
       >
-        <span style={{ fontWeight: 'bold', fontSize: '1.125em' }}>{props.brand}</span>
+        <span style={{ fontWeight: 'bold', fontSize: '1.125em', ...multilineTextStyle }}>{props.brand}</span>
         {mobileMenu && (
           <button
             type="button"
@@ -162,7 +168,7 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
                 style={{
                   color: 'inherit',
                   textDecoration: 'none',
-                  whiteSpace: 'nowrap',
+                  whiteSpace: 'pre-wrap',
                   display: vertical || mobileMenu ? 'block' : undefined,
                   width: vertical || mobileMenu ? '100%' : undefined,
                   padding: vertical || mobileMenu ? `${scaledPx(10, boxScale)} ${scaledPx(12, boxScale)}` : undefined,
@@ -191,8 +197,7 @@ const headingTagStyle = {
   fontFamily: 'inherit',
   letterSpacing: 'inherit',
   lineHeight: 1.15,
-  overflowWrap: 'break-word',
-  wordBreak: 'break-word',
+  ...multilineTextStyle,
 }
 
 export function Heading({ props, style }) {
@@ -207,7 +212,7 @@ export function Heading({ props, style }) {
 export function Text({ props, style }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, ...style }}>
-      <p style={{ margin: 0, overflowWrap: 'break-word', wordBreak: 'break-word' }}>{props.text}</p>
+      <p style={{ margin: 0, ...multilineTextStyle }}>{props.text}</p>
     </div>
   )
 }
@@ -229,7 +234,7 @@ export function Button({ props, style }) {
       {...linkAttrs(href)}
     >
       <InlineIcon name={props.icon} />
-      <span>{props.text}</span>
+      <span style={multilineTextStyle}>{props.text}</span>
     </a>
   )
 }
@@ -249,7 +254,7 @@ export function LinkButton({ props, style }) {
       {...linkAttrs(href)}
     >
       <InlineIcon name={props.icon} />
-      <span>{props.text}</span>
+      <span style={multilineTextStyle}>{props.text}</span>
     </a>
   )
 }
@@ -288,12 +293,12 @@ export function Section({ props, style, contentWidth, boxScale = 1 }) {
         }}
       >
         {props.eyebrow ? (
-          <p style={{ margin: `0 0 ${scaledPx(10, boxScale)}`, fontSize: '0.78em', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.72 }}>
+          <p style={{ margin: `0 0 ${scaledPx(10, boxScale)}`, fontSize: '0.78em', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.72, ...multilineTextStyle }}>
             {props.eyebrow}
           </p>
         ) : null}
         {props.heading ? <h2 style={headingTagStyle}>{props.heading}</h2> : null}
-        {props.text ? <p style={{ margin: props.heading ? `${scaledPx(12, boxScale)} 0 0` : 0, lineHeight: 1.6, opacity: 0.78 }}>{props.text}</p> : null}
+        {props.text ? <p style={{ margin: props.heading ? `${scaledPx(12, boxScale)} 0 0` : 0, lineHeight: 1.6, opacity: 0.78, ...multilineTextStyle }}>{props.text}</p> : null}
         {props.buttonText ? (
           <a
             href={href || undefined}
@@ -308,6 +313,7 @@ export function Section({ props, style, contentWidth, boxScale = 1 }) {
               color: sectionBg,
               textDecoration: 'none',
               fontWeight: 700,
+              ...multilineTextStyle,
             }}
             {...linkAttrs(href)}
           >
@@ -323,11 +329,11 @@ export function Card({ props, style, boxScale = 1 }) {
   return (
     <div style={{ fontSize: scaledPx(16, boxScale), display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', ...style }}>
       {props.title ? (
-        <h3 style={{ margin: `0 0 ${scaledPx(8, boxScale)}`, fontSize: '1.25em', fontWeight: 600 }}>
+        <h3 style={{ margin: `0 0 ${scaledPx(8, boxScale)}`, fontSize: '1.25em', fontWeight: 600, ...multilineTextStyle }}>
           {props.title}
         </h3>
       ) : null}
-      {props.text ? <p style={{ margin: 0 }}>{props.text}</p> : null}
+      {props.text ? <p style={{ margin: 0, ...multilineTextStyle }}>{props.text}</p> : null}
     </div>
   )
 }
@@ -361,9 +367,9 @@ export function Quote({ props, style, boxScale = 1 }) {
         ...style,
       }}
     >
-      <p style={{ margin: 0 }}>{props.text}</p>
+      <p style={{ margin: 0, ...multilineTextStyle }}>{props.text}</p>
       {props.author ? (
-        <footer style={{ marginTop: scaledPx(8, boxScale), fontStyle: 'normal', fontSize: '0.85em', opacity: 0.7 }}>
+        <footer style={{ marginTop: scaledPx(8, boxScale), fontStyle: 'normal', fontSize: '0.85em', opacity: 0.7, ...multilineTextStyle }}>
           — {props.author}
         </footer>
       ) : null}
@@ -373,7 +379,7 @@ export function Quote({ props, style, boxScale = 1 }) {
 
 export function Badge({ props, style }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', ...style }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', ...multilineTextStyle, ...style }}>
       {props.text}
     </span>
   )
@@ -436,7 +442,7 @@ export function Input({ props, style, boxScale = 1 }) {
     : 'text'
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: scaledPx(6, boxScale), minWidth: 0, ...style }}>
-      {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
+      {props.label ? <span style={{ fontWeight: 600, ...multilineTextStyle }}>{props.label}</span> : null}
       <input
         type={type}
         placeholder={props.placeholder || ''}
@@ -453,7 +459,7 @@ export function Select({ props, style, boxScale = 1 }) {
     .filter(Boolean)
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: scaledPx(6, boxScale), minWidth: 0, ...style }}>
-      {props.label ? <span style={{ fontWeight: 600 }}>{props.label}</span> : null}
+      {props.label ? <span style={{ fontWeight: 600, ...multilineTextStyle }}>{props.label}</span> : null}
       <select
         defaultValue={props.placeholder ? '' : opts[0] || ''}
         style={controlFieldStyle(props, boxScale)}
@@ -504,7 +510,7 @@ export function Alert({ props, style, boxScale = 1 }) {
       >
         <path d={d} />
       </svg>
-      <span style={{ overflowWrap: 'break-word' }}>{props.text}</span>
+      <span style={multilineTextStyle}>{props.text}</span>
     </div>
   )
 }
@@ -512,10 +518,10 @@ export function Alert({ props, style, boxScale = 1 }) {
 export function Accordion({ props, style, boxScale = 1 }) {
   return (
     <details style={{ border: `${scaledPx(1, boxScale)} solid #e5e7eb`, borderRadius: scaledPx(10, boxScale), padding: `${scaledPx(2, boxScale)} ${scaledPx(16, boxScale)}`, ...style }}>
-      <summary style={{ cursor: 'pointer', fontWeight: 600, padding: `${scaledPx(12, boxScale)} 0` }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 600, padding: `${scaledPx(12, boxScale)} 0`, ...multilineTextStyle }}>
         {props.title}
       </summary>
-      <div style={{ paddingBottom: scaledPx(14, boxScale), color: '#4b5563', overflowWrap: 'break-word' }}>
+      <div style={{ paddingBottom: scaledPx(14, boxScale), color: '#4b5563', ...multilineTextStyle }}>
         {props.text}
       </div>
     </details>

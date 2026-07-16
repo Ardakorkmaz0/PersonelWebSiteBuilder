@@ -14,6 +14,7 @@ import { TAB_STYLES } from '../renderer/constants.js'
 import { sanitizeStyles } from '../../utils/sanitize.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 import CanvasSelectionActions from './CanvasSelectionActions.jsx'
+import { selectionActionsCanvasWidth } from './canvasSelectionActionsLayout.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import {
   regionContentWidth,
@@ -335,6 +336,7 @@ export default function FlowCanvasItem({
       {isSelected && !brushMode && (
         <CanvasSelectionActions
           componentId={component.id}
+          canvasScale={canvasScale}
           style={{
             top: placeActionsInside ? 8 : -40,
             left: '50%',
@@ -607,7 +609,7 @@ function TabsCanvasItem({
   const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
   const handles = brushMode ? [] : freeResizeHandles(chromeRect)
   const edgeHitZones = brushMode ? [] : freeResizeEdgeHitZones(chromeRect)
-  const actionBarWidth = 168
+  const actionBarWidth = selectionActionsCanvasWidth(interactionScale)
   const actionBarLeft = Math.max(
     4 - x,
     Math.min((w - actionBarWidth) / 2, (bounds?.w || w) - x - actionBarWidth - 4),
@@ -746,6 +748,7 @@ function TabsCanvasItem({
         <>
           <CanvasSelectionActions
             componentId={component.id}
+            canvasScale={interactionScale}
             style={{ top: actionBarTop, left: actionBarLeft }}
           />
           <div

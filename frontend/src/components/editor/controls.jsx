@@ -497,9 +497,9 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                   </button>
                 </div>
               </div>
-              <input
-                type="text"
-                className={inputCls}
+              <textarea
+                rows={2}
+                className={`${inputCls} resize-y`}
                 value={t.label ?? ''}
                 placeholder={t('Tab label')}
                 onChange={(e) => rename(t.id, e.target.value)}
@@ -621,9 +621,9 @@ export function LinksEditor({ label, value, onChange, pages = [] }) {
                 {t('Remove')}
               </button>
             </div>
-            <input
-              type="text"
-              className={inputCls + ' mb-1'}
+            <textarea
+              rows={2}
+              className={`${inputCls} mb-1 resize-y`}
               value={link.label ?? ''}
               placeholder={t('Label')}
               onChange={(e) => update(i, { label: e.target.value })}

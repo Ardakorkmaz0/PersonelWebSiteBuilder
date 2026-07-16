@@ -28,6 +28,9 @@ function esc(s) {
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]),
   )
 }
+function multiline(s) {
+  return esc(s).replace(/\r?\n/g, '<br>')
+}
 const cssVal = (v) => String(v).replace(/[;{}<]/g, '').trim()
 const kebab = (k) => k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())
 
@@ -118,7 +121,7 @@ function linkAttrs(href) {
 
 function iconTextHtml(props = {}) {
   const icon = props.icon ? `<span aria-hidden="true" style="display:inline-flex;line-height:0">${iconSvg(props.icon)}</span>` : ''
-  return `${icon}<span>${esc(props.text)}</span>`
+  return `${icon}<span>${multiline(props.text)}</span>`
 }
 
 function safeInlineCss(value, fallback = '') {
@@ -131,13 +134,13 @@ function sectionInnerHtml(props = {}, styles = {}) {
   const bg = safeInlineCss(styles.backgroundColor, '#ffffff')
   return `<div class="rh-container">${
     props.eyebrow
-      ? `<p style="margin:0 0 10px;font-size:.78em;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.72">${esc(props.eyebrow)}</p>`
+      ? `<p style="margin:0 0 10px;font-size:.78em;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.72">${multiline(props.eyebrow)}</p>`
       : ''
-  }${props.heading ? `<h2 class="rh-m0">${esc(props.heading)}</h2>` : ''}${
-    props.text ? `<p class="rh-m0" style="margin-top:${props.heading ? '12px' : '0'};line-height:1.6;opacity:.78">${esc(props.text)}</p>` : ''
+  }${props.heading ? `<h2 class="rh-m0">${multiline(props.heading)}</h2>` : ''}${
+    props.text ? `<p class="rh-m0" style="margin-top:${props.heading ? '12px' : '0'};line-height:1.6;opacity:.78">${multiline(props.text)}</p>` : ''
   }${
     props.buttonText
-      ? `<a href="${esc(href || '#')}"${linkAttrs(href)} style="display:inline-flex;align-items:center;justify-content:center;margin-top:20px;padding:.72em 1.2em;border-radius:.65em;background:${color};color:${bg};text-decoration:none;font-weight:700">${esc(props.buttonText)}</a>`
+      ? `<a href="${esc(href || '#')}"${linkAttrs(href)} style="display:inline-flex;align-items:center;justify-content:center;margin-top:20px;padding:.72em 1.2em;border-radius:.65em;background:${color};color:${bg};text-decoration:none;font-weight:700">${multiline(props.buttonText)}</a>`
       : ''
   }</div>`
 }
@@ -153,7 +156,7 @@ function navbar(c) {
   const links = (Array.isArray(p.links) ? p.links : [])
     .map((l) => {
       const href = sanitizeUrl(l.href)
-      return `<a href="${esc(href || '#')}"${linkAttrs(href)}>${esc(l.label)}</a>`
+      return `<a href="${esc(href || '#')}"${linkAttrs(href)}>${multiline(l.label)}</a>`
     })
     .join('\n          ')
   // Links position (horizontal only): auto margins slide the links block
@@ -166,7 +169,7 @@ function navbar(c) {
         : ''
   return `<header class="rh-navbar"${styleAttr(c)}>
       <div class="rh-container rh-nav-inner rh-nav-${layout}">
-        <span class="rh-brand">${esc(p.brand)}</span>
+        <span class="rh-brand">${multiline(p.brand)}</span>
         <nav class="rh-links"${align}>\n          ${links}\n        </nav>
       </div>
     </header>`
@@ -200,10 +203,10 @@ function itemEl(c, multi, colOverride) {
   switch (c.type) {
     case 'heading': {
       const lvl = ['h1', 'h2', 'h3'].includes(p.level) ? p.level : 'h2'
-      return `<${lvl} class="${cls} rh-m0"${styleAttr(c, col)}>${esc(p.text)}</${lvl}>`
+      return `<${lvl} class="${cls} rh-m0"${styleAttr(c, col)}>${multiline(p.text)}</${lvl}>`
     }
     case 'text':
-      return `<p class="${cls} rh-m0"${styleAttr(c, col)}>${esc(p.text)}</p>`
+      return `<p class="${cls} rh-m0"${styleAttr(c, col)}>${multiline(p.text)}</p>`
     case 'button':
     case 'linkbutton': {
       const href = sanitizeUrl(p.href)
@@ -215,8 +218,8 @@ function itemEl(c, multi, colOverride) {
     }
     case 'card':
       return `<div class="${cls} rh-card"${styleAttr(c, col)}>${
-        p.title ? `<h3 class="rh-card-title">${esc(p.title)}</h3>` : ''
-      }${p.text ? `<p class="rh-m0">${esc(p.text)}</p>` : ''}</div>`
+        p.title ? `<h3 class="rh-card-title">${multiline(p.title)}</h3>` : ''
+      }${p.text ? `<p class="rh-m0">${multiline(p.text)}</p>` : ''}</div>`
     case 'spacer':
       return `<div class="rh-item" style="flex:1 1 100%;height:${Math.round(c.layout?.h || 24)}px"></div>`
     case 'list': {
@@ -230,35 +233,35 @@ function itemEl(c, multi, colOverride) {
       return `<blockquote class="${cls}"${styleAttr(
         c,
         `${col};border-left:4px solid currentColor;padding-left:18px;font-style:italic;margin:0`,
-      )}><p class="rh-m0">${esc(p.text)}</p>${
+      )}><p class="rh-m0">${multiline(p.text)}</p>${
         p.author
-          ? `<footer style="margin-top:8px;font-style:normal;font-size:.85em;opacity:.7">— ${esc(p.author)}</footer>`
+          ? `<footer style="margin-top:8px;font-style:normal;font-size:.85em;opacity:.7">— ${multiline(p.author)}</footer>`
           : ''
       }</blockquote>`
     case 'badge':
-      return `<span class="rh-item"${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center')}>${esc(p.text)}</span>`
+      return `<span class="rh-item"${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center')}>${multiline(p.text)}</span>`
     case 'icon':
       return `<span class="rh-item"${iconA11yAttrs(p)}${styleAttr(c, colOverride || 'flex:0 0 auto;display:inline-flex;align-items:center;line-height:0')}>${iconSvg(p.name)}</span>`
     case 'input': {
       const t = ['text', 'email', 'number', 'tel', 'url'].includes(p.inputType) ? p.inputType : 'text'
       return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px;min-width:0`)}>${
-        p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+        p.label ? `<span style="font-weight:600">${multiline(p.label)}</span>` : ''
       }<input type="${t}" placeholder="${esc(p.placeholder)}" style="${controlFieldCss(p)}" /></label>`
     }
     case 'select': {
       const opts = String(p.options || '').split('\n').map((s) => s.trim()).filter(Boolean)
       return `<label class="${cls}"${styleAttr(c, `${col};display:flex;flex-direction:column;gap:6px;min-width:0`)}>${
-        p.label ? `<span style="font-weight:600">${esc(p.label)}</span>` : ''
+        p.label ? `<span style="font-weight:600">${multiline(p.label)}</span>` : ''
       }<select style="${controlFieldCss(p)}">${
         p.placeholder ? `<option value="" disabled selected>${esc(p.placeholder)}</option>` : ''
       }${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`
     }
     case 'alert': {
       const v = ALERT_VARIANTS[p.variant] || ALERT_VARIANTS.info
-      return `<div class="${cls}"${styleAttr(c, `${col};display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;border:1px solid ${v.border};background:${v.bg};color:${v.color}`)}>${iconSvg(p.icon || 'check')}<span>${esc(p.text)}</span></div>`
+      return `<div class="${cls}"${styleAttr(c, `${col};display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;border:1px solid ${v.border};background:${v.bg};color:${v.color}`)}>${iconSvg(p.icon || 'check')}<span>${multiline(p.text)}</span></div>`
     }
     case 'accordion':
-      return `<details class="${cls}"${styleAttr(c, `${col};border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px`)}><summary style="cursor:pointer;font-weight:600;padding:12px 0">${esc(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${esc(p.text)}</div></details>`
+      return `<details class="${cls}"${styleAttr(c, `${col};border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px`)}><summary style="cursor:pointer;font-weight:600;padding:12px 0">${multiline(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${multiline(p.text)}</div></details>`
     case 'container': {
       const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
       const h = absolutePanelHeight(kids, Math.round(c.layout?.h || 160))
@@ -321,7 +324,7 @@ function tabsHtml(c, cls, col) {
       (t) =>
         `<button type="button" role="tab" data-builder-tab="${esc(t.id)}" aria-selected="${
           t.id === activeId ? 'true' : 'false'
-        }">${esc(t.label || 'Tab')}</button>`,
+        }">${multiline(t.label || 'Tab')}</button>`,
     )
     .join('')
   const panels = safeTabs

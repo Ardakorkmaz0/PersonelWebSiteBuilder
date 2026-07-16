@@ -212,6 +212,25 @@ export function selectComponentParent(state, id) {
   return findParentInTree(selectCurrentPage(state)?.components || [], id)
 }
 
+function siblingPositionInTree(components, id) {
+  const index = components.findIndex((component) => component.id === id)
+  if (index >= 0) return { index, length: components.length }
+  for (const component of components) {
+    if (!hasKids(component)) continue
+    const position = siblingPositionInTree(component.children, id)
+    if (position) return position
+  }
+  return null
+}
+
+export function selectCanMoveComponent(state, id, direction) {
+  const position = siblingPositionInTree(selectCurrentPage(state)?.components || [], id)
+  if (!position) return false
+  return direction === 'forward'
+    ? position.index < position.length - 1
+    : position.index > 0
+}
+
 function parentDesignWidth(parent, mobileWidth) {
   if (parent?.type === 'region') {
     return mobileWidth || regionContentWidth(parent)
@@ -2121,6 +2140,7 @@ export const useEditorStore = create((set, get) => ({
 
   // Move one step later in the order (toward the end / "next" in flow reading order).
   moveForward: (id) => {
+    if (!selectCanMoveComponent(get(), id, 'forward')) return
     get().record('zorder')
     set((state) => {
       const page = selectCurrentPage(state)
@@ -2133,6 +2153,7 @@ export const useEditorStore = create((set, get) => ({
 
   // Move one step earlier in the order (toward the start / "before" in flow order).
   moveBackward: (id) => {
+    if (!selectCanMoveComponent(get(), id, 'backward')) return
     get().record('zorder')
     set((state) => {
       const page = selectCurrentPage(state)

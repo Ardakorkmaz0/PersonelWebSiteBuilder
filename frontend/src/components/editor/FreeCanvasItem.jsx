@@ -3,6 +3,7 @@ import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
 import CanvasSelectionActions from './CanvasSelectionActions.jsx'
+import { selectionActionsCanvasWidth } from './canvasSelectionActionsLayout.js'
 import { snapDraggedRect } from '../../utils/snapping.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
@@ -114,7 +115,7 @@ export default function FreeCanvasItem({
   const edgeHitZones = resizeEdgeHitZones(chromeRect).filter(([dir]) => (
     stackedRegion ? dir === 's' : !viewportStretch || dir === 'n' || dir === 's'
   ))
-  const actionBarWidth = 168
+  const actionBarWidth = selectionActionsCanvasWidth(canvasScale)
   const actionBarLeft = Math.max(
     4 - x,
     Math.min((w - actionBarWidth) / 2, canvasWidth - x - actionBarWidth - 4),
@@ -427,6 +428,7 @@ export default function FreeCanvasItem({
         <>
           <CanvasSelectionActions
             componentId={component.id}
+            canvasScale={canvasScale}
             style={{ top: actionBarTop, left: actionBarLeft }}
           />
           {edgeHitZones.map(([dir, pos, cursor]) => (

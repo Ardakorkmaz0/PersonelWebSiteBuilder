@@ -1,23 +1,61 @@
-import { selectComponentParent, useEditorStore } from '../../store/editorStore.js'
+import {
+  selectCanMoveComponent,
+  selectComponentParent,
+  useEditorStore,
+} from '../../store/editorStore.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { normalizedSelectionActionsScale } from './canvasSelectionActionsLayout.js'
 
-// Contextual canvas actions shared by free, flow, container, region, and tabs
-// items. Detailed styling stays in Properties; these are the five operations a
-// user most often needs immediately after selecting something.
-export default function CanvasSelectionActions({ componentId, style }) {
+function LayerStepIcon({ forward }) {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <rect x="3" y="3" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="8" y="8" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d={forward ? 'M5 15V9m0 0-2 2m2-2 2 2' : 'M15 5v6m0 0-2-2m2 2 2-2'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function DuplicateIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <rect x="6" y="6" width="10" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M13 6V4H4v9h2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ParentIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <path d="M5 15V5h10M5 5l4 4M5 5l4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export default function CanvasSelectionActions({ componentId, canvasScale = 1, style }) {
   const { t } = useLanguage()
   const parent = useEditorStore((state) => selectComponentParent(state, componentId))
+  const canMoveBackward = useEditorStore((state) => selectCanMoveComponent(state, componentId, 'backward'))
+  const canMoveForward = useEditorStore((state) => selectCanMoveComponent(state, componentId, 'forward'))
   const selectParent = useEditorStore((state) => state.selectParentComponent)
   const duplicate = useEditorStore((state) => state.duplicateComponent)
   const moveBackward = useEditorStore((state) => state.moveBackward)
   const moveForward = useEditorStore((state) => state.moveForward)
   const remove = useEditorStore((state) => state.removeComponent)
   const actions = [
-    ['parent', '↖', t('Select parent'), () => selectParent(componentId), !parent],
-    ['duplicate', '⧉', t('Duplicate'), () => duplicate(componentId), false],
-    ['backward', '↑', t('Backward'), () => moveBackward(componentId), false],
-    ['forward', '↓', t('Forward'), () => moveForward(componentId), false],
-    ['delete', '×', t('Delete component'), () => remove(componentId), false],
+    ['parent', <ParentIcon key="parent-icon" />, t('Select parent'), () => selectParent(componentId), !parent],
+    ['duplicate', <DuplicateIcon key="duplicate-icon" />, t('Duplicate'), () => duplicate(componentId), false],
+    ['backward', <LayerStepIcon key="backward-icon" />, t('Backward'), () => moveBackward(componentId), !canMoveBackward],
+    ['forward', <LayerStepIcon key="forward-icon" forward />, t('Forward'), () => moveForward(componentId), !canMoveForward],
+    ['delete', <span key="delete-icon" aria-hidden="true">×</span>, t('Delete component'), () => remove(componentId), false],
   ]
 
   return (
@@ -42,10 +80,11 @@ export default function CanvasSelectionActions({ componentId, style }) {
         background: '#111827',
         boxShadow: '0 8px 22px rgba(15,23,42,0.3)',
         pointerEvents: 'auto',
+        zoom: 1 / normalizedSelectionActionsScale(canvasScale),
         ...style,
       }}
     >
-      {actions.map(([id, glyph, label, onClick, disabled]) => (
+      {actions.map(([id, icon, label, onClick, disabled]) => (
         <button
           key={id}
           type="button"
@@ -58,11 +97,11 @@ export default function CanvasSelectionActions({ componentId, style }) {
             event.stopPropagation()
             onClick()
           }}
-          className={`grid h-7 w-7 place-items-center rounded-md border-0 p-0 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-30 ${
+          className={`grid h-7 w-7 place-items-center rounded-md border-0 p-0 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-25 ${
             id === 'delete' ? 'bg-[#7f1d1d] hover:bg-[#991b1b]' : 'bg-transparent hover:bg-white/10'
           }`}
         >
-          {glyph}
+          {icon}
         </button>
       ))}
     </div>

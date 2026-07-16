@@ -860,7 +860,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
 
   if (selectedLayoutItems.length > 1) {
     return (
-      <div className="flex h-full flex-col">
+      <div className="studio-properties-panel flex h-full flex-col">
         <div className="border-b border-[#e5e7eb] px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -972,7 +972,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
 
   if (!component) {
     return (
-      <div className="flex h-full flex-col">
+      <div className="studio-properties-panel flex h-full flex-col">
         <div className="border-b border-[#e5e7eb] px-4 py-3">
           <h2 className="text-sm font-semibold text-[#111827]">{t('Page')}</h2>
           <p className="text-xs text-[#6b7280]">
@@ -1250,7 +1250,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   ) : null
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="studio-properties-panel flex h-full flex-col">
       <div className="border-b border-[#e5e7eb] px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

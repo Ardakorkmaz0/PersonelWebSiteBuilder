@@ -230,8 +230,8 @@ function CollapsedRail({ side, label, onOpen }) {
       type="button"
       onClick={onOpen}
       title={`Show ${label}`}
-      className={`relative z-40 flex w-7 shrink-0 flex-col items-center gap-2 bg-white py-3 text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
-        side === 'left' ? 'border-r border-[#e5e7eb]' : 'border-l border-[#e5e7eb]'
+      className={`studio-panel relative z-40 flex w-7 shrink-0 flex-col items-center gap-2 py-3 text-[var(--studio-text-faint)] transition hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)] ${
+        side === 'left' ? 'border-r' : 'border-l'
       }`}
     >
       <span className="text-sm font-bold">{side === 'left' ? '»' : '«'}</span>
@@ -2159,8 +2159,8 @@ export default function EditorPage() {
                 onOpen={() => setRail('right', true)}
                 onClose={() => setRail('right', false)}
               >
-                <div className="flex w-72 max-w-full shrink-0 flex-col border-l border-gray-200 bg-white">
-                  <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
+                <div className="studio-panel flex w-72 max-w-full shrink-0 flex-col border-l">
+                  <div className="flex items-center justify-between border-b border-[var(--studio-border)] px-3 py-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
                       {htmlSelection ? 'Element' : 'Site settings'}
                     </span>
@@ -2526,7 +2526,7 @@ export default function EditorPage() {
                     title={`${currentPage.name || 'Page'} preview`}
                   />
                 ) : (
-                  <div className="min-h-0 flex-1 bg-white">
+                  <div className="studio-panel min-h-0 flex-1">
                     <Suspense fallback={<PanelFallback />}>
                       <CodePanel />
                     </Suspense>
@@ -2542,11 +2542,11 @@ export default function EditorPage() {
                 onClose={() => setRail('right', false)}
               >
               <div
-                className={`flex max-w-full shrink-0 flex-col border-l border-gray-200 bg-white ${
+                className={`studio-panel flex max-w-full shrink-0 flex-col border-l ${
                   rightTab === 'code' ? 'w-[480px]' : 'w-72'
                 }`}
               >
-                <div className="flex shrink-0 items-center border-b border-gray-200 text-sm">
+                <div className="flex shrink-0 items-center border-b border-[var(--studio-border)] text-sm">
                   <button
                     type="button"
                     onClick={() => setRightTab('props')}

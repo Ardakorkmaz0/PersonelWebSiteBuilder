@@ -40,6 +40,52 @@
   --ms-text-2: var(--studio-text-muted);
 }
 
+/* Compatibility bridge for editor controls that still carry literal legacy
+   Tailwind colors. Scoped panels keep authored page previews untouched. */
+:root[data-ui-theme="dark"] .studio-panel .bg-white,
+:root[data-ui-theme="dark"] .studio-properties-panel .bg-white {
+  background-color: var(--studio-panel-raised) !important;
+}
+:root[data-ui-theme="dark"] .studio-panel [class*="bg-[#f9fafb]"],
+:root[data-ui-theme="dark"] .studio-panel [class*="bg-[#fafafa]"],
+:root[data-ui-theme="dark"] .studio-panel [class*="bg-[#f3f4f6]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="bg-[#f3f4f6]"] {
+  background-color: var(--studio-control) !important;
+}
+:root[data-ui-theme="dark"] .studio-panel [class*="bg-[#eef2ff]"],
+:root[data-ui-theme="dark"] .studio-panel [class*="bg-[#f5f5ff]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="bg-[#eef2ff]"] {
+  background-color: var(--studio-accent-soft) !important;
+}
+:root[data-ui-theme="dark"] .studio-panel [class*="border-[#e5e7eb]"],
+:root[data-ui-theme="dark"] .studio-panel [class*="border-[#d1d5db]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="border-[#e5e7eb]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="border-[#d1d5db]"] {
+  border-color: var(--studio-border) !important;
+}
+:root[data-ui-theme="dark"] .studio-panel [class*="text-[#111827]"],
+:root[data-ui-theme="dark"] .studio-panel [class*="text-[#374151]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="text-[#111827]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="text-[#374151]"] {
+  color: var(--studio-text) !important;
+}
+:root[data-ui-theme="dark"] .studio-panel [class*="text-[#4f46e5]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="text-[#4f46e5]"] {
+  color: var(--studio-accent-hover) !important;
+}
+:root[data-ui-theme="dark"] .studio-panel [class*="text-[#6b7280]"],
+:root[data-ui-theme="dark"] .studio-panel [class*="text-[#9ca3af]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="text-[#6b7280]"],
+:root[data-ui-theme="dark"] .studio-properties-panel [class*="text-[#9ca3af]"] {
+  color: var(--studio-text-muted) !important;
+}
+:root[data-ui-theme="dark"] .studio-panel :where(input:not([type="color"]), textarea, select),
+:root[data-ui-theme="dark"] .studio-properties-panel :where(input:not([type="color"]), textarea, select) {
+  border-color: var(--studio-border-strong) !important;
+  background: var(--studio-control) !important;
+  color: var(--studio-text) !important;
+}
+
 :root[data-ui-theme="dark"] {
   --studio-accent: #7868ff;
   --studio-accent-hover: #8b7dff;

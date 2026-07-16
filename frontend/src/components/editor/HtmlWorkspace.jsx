@@ -273,9 +273,32 @@ function updateSelectionResizeChrome(doc, el) {
   overlay.style.top = `${Math.round(rect.top)}px`
   overlay.style.width = `${Math.max(1, Math.round(rect.width))}px`
   overlay.style.height = `${Math.max(1, Math.round(rect.height))}px`
+
+  // Keep the contextual actions inside the visible iframe. Above the element
+  // is the natural position; selections near the top edge flip the bar below.
+  const toolbar = overlay.querySelector('[data-pwb-selection-toolbar]')
+  if (toolbar) {
+    toolbar.style.top = rect.top >= 44 ? '-40px' : `${Math.round(rect.height + 8)}px`
+    const viewportWidth = doc.defaultView?.innerWidth || 0
+    const toolbarWidth = toolbar.getBoundingClientRect().width || 190
+    if (viewportWidth > 0) {
+      const minLeft = 4 - rect.left
+      const maxLeft = viewportWidth - 4 - rect.left - toolbarWidth
+      toolbar.style.left = `${Math.round(Math.max(minLeft, Math.min(0, maxLeft)))}px`
+    }
+  }
 }
 
-function installSelectionResizeChrome(doc, el, onStartResize) {
+// Exported only for the DOM-level chrome test below; HtmlWorkspace remains the
+// sole production owner of the iframe selection UI.
+// eslint-disable-next-line react-refresh/only-export-components
+export function installSelectionResizeChrome(
+  doc,
+  el,
+  onStartResize,
+  onAction,
+  labels = {},
+) {
   removeSelectionResizeChrome(doc)
   if (!doc?.body || !el || !el.isConnected) return
   const overlay = doc.createElement('div')
@@ -317,6 +340,75 @@ function installSelectionResizeChrome(doc, el, onStartResize) {
     }, true)
     overlay.appendChild(part)
   }
+
+  // Wix-style contextual actions: the common operations live next to the
+  // selected element, while the right rail remains the detailed inspector.
+  const toolbar = doc.createElement('div')
+  toolbar.setAttribute('data-pwb-selection-toolbar', '')
+  toolbar.setAttribute('role', 'toolbar')
+  toolbar.setAttribute('aria-label', labels.toolbar || 'Arrange')
+  toolbar.setAttribute(
+    'style',
+    [
+      'position:absolute',
+      'left:0',
+      'top:-40px',
+      'display:flex',
+      'align-items:center',
+      'gap:2px',
+      'min-width:max-content',
+      'padding:4px',
+      'border:1px solid rgba(255,255,255,0.18)',
+      'border-radius:9px',
+      'background:#111827',
+      'box-shadow:0 8px 22px rgba(15,23,42,0.3)',
+      'pointer-events:auto',
+      'font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'white-space:nowrap',
+    ].join(';'),
+  )
+  const actions = [
+    ['parent', '↖', labels.parent || 'Select parent'],
+    ['duplicate', '⧉', labels.duplicate || 'Duplicate'],
+    ['up', '↑', labels.up || 'Move up'],
+    ['down', '↓', labels.down || 'Move down'],
+    ['delete', '×', labels.delete || 'Delete component'],
+  ]
+  for (const [action, glyph, label] of actions) {
+    const button = doc.createElement('button')
+    button.type = 'button'
+    button.setAttribute('data-pwb-selection-action', action)
+    button.setAttribute('aria-label', label)
+    button.setAttribute('title', label)
+    button.textContent = glyph
+    button.setAttribute(
+      'style',
+      [
+        'display:grid',
+        'place-items:center',
+        'width:28px',
+        'height:28px',
+        'padding:0',
+        'border:0',
+        'border-radius:6px',
+        action === 'delete' ? 'background:#7f1d1d' : 'background:transparent',
+        'color:#fff',
+        'font:700 16px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+        'cursor:pointer',
+      ].join(';'),
+    )
+    button.addEventListener('pointerdown', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }, true)
+    button.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      onAction?.(action)
+    }, true)
+    toolbar.appendChild(button)
+  }
+  overlay.appendChild(toolbar)
   doc.body.appendChild(overlay)
   updateSelectionResizeChrome(doc, el)
 }
@@ -542,6 +634,65 @@ function HtmlWorkspace({
     win.addEventListener('pointermove', onMove)
     win.addEventListener('pointerup', onUp)
   }, [onElementSelect])
+
+  function selectionChromeLabels() {
+    return {
+      toolbar: t('Arrange'),
+      parent: t('Select parent'),
+      duplicate: t('Duplicate'),
+      up: t('Move up'),
+      down: t('Move down'),
+      delete: t('Delete component'),
+    }
+  }
+
+  function installSelectedElementChrome(doc, el) {
+    installSelectionResizeChrome(
+      doc,
+      el,
+      startSelectedElementResize,
+      handleSelectionChromeAction,
+      selectionChromeLabels(),
+    )
+  }
+
+  // Common element actions live directly on the selection outline. This is
+  // deliberately the same mutation path as the right panel, so undo/save and
+  // the inspector snapshot stay in sync regardless of where the action began.
+  function handleSelectionChromeAction(action) {
+    const doc = iframeRef.current?.contentDocument
+    const el = selectedRef.current
+    if (!doc?.body || !el?.isConnected) return
+    let next = el
+    let changed = false
+
+    if (action === 'parent') {
+      next = selectableParent(el)
+      if (!next) return
+    } else if (action === 'duplicate') {
+      next = duplicateElement(el)
+      if (!next) return
+      changed = true
+      flashNode(doc, next)
+    } else if (action === 'up' || action === 'down') {
+      if (!moveElement(el, action)) return
+      changed = true
+      try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
+    } else if (action === 'delete') {
+      el.remove()
+      next = null
+      changed = true
+    } else {
+      return
+    }
+
+    selectedRef.current = next
+    setSelectedElement(doc, next)
+    if (next) installSelectedElementChrome(doc, next)
+    else removeSelectionResizeChrome(doc)
+    if (changed) onCommitRef.current?.(serializeDocument(doc))
+    onElementSelect?.(next ? describeElement(next) : null)
+  }
   // Topmost visible body-child index reported by the view iframe (it has an
   // opaque origin, so it tells us via postMessage). null = unknown.
   const viewAnchorRef = useRef(null)
@@ -725,7 +876,7 @@ function HtmlWorkspace({
     const next = result === null ? null : result || el
     selectedRef.current = next
     setSelectedElement(doc, next)
-    if (next) installSelectionResizeChrome(doc, next, startSelectedElementResize)
+    if (next) installSelectedElementChrome(doc, next)
     else removeSelectionResizeChrome(doc)
     onCommit?.(serializeDocument(doc))
     // Editing an href via the panel can add/change a connector — keep the
@@ -782,6 +933,7 @@ function HtmlWorkspace({
       if (!parent) return
       selectedRef.current = parent
       setSelectedElement(doc, parent)
+      installSelectedElementChrome(doc, parent)
       try { parent.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
       onElementSelect?.(describeElement(parent))
     },
@@ -1165,7 +1317,7 @@ function HtmlWorkspace({
       }
       selectedRef.current = el
       setSelectedElement(doc, el)
-      if (el) installSelectionResizeChrome(doc, el, startSelectedElementResize)
+      if (el) installSelectedElementChrome(doc, el)
       else removeSelectionResizeChrome(doc)
       onElementSelect?.(el ? describeElement(el) : null)
     })

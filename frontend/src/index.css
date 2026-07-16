@@ -5,16 +5,61 @@
    their own styles; these tokens style only the builder itself.
    (Class names keep the legacy ms- prefix so existing call sites work.) */
 :root {
-  --ms-accent: #4f46e5;
-  --ms-accent-hover: #4338ca;
-  --ms-accent-active: #3730a3;
-  --ms-accent-light: #eef2ff;
-  --ms-bg: #f3f4f6;
-  --ms-surface: #ffffff;
-  --ms-border: #e5e7eb;
-  --ms-border-strong: #d1d5db;
-  --ms-text: #111827;
-  --ms-text-2: #6b7280;
+  --studio-accent: #6d5dfb;
+  --studio-accent-hover: #7c6dfc;
+  --studio-accent-pressed: #5b4ae8;
+  --studio-accent-soft: #eeecff;
+  --studio-shell: #eef0f4;
+  --studio-panel: #ffffff;
+  --studio-panel-raised: #ffffff;
+  --studio-control: #f7f8fa;
+  --studio-control-hover: #f0f1f4;
+  --studio-border: #e2e4e9;
+  --studio-border-strong: #cfd3da;
+  --studio-text: #17191f;
+  --studio-text-muted: #707684;
+  --studio-text-faint: #9ba1ad;
+  --studio-danger: #d94452;
+  --studio-success: #25875a;
+  --studio-warning: #b56a0b;
+  --studio-shadow: 0 10px 30px rgba(20, 24, 33, 0.08);
+  --studio-shadow-menu: 0 18px 48px rgba(20, 24, 33, 0.16);
+  --studio-radius-sm: 6px;
+  --studio-radius: 8px;
+  --studio-radius-lg: 12px;
+
+  --ms-accent: var(--studio-accent);
+  --ms-accent-hover: var(--studio-accent-hover);
+  --ms-accent-active: var(--studio-accent-pressed);
+  --ms-accent-light: var(--studio-accent-soft);
+  --ms-bg: var(--studio-shell);
+  --ms-surface: var(--studio-panel);
+  --ms-border: var(--studio-border);
+  --ms-border-strong: var(--studio-border-strong);
+  --ms-text: var(--studio-text);
+  --ms-text-2: var(--studio-text-muted);
+}
+
+:root[data-ui-theme="dark"] {
+  --studio-accent: #7868ff;
+  --studio-accent-hover: #8b7dff;
+  --studio-accent-pressed: #6656ec;
+  --studio-accent-soft: #292443;
+  --studio-shell: #111318;
+  --studio-panel: #181b22;
+  --studio-panel-raised: #1e222b;
+  --studio-control: #21252e;
+  --studio-control-hover: #282d37;
+  --studio-border: #2c313c;
+  --studio-border-strong: #3a414e;
+  --studio-text: #f3f4f6;
+  --studio-text-muted: #a0a6b3;
+  --studio-text-faint: #747b89;
+  --studio-danger: #ef6570;
+  --studio-success: #5cc994;
+  --studio-warning: #e8a44a;
+  --studio-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+  --studio-shadow-menu: 0 22px 60px rgba(0, 0, 0, 0.48);
 }
 
 html,
@@ -29,8 +74,17 @@ body {
     "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: var(--ms-text);
-  background: #f7f8fa;
+  color: var(--studio-text);
+  background: var(--studio-shell);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--studio-accent) 38%, transparent);
+}
+
+* {
+  scrollbar-color: var(--studio-border-strong) transparent;
 }
 
 @layer components {

@@ -8,6 +8,7 @@ import ExplorePage from './pages/ExplorePage.jsx'
 import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import LanguageProvider from './i18n/LanguageProvider.jsx'
 import { useLanguage } from './i18n/useLanguage.js'
+import UiThemeProvider from './ui/UiThemeProvider.jsx'
 
 // The editor and the public preview are the heaviest screens — together they
 // pull in the entire renderer, all eight AI templates, the schema validators,
@@ -37,10 +38,11 @@ function FullScreenLoading() {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <BrowserRouter>
-        <Suspense fallback={<FullScreenLoading />}>
-          <Routes>
+    <UiThemeProvider>
+      <LanguageProvider>
+        <BrowserRouter>
+          <Suspense fallback={<FullScreenLoading />}>
+            <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -105,9 +107,10 @@ export default function App() {
           <Route path="/review/:token" element={<ReviewPage />} />
           <Route path="/u/:id" element={<PublicProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </LanguageProvider>
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </LanguageProvider>
+    </UiThemeProvider>
   )
 }

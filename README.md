@@ -1,4 +1,20 @@
-# PersonelWebSiteBuilder
+
+<!-- Use align="left" on the image to prevent table borders -->
+<img src="frontend/public/sitebuilder-logo.png" alt="Screenshot Description" width="200" align="left">
+
+<!-- Use <h3> (###) instead of <h1> (#) to avoid GitHub's default bottom border -->
+<br>
+<br>
+
+### WebSiteBuilder
+
+<!-- Short description right next to the logo -->
+
+<!-- Clear the alignment so the rest of your README continues normally below -->
+<br clear="left"/>
+
+<!-- Add a line break to clear the alignment for subsequent content -->
+<br clear="left"/>
 
 A personal website builder with two editing paths:
 
@@ -11,6 +27,19 @@ A personal website builder with two editing paths:
 Imported HTML sites can be viewed, lightly edited in-place, tested against common
 desktop/tablet/phone viewport presets, saved as drafts, and published to a public
 URL.
+
+## Screenshoots
+<img width="1280" height="800" alt="image" src="https://github.com/user-attachments/assets/7d379441-66ec-4ddb-a7b2-c6e399e8469c" />
+<br>
+<img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/ba3bcbee-cc5a-4c7a-bbde-0bdfb24f21c3" />
+<br>
+<img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/a2ad7319-2998-4768-9e88-67388c702a27" />
+<br>
+<img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/8950f80a-4de9-442c-9ae6-d3b42b2b1033" />
+
+
+
+
 
 ## Tech stack
 

@@ -14,13 +14,21 @@ import {
   CheckIcon,
   EyeIcon,
   FileIcon,
+  GithubIcon,
   GlobeIcon,
+  InstagramIcon,
+  LinkIcon,
+  MapPinIcon,
   PlusIcon,
   SearchIcon,
   StarIcon,
   TrashIcon,
+  XSocialIcon,
 } from '../components/icons.jsx'
+import { profileLinks } from '../utils/profileLinks.js'
 import { useLanguage } from '../i18n/useLanguage.js'
+
+const LINK_ICONS = { website: LinkIcon, github: GithubIcon, twitter: XSocialIcon, instagram: InstagramIcon }
 
 export default function ProfilePage() {
   const { t } = useLanguage()
@@ -30,6 +38,9 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(null)
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
+  // Modern-profile meta — a single object keeps the six optional fields tidy.
+  const [meta, setMeta] = useState({ headline: '', location: '', website: '', github: '', twitter: '', instagram: '' })
+  const setMetaField = (key) => (event) => setMeta((m) => ({ ...m, [key]: event.target.value }))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -49,6 +60,14 @@ export default function ProfilePage() {
         setProfile(result)
         setDisplayName(result.display_name || '')
         setBio(result.bio || '')
+        setMeta({
+          headline: result.headline || '',
+          location: result.location || '',
+          website: result.website || '',
+          github: result.github || '',
+          twitter: result.twitter || '',
+          instagram: result.instagram || '',
+        })
       })
       .catch((requestError) => setError(apiError(requestError)))
       .finally(() => setLoading(false))
@@ -82,7 +101,7 @@ export default function ProfilePage() {
     setError('')
     setSaved(false)
     try {
-      const result = await updateProfile({ display_name: displayName, bio })
+      const result = await updateProfile({ display_name: displayName, bio, ...meta })
       setProfile(result)
       await refreshHeader()
       setSaved(true)
@@ -198,10 +217,34 @@ export default function ProfilePage() {
                 </div>
                 <div className="min-w-0">
                   <h2 id="profile-name" className="truncate text-2xl font-bold tracking-tight text-[var(--studio-text)]">{profileName}</h2>
-                  <p className="mt-0.5 text-sm font-medium text-[var(--studio-text-muted)]">@{profileUser.username}</p>
+                  <p className="mt-0.5 text-sm font-medium text-[var(--studio-text-muted)]">
+                    @{profileUser.username}
+                    {profile?.headline && <span className="text-[var(--studio-text)]"> · {profile.headline}</span>}
+                  </p>
                   <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--studio-text-muted)]">
                     {profile?.bio || t('Add a short bio so visitors know who is behind your sites.')}
                   </p>
+                  {(profile?.location || profileLinks(profile).length > 0) && (
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-[var(--studio-text-muted)]">
+                      {profile?.location && (
+                        <span className="flex items-center gap-1"><MapPinIcon size={13} /> {profile.location}</span>
+                      )}
+                      {profileLinks(profile).map(({ id, label, href }) => {
+                        const ChipIcon = LINK_ICONS[id] || LinkIcon
+                        return (
+                          <a
+                            key={id}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex max-w-44 items-center gap-1 hover:text-[var(--studio-accent-hover)]"
+                          >
+                            <ChipIcon size={13} /> <span className="truncate">{label}</span>
+                          </a>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -242,6 +285,16 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-[var(--studio-text-muted)]">{t('Headline')}</label>
+                  <input
+                    className="studio-input w-full px-3 py-2 text-sm"
+                    placeholder={t('e.g. Product designer')}
+                    value={meta.headline}
+                    maxLength={80}
+                    onChange={setMetaField('headline')}
+                  />
+                </div>
+                <div>
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <label className="text-xs font-semibold text-[var(--studio-text-muted)]">{t('Bio')}</label>
                     <span className="text-[10px] text-[var(--studio-text-faint)]">{bio.length}/300</span>
@@ -253,6 +306,51 @@ export default function ProfilePage() {
                     value={bio}
                     onChange={(event) => setBio(event.target.value)}
                   />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-[var(--studio-text-muted)]">{t('Location')}</label>
+                    <input
+                      className="studio-input w-full px-3 py-2 text-sm"
+                      placeholder={t('e.g. Istanbul')}
+                      value={meta.location}
+                      maxLength={80}
+                      onChange={setMetaField('location')}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-[var(--studio-text-muted)]">{t('Website')}</label>
+                    <input
+                      className="studio-input w-full px-3 py-2 text-sm"
+                      placeholder="yoursite.com"
+                      value={meta.website}
+                      maxLength={200}
+                      onChange={setMetaField('website')}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold text-[var(--studio-text-muted)]">{t('Social links')}</p>
+                  <p className="mb-2 text-[11px] leading-4 text-[var(--studio-text-faint)]">{t('A handle (@you) or a full link — both work.')}</p>
+                  <div className="space-y-2">
+                    {[
+                      ['github', GithubIcon, 'GitHub'],
+                      ['twitter', XSocialIcon, 'X (Twitter)'],
+                      ['instagram', InstagramIcon, 'Instagram'],
+                    ].map(([key, SocialIcon, label]) => (
+                      <div key={key} className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--studio-text-faint)]"><SocialIcon size={14} /></span>
+                        <input
+                          className="studio-input w-full py-2 pl-9 pr-3 text-sm"
+                          placeholder={label}
+                          aria-label={label}
+                          value={meta[key]}
+                          maxLength={100}
+                          onChange={setMetaField(key)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 pt-1">
                   <button type="submit" disabled={saving} className="studio-btn studio-btn-primary min-h-9 px-4">

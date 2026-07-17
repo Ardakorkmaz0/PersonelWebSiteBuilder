@@ -8,7 +8,11 @@ import { useGoBack } from '../utils/useGoBack.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import { GithubIcon, InstagramIcon, LinkIcon, MapPinIcon, XSocialIcon } from '../components/icons.jsx'
+import { profileLinks } from '../utils/profileLinks.js'
 import { useLanguage } from '../i18n/useLanguage.js'
+
+const LINK_ICONS = { website: LinkIcon, github: GithubIcon, twitter: XSocialIcon, instagram: InstagramIcon }
 
 function BigAvatar({ url, name }) {
   const letter = (name || '?').trim().charAt(0).toUpperCase()
@@ -99,8 +103,32 @@ export default function PublicProfilePage() {
               <BigAvatar url={data.avatar_url} name={data.display_name} />
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-[#111827]">{data.display_name}</h1>
-                <div className="text-sm text-[#9ca3af]">@{data.username}</div>
+                <div className="text-sm text-[#9ca3af]">
+                  @{data.username}
+                  {data.headline && <span className="font-medium text-[#374151]"> · {data.headline}</span>}
+                </div>
                 {data.bio && <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#374151]">{data.bio}</p>}
+                {(data.location || profileLinks(data).length > 0) && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-[#6b7280]">
+                    {data.location && (
+                      <span className="flex items-center gap-1"><MapPinIcon size={13} /> {data.location}</span>
+                    )}
+                    {profileLinks(data).map(({ id, label, href }) => {
+                      const ChipIcon = LINK_ICONS[id] || LinkIcon
+                      return (
+                        <a
+                          key={id}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex max-w-44 items-center gap-1 hover:text-[#4f46e5]"
+                        >
+                          <ChipIcon size={13} /> <span className="truncate">{label}</span>
+                        </a>
+                      )
+                    })}
+                  </div>
+                )}
                 <div className="mt-2 text-xs text-[#9ca3af]">
                   {t(data.sites.length === 1 ? '{count} published site' : '{count} published sites', { count: data.sites.length })}
                   {data.date_joined && <> · {new Date(data.date_joined).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US')}</>}

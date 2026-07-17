@@ -920,6 +920,12 @@ class PublicProfileView(APIView):
             'display_name': prof.get('display_name') or user.username,
             'avatar_url': prof.get('avatar_url'),
             'bio': prof.get('bio') or '',
+            'headline': prof.get('headline') or '',
+            'location': prof.get('location') or '',
+            'website': prof.get('website') or '',
+            'github': prof.get('github') or '',
+            'twitter': prof.get('twitter') or '',
+            'instagram': prof.get('instagram') or '',
             'date_joined': user.date_joined,
             'sites': ExploreSiteSerializer(sites, many=True, context=ctx).data,
         })

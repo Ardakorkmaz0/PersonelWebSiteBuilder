@@ -90,3 +90,49 @@ class TestProfile:
 
     def test_profile_requires_auth(self, client):
         assert client.get('/api/profile/').status_code in (401, 403)
+
+
+@pytest.mark.django_db
+class TestProfileMeta:
+    """The modern-profile meta fields: headline/location + outbound links."""
+
+    def test_meta_fields_round_trip(self, client, alice):
+        _, token = alice
+        _auth(client, token)
+        resp = client.patch('/api/profile/', {
+            'headline': 'Product designer',
+            'location': 'Istanbul',
+            'website': 'https://arda.dev',
+            'github': 'ardakorkmaz',
+            'twitter': '@arda',
+            'instagram': 'https://instagram.com/arda',
+        }, format='json')
+        assert resp.status_code == 200
+        assert resp.data['headline'] == 'Product designer'
+        assert resp.data['location'] == 'Istanbul'
+        assert resp.data['website'] == 'https://arda.dev'
+        assert resp.data['github'] == 'ardakorkmaz'
+        assert resp.data['twitter'] == '@arda'
+        assert resp.data['instagram'] == 'https://instagram.com/arda'
+
+    def test_dangerous_link_schemes_rejected(self, client, alice):
+        _, token = alice
+        _auth(client, token)
+        for field in ('website', 'github', 'twitter', 'instagram'):
+            resp = client.patch('/api/profile/', {field: 'javascript:alert(1)'}, format='json')
+            assert resp.status_code == 400, field
+            resp = client.patch('/api/profile/', {field: 'ftp://x.example'}, format='json')
+            assert resp.status_code == 400, field
+
+    def test_public_profile_exposes_meta(self, client, alice):
+        user, token = alice
+        _auth(client, token)
+        client.patch('/api/profile/', {
+            'headline': 'Maker', 'location': 'Ankara', 'website': 'https://x.dev',
+        }, format='json')
+        client.credentials()  # anonymous visitor
+        resp = client.get(f'/api/public/profiles/{user.id}/')
+        assert resp.status_code == 200
+        assert resp.data['headline'] == 'Maker'
+        assert resp.data['location'] == 'Ankara'
+        assert resp.data['website'] == 'https://x.dev'

@@ -317,3 +317,39 @@ export const ClockIcon = (p) => (
     <path d="M12 7v5l3 2" />
   </Icon>
 )
+
+export const MapPinIcon = (p) => (
+  <Icon {...p}>
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+    <circle cx="12" cy="10" r="3" />
+  </Icon>
+)
+
+export const BriefcaseIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="7" width="18" height="13" rx="2" />
+    <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    <path d="M3 12h18" />
+  </Icon>
+)
+
+// Brand marks are filled shapes (a stroked outline reads mushy at 14px).
+export const GithubIcon = (p) => (
+  <Icon {...p} fill="currentColor">
+    <path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.56 9.56 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .26.18.58.69.48A10 10 0 0 0 22 12 10 10 0 0 0 12 2Z" />
+  </Icon>
+)
+
+export const XSocialIcon = (p) => (
+  <Icon {...p} fill="currentColor">
+    <path d="M17.9 3H21l-6.83 7.8L22.2 21h-6.3l-4.93-6.45L5.34 21H2.25l7.3-8.35L2 3h6.46l4.46 5.9L17.9 3Zm-1.1 16.1h1.7L7.62 4.8H5.8L16.8 19.1Z" />
+  </Icon>
+)
+
+export const InstagramIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" stroke="none" />
+  </Icon>
+)

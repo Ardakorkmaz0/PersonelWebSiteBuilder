@@ -407,6 +407,15 @@ class Profile(models.Model):
     avatar = models.ImageField(upload_to=_avatar_upload_path, blank=True, null=True)
     display_name = models.CharField(max_length=80, blank=True, default='')
     bio = models.CharField(max_length=300, blank=True, default='')
+    # Modern-profile meta: one-line headline ("Product designer"), where the
+    # creator is based, and outbound links. The social fields accept either a
+    # bare handle or a full URL — the frontend composes the canonical link.
+    headline = models.CharField(max_length=80, blank=True, default='')
+    location = models.CharField(max_length=80, blank=True, default='')
+    website = models.CharField(max_length=200, blank=True, default='')
+    github = models.CharField(max_length=100, blank=True, default='')
+    twitter = models.CharField(max_length=100, blank=True, default='')
+    instagram = models.CharField(max_length=100, blank=True, default='')
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

@@ -218,12 +218,41 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ('username', 'avatar', 'avatar_url', 'display_name', 'bio', 'updated_at')
+        fields = (
+            'username', 'avatar', 'avatar_url', 'display_name', 'bio',
+            'headline', 'location', 'website', 'github', 'twitter', 'instagram',
+            'updated_at',
+        )
         read_only_fields = ('username', 'avatar_url', 'updated_at')
         extra_kwargs = {'avatar': {'write_only': True, 'required': False}}
 
     def get_avatar_url(self, obj):
         return _absolute_image_url(obj.avatar, self.context)
+
+    @staticmethod
+    def _clean_link(value):
+        """Links/handles render as clickable hrefs on public pages — reject
+        any embedded scheme other than http(s) so a stored value can never
+        smuggle javascript: into an anchor."""
+        cleaned = (value or '').strip()
+        lowered = cleaned.lower()
+        if '://' in cleaned and not lowered.startswith(('http://', 'https://')):
+            raise serializers.ValidationError('Links must use http:// or https://.')
+        if lowered.startswith(('javascript:', 'data:', 'vbscript:')):
+            raise serializers.ValidationError('Links must use http:// or https://.')
+        return cleaned
+
+    def validate_website(self, value):
+        return self._clean_link(value)
+
+    def validate_github(self, value):
+        return self._clean_link(value)
+
+    def validate_twitter(self, value):
+        return self._clean_link(value)
+
+    def validate_instagram(self, value):
+        return self._clean_link(value)
 
     def validate_avatar(self, file):
         if file.size > MAX_IMAGE_BYTES:

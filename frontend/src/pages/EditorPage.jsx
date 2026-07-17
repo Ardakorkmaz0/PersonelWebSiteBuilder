@@ -968,6 +968,9 @@ export default function EditorPage() {
   // frame overshoots the real block to the right/bottom. Right after the drop,
   // measure the snippet's true rendered size and snap the box onto it —
   // addBlock selects the new component, so selectedId is the fresh embed.
+  // Always measured/applied at the PC design width: fitEmbedBox re-bases the
+  // box + _baseSize there and auto-mode mobile re-derives from it, so a drop
+  // made in the Mobile viewport never flips the page into manual-mobile mode.
   function autoFitDroppedEmbed() {
     window.setTimeout(async () => {
       const state = useEditorStore.getState()
@@ -975,13 +978,13 @@ export default function EditorPage() {
       const page = selectCurrentPage(state)
       const comp = (page.components || []).find((c) => c.id === componentId)
       if (!comp || comp.type !== 'html') return
-      const activeLayout =
-        (state.viewport === 'mobile' ? comp.mobileLayout || comp.layout : comp.layout) || {}
-      await fitHtmlEmbedLayout(comp, Math.round(activeLayout.w || 360), (patch) => {
+      await fitHtmlEmbedLayout(comp, Math.round(comp.layout?.w || 360), (patch) => {
         // Re-check the component still exists (fast undo / delete during measure).
         const fresh = selectCurrentPage(useEditorStore.getState()).components || []
         if (fresh.some((c) => c.id === componentId)) {
-          useEditorStore.getState().setLayout(componentId, patch)
+          // record:false — the fit shares the drop's undo step, so one Undo
+          // removes the block instead of first restoring the guessed size.
+          useEditorStore.getState().fitEmbedBox(componentId, patch, { record: false })
         }
       })
     }, 30)

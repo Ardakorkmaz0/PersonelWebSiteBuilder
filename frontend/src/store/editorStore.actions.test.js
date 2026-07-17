@@ -611,3 +611,46 @@ describe('per-breakpoint styles (stylesMobile)', () => {
     s().setViewport('pc')
   })
 })
+
+describe('fitEmbedBox', () => {
+  const addEmbed = () => {
+    s().addBlock(
+      [{
+        type: 'html', x: 10, y: 0, w: 560, h: 150,
+        props: { code: '<div>x</div>', _baseSize: { w: 560, h: 150 } },
+      }],
+      20,
+    )
+    return selectCurrentPage(useEditorStore.getState()).components.at(-1)
+  }
+
+  it('snaps the PC box, re-bases _baseSize and keeps mobile in auto mode', () => {
+    freshTwoPageSchema()
+    const emb = addEmbed()
+    s().fitEmbedBox(emb.id, { w: 436, h: 146 })
+    const page = selectCurrentPage(useEditorStore.getState())
+    const comp = page.components.find((c) => c.id === emb.id)
+    expect(comp.layout.w).toBe(436)
+    expect(comp.layout.h).toBe(146)
+    // Re-based so the embed renders unscaled inside the fitted box.
+    expect(comp.props._baseSize).toEqual({ w: 436, h: 146 })
+    // A content measurement is not a manual mobile edit.
+    expect(page.mobileManual).toBeFalsy()
+    // Auto mobile followed the new PC box.
+    expect(comp.mobileLayout.h).toBeGreaterThan(0)
+  })
+
+  it('record:false shares the drop undo step; default records its own', () => {
+    freshTwoPageSchema()
+    const emb = addEmbed()
+    s().fitEmbedBox(emb.id, { w: 436, h: 146 }, { record: false })
+    s().undo() // one undo removes the block entirely (fit left no extra step)
+    expect(selectCurrentPage(useEditorStore.getState()).components).toHaveLength(0)
+    const emb2 = addEmbed()
+    s().fitEmbedBox(emb2.id, { w: 300, h: 90 })
+    s().undo() // fit recorded → first undo restores the dropped size
+    const comp = selectCurrentPage(useEditorStore.getState()).components.at(-1)
+    expect(comp.layout.w).toBe(560)
+    expect(comp.props._baseSize).toEqual({ w: 560, h: 150 })
+  })
+})

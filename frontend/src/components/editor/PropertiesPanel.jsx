@@ -767,6 +767,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const applyComponentPreset = useEditorStore((s) => s.applyComponentPreset)
   const setLayout = useEditorStore((s) => s.setLayout)
   const setLayoutMany = useEditorStore((s) => s.setLayoutMany)
+  const fitEmbedBox = useEditorStore((s) => s.fitEmbedBox)
   const alignSelection = useEditorStore((s) => s.alignSelection)
   const distributeSelection = useEditorStore((s) => s.distributeSelection)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -1400,12 +1401,12 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               onPreset={presetSingleSize}
             />
           )}
-          {component.type === 'html' && (
+          {component.type === 'html' && viewport !== 'mobile' && (
             <button
               type="button"
               onClick={() =>
-                fitHtmlEmbedLayout(component, Math.round(layout.w || 360), (patch) =>
-                  setLayout(component.id, patch),
+                fitHtmlEmbedLayout(component, Math.round(component.layout?.w || 360), (patch) =>
+                  fitEmbedBox(component.id, patch),
                 )
               }
               title={t('Measure the block and snap the box to its real size')}

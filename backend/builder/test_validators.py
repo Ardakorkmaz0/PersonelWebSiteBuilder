@@ -210,6 +210,44 @@ class TestValidateAndCleanSchema:
         # the parser doesn't see a script-end inside our wrapper.
         assert '</script' not in code.lower()
 
+    def test_html_embed_palette_metadata_round_trips(self):
+        """_paletteType/_paletteVariant/_baseSize drive the client's fill-mode
+        and content scaling; dropping them makes reloaded embeds re-scale
+        against the palette default. Slugs and clamped numbers survive, junk
+        does not."""
+        clean = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [
+                    {
+                        'id': 'h1', 'type': 'html',
+                        'props': {
+                            'code': '<div>x</div>',
+                            '_paletteType': 'container',
+                            '_paletteVariant': 'bootstrap-1',
+                            '_baseSize': {'w': 436.4, 'h': 146},
+                        },
+                        'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 436, 'h': 146},
+                    },
+                    {
+                        'id': 'h2', 'type': 'html',
+                        'props': {
+                            'code': '<div>y</div>',
+                            '_paletteType': '<img onerror=alert(1)>',
+                            '_baseSize': {'w': 'NaN', 'h': -5},
+                        },
+                        'styles': {}, 'layout': {'x': 0, 'y': 200, 'w': 200, 'h': 100},
+                    },
+                ],
+            }],
+        })
+        good, bad = clean['pages'][0]['components']
+        assert good['props']['_paletteType'] == 'container'
+        assert good['props']['_paletteVariant'] == 'bootstrap-1'
+        assert good['props']['_baseSize'] == {'w': 436, 'h': 146}
+        assert '_paletteType' not in bad['props']
+        assert '_baseSize' not in bad['props']
+
     def test_styles_mobile_preserved_and_sanitized(self):
         clean = validate_and_clean_schema({
             'pages': [{

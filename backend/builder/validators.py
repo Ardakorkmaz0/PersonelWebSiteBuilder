@@ -25,6 +25,7 @@ MAX_HTML_EMBED = 50 * 1024
 PARENT_TYPES = {'container', 'tabs', 'region'}
 MAX_TABS = 12
 TAB_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
+PALETTE_SLUG_RE = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
 
 MAX_NESTING_DEPTH = 4
 MAX_CHILDREN = 60
@@ -247,7 +248,22 @@ def sanitize_props(ctype, props):
         # Only literal `</script` is escaped — the embed runs inside its own
         # sandboxed iframe at render time, which is what enforces isolation.
         code = re.sub(r'</\s*script', '<\\/script', code, flags=re.IGNORECASE)
-        return {'code': code}
+        out = {'code': code}
+        # Palette metadata drives the client's fill-mode and content scaling
+        # (componentBoxScale); without it a reloaded embed re-scales against
+        # the palette default and the box no longer hugs the content. Slugs
+        # and clamped numbers only — never rendered as markup.
+        for key in ('_paletteType', '_paletteVariant'):
+            val = props.get(key)
+            if isinstance(val, str) and PALETTE_SLUG_RE.match(val):
+                out[key] = val
+        base = props.get('_baseSize')
+        if isinstance(base, dict):
+            w = _num(base.get('w'), 0, 0, 4000)
+            h = _num(base.get('h'), 0, 0, 5000)
+            if w >= 8 and h >= 8:
+                out['_baseSize'] = {'w': w, 'h': h}
+        return out
     if ctype == 'tabs':
         raw_tabs = props.get('tabs')
         tabs = []

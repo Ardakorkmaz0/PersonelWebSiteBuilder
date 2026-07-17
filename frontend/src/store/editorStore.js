@@ -1915,6 +1915,30 @@ export const useEditorStore = create((set, get) => ({
     })
   },
 
+  // Snap an html embed's box onto its measured content size. Unlike setLayout
+  // this is a content measurement, not a manual layout opinion: it always
+  // targets the PC design box (auto-mode mobile re-derives from it through
+  // withComponents) and never flips the page into manual-mobile mode. It also
+  // re-bases _baseSize to the fitted size so the embed renders at scale 1
+  // inside the new box — otherwise componentBoxScale would keep scaling the
+  // content against the palette's old guess and the frame would gap again.
+  // `record: false` lets the post-drop auto-fit share the drop's undo step.
+  fitEmbedBox: (id, size, { record = true } = {}) => {
+    const page0 = selectCurrentPage(get())
+    const topLevel = isTopLevel(page0.components, id)
+    if (record) get().record('fit-' + id)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      const maxX = topLevel && !page.flowMode ? page.canvasWidth || CANVAS_WIDTH : undefined
+      const components = mapTree(page.components, id, (c) => ({
+        ...c,
+        layout: clampLayout({ x: 0, y: 0, ...(c.layout || {}), ...size }, { maxX }),
+        props: { ...c.props, _baseSize: { w: size.w, h: size.h } },
+      }))
+      return { schema: withComponents(state.schema, page.id, components), dirty: true }
+    })
+  },
+
   // Page background, per breakpoint.
   setPageBackground: (color) => {
     const key = get().viewport === 'mobile' ? 'backgroundMobile' : 'background'

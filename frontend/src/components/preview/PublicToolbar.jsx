@@ -5,7 +5,13 @@ import { useAuthStore } from '../../store/authStore.js'
 import { apiError } from '../../utils/errors.js'
 import { useGoBack } from '../../utils/useGoBack.js'
 import { schemaToSingleHtml } from '../../utils/schemaToFiles.js'
-import { CodeIcon, SparklesIcon, FlagIcon } from '../icons.jsx'
+import {
+  ArrowLeftIcon,
+  CodeIcon,
+  FlagIcon,
+  MoreHorizontalIcon,
+  SparklesIcon,
+} from '../icons.jsx'
 import LanguageSwitcher from '../LanguageSwitcher.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
@@ -46,7 +52,7 @@ function CreatorAvatar({ url, name }) {
 
 // Floating toolbar on a public site page: view the code, or "Use this" to clone
 // the site into your own account and edit it.
-export default function PublicToolbar({ site }) {
+export default function PublicToolbar({ site, pages = [], activePageId, onNavigate }) {
   const { t } = useLanguage()
   const [showCode, setShowCode] = useState(false)
   const [cloning, setCloning] = useState(false)
@@ -57,6 +63,7 @@ export default function PublicToolbar({ site }) {
   const [reporting, setReporting] = useState(false)
   const [reported, setReported] = useState(false)
   const [reportError, setReportError] = useState('')
+  const [moreOpen, setMoreOpen] = useState(false)
   const navigate = useNavigate()
   const goBack = useGoBack('/')
   const token = useAuthStore((s) => s.token)
@@ -100,64 +107,107 @@ export default function PublicToolbar({ site }) {
   }
 
   const code = showCode ? sourceOf(site) : ''
+  const ownerName = site?.owner_display_name || site?.owner_username || ''
 
   return (
     <>
-      <div className="fixed left-3 top-3 z-[130] flex flex-wrap items-center gap-2">
-        {/* Home logo + a real Back button (goes to the page you came from). */}
-        <Link
-          to="/"
-          title={t('Sitebuilder home')}
-          className="brand-mark shadow-lg"
-          style={{ width: '2rem', height: '2rem', fontSize: '0.85rem' }}
-        >
-          S
-        </Link>
-        <button
-          type="button"
-          onClick={goBack}
-          title={t('Go back')}
-          className="flex items-center gap-1 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
-        >
-          &larr; {t('Back')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowCode(true)}
-          title={t("View this site's source code")}
-          className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
-        >
-          <CodeIcon size={14} /> {t('Code')}
-        </button>
-        <button
-          type="button"
-          onClick={onUse}
-          disabled={cloning}
-          title={t('Copy this site into your account and edit it')}
-          className="flex items-center gap-1.5 rounded-lg bg-[#4f46e5] px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-[#4338ca] disabled:opacity-60"
-        >
-          <SparklesIcon size={14} /> {cloning ? t('Copying…') : t('Use this')}
-        </button>
-        <button
-          type="button"
-          onClick={onOpenReport}
-          title={t('Report this site')}
-          className="flex items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#b91c1c] shadow-lg backdrop-blur hover:bg-white"
-        >
-          <FlagIcon size={14} /> {t('Report')}
-        </button>
-        <LanguageSwitcher />
-        {/* Who made this site — their profile photo, linking to their public
-            profile (so a visitor can see the creator's other published sites). */}
-        {site?.owner_id && (
-          <Link
-            to={`/u/${site.owner_id}`}
-            title={t('By {name} — see their profile', { name: site.owner_display_name || site.owner_username })}
-            className="flex items-center gap-1.5 rounded-full border border-[#d1d5db] bg-white/90 py-1 pl-1 pr-3 text-xs font-semibold text-[#374151] shadow-lg backdrop-blur hover:bg-white"
-          >
-            <CreatorAvatar url={site.owner_avatar_url} name={site.owner_display_name || site.owner_username} />
-            <span className="max-w-[120px] truncate">{site.owner_display_name || site.owner_username}</span>
-          </Link>
+      <div className="studio-theme-surface">
+        <header className="preview-topbar">
+          <div className="preview-topbar-inner">
+            <div className="preview-topbar-leading">
+              <Link
+                to="/"
+                title={t('Sitebuilder home')}
+                className="brand-mark"
+                style={{ width: '2.15rem', height: '2.15rem' }}
+              >
+                S
+              </Link>
+              <button type="button" onClick={goBack} title={t('Go back')} className="preview-toolbar-icon-btn">
+                <ArrowLeftIcon size={16} />
+                <span className="sr-only">{t('Back')}</span>
+              </button>
+              <div className="preview-site-meta">
+                <strong title={site?.title} className="preview-site-title">{site?.title || t('Preview')}</strong>
+                {site?.owner_id && ownerName && (
+                  <Link to={`/u/${site.owner_id}`} className="preview-owner-link">
+                    <CreatorAvatar url={site.owner_avatar_url} name={ownerName} />
+                    <span className="truncate">{ownerName}</span>
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            <nav aria-label={t('Site pages')} className="preview-page-nav">
+              {pages.map((page) => (
+                <button
+                  key={page.id}
+                  type="button"
+                  onClick={() => onNavigate?.(page.id)}
+                  aria-current={page.id === activePageId ? 'page' : undefined}
+                  className={page.id === activePageId ? 'preview-page-tab preview-page-tab-active' : 'preview-page-tab'}
+                >
+                  {page.name}
+                </button>
+              ))}
+            </nav>
+
+            <div className="preview-topbar-actions">
+              <button
+                type="button"
+                onClick={() => setShowCode(true)}
+                title={t("View this site's source code")}
+                className="preview-toolbar-btn hidden sm:inline-flex"
+              >
+                <CodeIcon size={15} /> <span className="hidden lg:inline">{t('Code')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={onUse}
+                disabled={cloning}
+                title={t('Copy this site into your account and edit it')}
+                className="preview-toolbar-primary"
+              >
+                <SparklesIcon size={15} />
+                <span className="hidden sm:inline">{cloning ? t('Copying…') : t('Use this')}</span>
+              </button>
+              <div className="hidden xl:block"><LanguageSwitcher /></div>
+              <button
+                type="button"
+                onClick={() => setMoreOpen((open) => !open)}
+                aria-label={t('More actions')}
+                aria-expanded={moreOpen}
+                className="preview-toolbar-icon-btn"
+              >
+                <MoreHorizontalIcon size={17} />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {moreOpen && (
+          <>
+            <button type="button" aria-label={t('Close menu')} className="fixed inset-0 z-[131] cursor-default" onClick={() => setMoreOpen(false)} />
+            <div role="menu" className="preview-actions-menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setMoreOpen(false); onOpenReport() }}
+                className="preview-menu-item text-[var(--studio-danger)]"
+              >
+                <FlagIcon size={15} /> {t('Report this site')}
+              </button>
+              {site?.owner_id && ownerName && (
+                <Link to={`/u/${site.owner_id}`} role="menuitem" className="preview-menu-item" onClick={() => setMoreOpen(false)}>
+                  <CreatorAvatar url={site.owner_avatar_url} name={ownerName} />
+                  <span className="truncate">{t('By {name} — see their profile', { name: ownerName })}</span>
+                </Link>
+              )}
+              <div className="border-t border-[var(--studio-border)] px-2.5 py-2 xl:hidden">
+                <LanguageSwitcher />
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -204,7 +254,7 @@ export default function PublicToolbar({ site }) {
 
       {showReport && (
         <div
-          className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4"
+          className="studio-theme-surface fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setShowReport(false)}
         >
           <div

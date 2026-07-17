@@ -66,7 +66,7 @@ export default function NotesPanel({ open, onClose }) {
 
   return (
     <div
-      className="fixed right-4 top-16 z-[120] flex max-h-[78vh] w-[340px] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
+      className="studio-theme-surface fixed right-4 top-16 z-[120] flex max-h-[78vh] w-[340px] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between border-b border-[#e5e7eb] px-3 py-2">

@@ -83,6 +83,34 @@ export const ArrowLeftIcon = (p) => (
   </Icon>
 )
 
+export const ArrowRightIcon = (p) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+    <path d="m13 6 6 6-6 6" />
+  </Icon>
+)
+
+export const ChevronDownIcon = (p) => (
+  <Icon {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+)
+
+export const UserIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Icon>
+)
+
+export const LogOutIcon = (p) => (
+  <Icon {...p}>
+    <path d="M10 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h5" />
+    <path d="m15 16 4-4-4-4" />
+    <path d="M19 12H9" />
+  </Icon>
+)
+
 export const UndoIcon = (p) => (
   <Icon {...p}>
     <path d="M9 8 4 12l5 4" />

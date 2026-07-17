@@ -23,6 +23,16 @@ describe('site workflow tools', () => {
     expect(updateHtmlContent(html, entries[0], 'Welcome')).toContain('Welcome')
   })
 
+  it('keeps line breaks when HTML content is edited from the control center', () => {
+    const schema = { pages: [{ id: 'home', name: 'Home', mode: 'html' }] }
+    const html = '<html><body><p>First</p></body></html>'
+    const entry = extractSiteContent(schema, { home: html })[0]
+    const next = updateHtmlContent(html, entry, 'First\nSecond')
+
+    expect(next).toContain('<p>First<br>Second</p>')
+    expect(extractSiteContent(schema, { home: next })[0].value).toBe('First\nSecond')
+  })
+
   it('updates component copy without changing the original schema', () => {
     const schema = { pages: [{ id: 'home', name: 'Home', components: [{ type: 'text', props: { text: 'Old' } }] }] }
     const entry = extractSiteContent(schema)[0]

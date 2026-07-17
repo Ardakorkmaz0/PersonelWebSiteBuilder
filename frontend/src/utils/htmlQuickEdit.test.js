@@ -25,6 +25,15 @@ describe('htmlQuickEdit', () => {
     expect(next).toContain('href="#contact"')
   })
 
+  it('persists and reloads textarea newlines as br elements', () => {
+    const html = '<section><p>First</p></section>'
+    const paragraph = listHtmlContentFields(html).texts[0]
+    const next = updateHtmlTextAtPath(html, paragraph.path, 'First\nSecond <safe>')
+
+    expect(next).toContain('<p>First<br>Second &lt;safe&gt;</p>')
+    expect(listHtmlContentFields(next).texts[0].text).toBe('First\nSecond <safe>')
+  })
+
   it('updates href without changing link text', () => {
     const html = '<section><a href="#old">Open</a></section>'
     const link = listHtmlContentFields(html).links[0]

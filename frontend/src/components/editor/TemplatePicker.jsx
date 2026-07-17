@@ -103,7 +103,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-2 sm:p-4" onClick={onClose}>
+    <div className="studio-theme-surface fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-2 sm:p-4" onClick={onClose}>
       <section
         role="dialog"
         aria-modal="true"
@@ -178,7 +178,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
                 {entries.map(({ category, template }) => {
                   const favorite = favorites.includes(template.id)
                   return (
-                    <article key={template.id} className="group flex flex-col overflow-hidden rounded-lg border border-[#e5e7eb] transition hover:border-[#4f46e5] hover:shadow-lg">
+                    <article key={template.id} className="group flex flex-col overflow-hidden rounded-lg border border-[#e5e7eb] bg-white transition hover:border-[#4f46e5] hover:shadow-lg">
                       <div className="relative">
                         <Thumb html={localizedHtml(template)} />
                         <button type="button" onClick={() => toggleFavorite(template.id)} aria-label={t(favorite ? 'Remove from favorites' : 'Add to favorites')} aria-pressed={favorite} className={`absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white/95 shadow ${favorite ? 'text-[#f59e0b]' : 'text-[#6b7280]'}`}><StarIcon size={16} filled={favorite} /></button>

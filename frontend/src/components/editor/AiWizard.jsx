@@ -155,7 +155,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
     step !== 1 || answers.brand.trim() || answers.description.trim()
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-3 sm:p-6">
+    <div className="studio-theme-surface fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-3 sm:p-6">
       <div className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-center gap-3 border-b border-[#e5e7eb] px-5 py-3">

@@ -1,3 +1,5 @@
+import { readElementMultilineText, writeElementMultilineText } from './domMultilineText.js'
+
 const HTML_SELECTOR = 'h1,h2,h3,p,a,button,img'
 const COMPONENT_FIELDS = ['text', 'title', 'subtitle', 'label', 'description', 'alt', 'src']
 
@@ -33,7 +35,7 @@ export function extractSiteContent(schema = {}, pageHtmlMap = {}) {
       ;[...(doc?.querySelectorAll(HTML_SELECTOR) || [])].forEach((node, index) => {
         const isImage = node.tagName === 'IMG'
         const field = isImage ? 'alt' : 'text'
-        const value = isImage ? node.getAttribute('alt') || '' : node.textContent || ''
+        const value = isImage ? node.getAttribute('alt') || '' : readElementMultilineText(node)
         if (!value.trim() && !isImage) return
         result.push({
           id: `html:${page.id}:${index}:${field}`,
@@ -54,7 +56,7 @@ export function updateHtmlContent(html, entry, value) {
   const node = doc?.querySelectorAll(HTML_SELECTOR)?.[entry.index]
   if (!doc || !node) return html
   if (entry.field === 'alt') node.setAttribute('alt', value)
-  else node.textContent = value
+  else writeElementMultilineText(node, value)
   return '<!doctype html>\n' + doc.documentElement.outerHTML
 }
 

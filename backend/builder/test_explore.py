@@ -63,6 +63,20 @@ class TestExplore:
         titles = [s['title'] for s in resp.data['results']]
         assert titles == ['Shop One']
 
+    def test_searches_site_title_and_creator_name(self, client, alice, bob):
+        a, _ = alice
+        b, _ = bob
+        a.profile.display_name = 'Ada Studio'
+        a.profile.save(update_fields=['display_name'])
+        _site(a, 'Quiet Portfolio')
+        _site(b, 'Coffee Journal')
+
+        title_results = client.get('/api/explore/?search=coffee').data['results']
+        creator_results = client.get('/api/explore/?search=ada').data['results']
+
+        assert [site['title'] for site in title_results] == ['Coffee Journal']
+        assert [site['title'] for site in creator_results] == ['Quiet Portfolio']
+
     def test_paginated(self, client, alice):
         a, _ = alice
         for i in range(30):

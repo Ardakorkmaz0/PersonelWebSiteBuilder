@@ -142,7 +142,7 @@ export default function SiteControlCenter({
   }
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/50 p-0 md:p-5" onClick={onClose}>
+    <div className="studio-theme-surface fixed inset-0 z-[150] flex items-center justify-center bg-black/50 p-0 md:p-5" onClick={onClose}>
       <section role="dialog" aria-modal="true" aria-label={t('Site control center')} className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden bg-[#f8fafc] shadow-2xl md:h-[90vh] md:rounded-3xl" onClick={(event) => event.stopPropagation()}>
         <header className="flex items-center gap-3 border-b border-[#e5e7eb] bg-white px-4 py-3 md:px-6">
           <div className="min-w-0 flex-1">

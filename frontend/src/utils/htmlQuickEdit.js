@@ -1,3 +1,5 @@
+import { readElementMultilineText, writeElementMultilineText } from './domMultilineText.js'
+
 const TEXT_SKIP_TAGS = new Set([
   'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'IMG', 'INPUT',
   'TEXTAREA', 'SELECT', 'IFRAME', 'VIDEO', 'AUDIO', 'CANVAS', 'SVG',
@@ -59,13 +61,13 @@ function elementAtPath(root, path) {
 
 function isTextEditableElement(el) {
   if (!el || TEXT_SKIP_TAGS.has(el.tagName)) return false
-  if (!normalizeText(el.textContent)) return false
+  if (!normalizeText(readElementMultilineText(el))) return false
   return [...el.children].every((child) => INLINE_TEXT_TAGS.has(child.tagName))
 }
 
 function elementLabel(el) {
   const tag = el.tagName.toLowerCase()
-  const text = normalizeText(el.textContent).slice(0, 42)
+  const text = normalizeText(readElementMultilineText(el)).slice(0, 42)
   if (tag === 'a') return text ? `Link text: ${text}` : 'Link text'
   if (/^h[1-6]$/.test(tag)) return `Heading: ${text || tag}`
   if (tag === 'button') return text ? `Button: ${text}` : 'Button'
@@ -90,11 +92,11 @@ export function listHtmlContentFields(code, { maxText = 36, maxLinks = 24 } = {}
     const texts = textElements.slice(0, maxText).map((el) => ({
       path: pathForElement(el, parsed.root),
       label: elementLabel(el),
-      text: el.textContent || '',
+      text: readElementMultilineText(el),
     }))
     const links = linkElements.slice(0, maxLinks).map((el) => ({
       path: pathForElement(el, parsed.root),
-      label: normalizeText(el.textContent).slice(0, 42) || 'Link',
+      label: normalizeText(readElementMultilineText(el)).slice(0, 42) || 'Link',
       href: el.getAttribute('href') || '',
     }))
     return {
@@ -112,7 +114,7 @@ export function updateHtmlTextAtPath(code, path, text) {
   const parsed = parseEditableHtml(code)
   const el = elementAtPath(parsed.root, path)
   if (!el || !isTextEditableElement(el)) return String(code || '')
-  el.textContent = text
+  writeElementMultilineText(el, text)
   return serializeEditableHtml(parsed)
 }
 

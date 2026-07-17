@@ -574,11 +574,11 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       role="dialog"
       aria-modal="true"
       aria-label={t('AI Assistant')}
-      className="fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
+      className="studio-theme-surface fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-gradient-to-r from-[#4f46e5] to-[#2563eb] px-3 py-2 text-white">
+      <div data-theme-inverted className="flex items-center gap-2 border-b border-[#e5e7eb] bg-gradient-to-r from-[#4f46e5] to-[#2563eb] px-3 py-2 text-white">
         <span className="text-xs font-bold uppercase tracking-wide opacity-90">AI</span>
         <span
           className="truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px]"

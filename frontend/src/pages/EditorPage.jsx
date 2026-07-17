@@ -87,6 +87,7 @@ import { useUiTheme } from '../ui/useUiTheme.js'
 import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
 import MobileEditorPreview from '../components/editor/MobileEditorPreview.jsx'
 import SiteControlCenter from '../components/editor/SiteControlCenter.jsx'
+import DefaultViewportSelect from '../components/editor/DefaultViewportSelect.jsx'
 
 // The three panels below all sit behind a toggle / file-mode switch and most
 // editor sessions never open them. Lazy-loading them keeps the initial
@@ -554,8 +555,9 @@ export default function EditorPage() {
     try { localStorage.setItem(HTML_DEVICE_KEYS[deviceViewport], deviceId) } catch { /* ignore */ }
   }
   const chooseDefaultViewport = (nextViewport) => {
-    setDefaultViewport(nextViewport)
-    try { localStorage.setItem(DEFAULT_VIEWPORT_KEY, nextViewport) } catch { /* ignore */ }
+    const normalized = nextViewport === 'mobile' ? 'mobile' : 'pc'
+    setDefaultViewport(normalized)
+    try { localStorage.setItem(DEFAULT_VIEWPORT_KEY, normalized) } catch { /* ignore */ }
   }
   // Linked local .html file (File System Access API): every Save also writes
   // the document back to this file. { handle, name } or null. Persisted in
@@ -2167,20 +2169,7 @@ export default function EditorPage() {
                           </option>
                         ))}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => chooseDefaultViewport(isMobileDevice(htmlDevice) ? 'mobile' : 'pc')}
-                        title={t('Make this the default editor screen')}
-                        aria-label={t('Make this the default editor screen')}
-                        className={`studio-icon-btn shrink-0 ${
-                          defaultViewport === (isMobileDevice(htmlDevice) ? 'mobile' : 'pc')
-                            ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
-                            : ''
-                        }`}
-                      >
-                        {defaultViewport === (isMobileDevice(htmlDevice) ? 'mobile' : 'pc') ? '★' : '☆'}
-                        <span className="sr-only">{t('Default')}</span>
-                      </button>
+                      <DefaultViewportSelect value={defaultViewport} onChange={chooseDefaultViewport} />
                     </>
                   }
                   fileName={
@@ -2407,20 +2396,7 @@ export default function EditorPage() {
                       ↔
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => chooseDefaultViewport(viewport)}
-                    title={t('Make this the default editor screen')}
-                    aria-label={t('Make this the default editor screen')}
-                    className={`studio-icon-btn shrink-0 ${
-                      defaultViewport === viewport
-                        ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
-                        : ''
-                    }`}
-                  >
-                    {defaultViewport === viewport ? '★' : '☆'}
-                    <span className="sr-only">{t('Default')}</span>
-                  </button>
+                  <DefaultViewportSelect value={defaultViewport} onChange={chooseDefaultViewport} />
                   {canvasMode === 'legacy' && (
                     <button
                       type="button"

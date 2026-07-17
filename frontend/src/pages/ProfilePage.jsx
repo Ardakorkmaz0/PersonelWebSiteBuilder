@@ -7,16 +7,25 @@ import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
-import { useGoBack } from '../utils/useGoBack.js'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
-import { SearchIcon, CheckIcon, EyeIcon, StarIcon, GlobeIcon, FileIcon } from '../components/icons.jsx'
-import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
+import DashboardHeader, { DashboardAvatar } from '../components/dashboard/DashboardHeader.jsx'
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  EyeIcon,
+  FileIcon,
+  GlobeIcon,
+  PlusIcon,
+  SearchIcon,
+  StarIcon,
+  TrashIcon,
+} from '../components/icons.jsx'
 import { useLanguage } from '../i18n/useLanguage.js'
 
 export default function ProfilePage() {
   const { t } = useLanguage()
-  const goBack = useGoBack('/')
-  const setUser = useAuthStore((s) => s.setUser)
+  const user = useAuthStore((state) => state.user)
+  const setUser = useAuthStore((state) => state.setUser)
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
   const [displayName, setDisplayName] = useState('')
@@ -28,7 +37,6 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false)
   const fileRef = useRef(null)
 
-  // My sites
   const [sites, setSites] = useState([])
   const [sitesLoading, setSitesLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -37,84 +45,81 @@ export default function ProfilePage() {
 
   useEffect(() => {
     getProfile()
-      .then((p) => {
-        setProfile(p)
-        setDisplayName(p.display_name || '')
-        setBio(p.bio || '')
+      .then((result) => {
+        setProfile(result)
+        setDisplayName(result.display_name || '')
+        setBio(result.bio || '')
       })
-      .catch((e) => setError(apiError(e)))
+      .catch((requestError) => setError(apiError(requestError)))
       .finally(() => setLoading(false))
     listSites()
       .then(setSites)
-      .catch((e) => setError(apiError(e)))
+      .catch((requestError) => setError(apiError(requestError)))
       .finally(() => setSitesLoading(false))
   }, [])
 
   const visibleSites = useMemo(() => orderSites(sites, query), [sites, query])
-
-  // Aggregate stats across ALL my sites (not just the filtered view).
   const stats = useMemo(() => ({
     total: sites.length,
-    published: sites.filter((s) => s.published).length,
-    views: sites.reduce((n, s) => n + (s.view_count || 0), 0),
-    favorites: sites.reduce((n, s) => n + (s.favorite_count || 0), 0),
+    published: sites.filter((site) => site.published).length,
+    views: sites.reduce((total, site) => total + (site.view_count || 0), 0),
+    favorites: sites.reduce((total, site) => total + (site.favorite_count || 0), 0),
   }), [sites])
 
-  // Land back where you left off after opening a site and returning.
   useScrollRestore(!loading && !sitesLoading)
 
   async function refreshHeader() {
     try {
       setUser(await fetchMe())
     } catch {
-      /* non-fatal */
+      // Updating the profile succeeded; a header refresh failure is non-fatal.
     }
   }
 
-  async function onSave(e) {
-    e.preventDefault()
+  async function onSave(event) {
+    event.preventDefault()
     setSaving(true)
     setError('')
     setSaved(false)
     try {
-      const p = await updateProfile({ display_name: displayName, bio })
-      setProfile(p)
+      const result = await updateProfile({ display_name: displayName, bio })
+      setProfile(result)
       await refreshHeader()
       setSaved(true)
-      setTimeout(() => setSaved(false), 1500)
-    } catch (e) {
-      setError(apiError(e))
+      setTimeout(() => setSaved(false), 1800)
+    } catch (requestError) {
+      setError(apiError(requestError))
     } finally {
       setSaving(false)
     }
   }
 
-  async function onAvatar(e) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  async function onAvatar(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
     if (!file) return
     setUploading(true)
     setError('')
     try {
-      const p = await uploadAvatar(file)
-      setProfile(p)
+      const result = await uploadAvatar(file)
+      setProfile(result)
       await refreshHeader()
-    } catch (e) {
-      setError(apiError(e))
+    } catch (requestError) {
+      setError(apiError(requestError))
     } finally {
       setUploading(false)
     }
   }
 
-  async function onCreate(e) {
-    e.preventDefault()
+  async function onCreate(event) {
+    event.preventDefault()
     if (!newTitle.trim()) return
     setCreating(true)
     try {
       const site = await createSite(newTitle.trim())
       navigate(`/editor/${site.id}`)
-    } catch (e) {
-      setError(apiError(e))
+    } catch (requestError) {
+      setError(apiError(requestError))
       setCreating(false)
     }
   }
@@ -123,207 +128,230 @@ export default function ProfilePage() {
     if (!window.confirm(t('Delete this site? This cannot be undone.'))) return
     try {
       await deleteSite(id)
-      setSites((prev) => prev.filter((s) => s.id !== id))
-    } catch (e) {
-      setError(apiError(e))
+      setSites((previous) => previous.filter((site) => site.id !== id))
+    } catch (requestError) {
+      setError(apiError(requestError))
     }
   }
 
-  const letter = (displayName || profile?.username || '?').trim().charAt(0).toUpperCase()
+  const profileUser = {
+    ...user,
+    avatar_url: profile?.avatar_url || user?.avatar_url,
+    display_name: profile?.display_name || user?.display_name,
+    username: profile?.username || user?.username,
+  }
+  const profileName = profileUser.display_name || profileUser.username || t('Creator')
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
-      <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-2.5">
-            <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
-            <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
-              &larr; {t('Back')}
-            </button>
-          </div>
-          <LanguageSwitcher />
-        </div>
-      </header>
+    <div className="dashboard-page">
+      <DashboardHeader current="projects" />
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="mb-6 text-2xl font-bold tracking-tight text-[#111827]">{t('Profile')}</h1>
+      <main className="mx-auto max-w-[1280px] px-3 py-6 sm:px-6 sm:py-9">
+        <div className="mb-6">
+          <p className="dashboard-kicker">{t('Workspace')}</p>
+          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)] sm:text-3xl">{t('Profile and projects')}</h1>
+              <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Manage your public identity and every site in one place.')}</p>
+            </div>
+            {user?.id && (
+              <Link to={`/u/${user.id}`} className="studio-btn studio-btn-secondary min-h-9 px-3">
+                <GlobeIcon size={15} /> {t('View public profile')}
+              </Link>
+            )}
+          </div>
+        </div>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
         {loading ? (
-          <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
+          <div className="dashboard-section-card mb-6 animate-pulse p-6">
+            <div className="h-20 w-20 rounded-full bg-[var(--studio-control)]" />
+            <div className="mt-4 h-5 w-48 rounded bg-[var(--studio-control)]" />
+          </div>
         ) : (
-          <form onSubmit={onSave} className="ms-card space-y-6 p-6">
-            <div className="flex items-center gap-5">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="h-20 w-20 rounded-full object-cover ring-2 ring-[#eef2ff]" />
-              ) : (
-                <span className="grid h-20 w-20 place-items-center rounded-full bg-[#eef2ff] text-3xl font-semibold text-[#4f46e5]">
-                  {letter}
-                </span>
-              )}
-              <div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml"
-                  onChange={onAvatar}
-                  className="hidden"
-                />
-                <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="ms-btn px-4">
-                  {uploading ? t('Uploading…') : profile?.avatar_url ? t('Change photo') : t('Upload photo')}
-                </button>
-                <p className="mt-1.5 text-xs text-[#9ca3af]">{t('PNG, JPG, GIF, WEBP, AVIF or SVG. Max 5 MB.')}</p>
+          <section className="dashboard-welcome mb-6 p-5 sm:p-7" aria-labelledby="profile-name">
+            <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="relative w-fit">
+                  <DashboardAvatar user={profileUser} size={86} />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml"
+                    onChange={onAvatar}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    title={profile?.avatar_url ? t('Change photo') : t('Upload photo')}
+                    className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text)] shadow-md hover:bg-[var(--studio-control-hover)]"
+                  >
+                    {uploading ? <span className="text-xs">…</span> : <PlusIcon size={15} />}
+                  </button>
+                </div>
+                <div className="min-w-0">
+                  <h2 id="profile-name" className="truncate text-2xl font-bold tracking-tight text-[var(--studio-text)]">{profileName}</h2>
+                  <p className="mt-0.5 text-sm font-medium text-[var(--studio-text-muted)]">@{profileUser.username}</p>
+                  <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--studio-text-muted)]">
+                    {profile?.bio || t('Add a short bio so visitors know who is behind your sites.')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[28rem]">
+                {[
+                  ['Sites', stats.total, FileIcon],
+                  ['Published', stats.published, GlobeIcon],
+                  ['Total views', stats.views, EyeIcon],
+                  ['Favorites', stats.favorites, StarIcon],
+                ].map(([label, value, StatIcon]) => (
+                  <div key={label} className="rounded-xl border border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_76%,transparent)] p-3">
+                    <StatIcon size={15} className="text-[var(--studio-accent-hover)]" />
+                    <div className="mt-2 text-lg font-bold text-[var(--studio-text)]">{Number(value).toLocaleString()}</div>
+                    <div className="truncate text-[11px] font-medium text-[var(--studio-text-muted)]">{t(label)}</div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#374151]">{t('Display name')}</label>
-              <input
-                className="ms-input w-full"
-                placeholder={profile?.username}
-                value={displayName}
-                maxLength={80}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-[#9ca3af]">{t('Shown in the header and on your sites. Defaults to your username.')}</p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#374151]">{t('Bio')}</label>
-              <textarea
-                className="ms-input w-full resize-none"
-                rows={3}
-                maxLength={300}
-                placeholder={t('A line or two about you…')}
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-              />
-              <p className="mt-1 text-right text-xs text-[#9ca3af]">{bio.length}/300</p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button type="submit" disabled={saving} className="ms-btn ms-btn-primary px-5">
-                {saving ? t('Saving…') : t('Save profile')}
-              </button>
-              {saved && <span className="flex items-center gap-1 text-sm text-[#15803d]"><CheckIcon size={15} /> {t('Saved')}</span>}
-            </div>
-          </form>
+          </section>
         )}
 
-        {/* My sites — including drafts (these are private; only published ones
-            show on Explore). */}
-        <section className="mt-12">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-bold tracking-tight text-[#111827]">{t('My sites')}</h2>
-            <form onSubmit={onCreate} className="flex gap-2">
-              <input
-                className="ms-input w-44"
-                placeholder={t('New site title')}
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-              />
-              <button type="submit" disabled={creating || !newTitle.trim()} className="ms-btn ms-btn-primary whitespace-nowrap px-4">
-                {creating ? '…' : t('+ Create')}
-              </button>
-            </form>
-          </div>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.55fr)]">
+          <section className="dashboard-section-card p-5 sm:p-6" aria-labelledby="profile-details-heading">
+            <p className="dashboard-kicker">{t('Account')}</p>
+            <h2 id="profile-details-heading" className="mt-1 text-lg font-bold text-[var(--studio-text)]">{t('Profile details')}</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">{t('Update the name and bio shown across Sitebuilder.')}</p>
 
-          {/* Aggregate stats across all my sites. */}
-          {sites.length > 0 && (
-            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                ['Sites', stats.total, <FileIcon key="f" size={16} />, '#4f46e5'],
-                ['Published', stats.published, <GlobeIcon key="g" size={16} />, '#15803d'],
-                ['Total views', stats.views, <EyeIcon key="e" size={16} />, '#0ea5e9'],
-                ['Favorites', stats.favorites, <StarIcon key="s" size={16} filled />, '#f59e0b'],
-              ].map(([label, value, icon, color]) => (
-                <div key={label} className="ms-card flex items-center gap-3 p-4">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg" style={{ background: `${color}1a`, color }}>
-                    {icon}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-lg font-bold leading-tight text-[#111827]">{value.toLocaleString()}</div>
-                    <div className="truncate text-xs text-[#6b7280]">{t(label)}</div>
-                  </div>
+            {!loading && (
+              <form onSubmit={onSave} className="mt-5 space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-[var(--studio-text-muted)]">{t('Display name')}</label>
+                  <input
+                    className="studio-input w-full px-3 py-2 text-sm"
+                    placeholder={profile?.username}
+                    value={displayName}
+                    maxLength={80}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                  />
                 </div>
-              ))}
-            </div>
-          )}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label className="text-xs font-semibold text-[var(--studio-text-muted)]">{t('Bio')}</label>
+                    <span className="text-[10px] text-[var(--studio-text-faint)]">{bio.length}/300</span>
+                  </div>
+                  <textarea
+                    className="studio-input min-h-28 w-full resize-y px-3 py-2 text-sm"
+                    maxLength={300}
+                    placeholder={t('A line or two about you…')}
+                    value={bio}
+                    onChange={(event) => setBio(event.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button type="submit" disabled={saving} className="studio-btn studio-btn-primary min-h-9 px-4">
+                    {saving ? t('Saving…') : t('Save profile')}
+                  </button>
+                  {saved && <span className="flex items-center gap-1 text-xs font-semibold text-[var(--studio-success)]"><CheckIcon size={14} /> {t('Saved')}</span>}
+                </div>
+              </form>
+            )}
+          </section>
 
-          {sites.length > 0 && (
-            <div className="relative mb-5 max-w-sm">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]"><SearchIcon size={16} /></span>
-              <input
-                className="ms-input w-full pl-9"
-                placeholder={t('Search your sites…')}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+          <section id="projects" className="dashboard-section-card min-w-0 p-5 sm:p-6" aria-labelledby="projects-heading">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="dashboard-kicker">{t('Project library')}</p>
+                <h2 id="projects-heading" className="mt-1 text-lg font-bold text-[var(--studio-text)]">{t('My sites')}</h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">{t('Create, search, and manage every site you own.')}</p>
+              </div>
+              <form onSubmit={onCreate} className="flex min-w-0 gap-2">
+                <input
+                  className="studio-input min-w-0 flex-1 px-3 py-2 text-sm sm:w-44"
+                  placeholder={t('New site title')}
+                  value={newTitle}
+                  onChange={(event) => setNewTitle(event.target.value)}
+                />
+                <button type="submit" disabled={creating || !newTitle.trim()} className="studio-btn studio-btn-primary shrink-0 px-3">
+                  <PlusIcon size={15} /> <span className="hidden sm:inline">{creating ? t('Creating…') : t('Create')}</span>
+                </button>
+              </form>
             </div>
-          )}
 
-          {sitesLoading ? (
-            <p className="text-sm text-[#6b7280]">{t('Loading…')}</p>
-          ) : sites.length === 0 ? (
-            <div className="ms-card border-dashed py-14 text-center">
-              <p className="font-medium text-[#374151]">{t('No sites yet')}</p>
-              <p className="mt-1 text-sm text-[#6b7280]">{t('Create your first site above.')}</p>
-            </div>
-          ) : visibleSites.length === 0 ? (
-            <p className="text-sm text-[#6b7280]">{t('No sites match “{query}”.', { query })}</p>
-          ) : (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleSites.map((site) => (
-                <div key={site.id} className="ms-card group flex flex-col overflow-hidden p-0 transition hover:-translate-y-0.5 hover:shadow-md">
-                  <Link to={`/editor/${site.id}`} className="block">
-                    <SitePreview site={site} source="owner" height={140} />
-                  </Link>
-                  <div className="flex flex-1 flex-col p-4">
-                    <div className="mb-3 flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="truncate font-semibold text-[#111827]">{site.title}</h3>
-                        <p className="mt-0.5 truncate text-xs text-[#9ca3af]">/site/{site.slug}</p>
+            {sites.length > 0 && (
+              <div className="relative mt-5 max-w-sm">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--studio-text-faint)]"><SearchIcon size={15} /></span>
+                <input
+                  className="studio-input w-full py-2 pl-9 pr-3 text-sm"
+                  placeholder={t('Search your sites…')}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </div>
+            )}
+
+            {sitesLoading ? (
+              <p className="mt-6 text-sm text-[var(--studio-text-muted)]">{t('Loading…')}</p>
+            ) : sites.length === 0 ? (
+              <div className="mt-6 rounded-xl border border-dashed border-[var(--studio-border)] py-12 text-center">
+                <p className="font-medium text-[var(--studio-text)]">{t('No sites yet')}</p>
+                <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Create your first site above.')}</p>
+              </div>
+            ) : visibleSites.length === 0 ? (
+              <p className="mt-6 text-sm text-[var(--studio-text-muted)]">{t('No sites match “{query}”.', { query })}</p>
+            ) : (
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                {visibleSites.map((site) => (
+                  <article key={site.id} className="group overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] transition hover:-translate-y-0.5 hover:shadow-[var(--studio-shadow)]">
+                    <Link to={`/editor/${site.id}`} className="block bg-[var(--studio-control)] p-2">
+                      <SitePreview site={site} source="owner" height={145} />
+                    </Link>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold text-[var(--studio-text)]">{site.title}</h3>
+                          <p className="mt-0.5 truncate text-[11px] text-[var(--studio-text-faint)]">/site/{site.slug}</p>
+                        </div>
+                        <span className={`dashboard-status ${site.published ? 'dashboard-status-live' : ''}`}>
+                          {site.published ? t('Published') : t('Draft')}
+                        </span>
                       </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          site.published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
-                        }`}
-                      >
-                        {site.published ? t('Published') : t('Draft')}
-                      </span>
-                    </div>
-                    <div className="mb-3 flex items-center gap-4 text-xs text-[#9ca3af]">
-                      <span title={t('Views')} className="flex items-center gap-1"><EyeIcon size={13} /> {(site.view_count || 0).toLocaleString()}</span>
-                      <span title={t('Favorites')} className="flex items-center gap-1"><StarIcon size={13} /> {(site.favorite_count || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="mt-auto flex items-center gap-3 text-sm">
-                      <Link to={`/editor/${site.id}`} className="ms-btn ms-btn-primary">
-                        {t('Open editor')}
-                      </Link>
-                      {site.published && (
-                        <Link to={`/site/${site.slug}`} className="font-medium text-[#4f46e5] hover:underline">
-                          {t('View')}
+                      <div className="mt-3 flex items-center gap-4 text-[11px] text-[var(--studio-text-faint)]">
+                        <span className="flex items-center gap-1"><EyeIcon size={13} /> {(site.view_count || 0).toLocaleString()}</span>
+                        <span className="flex items-center gap-1"><StarIcon size={13} /> {(site.favorite_count || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <Link to={`/editor/${site.id}`} className="studio-btn studio-btn-accent min-h-8 px-3">
+                          {t('Continue editing')} <ArrowRightIcon size={14} />
                         </Link>
-                      )}
-                      <button
-                        onClick={() => onDelete(site.id)}
-                        className="ml-auto rounded-lg px-2 py-1 text-[#9ca3af] transition hover:bg-red-50 hover:text-red-600"
-                        title={t('Delete site')}
-                      >
-                        {t('Delete')}
-                      </button>
+                        {site.published && (
+                          <Link to={`/site/${site.slug}`} title={t('View live site')} className="studio-icon-btn">
+                            <GlobeIcon size={15} />
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onDelete(site.id)}
+                          className="studio-icon-btn ml-auto hover:text-[var(--studio-danger)]"
+                          title={t('Delete site')}
+                          aria-label={`${t('Delete site')}: ${site.title}`}
+                        >
+                          <TrashIcon size={15} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </main>
     </div>
   )

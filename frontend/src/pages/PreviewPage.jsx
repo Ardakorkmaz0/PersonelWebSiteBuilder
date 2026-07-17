@@ -438,25 +438,7 @@ export default function PreviewPage() {
     }
     return (
       <>
-        <PublicToolbar site={site} />
-        {pages.length > 1 && (
-          <nav className="fixed inset-x-0 top-0 z-[110] flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/85 px-3 py-2 backdrop-blur">
-            {pages.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => go(p.id)}
-                className={`rounded-lg px-3 py-1 text-sm font-medium ${
-                  p.id === current.id
-                    ? 'bg-[#4f46e5] text-white'
-                    : 'text-[#374151] hover:bg-[#f3f4f6]'
-                }`}
-              >
-                {p.name}
-              </button>
-            ))}
-          </nav>
-        )}
+        <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
         <iframe
           key={current.id}
           title={site.title || 'site'}
@@ -466,11 +448,13 @@ export default function PreviewPage() {
           allowFullScreen
           style={{
             position: 'fixed',
-            inset: 0,
+            top: '64px',
+            right: 0,
+            bottom: 0,
+            left: 0,
             width: '100%',
-            height: '100%',
+            height: 'calc(100% - 64px)',
             border: 'none',
-            paddingTop: pages.length > 1 ? 44 : 0,
             boxSizing: 'border-box',
           }}
         />
@@ -520,23 +504,7 @@ ${customCssBlock(site?.schema?.customCss)}`
     }
     return (
       <>
-        <PublicToolbar site={site} />
-        {pages.length > 1 && (
-          <nav className="fixed inset-x-0 top-0 z-[110] flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/80 px-3 py-2 backdrop-blur">
-            {pages.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => go(p.id)}
-                className={`rounded-full px-3 py-1 text-sm transition ${
-                  p.id === current.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {p.name}
-              </button>
-            ))}
-          </nav>
-        )}
+        <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
         <iframe
           key={`${current.id}-${staticMode ? 'static' : 'live'}`}
           title={site.title || current.name || 'site'}
@@ -551,13 +519,16 @@ ${customCssBlock(site?.schema?.customCss)}`
           allowFullScreen
           style={{
             position: 'fixed',
-            inset: pages.length > 1 ? '44px 0 0 0' : 0,
+            top: '64px',
+            right: 0,
+            bottom: 0,
+            left: 0,
             width: '100%',
-            height: pages.length > 1 ? 'calc(100% - 44px)' : '100%',
+            height: 'calc(100% - 64px)',
             border: 'none',
           }}
         />
-        <div className="fixed right-4 top-4 z-[120] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg">
+        <div className="fixed bottom-4 right-4 z-[120] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg">
           <button
             type="button"
             onClick={() => setComponentPreviewMode('static')}
@@ -592,8 +563,8 @@ ${customCssBlock(site?.schema?.customCss)}`
   // changes so stale URLs don't linger.
   const fontHref = googleFontHrefForTheme(site?.schema?.theme)
   return (
-    <div>
-      <PublicToolbar site={site} />
+    <div className="min-h-screen pt-16">
+      <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
       {fontHref && (
         <>
           <link rel="preconnect" href="https://fonts.googleapis.com" crossOrigin="anonymous" />
@@ -602,24 +573,6 @@ ${customCssBlock(site?.schema?.customCss)}`
         </>
       )}
       <style>{siteCss}</style>
-      {pages.length > 1 && (
-        <nav className="sticky top-0 z-50 flex flex-wrap justify-center gap-1 border-b border-black/5 bg-white/80 px-3 py-2 backdrop-blur">
-          {pages.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => go(p.id)}
-              className={`rounded-full px-3 py-1 text-sm transition ${
-                p.id === current.id
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-        </nav>
-      )}
       <div data-public-site-canvas>
         <ResponsiveSite key={current.id} page={current} />
       </div>

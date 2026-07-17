@@ -944,6 +944,13 @@ class ExploreView(ListAPIView):
         category = self.request.GET.get('category')
         if category:
             qs = qs.filter(category=category)
+        search = self.request.GET.get('search', '').strip()
+        if search:
+            qs = qs.filter(
+                Q(title__icontains=search)
+                | Q(owner__username__icontains=search)
+                | Q(owner__profile__display_name__icontains=search)
+            )
         return qs
 
     def get_serializer_context(self):

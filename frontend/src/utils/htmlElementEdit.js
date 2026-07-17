@@ -1,3 +1,5 @@
+import { readElementMultilineText, writeElementMultilineText } from './domMultilineText.js'
+
 // Element-level inspect/edit helpers for the HTML-mode properties panel.
 // The edit iframe is same-origin, so the panel mutates the clicked element's
 // live DOM node directly through these helpers and the workspace re-serializes
@@ -67,7 +69,7 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     tag,
     classes: [...el.classList].join(' '),
     canEditText,
-    text: canEditText ? el.textContent : '',
+    text: canEditText ? readElementMultilineText(el) : '',
     // Every element can carry a link (wrapped in <a> when needed), so the panel
     // always offers the link picker — not just for existing anchors.
     href: elementLinkHref(el),
@@ -148,7 +150,7 @@ function ancestorTrail(el) {
 export function applyElementPatch(el, patch = {}) {
   if (!el || el.nodeType !== 1) return
   if (patch.text !== undefined && isTextEditable(el)) {
-    el.textContent = patch.text
+    writeElementMultilineText(el, patch.text)
   }
   if (patch.href !== undefined) setElementLink(el, patch.href)
   if (patch.src !== undefined && el.tagName === 'IMG') el.setAttribute('src', patch.src)

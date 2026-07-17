@@ -122,6 +122,14 @@ describe('applyElementPatch', () => {
     expect(hero.querySelector('p')).not.toBeNull() // block children survived
   })
 
+  it('round-trips textarea newlines as safe br elements', () => {
+    const p = document.getElementById('para')
+    applyElementPatch(p, { text: 'First line\nSecond <line>' })
+
+    expect(p.innerHTML).toBe('First line<br>Second &lt;line&gt;')
+    expect(describeElement(p).text).toBe('First line\nSecond <line>')
+  })
+
   it('updates href / src / alt on the right tags only', () => {
     const a = document.getElementById('link')
     applyElementPatch(a, { href: '/about' })

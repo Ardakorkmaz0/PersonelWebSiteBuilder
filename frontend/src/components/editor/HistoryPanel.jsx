@@ -103,7 +103,7 @@ export default function HistoryPanel({
 
   return (
     <div
-      className="fixed right-4 top-20 z-[115] flex h-[min(74vh,680px)] w-[min(92vw,420px)] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
+      className="studio-theme-surface fixed right-4 top-20 z-[115] flex h-[min(74vh,680px)] w-[min(92vw,420px)] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-[#4f46e5] px-3 py-2 text-white">

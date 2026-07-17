@@ -1,5 +1,5 @@
 import { useLanguage } from '../i18n/useLanguage.js'
-import { MonitorIcon, MoonIcon, SunIcon } from './icons.jsx'
+import { GlobeIcon, MonitorIcon, MoonIcon, SunIcon } from './icons.jsx'
 import { useUiTheme } from '../ui/useUiTheme.js'
 
 export default function LanguageSwitcher({ className = '' }) {
@@ -27,7 +27,7 @@ export default function LanguageSwitcher({ className = '' }) {
       </button>
       <label className="flex shrink-0 items-center gap-1.5">
         <span className="sr-only">{t('Language')}</span>
-        <span aria-hidden className="text-sm">🌐</span>
+        <GlobeIcon size={14} className="text-[var(--studio-text-muted)]" />
         <select
           value={language}
           onChange={(event) => setLanguage(event.target.value)}

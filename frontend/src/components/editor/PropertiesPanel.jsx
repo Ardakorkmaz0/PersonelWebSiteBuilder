@@ -44,6 +44,7 @@ import {
 } from './controls.jsx'
 import { PaletteIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
@@ -1398,6 +1399,20 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               onScale={scaleSingleSize}
               onPreset={presetSingleSize}
             />
+          )}
+          {component.type === 'html' && (
+            <button
+              type="button"
+              onClick={() =>
+                fitHtmlEmbedLayout(component, Math.round(layout.w || 360), (patch) =>
+                  setLayout(component.id, patch),
+                )
+              }
+              title={t('Measure the block and snap the box to its real size')}
+              className="w-full rounded-lg border border-[var(--studio-border,#d1d5db)] px-3 py-1.5 text-xs font-semibold text-[var(--studio-text,#374151)] hover:bg-[var(--studio-control-hover,#f3f4f6)]"
+            >
+              {t('Fit to content')}
+            </button>
           )}
         </section>
 

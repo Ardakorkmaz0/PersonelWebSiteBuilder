@@ -63,6 +63,7 @@ import { blankResponsiveSite } from '../utils/htmlTemplates.js'
 import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import { MOBILE_EDITOR_QUERY, NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
+import { fitHtmlEmbedLayout } from '../utils/htmlEmbedMeasure.js'
 import {
   EDITOR_AUTO_SAVE_DELAY_MS,
   isEditorSaveShortcut,
@@ -924,6 +925,7 @@ export default function EditorPage() {
           _baseSize: { w: data.w || 360, h: data.h || 120 },
         },
       }], y)
+      autoFitDroppedEmbed()
       return
     }
 
@@ -956,9 +958,33 @@ export default function EditorPage() {
           _baseSize: { w, h },
         },
       }], py)
+      autoFitDroppedEmbed()
       return
     }
     if (d.type) addComponent(d.type, px, py, null, d.preset, { w: d.w, h: d.h })
+  }
+
+  // Palette embeds land with the palette's GUESSED size, so the selection
+  // frame overshoots the real block to the right/bottom. Right after the drop,
+  // measure the snippet's true rendered size and snap the box onto it —
+  // addBlock selects the new component, so selectedId is the fresh embed.
+  function autoFitDroppedEmbed() {
+    window.setTimeout(async () => {
+      const state = useEditorStore.getState()
+      const componentId = state.selectedId
+      const page = selectCurrentPage(state)
+      const comp = (page.components || []).find((c) => c.id === componentId)
+      if (!comp || comp.type !== 'html') return
+      const activeLayout =
+        (state.viewport === 'mobile' ? comp.mobileLayout || comp.layout : comp.layout) || {}
+      await fitHtmlEmbedLayout(comp, Math.round(activeLayout.w || 360), (patch) => {
+        // Re-check the component still exists (fast undo / delete during measure).
+        const fresh = selectCurrentPage(useEditorStore.getState()).components || []
+        if (fresh.some((c) => c.id === componentId)) {
+          useEditorStore.getState().setLayout(componentId, patch)
+        }
+      })
+    }, 30)
   }
 
   const HTML_HISTORY_CAP = 50

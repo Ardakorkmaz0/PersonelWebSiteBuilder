@@ -4,7 +4,7 @@
 // hidden same-origin iframe — safe because every executable script is stripped
 // first; only markup + CSS participate in layout.
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
-import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
+import { embedAspectLock, htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { withoutExecutableScripts } from './htmlRuntime.js'
 
 const MIN_W = 80
@@ -27,12 +27,16 @@ export function measureHtmlSnippet(component, width, { timeout = 2500 } = {}) {
       resolve(result)
     }
     try {
-      // Measure the snippet's INTRINSIC size — never its fill-mode size. Fill
-      // CSS (control/form embeds) stretches the content to 100vw/100vh; the
-      // measure iframe is only 10px tall, so a filled textarea/input would
-      // collapse to ~0 and the box would clamp to MIN_H. Strip fill for the
-      // measurement; scale + appearance tweaks (which change real size) stay.
-      const opts = { ...htmlEmbedDocumentOptions(component, 1), fill: '' }
+      // Measure the snippet's INTRINSIC size — never its fill-mode or shape
+      // size. Both stretch the content to 100% of a box that, in the 10px-tall
+      // measure iframe, collapses to ~0. Strip them so we read the true content
+      // box; scale + the other appearance tweaks (which change real size) stay.
+      const base = htmlEmbedDocumentOptions(component, 1)
+      const opts = {
+        ...base,
+        fill: '',
+        tweaks: base.tweaks ? { ...base.tweaks, shape: undefined } : base.tweaks,
+      }
       const doc = withoutExecutableScripts(
         htmlEmbedDocument(component?.props?.code || '', opts),
       )
@@ -130,6 +134,14 @@ export async function fitHtmlEmbedLayout(component, width, apply) {
   // only protects multi-column layouts, which an image block can't be.
   const minRatio = paletteType === 'image' ? 0 : undefined
   let { w, h } = decideFitSize({ boxW: width, measuredH: first.h, naturalW: first.naturalW, allowTighten, minRatio })
+  // Aspect-locked embeds (profile photos, icons, shape=square/circle) get a box
+  // matching the lock, driven off the measured content WIDTH — so the box can
+  // never end up a rectangle that follows the source image's dimensions.
+  const aspect = embedAspectLock(component)
+  if (aspect) {
+    apply({ w, h: Math.max(MIN_H, Math.round(w / aspect)) })
+    return true
+  }
   if (w !== Math.round(width)) {
     const second = await measureHtmlSnippet(component, w)
     if (second) h = decideFitSize({ boxW: w, measuredH: second.h, naturalW: 0 }).h

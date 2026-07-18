@@ -22,6 +22,12 @@ describe('embedAspectLock', () => {
     expect(embedAspectLock(html('button', 'solid'))).toBeNull()
   })
 
+  it('an explicit shape prop locks any image embed (panel Shape control)', () => {
+    expect(embedAspectLock({ type: 'html', props: { _paletteType: 'image', _paletteVariant: 'framed', shape: 'square' } })).toBe(1)
+    expect(embedAspectLock({ type: 'html', props: { _paletteType: 'image', _paletteVariant: 'rounded', shape: 'circle' } })).toBe(1)
+    expect(embedAspectLock({ type: 'html', props: { _paletteType: 'image', _paletteVariant: 'rounded', shape: 'weird' } })).toBeNull()
+  })
+
   it('ignores non-embed components and missing metadata', () => {
     expect(embedAspectLock({ type: 'heading', props: {} })).toBeNull()
     expect(embedAspectLock({ type: 'html', props: {} })).toBeNull()

@@ -293,6 +293,26 @@ class TestValidateAndCleanSchema:
         assert 'tweakAlign' not in props2
         assert 'tweakZoom' not in props2
 
+    def test_html_embed_shape_round_trips(self):
+        """The locked frame shape survives a save; junk values are dropped."""
+        def clean_shape(value):
+            data = validate_and_clean_schema({
+                'pages': [{
+                    'id': 'home', 'name': 'Home',
+                    'components': [{
+                        'id': 'h1', 'type': 'html',
+                        'props': {'code': '<img src="/a.png">', 'shape': value},
+                        'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 200, 'h': 200},
+                    }],
+                }],
+            })
+            return data['pages'][0]['components'][0]['props'].get('shape')
+
+        assert clean_shape('square') == 'square'
+        assert clean_shape('circle') == 'circle'
+        assert clean_shape('oval') is None
+        assert clean_shape('<script>') is None
+
     def test_styles_mobile_preserved_and_sanitized(self):
         clean = validate_and_clean_schema({
             'pages': [{

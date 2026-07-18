@@ -87,6 +87,17 @@ function tweaksTag(tweaks) {
   if (align === 'left' || align === 'center' || align === 'right') {
     css.push(`body{text-align:${align}!important;}`)
   }
+  // Shape: force the media to fill and cover the (aspect-locked) box so a photo
+  // conforms to a square/circle frame at any size instead of the box growing to
+  // the photo's rectangle. Paired with embedAspectLock keeping the box 1:1.
+  if (tweaks.shape === 'square' || tweaks.shape === 'circle') {
+    const radius = tweaks.shape === 'circle' ? '999px' : '14px'
+    css.push(
+      'body{display:block!important;}',
+      'body>*{width:100%!important;height:100%!important;box-sizing:border-box!important;margin:0!important;}',
+      `body :is(img,picture,video,canvas){width:100%!important;height:100%!important;object-fit:cover!important;display:block!important;border-radius:${radius}!important;}`,
+    )
+  }
   return css.length ? `<style data-pwb-embed-tweaks>${css.join('')}</style>` : ''
 }
 

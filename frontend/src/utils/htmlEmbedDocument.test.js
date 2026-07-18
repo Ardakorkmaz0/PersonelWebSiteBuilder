@@ -96,4 +96,17 @@ describe('appearance tweaks tag', () => {
     expect(doc).not.toContain('<script>alert')
     expect(doc).toContain('data-pwb-embed-tweaks')
   })
+
+  it('shape square forces images to cover the box with a soft radius', () => {
+    const doc = htmlEmbedDocument('<img src="/a.png">', { tweaks: { shape: 'square' } })
+    expect(doc).toContain('object-fit:cover!important')
+    expect(doc).toContain('border-radius:14px!important')
+    expect(doc).not.toContain('border-radius:999px')
+  })
+
+  it('shape circle rounds the covered image fully', () => {
+    const doc = htmlEmbedDocument('<img src="/a.png">', { tweaks: { shape: 'circle' } })
+    expect(doc).toContain('object-fit:cover!important')
+    expect(doc).toContain('border-radius:999px!important')
+  })
 })

@@ -1236,6 +1236,23 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             }
           />
         ))}
+      {/* Shape: force any image embed into a square/circle frame — the photo
+          conforms to the box (cover) and the box locks to 1:1, instead of the
+          box stretching to the photo's rectangle. */}
+      {component.type === 'html' && listEmbedImages(component.props.code).length > 0 && (
+        <LabeledSelect
+          label={t('Shape')}
+          value={component.props.shape || ''}
+          onChange={(shape) => {
+            updateProps(component.id, { shape: shape || undefined })
+            if (shape === 'square' || shape === 'circle') {
+              const side = Math.round(Math.min(layout.w || 200, layout.h || 200))
+              fitEmbedBox(component.id, { w: side, h: side })
+            }
+          }}
+          options={[['', t('Original')], ['square', t('Square')], ['circle', t('Circle')]]}
+        />
+      )}
       {def.editableProps.map((field) => (
         <PropControl
           key={`${field.key}-${field.control || 'text'}-${field.label}`}

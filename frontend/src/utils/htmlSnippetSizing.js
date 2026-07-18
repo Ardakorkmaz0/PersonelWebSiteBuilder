@@ -109,6 +109,7 @@ export function htmlEmbedTweaks(props) {
   if (props.tweakPadding !== undefined && props.tweakPadding !== '') tweaks.padding = props.tweakPadding
   if (props.tweakZoom) tweaks.zoom = props.tweakZoom
   if (props.tweakAlign) tweaks.align = props.tweakAlign
+  if (props.shape === 'square' || props.shape === 'circle') tweaks.shape = props.shape
   return Object.keys(tweaks).length ? tweaks : null
 }
 
@@ -157,6 +158,9 @@ const ASPECT_LOCK_VARIANTS = new Set(['image:circle', 'image:square-pp', 'image:
 export function embedAspectLock(component) {
   if (!component || component.type !== 'html') return null
   const props = component.props || {}
+  // Explicit shape chosen in the panel wins — lets ANY image be forced square
+  // or circular, not just the preset profile-photo variants.
+  if (props.shape === 'square' || props.shape === 'circle') return 1
   if (ASPECT_LOCK_TYPES.has(props._paletteType)) return 1
   if (ASPECT_LOCK_VARIANTS.has(`${props._paletteType}:${props._paletteVariant}`)) return 1
   return null

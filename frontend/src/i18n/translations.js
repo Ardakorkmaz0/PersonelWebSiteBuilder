@@ -456,6 +456,8 @@ export const TURKISH_TRANSLATIONS = {
   // Component variant labels (buttons / cards / badges / inputs)
   'Square photo': 'Kare fotoğraf',
   'Ring avatar': 'Halkalı avatar',
+  'Shape': 'Şekil',
+  'Original': 'Orijinal',
   'Icon left': 'Solda ikon',
   'Soft rose': 'Yumuşak gül',
   'Soft emerald': 'Yumuşak zümrüt',

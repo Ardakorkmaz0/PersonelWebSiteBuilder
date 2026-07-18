@@ -276,6 +276,10 @@ def sanitize_props(ctype, props):
         zoom = props.get('tweakZoom')
         if isinstance(zoom, str) and re.match(r'^[0-2](\.\d{1,2})?$', zoom):
             out['tweakZoom'] = zoom
+        # Locked frame shape for image embeds (square / circle); anything else
+        # is treated as the original free shape and dropped.
+        if props.get('shape') in ('square', 'circle'):
+            out['shape'] = props['shape']
         return out
     if ctype == 'tabs':
         raw_tabs = props.get('tabs')

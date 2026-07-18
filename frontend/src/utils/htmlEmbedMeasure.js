@@ -27,8 +27,14 @@ export function measureHtmlSnippet(component, width, { timeout = 2500 } = {}) {
       resolve(result)
     }
     try {
+      // Measure the snippet's INTRINSIC size — never its fill-mode size. Fill
+      // CSS (control/form embeds) stretches the content to 100vw/100vh; the
+      // measure iframe is only 10px tall, so a filled textarea/input would
+      // collapse to ~0 and the box would clamp to MIN_H. Strip fill for the
+      // measurement; scale + appearance tweaks (which change real size) stay.
+      const opts = { ...htmlEmbedDocumentOptions(component, 1), fill: '' }
       const doc = withoutExecutableScripts(
-        htmlEmbedDocument(component?.props?.code || '', htmlEmbedDocumentOptions(component, 1)),
+        htmlEmbedDocument(component?.props?.code || '', opts),
       )
       frame = document.createElement('iframe')
       frame.setAttribute('aria-hidden', 'true')
@@ -117,7 +123,9 @@ export async function fitHtmlEmbedLayout(component, width, apply) {
   const first = await measureHtmlSnippet(component, width)
   if (!first) return false
   const paletteType = component?.props?._paletteType
-  const allowTighten = paletteType !== 'section'
+  // Sections and form fields are designed at a chosen width (you type into an
+  // input; a section spans the page), so only their height ever adjusts.
+  const allowTighten = !['section', 'input', 'select'].includes(paletteType)
   // A lone image IS its content — hug it fully; the stacking-collapse guard
   // only protects multi-column layouts, which an image block can't be.
   const minRatio = paletteType === 'image' ? 0 : undefined

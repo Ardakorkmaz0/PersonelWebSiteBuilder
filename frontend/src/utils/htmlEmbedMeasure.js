@@ -99,10 +99,10 @@ export function measureHtmlSnippet(component, width, { timeout = 2500 } = {}) {
 // Height always follows the content.
 const MIN_TIGHTEN_RATIO = 0.45
 
-export function decideFitSize({ boxW, measuredH, naturalW, allowTighten = true }) {
+export function decideFitSize({ boxW, measuredH, naturalW, allowTighten = true, minRatio = MIN_TIGHTEN_RATIO }) {
   const w = Math.max(MIN_W, Math.round(boxW))
   const wanted = Number(naturalW) > 0 ? naturalW + PAD : 0
-  const tightW = allowTighten && wanted > 0 && wanted < w * 0.92 && wanted >= w * MIN_TIGHTEN_RATIO
+  const tightW = allowTighten && wanted > 0 && wanted < w * 0.92 && wanted >= w * minRatio
     ? Math.max(MIN_W, Math.round(wanted))
     : w
   const h = Math.max(MIN_H, Math.min(MAX_H, Math.round((Number(measuredH) || 0) + PAD)))
@@ -116,8 +116,12 @@ export function decideFitSize({ boxW, measuredH, naturalW, allowTighten = true }
 export async function fitHtmlEmbedLayout(component, width, apply) {
   const first = await measureHtmlSnippet(component, width)
   if (!first) return false
-  const allowTighten = component?.props?._paletteType !== 'section'
-  let { w, h } = decideFitSize({ boxW: width, measuredH: first.h, naturalW: first.naturalW, allowTighten })
+  const paletteType = component?.props?._paletteType
+  const allowTighten = paletteType !== 'section'
+  // A lone image IS its content — hug it fully; the stacking-collapse guard
+  // only protects multi-column layouts, which an image block can't be.
+  const minRatio = paletteType === 'image' ? 0 : undefined
+  let { w, h } = decideFitSize({ boxW: width, measuredH: first.h, naturalW: first.naturalW, allowTighten, minRatio })
   if (w !== Math.round(width)) {
     const second = await measureHtmlSnippet(component, w)
     if (second) h = decideFitSize({ boxW: w, measuredH: second.h, naturalW: 0 }).h

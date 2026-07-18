@@ -45,6 +45,7 @@ import {
 import { PaletteIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
+import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
@@ -1218,6 +1219,23 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const contentSection = (def.editableProps || []).length > 0 ? (
     <section className="space-y-3">
       <SectionTitle>{t('Content')}</SectionTitle>
+      {/* Picture blocks (Avatar, figures, photo cards) drop as html embeds, so
+          swapping the photo used to require editing the snippet by hand. Every
+          <img> in the code gets a real picker, FIRST — the main property of an
+          image block is its image. */}
+      {component.type === 'html' &&
+        listEmbedImages(component.props.code).map((img, _, all) => (
+          <LabeledImage
+            key={`embed-img-${img.index}`}
+            label={all.length === 1 ? t('Image') : `${t('Image')} ${img.index + 1}`}
+            value={img.src}
+            onChange={(src) =>
+              updateProps(component.id, {
+                code: replaceEmbedImage(component.props.code, img.index, src),
+              })
+            }
+          />
+        ))}
       {def.editableProps.map((field) => (
         <PropControl
           key={`${field.key}-${field.control || 'text'}-${field.label}`}
@@ -1285,6 +1303,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           )}
         </div>
 
+        {/* Main properties FIRST — the thing you dropped the component for
+            (its image, text, links) must not hide below secondary tooling. */}
+        {component.type === 'region' && isMobile ? null : contentSection}
+        {linkSection}
+
         <AiComponentEdit
           component={component}
           onApply={(styles, props) => {
@@ -1292,9 +1315,6 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             if (props && Object.keys(props).length) updateProps(component.id, props)
           }}
         />
-
-        {component.type === 'region' && isMobile ? null : contentSection}
-        {linkSection}
 
         {component.type === 'region' && (
           <section className="space-y-3">

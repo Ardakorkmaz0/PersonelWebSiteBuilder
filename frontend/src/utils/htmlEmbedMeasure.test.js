@@ -35,6 +35,12 @@ describe('decideFitSize', () => {
     expect(out.h).toBe(386)
   })
 
+  it('minRatio 0 lets a lone image hug fully (no stacking risk)', () => {
+    const out = decideFitSize({ boxW: 480, measuredH: 120, naturalW: 120, minRatio: 0 })
+    expect(out.w).toBe(126)
+    expect(out.h).toBe(126)
+  })
+
   it('clamps to sane minimums and maximums', () => {
     expect(decideFitSize({ boxW: 20, measuredH: 4, naturalW: 10 })).toEqual({ w: 80, h: 36 })
     expect(decideFitSize({ boxW: 600, measuredH: 99999, naturalW: 0 }).h).toBe(2400)

@@ -92,12 +92,18 @@ export function measureHtmlSnippet(component, width, { timeout = 2500 } = {}) {
 }
 
 // Pure sizing decision — unit-testable without layout. Width only tightens
-// when the content is clearly narrower than the box (buttons, badges, cards);
-// text blocks keep the designed width. Height always follows the content.
-export function decideFitSize({ boxW, measuredH, naturalW }) {
+// when the content is clearly narrower than the box (cards, containers,
+// images); text blocks keep the designed width, and so does anything whose
+// max-content collapses far below the box (a flex/grid section reports the
+// width of ONE column — tightening would stack its columns vertically).
+// Height always follows the content.
+const MIN_TIGHTEN_RATIO = 0.45
+
+export function decideFitSize({ boxW, measuredH, naturalW, allowTighten = true }) {
   const w = Math.max(MIN_W, Math.round(boxW))
-  const tightW = Number(naturalW) > 0 && naturalW + PAD < w * 0.92
-    ? Math.max(MIN_W, Math.round(naturalW + PAD))
+  const wanted = Number(naturalW) > 0 ? naturalW + PAD : 0
+  const tightW = allowTighten && wanted > 0 && wanted < w * 0.92 && wanted >= w * MIN_TIGHTEN_RATIO
+    ? Math.max(MIN_W, Math.round(wanted))
     : w
   const h = Math.max(MIN_H, Math.min(MAX_H, Math.round((Number(measuredH) || 0) + PAD)))
   return { w: tightW, h }
@@ -106,10 +112,12 @@ export function decideFitSize({ boxW, measuredH, naturalW }) {
 // Measure + apply: snaps the ACTIVE breakpoint's layout box onto the embed's
 // real content. `apply(patch)` is the caller's setLayout binding. Re-measures
 // once when the width tightened, since height changes with width.
+// Sections are designed full-width — only their height ever adjusts.
 export async function fitHtmlEmbedLayout(component, width, apply) {
   const first = await measureHtmlSnippet(component, width)
   if (!first) return false
-  let { w, h } = decideFitSize({ boxW: width, measuredH: first.h, naturalW: first.naturalW })
+  const allowTighten = component?.props?._paletteType !== 'section'
+  let { w, h } = decideFitSize({ boxW: width, measuredH: first.h, naturalW: first.naturalW, allowTighten })
   if (w !== Math.round(width)) {
     const second = await measureHtmlSnippet(component, w)
     if (second) h = decideFitSize({ boxW: w, measuredH: second.h, naturalW: 0 }).h

@@ -27,7 +27,8 @@ describe('Sidebar component recommendations', () => {
     const user = userEvent.setup()
     renderSidebar()
 
-    expect(screen.getByText('Bootstrap variants')).toBeInTheDocument()
+    // Discovery moved to the BlockLibrary overlay; the rail opens it from here.
+    expect(screen.getByRole('button', { name: /Browse all blocks/ })).toBeInTheDocument()
     expect(screen.queryByText('Bootstrap Navbar')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^☰Navbar\d+▸$/ }))

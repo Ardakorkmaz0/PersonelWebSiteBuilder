@@ -11,15 +11,28 @@ describe('decideFitSize', () => {
     expect(out.h).toBe(102) // measured + padding
   })
 
-  it('tightens the width for clearly narrower content (button, badge, card)', () => {
-    const out = decideFitSize({ boxW: 560, measuredH: 48, naturalW: 180 })
-    expect(out.w).toBe(186) // natural + padding
-    expect(out.h).toBe(54)
+  it('tightens the width for clearly narrower content (container, card)', () => {
+    const out = decideFitSize({ boxW: 560, measuredH: 140, naturalW: 430 })
+    expect(out.w).toBe(436) // natural + padding
+    expect(out.h).toBe(146)
   })
 
   it('does not tighten for near-full-width content (avoids jitter)', () => {
     const out = decideFitSize({ boxW: 400, measuredH: 100, naturalW: 380 })
     expect(out.w).toBe(400) // 380+6 > 400*0.92 → keep
+  })
+
+  it('does not tighten when max-content collapses far below the box (column stacking)', () => {
+    // A 3-column pricing grid reports one column's width as max-content;
+    // tightening would stack the columns vertically.
+    const out = decideFitSize({ boxW: 1000, measuredH: 380, naturalW: 290 })
+    expect(out.w).toBe(1000)
+  })
+
+  it('never tightens when the caller forbids it (sections are full-width)', () => {
+    const out = decideFitSize({ boxW: 1000, measuredH: 380, naturalW: 620, allowTighten: false })
+    expect(out.w).toBe(1000)
+    expect(out.h).toBe(386)
   })
 
   it('clamps to sane minimums and maximums', () => {

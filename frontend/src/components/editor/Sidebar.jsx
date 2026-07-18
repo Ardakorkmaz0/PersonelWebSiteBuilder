@@ -1,48 +1,39 @@
 import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import { paletteItems } from '../registry.jsx'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
-import { htmlVariantsFor, HTML_BLOCKS } from '../../utils/htmlVariants.js'
-import { htmlSnippetSize } from '../../utils/htmlSnippetSizing.js'
-import { componentToHtml } from '../../utils/componentToHtml.js'
 import { useEditorStore } from '../../store/editorStore.js'
 import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import BlockLibrary from './BlockLibrary.jsx'
+import {
+  ADDABLE_PALETTE_ITEMS,
+  NATIVE_CANVAS_TYPES,
+  WIDE_HTML,
+  blockSize,
+  htmlSize,
+  previewSrcDoc,
+  variantsForType,
+} from './paletteData.js'
 
-// Variants for a type, with a synthesized "Default" snippet for the types that
-// have no curated variants yet (so every component is still placeable).
-function variantsForType(type) {
-  const vs = htmlVariantsFor(type)
-  return vs.length ? vs : [{ id: 'default', label: 'Default', html: componentToHtml(type) }]
-}
-
-// ONE visual library powers both editor modes. Most palette variants still drop
-// as editable HTML embeds on the free canvas, but structural widgets that need
-// editor-owned children stay native there.
-const NATIVE_CANVAS_TYPES = new Set(['tabs', 'navbar', 'region'])
-// Region creation is intentionally hidden until the Wix-like section model is
-// redesigned. Keeping the registry type preserves existing saved projects.
-const ADDABLE_PALETTE_ITEMS = paletteItems.filter((item) => item.type !== 'region')
-
-// Types whose snippets are wide (full-width-ish) — previewed scaled-down from the
-// top-left; the rest are inline and shown a bit larger, centered.
-const WIDE_HTML = new Set(['navbar', 'section', 'region', 'card', 'image', 'list', 'input', 'select', 'alert', 'accordion', 'tabs', 'container', 'html', 'spacer'])
-
-function htmlSize(type, variant) {
-  const id = typeof variant === 'string' ? variant : variant?.id
-  const size = htmlSnippetSize(type, id)
-  return [size.w, size.h]
-}
-
-// Natural size per section block, so the dropped frame matches the content's real
-// height (no dead space below) — keyed by block id, all ~full-width.
-const BLOCK_SIZE = {
-  hero: [1000, 420], 'hero-split': [1000, 460], features: [1000, 280], stats: [1000, 170],
-  pricing: [1000, 380], logos: [1000, 140], testimonial: [1000, 220], faq: [1000, 360],
-  contact: [1000, 460], cta: [1000, 220], footer: [1000, 150],
-}
-function blockSize(id) {
-  return BLOCK_SIZE[id] || [1000, 360]
+// Live, inert preview of a snippet's HTML, scaled to fit the palette swatch. The
+// HTML is our own trusted template string (no user input), rendered pointer-
+// events-none so it can't be interacted with in the palette.
+function HtmlPreview({ html, wide }) {
+  // Wide snippets render at a FIXED width then scale down centered, so the whole
+  // element shows (a percentage width + top-left origin left navbars/sections
+  // looking empty). Inline snippets just scale a touch from their natural size.
+  return (
+    <div className="flex h-[56px] w-full items-center justify-center overflow-hidden rounded-md bg-[#f8fafc]">
+      <div
+        style={
+          wide
+            ? { width: 380, transform: 'scale(0.26)', transformOrigin: 'center', flexShrink: 0, pointerEvents: 'none' }
+            : { transform: 'scale(0.58)', transformOrigin: 'center', pointerEvents: 'none' }
+        }
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
+  )
 }
 
 const CUSTOM_BLOCKS_KEY = 'pwb_custom_blocks'
@@ -73,34 +64,6 @@ function writeCustomBlocks(blocks) {
   } catch {
     // Ignore storage quota/private-mode errors; placing the block should still work.
   }
-}
-
-// Live, inert preview of a snippet's HTML, scaled to fit the palette swatch. The
-// HTML is our own trusted template string (no user input), rendered pointer-
-// events-none so it can't be interacted with in the palette.
-function HtmlPreview({ html, wide }) {
-  // Wide snippets render at a FIXED width then scale down centered, so the whole
-  // element shows (a percentage width + top-left origin left navbars/sections
-  // looking empty). Inline snippets just scale a touch from their natural size.
-  return (
-    <div className="flex h-[56px] w-full items-center justify-center overflow-hidden rounded-md bg-[#f8fafc]">
-      <div
-        style={
-          wide
-            ? { width: 380, transform: 'scale(0.26)', transformOrigin: 'center', flexShrink: 0, pointerEvents: 'none' }
-            : { transform: 'scale(0.58)', transformOrigin: 'center', pointerEvents: 'none' }
-        }
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    </div>
-  )
-}
-
-function previewSrcDoc(html, wide) {
-  const body = wide
-    ? `<div class="stage stage-wide">${html}</div>`
-    : `<div class="stage stage-inline">${html}</div>`
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111827;overflow:hidden}body{padding:12px}.stage-wide{width:920px;transform:scale(.2);transform-origin:top left}.stage-inline{min-height:108px;display:grid;place-items:center}img,video,svg,canvas{max-width:100%;height:auto}</style></head><body>${body}</body></html>`
 }
 
 function DetailPreview({ html, wide }) {
@@ -541,6 +504,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
   const [tab, setTab] = useState(filesPanel ? 'files' : 'components')
   const [openType, setOpenType] = useState(null)
   const [preview, setPreview] = useState(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const theme = useEditorStore((s) => s.schema.theme)
   return (
     <aside className="studio-panel flex w-60 shrink-0 flex-col overflow-hidden border-r">
@@ -582,35 +546,20 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
           filesPanel
         ) : (
           <>
-            {/* ONE library for both modes — the same Sections + Components. */}
-            <div className="mb-5">
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-                {t('Sections')}
-              </h2>
-              <div className="grid grid-cols-2 gap-2">
-                {HTML_BLOCKS.map((b) => (
-                  <BlockCard key={b.id} block={b} onPick={onPickComponent} onArm={onArmPlacement} onInspect={setPreview} theme={theme} />
-                ))}
-              </div>
-              <CustomBlockPanel onPick={onPickComponent} onArm={onArmPlacement} onInspect={setPreview} theme={theme} />
-            </div>
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+            {/* Discovery lives in the BlockLibrary overlay (sections, every
+                variant, search); the rail below keeps the compact drag/tap
+                palette for users who already know what they want. */}
+            <button
+              type="button"
+              onClick={() => setLibraryOpen(true)}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#4338ca] hover:to-[#1d4ed8]"
+            >
+              <LayersIcon size={15} /> {t('Browse all blocks')}
+            </button>
+            <CustomBlockPanel onPick={onPickComponent} onArm={onArmPlacement} onInspect={setPreview} theme={theme} />
+            <h2 className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
               {t('Components')}
             </h2>
-            <div className="mb-3 flex gap-2 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-2.5 text-[#166534]">
-              <span
-                aria-hidden="true"
-                className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#22c55e] text-[11px] font-black text-white"
-              >
-                ✓
-              </span>
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold">{t('Bootstrap variants')}</p>
-                <p className="mt-0.5 text-[10px] leading-relaxed text-[#15803d]">
-                  {t('Bootstrap variants use Bootstrap class markup and include dependency-free fallback styles.')}
-                </p>
-              </div>
-            </div>
             <div className="space-y-2">
               {ADDABLE_PALETTE_ITEMS.map((item) => (
                 <PaletteCategory
@@ -635,6 +584,12 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
       {!(filesPanel && tab === 'files') && (
         <PalettePreviewPanel preview={preview} onClose={() => setPreview(null)} />
       )}
+      <BlockLibrary
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onPickComponent={onPickComponent}
+        onArmPlacement={onArmPlacement}
+      />
     </aside>
   )
 }

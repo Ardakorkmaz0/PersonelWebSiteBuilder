@@ -263,6 +263,19 @@ def sanitize_props(ctype, props):
             h = _num(base.get('h'), 0, 0, 5000)
             if w >= 8 and h >= 8:
                 out['_baseSize'] = {'w': w, 'h': h}
+        # Appearance overrides (Properties panel): plain CSS values that the
+        # client injects into the embed's own style tag. _css_value strips
+        # ;{}<> so a value can never escape that tag.
+        for key in ('tweakBackground', 'tweakTextColor', 'tweakAccent', 'tweakFont', 'tweakPadding'):
+            val = _css_value(props.get(key), '')
+            if val:
+                out[key] = val[:120]
+        align = props.get('tweakAlign')
+        if align in ('left', 'center', 'right'):
+            out['tweakAlign'] = align
+        zoom = props.get('tweakZoom')
+        if isinstance(zoom, str) and re.match(r'^[0-2](\.\d{1,2})?$', zoom):
+            out['tweakZoom'] = zoom
         return out
     if ctype == 'tabs':
         raw_tabs = props.get('tabs')

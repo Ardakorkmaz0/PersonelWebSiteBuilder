@@ -1,10 +1,21 @@
 import {
   selectCanMoveComponent,
   selectComponentParent,
+  selectCurrentPage,
   useEditorStore,
 } from '../../store/editorStore.js'
+import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { normalizedSelectionActionsScale } from './canvasSelectionActionsLayout.js'
+
+function findById(components, id) {
+  for (const c of components || []) {
+    if (c.id === id) return c
+    const deep = findById(c.children, id)
+    if (deep) return deep
+  }
+  return null
+}
 
 function LayerStepIcon({ forward }) {
   return (
@@ -40,6 +51,21 @@ function ParentIcon() {
   )
 }
 
+function FitIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <path
+        d="M8 3v5H3M12 3v5h5M8 17v-5H3M12 17v-5h5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export default function CanvasSelectionActions({ componentId, canvasScale = 1, style }) {
   const { t } = useLanguage()
   const parent = useEditorStore((state) => selectComponentParent(state, componentId))
@@ -50,9 +76,28 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
   const moveBackward = useEditorStore((state) => state.moveBackward)
   const moveForward = useEditorStore((state) => state.moveForward)
   const remove = useEditorStore((state) => state.removeComponent)
+  const fitEmbedBox = useEditorStore((state) => state.fitEmbedBox)
+  // Fit lives here (not only in the Size panel) so an embed whose frame
+  // overshoots or clips its content is fixed right where the user sees it.
+  // PC viewport only — the fit targets the PC design box.
+  const canFit = useEditorStore(
+    (state) =>
+      state.viewport !== 'mobile' &&
+      findById(selectCurrentPage(state)?.components, componentId)?.type === 'html',
+  )
+  const fitToContent = () => {
+    const comp = findById(selectCurrentPage(useEditorStore.getState())?.components, componentId)
+    if (comp?.type !== 'html') return
+    fitHtmlEmbedLayout(comp, Math.round(comp.layout?.w || 360), (patch) =>
+      fitEmbedBox(componentId, patch),
+    )
+  }
   const actions = [
     ['parent', <ParentIcon key="parent-icon" />, t('Select parent'), () => selectParent(componentId), !parent],
     ['duplicate', <DuplicateIcon key="duplicate-icon" />, t('Duplicate'), () => duplicate(componentId), false],
+    ...(canFit
+      ? [['fit', <FitIcon key="fit-icon" />, t('Fit to content'), fitToContent, false]]
+      : []),
     ['backward', <LayerStepIcon key="backward-icon" />, t('Backward'), () => moveBackward(componentId), !canMoveBackward],
     ['forward', <LayerStepIcon key="forward-icon" forward />, t('Forward'), () => moveForward(componentId), !canMoveForward],
     ['delete', <span key="delete-icon" aria-hidden="true">×</span>, t('Delete component'), () => remove(componentId), false],

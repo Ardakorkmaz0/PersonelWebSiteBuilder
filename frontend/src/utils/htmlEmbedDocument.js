@@ -46,6 +46,50 @@ function fillAttr(fill) {
     : ''
 }
 
+// Appearance overrides the user set in the Properties panel (background, text
+// color, accent, font, padding, zoom, alignment). They ride into the embed as
+// one style tag AFTER the reset, with !important so they beat the snippet's
+// own styles — that is the point: the user asked to restyle a block whose
+// internals they don't want to hand-edit. Values are stripped of markup/CSS
+// structure characters so a value can never escape the style tag.
+function tweakVal(value) {
+  return String(value ?? '').replace(/[<>{};]/g, '').trim()
+}
+
+function tweaksTag(tweaks) {
+  if (!tweaks || typeof tweaks !== 'object') return ''
+  const css = []
+  const bg = tweakVal(tweaks.background)
+  if (bg) css.push(`body{background:${bg}!important;}`)
+  const color = tweakVal(tweaks.textColor)
+  if (color) {
+    css.push(
+      `body{color:${color}!important;}`,
+      'body :is(h1,h2,h3,h4,h5,h6,p,li,blockquote,small,strong,em,span){color:inherit!important;}',
+    )
+  }
+  const accent = tweakVal(tweaks.accent)
+  if (accent) {
+    css.push(
+      `body a{color:${accent}!important;}`,
+      `body :is(button,input[type=submit],input[type=button],[class*=btn],[class*=button]){background:${accent}!important;border-color:${accent}!important;}`,
+    )
+  }
+  const font = tweakVal(tweaks.font)
+  if (font) css.push(`body,body :is(h1,h2,h3,h4,h5,h6,button,input,select,textarea){font-family:${font}!important;}`)
+  const pad = tweakVal(tweaks.padding)
+  if (pad) css.push(`body{padding:${/^\d+(\.\d+)?$/.test(pad) ? `${pad}px` : pad}!important;}`)
+  const zoom = Number(tweaks.zoom)
+  if (Number.isFinite(zoom) && zoom > 0 && Math.abs(zoom - 1) > 0.01) {
+    css.push(`body{zoom:${Math.max(0.5, Math.min(2, zoom))}!important;}`)
+  }
+  const align = tweakVal(tweaks.align)
+  if (align === 'left' || align === 'center' || align === 'right') {
+    css.push(`body{text-align:${align}!important;}`)
+  }
+  return css.length ? `<style data-pwb-embed-tweaks>${css.join('')}</style>` : ''
+}
+
 function hasReset(html) {
   return /<style[^>]*data-pwb-embed-reset/i.test(html)
 }
@@ -66,9 +110,10 @@ function wrapBodyForOptions(html, options = {}) {
 }
 
 function injectReset(html, options = {}) {
-  const tags = `${hasReset(html) ? '' : resetTag}${scaleTag(options.scale)}`
-  if (!tags && !cleanScale(options.scale) && !fillAttr(options.fill)) return html
-  if (hasReset(html)) return wrapBodyForOptions(html.replace(/<\/head>/i, `${scaleTag(options.scale)}</head>`), options)
+  const extra = `${scaleTag(options.scale)}${tweaksTag(options.tweaks)}`
+  const tags = `${hasReset(html) ? '' : resetTag}${extra}`
+  if (!tags && !fillAttr(options.fill)) return html
+  if (hasReset(html)) return wrapBodyForOptions(html.replace(/<\/head>/i, `${extra}</head>`), options)
   if (/<\/head>/i.test(html)) {
     return wrapBodyForOptions(html.replace(/<\/head>/i, `${tags}</head>`), options)
   }

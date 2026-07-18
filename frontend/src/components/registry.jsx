@@ -620,6 +620,41 @@ export const registry = {
     editableProps: [
       { key: 'code', label: 'Text & links', control: 'htmlContent' },
       { key: 'code', label: 'HTML / CSS / JS', control: 'code' },
+      // Appearance overrides: restyle any snippet without touching its code.
+      // They inject a style tag into the embed document (htmlEmbedTweaks), so
+      // canvas, published site and export all render them the same way.
+      { key: 'tweakBackground', label: 'Content background', control: 'color' },
+      { key: 'tweakTextColor', label: 'Text color', control: 'color' },
+      { key: 'tweakAccent', label: 'Accent (buttons & links)', control: 'color' },
+      {
+        key: 'tweakFont', label: 'Font family', control: 'select',
+        options: [
+          ['', 'From snippet'],
+          ['system-ui, -apple-system, "Segoe UI", sans-serif', 'Modern (system)'],
+          ['Georgia, "Times New Roman", serif', 'Serif (Georgia)'],
+          ['"Trebuchet MS", Verdana, sans-serif', 'Rounded (Trebuchet)'],
+          ['"Courier New", ui-monospace, monospace', 'Monospace'],
+        ],
+      },
+      {
+        key: 'tweakZoom', label: 'Content zoom', control: 'select',
+        options: [
+          ['', 'Normal'],
+          ['0.85', 'Smaller'],
+          ['1.15', 'Larger'],
+          ['1.3', 'Extra large'],
+        ],
+      },
+      { key: 'tweakPadding', label: 'Inner padding', control: 'px' },
+      {
+        key: 'tweakAlign', label: 'Content alignment', control: 'select',
+        options: [
+          ['', 'From snippet'],
+          ['left', 'Left'],
+          ['center', 'Center'],
+          ['right', 'Right'],
+        ],
+      },
     ],
     editableStyles: [
       'backgroundColor', 'borderRadius', 'borderWidth', 'borderStyle',

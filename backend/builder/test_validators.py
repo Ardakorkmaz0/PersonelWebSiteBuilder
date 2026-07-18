@@ -248,6 +248,51 @@ class TestValidateAndCleanSchema:
         assert '_paletteType' not in bad['props']
         assert '_baseSize' not in bad['props']
 
+    def test_html_embed_appearance_tweaks_round_trip(self):
+        """Appearance overrides survive as sanitized CSS values; markup and
+        junk enums are dropped."""
+        clean = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [{
+                    'id': 'h1', 'type': 'html',
+                    'props': {
+                        'code': '<div>x</div>',
+                        'tweakBackground': '#111827',
+                        'tweakAccent': 'linear-gradient(90deg, #6d28d9, #2563eb)',
+                        'tweakFont': 'Georgia, "Times New Roman", serif',
+                        'tweakPadding': '24px',
+                        'tweakAlign': 'center',
+                        'tweakZoom': '1.3',
+                        'tweakTextColor': '<script>alert(1)</script>',
+                    },
+                    'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 400, 'h': 200},
+                }],
+            }],
+        })
+        props = clean['pages'][0]['components'][0]['props']
+        assert props['tweakBackground'] == '#111827'
+        assert props['tweakFont'] == 'Georgia, "Times New Roman", serif'
+        assert props['tweakPadding'] == '24px'
+        assert props['tweakAlign'] == 'center'
+        assert props['tweakZoom'] == '1.3'
+        # Markup characters are stripped by _css_value; nothing executable stays.
+        assert '<' not in props.get('tweakTextColor', '')
+
+        clean2 = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [{
+                    'id': 'h2', 'type': 'html',
+                    'props': {'code': 'x', 'tweakAlign': 'justify', 'tweakZoom': '99'},
+                    'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 400, 'h': 200},
+                }],
+            }],
+        })
+        props2 = clean2['pages'][0]['components'][0]['props']
+        assert 'tweakAlign' not in props2
+        assert 'tweakZoom' not in props2
+
     def test_styles_mobile_preserved_and_sanitized(self):
         clean = validate_and_clean_schema({
             'pages': [{

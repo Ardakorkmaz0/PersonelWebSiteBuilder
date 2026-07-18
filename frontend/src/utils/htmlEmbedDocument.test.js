@@ -69,3 +69,31 @@ describe('htmlEmbedDocument', () => {
     expect((again.match(/data-pwb-embed-reset/g) || []).length).toBe(1)
   })
 })
+
+describe('appearance tweaks tag', () => {
+  it('injects one style tag with only the set overrides', () => {
+    const doc = htmlEmbedDocument('<div>x</div>', {
+      tweaks: { background: '#111827', accent: '#f43f5e', padding: '24', align: 'center', zoom: '1.3' },
+    })
+    expect(doc).toContain('data-pwb-embed-tweaks')
+    expect(doc).toContain('background:#111827!important')
+    expect(doc).toContain('padding:24px!important')
+    expect(doc).toContain('text-align:center!important')
+    expect(doc).toContain('zoom:1.3!important')
+    // Unset knobs emit nothing: no font override after the tweaks marker.
+    expect(doc.split('data-pwb-embed-tweaks')[1]).not.toContain('font-family')
+  })
+
+  it('emits no tag when no tweak is set', () => {
+    const doc = htmlEmbedDocument('<div>x</div>', { tweaks: null })
+    expect(doc).not.toContain('data-pwb-embed-tweaks')
+  })
+
+  it('strips characters that could escape the style tag', () => {
+    const doc = htmlEmbedDocument('<div>x</div>', {
+      tweaks: { background: 'red</style><script>alert(1)</script>' },
+    })
+    expect(doc).not.toContain('<script>alert')
+    expect(doc).toContain('data-pwb-embed-tweaks')
+  })
+})

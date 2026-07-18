@@ -97,11 +97,27 @@ export function htmlEmbedFillMode(component) {
   return ''
 }
 
+// Appearance overrides set in the Properties panel, forwarded to
+// htmlEmbedDocument's tweaks style tag. Only set values ride along.
+export function htmlEmbedTweaks(props) {
+  if (!props || typeof props !== 'object') return null
+  const tweaks = {}
+  if (props.tweakBackground) tweaks.background = props.tweakBackground
+  if (props.tweakTextColor) tweaks.textColor = props.tweakTextColor
+  if (props.tweakAccent) tweaks.accent = props.tweakAccent
+  if (props.tweakFont) tweaks.font = props.tweakFont
+  if (props.tweakPadding !== undefined && props.tweakPadding !== '') tweaks.padding = props.tweakPadding
+  if (props.tweakZoom) tweaks.zoom = props.tweakZoom
+  if (props.tweakAlign) tweaks.align = props.tweakAlign
+  return Object.keys(tweaks).length ? tweaks : null
+}
+
 export function htmlEmbedDocumentOptions(component, scale = 1) {
   const fill = htmlEmbedFillMode(component)
   return {
     fill,
     scale: fill ? 1 : scale,
+    tweaks: htmlEmbedTweaks(component?.props),
   }
 }
 

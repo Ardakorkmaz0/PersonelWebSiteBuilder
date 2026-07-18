@@ -121,6 +121,8 @@ const images = [
   ['rounded', 'Rounded', `<img src="https://picsum.photos/seed/3/800/450" alt="" style="max-width:100%;height:auto;border-radius:14px;display:block;" />`],
   ['shadow', 'Shadow', `<img src="https://picsum.photos/seed/4/800/450" alt="" style="max-width:100%;height:auto;border-radius:14px;box-shadow:0 20px 45px rgba(0,0,0,0.2);display:block;" />`],
   ['circle', 'Avatar', `<img src="https://picsum.photos/seed/5/240/240" alt="" style="width:120px;height:120px;border-radius:999px;object-fit:cover;display:block;" />`],
+  ['square-pp', 'Square photo', `<img src="https://picsum.photos/seed/5/240/240" alt="" style="width:120px;height:120px;border-radius:16px;object-fit:cover;display:block;" />`],
+  ['ring', 'Ring avatar', `<img src="https://picsum.photos/seed/7/240/240" alt="" style="width:120px;height:120px;border-radius:999px;object-fit:cover;display:block;border:3px solid #fff;box-shadow:0 0 0 3px #6366f1;" />`],
   ['framed', 'Framed', `<img src="https://picsum.photos/seed/6/800/450" alt="" style="max-width:100%;height:auto;border-radius:14px;border:6px solid #fff;box-shadow:0 8px 24px rgba(0,0,0,0.12);display:block;" />`],
 ]
 

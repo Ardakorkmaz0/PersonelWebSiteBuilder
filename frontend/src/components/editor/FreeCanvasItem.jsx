@@ -5,6 +5,7 @@ import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
 import CanvasSelectionActions from './CanvasSelectionActions.jsx'
 import { selectionActionsCanvasWidth } from './canvasSelectionActionsLayout.js'
 import { snapDraggedRect } from '../../utils/snapping.js'
+import { embedAspectLock } from '../../utils/htmlSnippetSizing.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
@@ -291,6 +292,9 @@ export default function FreeCanvasItem({
     const sx = e.clientX
     const sy = e.clientY
     const orig = { x, y, w, h }
+    // Shape-locked embeds (profile photos, icons) keep a fixed box ratio so a
+    // circular avatar can't be squashed into an oval.
+    const aspect = embedAspectLock(component)
     function onMove(ev) {
       const dx = (ev.clientX - sx) / canvasScale
       const dy = (ev.clientY - sy) / canvasScale
@@ -304,6 +308,15 @@ export default function FreeCanvasItem({
       if (dir.includes('n')) {
         nh = Math.max(MIN, orig.h - dy)
         ny = orig.y + (orig.h - nh)
+      }
+      if (aspect) {
+        // Drive from the horizontal axis for any handle that moves an
+        // east/west edge, else from the vertical axis; then re-anchor the
+        // fixed corner so the opposite edge stays put.
+        if (dir.includes('e') || dir.includes('w')) nh = Math.max(MIN, Math.round(nw / aspect))
+        else nw = Math.max(MIN, Math.round(nh * aspect))
+        if (dir.includes('n')) ny = orig.y + orig.h - nh
+        if (dir.includes('w')) nx = orig.x + orig.w - nw
       }
       setLayout(component.id, { x: nx, y: ny, w: nw, h: nh })
     }

@@ -454,6 +454,8 @@ export const TURKISH_TRANSLATIONS = {
   'Fit to content': 'İçeriğe sığdır',
   'Measure the block and snap the box to its real size': 'Bloğu ölç ve kutuyu gerçek boyutuna oturt',
   // Component variant labels (buttons / cards / badges / inputs)
+  'Square photo': 'Kare fotoğraf',
+  'Ring avatar': 'Halkalı avatar',
   'Icon left': 'Solda ikon',
   'Soft rose': 'Yumuşak gül',
   'Soft emerald': 'Yumuşak zümrüt',

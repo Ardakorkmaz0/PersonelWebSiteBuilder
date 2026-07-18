@@ -146,3 +146,18 @@ export function htmlBaseSizeFromComponent(component, fallback) {
     || current
   )
 }
+
+// Embeds whose box must keep a fixed aspect ratio while resizing — profile
+// photos and icons are meant to stay square, so dragging any handle keeps a
+// 1:1 box instead of letting a circular avatar stretch into an oval. Keyed by
+// paletteType (icons are always square) or paletteType:variant (photo shapes).
+const ASPECT_LOCK_TYPES = new Set(['icon'])
+const ASPECT_LOCK_VARIANTS = new Set(['image:circle', 'image:square-pp', 'image:ring'])
+
+export function embedAspectLock(component) {
+  if (!component || component.type !== 'html') return null
+  const props = component.props || {}
+  if (ASPECT_LOCK_TYPES.has(props._paletteType)) return 1
+  if (ASPECT_LOCK_VARIANTS.has(`${props._paletteType}:${props._paletteVariant}`)) return 1
+  return null
+}

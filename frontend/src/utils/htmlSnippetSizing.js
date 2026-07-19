@@ -97,6 +97,20 @@ export function htmlEmbedFillMode(component) {
   return ''
 }
 
+// The frame shape an embed should render as: the panel's explicit choice wins,
+// otherwise the preset profile-photo variants imply one. A shaped embed fills
+// its box (object-fit:cover) at ANY size — this is what keeps a preset avatar
+// from sitting small inside a big box (the fixed-size + box-scale approach caps
+// out and can't fill a large frame).
+export function embedShape(props) {
+  if (!props || typeof props !== 'object') return null
+  if (props.shape === 'square' || props.shape === 'circle') return props.shape
+  const key = `${props._paletteType}:${props._paletteVariant}`
+  if (key === 'image:circle' || key === 'image:ring') return 'circle'
+  if (key === 'image:square-pp') return 'square'
+  return null
+}
+
 // Appearance overrides set in the Properties panel, forwarded to
 // htmlEmbedDocument's tweaks style tag. Only set values ride along.
 export function htmlEmbedTweaks(props) {
@@ -109,16 +123,23 @@ export function htmlEmbedTweaks(props) {
   if (props.tweakPadding !== undefined && props.tweakPadding !== '') tweaks.padding = props.tweakPadding
   if (props.tweakZoom) tweaks.zoom = props.tweakZoom
   if (props.tweakAlign) tweaks.align = props.tweakAlign
-  if (props.shape === 'square' || props.shape === 'circle') tweaks.shape = props.shape
+  const shape = embedShape(props)
+  if (shape) tweaks.shape = shape
   return Object.keys(tweaks).length ? tweaks : null
 }
 
 export function htmlEmbedDocumentOptions(component, scale = 1) {
   const fill = htmlEmbedFillMode(component)
+  const tweaks = htmlEmbedTweaks(component?.props)
+  // A shaped embed fills its box directly (object-fit:cover), so the
+  // proportional box-scale transform must NOT also apply — otherwise the
+  // content is scaled AND stretched, leaving the image small inside a big box
+  // (or clipped when small). Like fill mode, shape pins scale to 1.
+  const shaped = tweaks?.shape === 'square' || tweaks?.shape === 'circle'
   return {
     fill,
-    scale: fill ? 1 : scale,
-    tweaks: htmlEmbedTweaks(component?.props),
+    scale: (fill || shaped) ? 1 : scale,
+    tweaks,
   }
 }
 
@@ -150,18 +171,15 @@ export function htmlBaseSizeFromComponent(component, fallback) {
 
 // Embeds whose box must keep a fixed aspect ratio while resizing — profile
 // photos and icons are meant to stay square, so dragging any handle keeps a
-// 1:1 box instead of letting a circular avatar stretch into an oval. Keyed by
-// paletteType (icons are always square) or paletteType:variant (photo shapes).
+// 1:1 box instead of letting a circular avatar stretch into an oval.
 const ASPECT_LOCK_TYPES = new Set(['icon'])
-const ASPECT_LOCK_VARIANTS = new Set(['image:circle', 'image:square-pp', 'image:ring'])
 
 export function embedAspectLock(component) {
   if (!component || component.type !== 'html') return null
   const props = component.props || {}
-  // Explicit shape chosen in the panel wins — lets ANY image be forced square
-  // or circular, not just the preset profile-photo variants.
-  if (props.shape === 'square' || props.shape === 'circle') return 1
+  // Any shaped embed (panel choice or preset profile photo) locks 1:1; icons
+  // are always square too.
+  if (embedShape(props)) return 1
   if (ASPECT_LOCK_TYPES.has(props._paletteType)) return 1
-  if (ASPECT_LOCK_VARIANTS.has(`${props._paletteType}:${props._paletteVariant}`)) return 1
   return null
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { embedAspectLock } from './htmlSnippetSizing.js'
+import { embedAspectLock, htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 
 const html = (type, variant) => ({ type: 'html', props: { _paletteType: type, _paletteVariant: variant } })
 
@@ -32,5 +32,19 @@ describe('embedAspectLock', () => {
     expect(embedAspectLock({ type: 'heading', props: {} })).toBeNull()
     expect(embedAspectLock({ type: 'html', props: {} })).toBeNull()
     expect(embedAspectLock(null)).toBeNull()
+  })
+})
+
+describe('htmlEmbedDocumentOptions scale', () => {
+  it('keeps the box-scale for an ordinary embed', () => {
+    const opts = htmlEmbedDocumentOptions({ type: 'html', props: { code: '<div>x</div>' } }, 1.6)
+    expect(opts.scale).toBe(1.6)
+  })
+
+  it('pins scale to 1 for a shaped embed so the image fills the box directly', () => {
+    const square = htmlEmbedDocumentOptions({ type: 'html', props: { code: '<img>', shape: 'square' } }, 1.6)
+    const circle = htmlEmbedDocumentOptions({ type: 'html', props: { code: '<img>', shape: 'circle' } }, 2.4)
+    expect(square.scale).toBe(1)
+    expect(circle.scale).toBe(1)
   })
 })

@@ -183,3 +183,43 @@ describe('schemaToSingleHtml per-breakpoint styles', () => {
     expect(desktop).not.toContain('font-size: 28px')
   })
 })
+
+describe('schemaToSingleHtml auto-layout container', () => {
+  const build = (flow, extra = {}) => schemaToSingleHtml({
+    theme: {},
+    pages: [{
+      id: 'p1', name: 'Home', mode: 'empty',
+      components: [{
+        id: 'c1', type: 'container',
+        props: { flow, gap: 20, ...extra },
+        styles: {}, layout: { x: 0, y: 0, w: 600, h: 300 },
+        children: [
+          { id: 'a', type: 'heading', props: { text: 'A', level: 'h3' }, styles: {}, layout: { x: 0, y: 0, w: 200, h: 40 } },
+          { id: 'b', type: 'text', props: { text: 'B' }, styles: {}, layout: { x: 0, y: 0, w: 200, h: 60 } },
+        ],
+      }],
+    }],
+  }, 'Site')
+
+  it('emits a flex column that flows children (no absolute positioning)', () => {
+    const html = build('column')
+    expect(html).toContain('display:flex')
+    expect(html).toContain('flex-direction:column')
+    expect(html).toContain('gap:20px')
+    // The container's own children are not absolutely pinned in flow mode.
+    expect(html).not.toContain('position:absolute;left:0px;top:0px;width:200px')
+  })
+
+  it('emits a responsive grid template', () => {
+    const html = build('grid', { cols: 4 })
+    expect(html).toContain('display:grid')
+    expect(html).toContain('repeat(4, minmax(0, 1fr))')
+  })
+
+  it('a free container still uses the absolute mini-canvas', () => {
+    const html = build('free')
+    expect(html).toContain('position:relative')
+    expect(html).toContain('position:absolute')
+    expect(html).not.toContain('display:grid')
+  })
+})

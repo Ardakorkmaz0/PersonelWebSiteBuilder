@@ -231,16 +231,20 @@ def sanitize_props(ctype, props):
     if ctype == 'accordion':
         return {'title': _str(props.get('title')), 'text': _str(props.get('text'))}
     if ctype == 'container':
-        direction = props.get('direction')
+        # Auto-layout: 'free' keeps the classic absolute mini-canvas; the flow
+        # modes make the container lay its children out with flex/grid so they
+        # reflow responsively. Extra keys ride along harmlessly on free ones.
+        flow = props.get('flow')
         align = props.get('align')
         justify = props.get('justify')
         return {
-            'direction': direction if direction in ('row', 'column') else 'column',
-            'align': align if align in ('flex-start', 'center', 'flex-end', 'stretch') else 'stretch',
+            'flow': flow if flow in ('free', 'column', 'row', 'grid') else 'free',
+            'align': align if align in ('start', 'center', 'end', 'stretch') else 'stretch',
             'justify': justify
-            if justify in ('flex-start', 'center', 'flex-end', 'space-between', 'space-around')
-            else 'flex-start',
+            if justify in ('start', 'center', 'end', 'between', 'around')
+            else 'start',
             'gap': _num(props.get('gap'), 16, 0, 200),
+            'cols': _num(props.get('cols'), 3, 1, 12),
             'wrap': bool(props.get('wrap')),
         }
     if ctype == 'html':

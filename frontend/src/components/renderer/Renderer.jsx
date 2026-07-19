@@ -23,6 +23,7 @@ import {
 } from './layout.js'
 import { componentBoxScale, scaleBoxStyles, scaleCssValue, scaledPx } from './scale.js'
 import { regionContentWidth, responsiveRegionChildLayout } from '../../utils/regionLayout.js'
+import { autoLayoutChildStyle, autoLayoutContainerStyle } from '../../utils/autoLayout.js'
 
 function isViewportStretch(component) {
   return component?.type === 'region' || (
@@ -242,9 +243,25 @@ export function RenderComponent({
   }
 
   // A container is a nested mini-canvas: children keep their own x/y/w/h inside
-  // the container, matching the editor and exported HTML.
+  // the container, matching the editor and exported HTML. When it is set to an
+  // auto-layout flow (column/row/grid) the children instead FLOW responsively.
   if (component.type === 'container') {
     const kids = Array.isArray(component.children) ? component.children : []
+    const autoStyle = autoLayoutContainerStyle(component.props)
+    if (autoStyle) {
+      return (
+        <div style={{ ...style, ...autoStyle, position: 'relative', height: 'auto' }}>
+          {kids.map((c) => {
+            if (isHidden(c, viewport)) return null
+            return (
+              <div key={c.id} style={autoLayoutChildStyle(c, component.props)}>
+                <RenderComponent component={c} viewport={viewport} editorPreview={editorPreview} />
+              </div>
+            )
+          })}
+        </div>
+      )
+    }
     const minHeight = absoluteChildrenHeight(kids, Math.round(component.layout?.h || 160))
     return (
       <div

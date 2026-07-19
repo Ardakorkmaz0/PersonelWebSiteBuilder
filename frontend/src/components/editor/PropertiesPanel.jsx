@@ -1286,6 +1286,75 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     </section>
   ) : null
 
+  // Auto-layout for containers: a Stack/Row/Grid flow makes the children reflow
+  // responsively instead of sitting at fixed x/y — the single biggest lever for
+  // screen compatibility. 'Free' keeps the classic absolute mini-canvas.
+  const containerFlow = component.props.flow || 'free'
+  const layoutSection = component.type === 'container' ? (
+    <section className="space-y-3">
+      <SectionTitle>{t('Layout')}</SectionTitle>
+      <LabeledSelect
+        label={t('Flow')}
+        value={containerFlow}
+        onChange={(flow) => updateProps(component.id, { flow })}
+        options={[
+          ['free', t('Free (absolute)')],
+          ['column', t('Stack (vertical)')],
+          ['row', t('Row (horizontal)')],
+          ['grid', t('Grid')],
+        ]}
+      />
+      {containerFlow !== 'free' && (
+        <>
+          <LabeledNumber
+            label={t('Gap')}
+            value={component.props.gap ?? 16}
+            onChange={(gap) => updateProps(component.id, { gap })}
+          />
+          {containerFlow === 'grid' ? (
+            <LabeledNumber
+              label={t('Columns')}
+              value={component.props.cols ?? 3}
+              onChange={(cols) => updateProps(component.id, { cols })}
+            />
+          ) : (
+            <>
+              <LabeledSelect
+                label={t('Justify')}
+                value={component.props.justify || 'start'}
+                onChange={(justify) => updateProps(component.id, { justify })}
+                options={[
+                  ['start', t('Start')],
+                  ['center', t('Center')],
+                  ['end', t('End')],
+                  ['between', t('Space between')],
+                  ['around', t('Space around')],
+                ]}
+              />
+              <LabeledSelect
+                label={t('Align')}
+                value={component.props.align || 'stretch'}
+                onChange={(align) => updateProps(component.id, { align })}
+                options={[
+                  ['stretch', t('Stretch')],
+                  ['start', t('Start')],
+                  ['center', t('Center')],
+                  ['end', t('End')],
+                ]}
+              />
+              <LabeledSelect
+                label={t('Wrap')}
+                value={component.props.wrap ? 'wrap' : 'nowrap'}
+                onChange={(v) => updateProps(component.id, { wrap: v === 'wrap' })}
+                options={[['nowrap', t('No wrap')], ['wrap', t('Wrap')]]}
+              />
+            </>
+          )}
+        </>
+      )}
+    </section>
+  ) : null
+
   return (
     <div className="studio-properties-panel flex h-full min-w-0 flex-col overflow-hidden">
       <div className="border-b border-[#e5e7eb] px-4 py-3">
@@ -1324,6 +1393,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             (its image, text, links) must not hide below secondary tooling. */}
         {component.type === 'region' && isMobile ? null : contentSection}
         {linkSection}
+        {layoutSection}
 
         <AiComponentEdit
           component={component}

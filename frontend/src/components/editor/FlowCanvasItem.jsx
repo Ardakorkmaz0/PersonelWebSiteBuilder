@@ -21,6 +21,7 @@ import {
   regionDisplayPatchToDesign,
   responsiveRegionChildLayout,
 } from '../../utils/regionLayout.js'
+import { autoLayoutChildStyle, autoLayoutContainerStyle } from '../../utils/autoLayout.js'
 
 const ACCENT = '#4f46e5'
 const MIN = 20
@@ -524,6 +525,47 @@ export function ContainerEditor({
     ref.current = el
     setNodeRef(el)
   }
+
+  // Auto-layout: children FLOW (flex/grid) exactly as they render/publish, so
+  // the editor is WYSIWYG. Each child is a click-to-select cell (no absolute
+  // handles); dropping onto the container appends, and the layer arrows reorder.
+  const autoStyle = autoLayoutContainerStyle(component.props)
+  if (autoStyle) {
+    return (
+      <div
+        ref={setRefs}
+        data-builder-droppable-id={component.id}
+        data-builder-fit-scale={1}
+        style={{
+          ...userStyles,
+          ...autoStyle,
+          width: '100%',
+          height: 'auto',
+          boxSizing: 'border-box',
+          outline: isOver ? `2px dashed ${ACCENT}` : undefined,
+          outlineOffset: -2,
+        }}
+      >
+        {kids.length === 0 ? (
+          <div className="pointer-events-none flex min-h-16 items-center justify-center py-4 text-center text-xs text-[#9ca3af]">
+            {t('Drop components here')}
+          </div>
+        ) : (
+          kids.map((c) => (
+            <FlowChildItem
+              key={c.id}
+              component={c}
+              container={component}
+              brushMode={brushMode}
+              brushColor={brushColor}
+              brushTarget={brushTarget}
+              onBrushUse={onBrushUse}
+            />
+          ))
+        )}
+      </div>
+    )
+  }
   return (
     <div
       ref={setRefs}
@@ -569,6 +611,54 @@ export function ContainerEditor({
             />
           ))
         )}
+      </div>
+    </div>
+  )
+}
+
+// One child inside an auto-layout container: an in-flow cell that renders the
+// real component and selects on click. Sizing comes from autoLayoutChildStyle
+// so the editor matches the published flow exactly.
+function FlowChildItem({
+  component,
+  container,
+  brushMode = false,
+  brushColor = '#4f46e5',
+  brushTarget = 'smart',
+  onBrushUse = () => {},
+}) {
+  const selectedId = useEditorStore((s) => s.selectedId)
+  const viewport = useEditorStore((s) => s.viewport)
+  const select = useEditorStore((s) => s.selectComponent)
+  const paintComponent = useEditorStore((s) => s.paintComponent)
+  if (isHidden(component, viewport)) return null
+  const isSelected = selectedId === component.id
+  const childStyle = autoLayoutChildStyle(component, container.props) || {}
+  return (
+    <div
+      data-cid={component.id}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return
+        e.stopPropagation()
+        if (brushMode) {
+          paintComponent(component.id, brushColor, brushTarget)
+          onBrushUse(brushColor)
+          return
+        }
+        select(component.id)
+      }}
+      style={{
+        ...childStyle,
+        position: 'relative',
+        boxSizing: 'border-box',
+        cursor: brushMode ? BRUSH_CURSOR : 'pointer',
+        outline: isSelected ? `2px solid ${ACCENT}` : undefined,
+        outlineOffset: 1,
+        borderRadius: 4,
+      }}
+    >
+      <div className="pointer-events-none h-full w-full">
+        <RenderComponent component={component} viewport={viewport} editorPreview />
       </div>
     </div>
   )

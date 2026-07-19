@@ -23,6 +23,7 @@ import {
   pinnedLayoutStyle,
 } from '../components/renderer/layout.js'
 import { regionContentWidth, resolveRegionDock } from './regionLayout.js'
+import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -288,6 +289,18 @@ function inlineNode(c) {
   }
   if (c.type === 'container') {
     const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+    // Auto-layout: children flow (flex/grid) and reflow on any screen.
+    const autoCss = autoLayoutContainerCss(c.props)
+    if (autoCss) {
+      const inner = kids
+        .map((ch) => {
+          const filled = { ...ch, styles: { ...(ch.styles || {}), width: '100%' } }
+          const childCss = autoLayoutChildCss(ch, c.props)
+          return `<div style="${childCss}">${linkWrap(filled, inlineNode(filled))}</div>`
+        })
+        .join('')
+      return `<div style="${autoCss};${styleStr}">${inner}</div>`
+    }
     const h = absoluteChildrenHeight(kids, Math.round(c.layout?.h || 160))
     const inner = kids
       .map((ch) => {

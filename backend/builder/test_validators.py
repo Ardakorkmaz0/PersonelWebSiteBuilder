@@ -293,6 +293,44 @@ class TestValidateAndCleanSchema:
         assert 'tweakAlign' not in props2
         assert 'tweakZoom' not in props2
 
+    def test_container_auto_layout_round_trips(self):
+        """Auto-layout flow props survive a save; junk is normalized."""
+        clean = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [{
+                    'id': 'c1', 'type': 'container',
+                    'props': {'flow': 'grid', 'gap': 24, 'cols': 4, 'align': 'center',
+                              'justify': 'between', 'wrap': True},
+                    'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 600, 'h': 300},
+                    'children': [],
+                }],
+            }],
+        })
+        props = clean['pages'][0]['components'][0]['props']
+        assert props['flow'] == 'grid'
+        assert props['gap'] == 24
+        assert props['cols'] == 4
+        assert props['align'] == 'center'
+        assert props['justify'] == 'between'
+        assert props['wrap'] is True
+
+        bad = validate_and_clean_schema({
+            'pages': [{
+                'id': 'home', 'name': 'Home',
+                'components': [{
+                    'id': 'c2', 'type': 'container',
+                    'props': {'flow': 'diagonal', 'cols': 99, 'align': 'sideways'},
+                    'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 600, 'h': 300},
+                    'children': [],
+                }],
+            }],
+        })
+        p2 = bad['pages'][0]['components'][0]['props']
+        assert p2['flow'] == 'free'
+        assert p2['cols'] == 12
+        assert p2['align'] == 'stretch'
+
     def test_html_embed_shape_round_trips(self):
         """The locked frame shape survives a save; junk values are dropped."""
         def clean_shape(value):

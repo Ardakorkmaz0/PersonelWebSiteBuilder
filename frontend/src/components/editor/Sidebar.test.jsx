@@ -70,10 +70,13 @@ describe('Sidebar component recommendations', () => {
     }
   })
 
-  it('hides Region creation while preserving its registry support for existing projects', () => {
+  it('exposes the Section (region) as the leading structural block', () => {
     renderSidebar()
 
+    // Region is the Wix-like Section — now addable, labelled "Section", and
+    // listed first as the primary page-structure block.
     expect(paletteItems.some((item) => item.type === 'region')).toBe(true)
+    expect(screen.getAllByText('Section').length).toBeGreaterThan(0)
     expect(screen.queryByText('Region')).not.toBeInTheDocument()
   })
 

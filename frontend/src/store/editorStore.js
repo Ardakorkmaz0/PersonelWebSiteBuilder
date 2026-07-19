@@ -1105,10 +1105,14 @@ export const useEditorStore = create((set, get) => ({
       const defaultSize = def.defaultSize || { w: 200, h: 80 }
       const customW = Number(initialSize?.w)
       const customH = Number(initialSize?.h)
-      const size = {
-        w: Number.isFinite(customW) && customW > 0 ? Math.round(customW) : defaultSize.w,
-        h: Number.isFinite(customH) && customH > 0 ? Math.round(customH) : defaultSize.h,
-      }
+      // A Section (region) is a full-width band — always drop it at its native
+      // size, never the palette's guessed swatch size, so it spans the page.
+      const size = type === 'region'
+        ? { ...defaultSize }
+        : {
+            w: Number.isFinite(customW) && customW > 0 ? Math.round(customW) : defaultSize.w,
+            h: Number.isFinite(customH) && customH > 0 ? Math.round(customH) : defaultSize.h,
+          }
       const comps = page.components
       const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
       const id = genId(type)

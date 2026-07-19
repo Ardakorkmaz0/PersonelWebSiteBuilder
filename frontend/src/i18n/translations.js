@@ -458,6 +458,7 @@ export const TURKISH_TRANSLATIONS = {
   'Ring avatar': 'Halkalı avatar',
   'Shape': 'Şekil',
   'Original': 'Orijinal',
+  'Text band': 'Metin bandı',
   'Flow': 'Akış',
   'Free (absolute)': 'Serbest (mutlak)',
   'Stack (vertical)': 'Dikey yığın',

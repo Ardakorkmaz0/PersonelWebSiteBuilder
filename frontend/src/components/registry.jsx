@@ -231,7 +231,7 @@ export const registry = {
 
   section: {
     type: 'section',
-    label: 'Section',
+    label: 'Text band',
     icon: '▬',
     Render: Section,
     defaultSize: { w: 1000, h: 280 },
@@ -264,7 +264,7 @@ export const registry = {
 
   region: {
     type: 'region',
-    label: 'Region',
+    label: 'Section',
     icon: '▤',
     Render: Region,
     defaultSize: { w: 980, h: 360 },

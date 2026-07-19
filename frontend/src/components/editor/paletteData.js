@@ -17,9 +17,14 @@ export function variantsForType(type) {
 // Most palette variants drop as editable HTML embeds on the free canvas, but
 // structural widgets that need editor-owned children stay native there.
 export const NATIVE_CANVAS_TYPES = new Set(['tabs', 'navbar', 'region'])
-// Region creation is intentionally hidden until the Wix-like section model is
-// redesigned. Keeping the registry type preserves existing saved projects.
-export const ADDABLE_PALETTE_ITEMS = paletteItems.filter((item) => item.type !== 'region')
+// The `region` type is a Wix-like Section: a full-width band that auto-stacks
+// below the previous one, never overlaps, reorders, and holds freely-placed
+// children — so a page can be built as a stack of sections. It leads the
+// palette as the primary structural block; all types stay addable.
+export const ADDABLE_PALETTE_ITEMS = [
+  ...paletteItems.filter((item) => item.type === 'region'),
+  ...paletteItems.filter((item) => item.type !== 'region'),
+]
 
 // Types whose snippets are wide (full-width-ish) — previewed scaled-down from the
 // top-left; the rest are inline and shown a bit larger, centered.

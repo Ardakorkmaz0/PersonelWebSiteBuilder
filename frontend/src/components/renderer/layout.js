@@ -71,6 +71,21 @@ export function pinnedLayoutStyle(component, baseStyle = {}) {
     pinned.height = 'auto'
   }
 
+  // A fixed full-width HORIZONTAL navbar is Bootstrap's fixed-top: glued to
+  // the viewport top edge-to-edge. Pin offsets must not nudge it sideways —
+  // entering fixed mode may not change the design, only the scroll behavior.
+  if (
+    mode === 'fixed' &&
+    component?.type === 'navbar' &&
+    !isVerticalNavbar(component) &&
+    component?.props?.widthMode !== 'boxed'
+  ) {
+    pinned.left = 0
+    pinned.right = 0
+    pinned.width = '100%'
+    pinned.transform = undefined
+  }
+
   return pinned
 }
 

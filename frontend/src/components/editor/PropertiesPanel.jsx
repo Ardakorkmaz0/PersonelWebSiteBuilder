@@ -1220,18 +1220,36 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     <section className="space-y-3">
       <SectionTitle>{t('Content')}</SectionTitle>
       {/* Navbars lead with pinning, Bootstrap-style — "is this bar fixed?" is
-          the first question a nav asks. A fixed VERTICAL navbar becomes a
-          full-height rail (Twitter-like), so it also picks its side here. */}
+          the first question a nav asks. Exactly two states, and toggling MUST
+          NOT change the design: a full-width bar stays edge-to-edge where it
+          is, only the scroll behavior changes (fixed-top). A fixed VERTICAL
+          navbar becomes a full-height rail (Twitter-like) and picks its side. */}
       {component.type === 'navbar' && (
         <>
           <LabeledSelect
             label={t('Pin navbar')}
-            value={scrollBehavior}
-            onChange={setScrollBehavior}
+            value={scrollBehavior === 'normal' ? 'normal' : 'fixed'}
+            onChange={(mode) => {
+              if (mode !== 'fixed') {
+                updateProps(component.id, { scrollBehavior: 'normal' })
+                return
+              }
+              const vertical = component.props?.navLayout === 'vertical'
+              const boxed = component.props?.widthMode === 'boxed'
+              updateProps(component.id, {
+                scrollBehavior: 'fixed',
+                pinY: 'top',
+                pinOffsetY: 0,
+                // Full-width bars and rails hug their edges (offset 0); only a
+                // boxed bar keeps its designed x so it does not jump sideways.
+                pinX: vertical && component.props?.pinX === 'right' ? 'right' : 'left',
+                pinOffsetX: !vertical && boxed ? Math.round((component.layout?.x || 0)) : 0,
+                pinZIndex: component.props?.pinZIndex ?? 100,
+              })
+            }}
             options={[
-              ['normal', t('Not pinned (scrolls with page)')],
-              ['fixed', t('Fixed — always on screen')],
-              ['sticky', t('Sticky — sticks when it reaches the top')],
+              ['normal', t('Not fixed')],
+              ['fixed', t('Fixed while scrolling (fixed-top)')],
             ]}
           />
           {component.props?.navLayout === 'vertical' && scrollBehavior === 'fixed' && (

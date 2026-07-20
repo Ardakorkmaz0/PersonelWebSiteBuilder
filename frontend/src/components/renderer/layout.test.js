@@ -107,3 +107,33 @@ describe('pinnedLayoutStyle full-height vertical navbar', () => {
     expect(stickyVertical.bottom).toBeUndefined()
   })
 })
+
+describe('pinnedLayoutStyle Bootstrap fixed-top navbar', () => {
+  it('keeps a full-width horizontal navbar edge-to-edge, ignoring stray offsets', () => {
+    const style = pinnedLayoutStyle(
+      {
+        type: 'navbar',
+        props: { scrollBehavior: 'fixed', pinOffsetX: 24, pinOffsetY: 0 },
+      },
+      { position: 'absolute', left: 0, top: 0, width: '100%', height: 70 },
+    )
+    expect(style.position).toBe('fixed')
+    expect(style.left).toBe(0)
+    expect(style.right).toBe(0)
+    expect(style.width).toBe('100%')
+    expect(style.top).toBe(0)
+  })
+
+  it('leaves a boxed navbar at its designed x', () => {
+    const style = pinnedLayoutStyle(
+      {
+        type: 'navbar',
+        props: { scrollBehavior: 'fixed', widthMode: 'boxed', pinOffsetX: 120 },
+      },
+      { position: 'absolute', left: 120, top: 0, width: 700, height: 70 },
+    )
+    expect(style.left).toBe(120)
+    expect(style.right).toBeUndefined()
+    expect(style.width).toBe(700)
+  })
+})

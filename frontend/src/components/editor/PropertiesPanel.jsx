@@ -1219,6 +1219,31 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const contentSection = (def.editableProps || []).length > 0 ? (
     <section className="space-y-3">
       <SectionTitle>{t('Content')}</SectionTitle>
+      {/* Navbars lead with pinning, Bootstrap-style — "is this bar fixed?" is
+          the first question a nav asks. A fixed VERTICAL navbar becomes a
+          full-height rail (Twitter-like), so it also picks its side here. */}
+      {component.type === 'navbar' && (
+        <>
+          <LabeledSelect
+            label={t('Pin navbar')}
+            value={scrollBehavior}
+            onChange={setScrollBehavior}
+            options={[
+              ['normal', t('Not pinned (scrolls with page)')],
+              ['fixed', t('Fixed — always on screen')],
+              ['sticky', t('Sticky — sticks when it reaches the top')],
+            ]}
+          />
+          {component.props?.navLayout === 'vertical' && scrollBehavior === 'fixed' && (
+            <LabeledSelect
+              label={t('Rail side')}
+              value={component.props?.pinX === 'right' ? 'right' : 'left'}
+              onChange={(v) => updateProps(component.id, { pinX: v, pinOffsetX: 0 })}
+              options={[['left', t('Left')], ['right', t('Right')]]}
+            />
+          )}
+        </>
+      )}
       {/* Picture blocks (Avatar, figures, photo cards) drop as html embeds, so
           swapping the photo used to require editing the snippet by hand. Every
           <img> in the code gets a real picker, FIRST — the main property of an

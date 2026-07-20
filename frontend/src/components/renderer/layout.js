@@ -62,6 +62,15 @@ export function pinnedLayoutStyle(component, baseStyle = {}) {
     Object.assign(pinned, pinInset(pinX, offsetX))
   }
 
+  // A fixed VERTICAL navbar is a full-height rail (Twitter-like): pinned to
+  // its side, stretching from the top of the viewport all the way down — the
+  // page can scroll forever underneath, the rail never ends.
+  if (mode === 'fixed' && isVerticalNavbar(component)) {
+    pinned.top = numericProp(props.pinOffsetY, 0)
+    pinned.bottom = 0
+    pinned.height = 'auto'
+  }
+
   return pinned
 }
 

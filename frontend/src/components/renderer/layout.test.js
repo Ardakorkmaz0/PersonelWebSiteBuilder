@@ -62,3 +62,48 @@ describe('pinnedLayoutStyle', () => {
     expect(style.top).toBe(144)
   })
 })
+
+describe('pinnedLayoutStyle full-height vertical navbar', () => {
+  it('stretches a fixed vertical navbar into a Twitter-like side rail', () => {
+    const style = pinnedLayoutStyle(
+      {
+        type: 'navbar',
+        props: { navLayout: 'vertical', scrollBehavior: 'fixed', pinX: 'left' },
+      },
+      { position: 'absolute', left: 0, top: 0, width: 220, height: 320 },
+    )
+    expect(style.position).toBe('fixed')
+    expect(style.top).toBe(0)
+    expect(style.bottom).toBe(0)
+    expect(style.height).toBe('auto')
+    expect(style.left).toBe(0)
+  })
+
+  it('supports the right side and keeps a custom top offset', () => {
+    const style = pinnedLayoutStyle(
+      {
+        type: 'navbar',
+        props: { navLayout: 'vertical', scrollBehavior: 'fixed', pinX: 'right', pinOffsetY: 12 },
+      },
+      { position: 'absolute', left: 0, top: 0, width: 220, height: 320 },
+    )
+    expect(style.right).toBe(0)
+    expect(style.top).toBe(12)
+    expect(style.bottom).toBe(0)
+    expect(style.height).toBe('auto')
+  })
+
+  it('does not stretch horizontal navbars or sticky vertical ones', () => {
+    const horizontal = pinnedLayoutStyle(
+      { type: 'navbar', props: { navLayout: 'horizontal', scrollBehavior: 'fixed' } },
+      { position: 'absolute', left: 0, top: 0, width: 1000, height: 70 },
+    )
+    expect(horizontal.height).toBe(70)
+    const stickyVertical = pinnedLayoutStyle(
+      { type: 'navbar', props: { navLayout: 'vertical', scrollBehavior: 'sticky' } },
+      { position: 'absolute', left: 0, top: 0, width: 220, height: 320 },
+    )
+    expect(stickyVertical.height).toBe(320)
+    expect(stickyVertical.bottom).toBeUndefined()
+  })
+})

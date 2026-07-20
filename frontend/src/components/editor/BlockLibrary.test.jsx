@@ -23,7 +23,9 @@ describe('BlockLibrary', () => {
     expect(document.querySelector('[data-block-library]')).toBeNull()
   })
 
-  it('lists categories with counts and shows every entry under All blocks', () => {
+  // The All view mounts the ENTIRE library (~140 cards, sections in iframes);
+  // under a loaded parallel test run that render can exceed the default 5s.
+  it('lists categories with counts and shows every entry under All blocks', { timeout: 20000 }, () => {
     localStorage.setItem('pwb_language', 'en')
     renderLibrary()
     expect(screen.getByText('Block library')).toBeInTheDocument()

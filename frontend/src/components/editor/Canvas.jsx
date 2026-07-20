@@ -286,12 +286,19 @@ export default function Canvas({
         />
       )}
 
-      {/* Group toolbar for a multi selection — align, distribute, group delete. */}
+      {/* Group toolbar for a multi selection — align, distribute, group delete.
+          Sits above the group's bounding box; when the group hugs the top of
+          the artboard it drops just inside instead, so it can never be pushed
+          off-canvas out of reach (same rule as the single-item toolbar). */}
       {multiBox && !marquee && (
         <CanvasMultiActions
           count={selectedIds.length}
           canvasScale={canvasScale}
-          style={{ left: multiBox.x, top: multiBox.y, transform: 'translateY(calc(-100% - 8px))' }}
+          style={
+            multiBox.y >= 48
+              ? { left: multiBox.x, top: multiBox.y, transform: 'translateY(calc(-100% - 8px))' }
+              : { left: multiBox.x, top: multiBox.y + 8 }
+          }
         />
       )}
 

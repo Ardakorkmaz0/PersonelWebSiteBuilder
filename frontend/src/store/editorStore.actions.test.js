@@ -654,3 +654,88 @@ describe('fitEmbedBox', () => {
     expect(comp.props._baseSize).toEqual({ w: 560, h: 150 })
   })
 })
+
+describe('setCanvasPreset proportional rescale', () => {
+  it('scales layouts to the new width so the design grows instead of drifting left', () => {
+    useEditorStore.getState().loadSchema({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', canvasWidth: 1000, components: [
+          { id: 'btn', type: 'button', props: {}, styles: {}, layout: { x: 100, y: 50, w: 500, h: 100 } },
+          {
+            id: 'box', type: 'container', props: {}, styles: {}, layout: { x: 0, y: 200, w: 600, h: 200 },
+            children: [{ id: 'kid', type: 'text', props: { text: 'k' }, styles: {}, layout: { x: 30, y: 20, w: 300, h: 40 } }],
+          },
+          {
+            id: 'band', type: 'region', props: { contentWidth: 980 }, styles: {}, layout: { x: 0, y: 420, w: 1000, h: 300 },
+            children: [{ id: 'inner', type: 'text', props: { text: 'i' }, styles: {}, layout: { x: 40, y: 30, w: 200, h: 40 } }],
+          },
+        ],
+      }],
+    })
+    useEditorStore.getState().selectPage('p1')
+    useEditorStore.getState().setViewport('pc')
+    useEditorStore.getState().setCanvasPreset({ width: 2000, fold: 0 })
+
+    const page = selectCurrentPage(useEditorStore.getState())
+    expect(page.canvasWidth).toBe(2000)
+    // Top-level boxes double with the artboard.
+    expect(page.components.find((c) => c.id === 'btn').layout).toMatchObject({ x: 200, y: 100, w: 1000, h: 200 })
+    // Container children scale with their parent's box.
+    expect(page.components.find((c) => c.id === 'box').children[0].layout).toMatchObject({ x: 60, y: 40, w: 600, h: 80 })
+    // Region band scales, but its children stay in contentWidth coordinates.
+    expect(page.components.find((c) => c.id === 'band').layout.w).toBe(2000)
+    expect(page.components.find((c) => c.id === 'band').children[0].layout).toMatchObject({ x: 40, y: 30, w: 200, h: 40 })
+  })
+
+  it('scaling back down restores the original boxes (round-trip)', () => {
+    const page = selectCurrentPage(useEditorStore.getState())
+    expect(page.canvasWidth).toBe(2000)
+    useEditorStore.getState().setCanvasPreset({ width: 1000, fold: 0 })
+    const back = selectCurrentPage(useEditorStore.getState())
+    expect(back.components.find((c) => c.id === 'btn').layout).toMatchObject({ x: 100, y: 50, w: 500, h: 100 })
+  })
+})
+
+describe('align/distribute hardening', () => {
+  it('aligns 8 items and never moves a Section (region) band', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `n${i}`, type: 'button', props: {}, styles: {},
+      layout: { x: 40 + i * 37, y: 30 + (i % 4) * 90, w: 90, h: 40 },
+    }))
+    useEditorStore.getState().loadSchema({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', components: [
+          ...many,
+          { id: 'band', type: 'region', props: {}, styles: {}, layout: { x: 0, y: 500, w: 1000, h: 300 }, children: [] },
+        ],
+      }],
+    })
+    useEditorStore.getState().selectPage('p1')
+    useEditorStore.getState().setViewport('pc')
+    useEditorStore.getState().selectMany([...many.map((c) => c.id), 'band'])
+    useEditorStore.getState().alignSelection('left')
+    const page = selectCurrentPage(useEditorStore.getState())
+    for (const c of many) {
+      expect(page.components.find((x) => x.id === c.id).layout.x).toBe(40)
+    }
+    // The band is structural: untouched by group alignment.
+    expect(page.components.find((x) => x.id === 'band').layout).toMatchObject({ x: 0, y: 500 })
+  })
+
+  it('distributes 8 items with equal gaps and stable order', () => {
+    const ids = Array.from({ length: 8 }, (_, i) => `n${i}`)
+    useEditorStore.getState().selectMany(ids)
+    useEditorStore.getState().distributeSelection('x')
+    const page = selectCurrentPage(useEditorStore.getState())
+    const xs = ids
+      .map((id) => page.components.find((c) => c.id === id).layout)
+      .map((l) => ({ x: l.x, w: l.w }))
+      .sort((a, b) => a.x - b.x)
+    const gaps = []
+    for (let i = 1; i < xs.length; i++) gaps.push(xs[i].x - (xs[i - 1].x + xs[i - 1].w))
+    // All gaps equal within rounding.
+    for (const g of gaps) expect(Math.abs(g - gaps[0])).toBeLessThanOrEqual(1)
+  })
+})

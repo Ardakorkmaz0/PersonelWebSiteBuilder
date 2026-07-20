@@ -251,6 +251,31 @@ function shiftAfterRegion(components, regionId, key, delta, oldBottom) {
   })
 }
 
+// Proportionally scale a layout tree to a new artboard width (factor =
+// newWidth / oldWidth). Containers/tabs scale their children with them (child
+// coords live in the parent's box); region children are SKIPPED — they sit in
+// the region's contentWidth coordinate space, which does not change with the
+// artboard, so the region band grows while its inner grid stays centred.
+function scaleLayoutTree(components, factor, key) {
+  return components.map((c) => {
+    const l = c[key] || c.layout
+    const next = { ...c }
+    if (l) {
+      next[key] = {
+        ...l,
+        x: Math.max(0, Math.round((l.x || 0) * factor)),
+        y: Math.max(0, Math.round((l.y || 0) * factor)),
+        w: Math.max(8, Math.round((l.w || 0) * factor)),
+        h: Math.max(8, Math.round((l.h || 0) * factor)),
+      }
+    }
+    if (Array.isArray(c.children) && c.children.length && c.type !== 'region') {
+      next.children = scaleLayoutTree(c.children, factor, key)
+    }
+    return next
+  })
+}
+
 function removeWithRegionReflow(components, ids) {
   const wanted = new Set(ids)
   let next = components
@@ -1544,7 +1569,10 @@ export const useEditorStore = create((set, get) => ({
       const items = ids
         .map((id) => {
           const c = findInTree(page.components, id)
-          const l = c && (c[key] || c.layout)
+          // Sections (regions) are structural full-width bands — nudging their
+          // x/y would break the stacked-band model, so they never take part.
+          if (!c || c.type === 'region') return null
+          const l = c[key] || c.layout
           return l ? { id, x: l.x || 0, y: l.y || 0, w: l.w || 0, h: l.h || 0 } : null
         })
         .filter(Boolean)
@@ -1594,7 +1622,9 @@ export const useEditorStore = create((set, get) => ({
       const items = ids
         .map((id) => {
           const c = findInTree(page.components, id)
-          const l = c && (c[key] || c.layout)
+          // Same structural exemption as alignSelection: bands stay put.
+          if (!c || c.type === 'region') return null
+          const l = c[key] || c.layout
           return l ? { id, [axis]: l[axis] || 0, [sizeKey]: l[sizeKey] || 0 } : null
         })
         .filter(Boolean)
@@ -2024,6 +2054,7 @@ export const useEditorStore = create((set, get) => ({
       const fKey = isMobile ? 'mobileFold' : 'canvasFold'
       return {
         schema: mapPage(state.schema, state.currentPageId, (p) => {
+          const oldW = p[wKey] || (isMobile ? MOBILE_CANVAS_WIDTH : CANVAS_WIDTH)
           const np = {
             ...p,
             [wKey]: clampWidth(
@@ -2033,6 +2064,20 @@ export const useEditorStore = create((set, get) => ({
               isMobile ? 1200 : 4000,
             ),
             [fKey]: clampWidth(fold, 0, 0, 20000),
+          }
+          // Design made on a 1000px artboard should not huddle in the left
+          // corner of a 1920px one: scale every box proportionally to the new
+          // width so the layout re-centres and GROWS with the screen (content
+          // scales too, via the box-scale renderers). Mobile in AUTO mode
+          // skips this — its layout re-derives from the PC design below.
+          const factor = np[wKey] / oldW
+          if (
+            Math.abs(factor - 1) > 0.001 &&
+            !p.flowMode &&
+            (p.components || []).length &&
+            (!isMobile || p.mobileManual)
+          ) {
+            np.components = scaleLayoutTree(np.components, factor, isMobile ? 'mobileLayout' : 'layout')
           }
           // Re-fit the auto mobile layout to the new phone width.
           if (isMobile && !p.mobileManual) {

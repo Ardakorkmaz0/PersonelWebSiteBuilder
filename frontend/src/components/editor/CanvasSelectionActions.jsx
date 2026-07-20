@@ -66,6 +66,26 @@ function FitIcon() {
   )
 }
 
+// Monitor / phone glyphs with an optional slash to show "hidden on this screen".
+function MonitorIcon({ off }) {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <rect x="2.5" y="3.5" width="15" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M7 17h6M10 13.5V17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      {off && <path d="M3 3l14 14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />}
+    </svg>
+  )
+}
+function PhoneIcon({ off }) {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <rect x="5.5" y="2.5" width="9" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M8.5 15h3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      {off && <path d="M3 3l14 14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />}
+    </svg>
+  )
+}
+
 export default function CanvasSelectionActions({ componentId, canvasScale = 1, style }) {
   const { t } = useLanguage()
   const parent = useEditorStore((state) => selectComponentParent(state, componentId))
@@ -77,6 +97,14 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
   const moveForward = useEditorStore((state) => state.moveForward)
   const remove = useEditorStore((state) => state.removeComponent)
   const fitEmbedBox = useEditorStore((state) => state.fitEmbedBox)
+  const setVisibility = useEditorStore((state) => state.setVisibility)
+  // Per-breakpoint visibility, pinned in the toolbar like duplicate/front/back.
+  const pcHidden = useEditorStore(
+    (state) => !!findById(selectCurrentPage(state)?.components, componentId)?.hidden,
+  )
+  const mobileHidden = useEditorStore(
+    (state) => !!findById(selectCurrentPage(state)?.components, componentId)?.hiddenMobile,
+  )
   // Fit lives here (not only in the Size panel) so an embed whose frame
   // overshoots or clips its content is fixed right where the user sees it.
   // PC viewport only — the fit targets the PC design box.
@@ -100,6 +128,22 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
       : []),
     ['backward', <LayerStepIcon key="backward-icon" />, t('Backward'), () => moveBackward(componentId), !canMoveBackward],
     ['forward', <LayerStepIcon key="forward-icon" forward />, t('Forward'), () => moveForward(componentId), !canMoveForward],
+    [
+      'vis-pc',
+      <MonitorIcon key="vis-pc-icon" off={pcHidden} />,
+      pcHidden ? t('Show on PC') : t('Hide on PC'),
+      () => setVisibility(componentId, { hidden: !pcHidden }),
+      false,
+      pcHidden,
+    ],
+    [
+      'vis-mobile',
+      <PhoneIcon key="vis-mobile-icon" off={mobileHidden} />,
+      mobileHidden ? t('Show on Mobile') : t('Hide on Mobile'),
+      () => setVisibility(componentId, { hiddenMobile: !mobileHidden }),
+      false,
+      mobileHidden,
+    ],
     ['delete', <span key="delete-icon" aria-hidden="true">×</span>, t('Delete component'), () => remove(componentId), false],
   ]
 
@@ -129,12 +173,13 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
         ...style,
       }}
     >
-      {actions.map(([id, icon, label, onClick, disabled]) => (
+      {actions.map(([id, icon, label, onClick, disabled, dimmed]) => (
         <button
           key={id}
           type="button"
           data-canvas-selection-action={id}
           aria-label={label}
+          aria-pressed={dimmed === undefined ? undefined : dimmed}
           title={label}
           disabled={disabled}
           onClick={(event) => {
@@ -144,7 +189,7 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
           }}
           className={`grid h-7 w-7 place-items-center rounded-md border-0 p-0 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-25 ${
             id === 'delete' ? 'bg-[#7f1d1d] hover:bg-[#991b1b]' : 'bg-transparent hover:bg-white/10'
-          }`}
+          } ${dimmed ? 'text-amber-300/80' : ''}`}
         >
           {icon}
         </button>

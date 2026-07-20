@@ -53,6 +53,28 @@ describe('CanvasSelectionActions', () => {
     expect(useEditorStore.getState().selectedId).toBe('parent')
   })
 
+  it('toggles per-breakpoint visibility from the pinned toolbar', async () => {
+    localStorage.setItem('pwb_language', 'en')
+    loadNestedCanvas()
+    const user = userEvent.setup()
+    const child = () =>
+      useEditorStore.getState().schema.pages[0].components[0].children[0]
+
+    render(
+      <LanguageProvider>
+        <CanvasSelectionActions componentId="child" />
+      </LanguageProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Hide on PC' }))
+    expect(child().hidden).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Show on PC' }))
+    expect(child().hidden).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'Hide on Mobile' }))
+    expect(child().hiddenMobile).toBe(true)
+  })
+
   it('keeps its physical size when a large canvas is scaled down', () => {
     localStorage.setItem('pwb_language', 'en')
     loadNestedCanvas()

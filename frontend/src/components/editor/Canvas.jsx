@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
@@ -6,6 +6,7 @@ import { canvasHeight, flowCanvasHeight, flowGap, flowSidePad } from '../rendere
 import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import FreeCanvasItem from './FreeCanvasItem.jsx'
 import FlowCanvasItem from './FlowCanvasItem.jsx'
+import CanvasMultiActions from './CanvasMultiActions.jsx'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 
@@ -35,6 +36,7 @@ export default function Canvas({
   const mobileFold = page.mobileFold || 0
   const select = useEditorStore((s) => s.selectComponent)
   const selectMany = useEditorStore((s) => s.selectMany)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
   const linkMode = useEditorStore((s) => s.linkMode)
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' })
@@ -76,6 +78,24 @@ export default function Canvas({
     return () => observer.disconnect()
   }, [isMobile])
   const canvasScale = !editorWidth ? 1 : Math.min(1, editorWidth / frameW)
+
+  // Bounding box of a MULTI selection (top-level free-canvas items), so a group
+  // toolbar (align / distribute / delete) can float above it.
+  const multiBox = useMemo(() => {
+    if (flowMode || selectedIds.length < 2) return null
+    const rects = selectedIds
+      .map((sid) => {
+        const c = components.find((x) => x.id === sid)
+        if (!c) return null
+        const l = (viewport === 'mobile' ? c.mobileLayout || c.layout : c.layout) || {}
+        return { x: l.x || 0, y: l.y || 0, w: l.w || 0, h: l.h || 0 }
+      })
+      .filter(Boolean)
+    if (rects.length < 2) return null
+    const minX = Math.min(...rects.map((r) => r.x))
+    const minY = Math.min(...rects.map((r) => r.y))
+    return { x: Math.max(0, minX), y: Math.max(0, minY) }
+  }, [flowMode, selectedIds, components, viewport])
 
   // Link-tool connectors: an arrow from each link component to the in-page
   // component it targets (href="#<componentId>"). Drawn in canvas coordinates,
@@ -263,6 +283,15 @@ export default function Canvas({
             backgroundColor: 'rgba(79,70,229,0.12)',
             zIndex: 50,
           }}
+        />
+      )}
+
+      {/* Group toolbar for a multi selection — align, distribute, group delete. */}
+      {multiBox && !marquee && (
+        <CanvasMultiActions
+          count={selectedIds.length}
+          canvasScale={canvasScale}
+          style={{ left: multiBox.x, top: multiBox.y, transform: 'translateY(calc(-100% - 8px))' }}
         />
       )}
 

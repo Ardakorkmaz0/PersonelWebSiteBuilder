@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
@@ -98,10 +98,41 @@ export default function FreeCanvasItem({
     component.props?.widthMode !== 'boxed'
   )
   const stackedRegion = component.type === 'region'
+  // A fixed VERTICAL navbar publishes as a full-height side rail (top:0 →
+  // bottom:0). Edit used to draw it at its short design height, so the canvas
+  // looked nothing like View. Measure the visible canvas band and render the
+  // rail at that height, so Edit frames it exactly like the published page.
+  const isFullHeightRail =
+    component.type === 'navbar' &&
+    component.props?.navLayout === 'vertical' &&
+    component.props?.scrollBehavior === 'fixed'
+  const [railHeight, setRailHeight] = useState(0)
+  useEffect(() => {
+    if (!isFullHeightRail) return undefined
+    const scroller = document.getElementById('canvas-scroll')
+    if (!scroller) return undefined
+    // The band is measured in SCREEN pixels but the layout box lives in canvas
+    // coordinates, so undo the artboard's fit-scale. Measure once up front —
+    // a ResizeObserver alone never yields a first value in environments where
+    // it does not fire — then keep it in sync with the observer + resize.
+    const measure = () => {
+      const scale = canvasScale > 0 ? canvasScale : 1
+      const next = Math.max(120, Math.round(scroller.getBoundingClientRect().height / scale))
+      setRailHeight((prev) => (prev === next ? prev : next))
+    }
+    measure()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    observer?.observe(scroller)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [isFullHeightRail, canvasScale])
   const x = viewportStretch ? 0 : layout.x
   const y = layout.y
   const w = viewportStretch ? canvasWidth : layout.w
-  const h = layout.h
+  const h = isFullHeightRail && railHeight ? railHeight : layout.h
   const chromeRect = {
     x,
     y,
@@ -149,25 +180,30 @@ export default function FreeCanvasItem({
     const apply = () => {
       const sRect = scroller.getBoundingClientRect()
       const cRect = canvas.getBoundingClientRect()
-      // The visible scrollport band, in canvas coordinates (edit mode is 1:1).
-      const viewTop = sRect.top - cRect.top
-      const viewBottom = viewTop + sRect.height
+      // getBoundingClientRect reports SCREEN pixels, but the layout box (x/y/w/h)
+      // and this element's transform live in CANVAS coordinates — divide by the
+      // artboard's fit-scale or a scaled-down canvas would un-glue pinned items.
+      const scale = canvasScale > 0 ? canvasScale : 1
+      const canvasH = cRect.height / scale
+      const canvasWidthPx = cRect.width / scale
+      const viewTop = (sRect.top - cRect.top) / scale
+      const viewBottom = viewTop + sRect.height / scale
       let targetY = pinY === 'bottom' ? viewBottom - h - pinOffsetY : viewTop + pinOffsetY
       if (pinMode === 'sticky') {
         // Sticky scrolls with the page until it reaches the pinned edge.
         targetY = pinY === 'bottom' ? Math.min(y, targetY) : Math.max(y, targetY)
       }
-      targetY = Math.min(Math.max(targetY, 0), Math.max(0, cRect.height - h))
+      targetY = Math.min(Math.max(targetY, 0), Math.max(0, canvasH - h))
       // Fixed pins X to the artboard (= the site viewport); sticky keeps design X.
       let targetX = x
       if (pinMode === 'fixed') {
         targetX =
           pinX === 'right'
-            ? cRect.width - w - pinOffsetX
+            ? canvasWidthPx - w - pinOffsetX
             : pinX === 'center'
-              ? (cRect.width - w) / 2 + pinOffsetX
+              ? (canvasWidthPx - w) / 2 + pinOffsetX
               : pinOffsetX
-        targetX = Math.min(Math.max(targetX, 0), Math.max(0, cRect.width - w))
+        targetX = Math.min(Math.max(targetX, 0), Math.max(0, canvasWidthPx - w))
       }
       const tx = Math.round(targetX - x)
       const ty = Math.round(targetY - y)
@@ -181,7 +217,7 @@ export default function FreeCanvasItem({
       window.removeEventListener('resize', apply)
       el.style.transform = ''
     }
-  }, [pinMode, pinY, pinX, pinOffsetY, pinOffsetX, x, y, w, h, viewport])
+  }, [pinMode, pinY, pinX, pinOffsetY, pinOffsetX, x, y, w, h, viewport, canvasScale])
 
   function startMove(e) {
     if (e.button !== 0) return

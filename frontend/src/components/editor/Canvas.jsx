@@ -253,7 +253,6 @@ export default function Canvas({
             key={component.id}
             component={component}
             canvasWidth={canvasW}
-            placeActionsInside={components[0]?.id === component.id}
             brushMode={brushMode}
             brushColor={brushColor}
             brushTarget={brushTarget}

@@ -42,6 +42,7 @@ import {
 } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import CanvasPreview from '../components/editor/CanvasPreview.jsx'
+import CanvasSelectionActions from '../components/editor/CanvasSelectionActions.jsx'
 import BrushControls from '../components/editor/BrushControls.jsx'
 import {
   BRUSH_TARGETS,
@@ -287,6 +288,10 @@ export default function EditorPage() {
   const setCanvasPreset = useEditorStore((s) => s.setCanvasPreset)
   const gridStep = useEditorStore((s) => s.gridStep)
   const setGridStep = useEditorStore((s) => s.setGridStep)
+  // Exactly-one selection drives the element action bar docked in the toolbar.
+  const selectedComponentId = useEditorStore((s) =>
+    s.selectedIds.length <= 1 ? s.selectedId : null,
+  )
   const pcWidth = useEditorStore((s) => selectCurrentPage(s).canvasWidth || 1000)
   const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
   const mobileW = useEditorStore((s) => selectCurrentPage(s).mobileWidth || 390)
@@ -2319,6 +2324,12 @@ export default function EditorPage() {
                       </button>
                     ))}
                   </div>
+                  {/* Selected element's actions live HERE, next to the device
+                      controls, instead of floating over the element: one stable
+                      spot that never covers the design. */}
+                  {canvasMode === 'edit' && selectedComponentId && (
+                    <CanvasSelectionActions inline componentId={selectedComponentId} />
+                  )}
                   {/* Device controls — moved out of the app header so it stays
                       one row; they act on the canvas this bar belongs to. */}
                   <div className="studio-segment shrink-0">

@@ -86,7 +86,10 @@ function PhoneIcon({ off }) {
   )
 }
 
-export default function CanvasSelectionActions({ componentId, canvasScale = 1, style }) {
+// `inline` docks the bar in the editor toolbar instead of floating it over the
+// selected element: one stable place for every element's actions, so it never
+// covers the design and never has to be hunted for.
+export default function CanvasSelectionActions({ componentId, canvasScale = 1, style, inline = false }) {
   const { t } = useLanguage()
   const parent = useEditorStore((state) => selectComponentParent(state, componentId))
   const canMoveBackward = useEditorStore((state) => selectCanMoveComponent(state, componentId, 'backward'))
@@ -157,8 +160,6 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
         event.stopPropagation()
       }}
       style={{
-        position: 'absolute',
-        zIndex: 36,
         display: 'flex',
         alignItems: 'center',
         gap: 2,
@@ -167,9 +168,15 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
         border: '1px solid rgba(255,255,255,0.18)',
         borderRadius: 9,
         background: '#111827',
-        boxShadow: '0 8px 22px rgba(15,23,42,0.3)',
         pointerEvents: 'auto',
-        zoom: 1 / normalizedSelectionActionsScale(canvasScale),
+        ...(inline
+          ? { position: 'static', flexShrink: 0 }
+          : {
+              position: 'absolute',
+              zIndex: 36,
+              boxShadow: '0 8px 22px rgba(15,23,42,0.3)',
+              zoom: 1 / normalizedSelectionActionsScale(canvasScale),
+            }),
         ...style,
       }}
     >

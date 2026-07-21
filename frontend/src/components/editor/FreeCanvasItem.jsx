@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
-import CanvasSelectionActions from './CanvasSelectionActions.jsx'
-import { selectionActionsCanvasWidth } from './canvasSelectionActionsLayout.js'
 import { snapDraggedRect } from '../../utils/snapping.js'
 import { embedAspectLock } from '../../utils/htmlSnippetSizing.js'
 import { fixedRailInset } from '../../utils/railInset.js'
@@ -160,12 +158,6 @@ export default function FreeCanvasItem({
   const edgeHitZones = resizeEdgeHitZones(chromeRect).filter(([dir]) => (
     stackedRegion ? dir === 's' : !viewportStretch || dir === 'n' || dir === 's'
   ))
-  const actionBarWidth = selectionActionsCanvasWidth(canvasScale)
-  const actionBarLeft = Math.max(
-    4 - x,
-    Math.min((w - actionBarWidth) / 2, canvasWidth - x - actionBarWidth - 4),
-  )
-  const actionBarTop = y >= 44 ? -40 : 8
   const hidden =
     viewport === 'mobile' ? component.hiddenMobile : component.hidden
 
@@ -498,11 +490,8 @@ export default function FreeCanvasItem({
 
       {isPrimarySingle && !linkMode && (
         <>
-          <CanvasSelectionActions
-            componentId={component.id}
-            canvasScale={canvasScale}
-            style={{ top: actionBarTop, left: actionBarLeft }}
-          />
+          {/* The action bar itself is docked in the editor toolbar (one stable
+              spot for every element) — only the resize affordances live here. */}
           {edgeHitZones.map(([dir, pos, cursor]) => (
             <div
               key={`edge-${dir}`}

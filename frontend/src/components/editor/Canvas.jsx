@@ -8,6 +8,8 @@ import FreeCanvasItem from './FreeCanvasItem.jsx'
 import FlowCanvasItem from './FlowCanvasItem.jsx'
 import CanvasMultiActions from './CanvasMultiActions.jsx'
 import { PAGE_SHEET_SHADOW } from './pageSheet.js'
+import PhoneFrame from './PhoneFrame.jsx'
+import { PHONE_FRAME_H, PHONE_FRAME_W } from './phoneFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 
@@ -68,7 +70,7 @@ export default function Canvas({
   const background = isMobile ? bgMobile : bg
   const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
   const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
-  const frameW = canvasW + (isMobile ? 24 : 0)
+  const frameW = canvasW + (isMobile ? PHONE_FRAME_W : 0)
   useEffect(() => {
     const el = scrollElRef.current
     if (!el) return undefined
@@ -416,7 +418,7 @@ export default function Canvas({
       >
         <div
           className="mx-auto"
-          style={{ width: frameW * canvasScale, height: (minHeight + 24) * canvasScale }}
+          style={{ width: frameW * canvasScale, height: (minHeight + PHONE_FRAME_H) * canvasScale }}
         >
           <div
             style={{
@@ -425,12 +427,9 @@ export default function Canvas({
               transformOrigin: 'top left',
             }}
           >
-            <div
-              className="overflow-hidden rounded-[44px] border-[12px] border-gray-900 bg-white shadow-2xl"
-              style={{ width: frameW }}
-            >
+            <PhoneFrame screenWidth={canvasW} screenHeight={minHeight}>
               {canvas}
-            </div>
+            </PhoneFrame>
           </div>
         </div>
         <p className="mx-auto mt-3 max-w-[360px] text-center text-xs text-gray-400">

@@ -4,6 +4,8 @@ import { canvasHeight, flowCanvasHeight } from '../renderer/layout.js'
 import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../../utils/htmlRuntime.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { PAGE_SHEET_SHADOW } from './pageSheet.js'
+import PhoneFrame from './PhoneFrame.jsx'
+import { PHONE_FRAME_H, PHONE_FRAME_W } from './phoneFrameMetrics.js'
 
 const WORKSPACE_PADDING = 64
 
@@ -51,13 +53,20 @@ export default function CanvasPreview({
   // shrunk static snapshot. Matches what /site/:slug does with a full-window
   // iframe, just inside the editor panel.
   if (iframeHtml) {
-    const frameW = width + (mobile ? 24 : 0)
+    // The device body, in design pixels — the same arithmetic the Edit canvas
+    // uses, so both fit-scale to the same size. The iframe itself is exactly
+    // `width` wide: its layout viewport is its CSS width, so the page must get
+    // the phone's screen width and not the bezel's, or every media query and
+    // centered row here would resolve differently than in Edit.
+    const frameW = width + (mobile ? PHONE_FRAME_W : 0)
     const scale = workspace.w ? Math.min(1, workspace.w / frameW) : 1
     // The iframe's own viewport height (before the fit-scale) — tall enough to
     // fill the panel so there is a real scroll region for pinned content.
-    const viewportH = Math.max(360, Math.round((workspace.h || 560) / scale))
-    const boxW = frameW * scale
-    const boxH = viewportH * scale
+    const viewportH = Math.max(
+      360,
+      Math.round((workspace.h || 560) / scale) - (mobile ? PHONE_FRAME_H : 0),
+    )
+    const frameH = viewportH + (mobile ? PHONE_FRAME_H : 0)
     const inner = (
       <iframe
         title={title}
@@ -66,12 +75,7 @@ export default function CanvasPreview({
         allow={HTML_ALLOW}
         allowFullScreen
         className="block border-0 bg-white"
-        style={{
-          width: frameW,
-          height: viewportH,
-          transform: scale < 1 ? `scale(${scale})` : undefined,
-          transformOrigin: 'top left',
-        }}
+        style={{ width, height: viewportH }}
       />
     )
     return (
@@ -81,14 +85,28 @@ export default function CanvasPreview({
         className="min-h-0 flex-1 overflow-hidden bg-[var(--studio-shell)] p-8"
       >
         <div
-          className="mx-auto overflow-hidden bg-white"
+          className="mx-auto"
           data-builder-preview-scale={scale}
           data-builder-preview-artboard
-          style={mobile
-            ? { width: boxW, height: boxH, borderRadius: 44, border: '12px solid #111827', boxSizing: 'content-box' }
-            : { width: boxW, height: boxH, boxShadow: PAGE_SHEET_SHADOW }}
+          style={{ width: frameW * scale, height: frameH * scale }}
         >
-          {inner}
+          <div
+            style={{
+              width: frameW,
+              transform: scale < 1 ? `scale(${scale})` : undefined,
+              transformOrigin: 'top left',
+            }}
+          >
+            {mobile ? (
+              <PhoneFrame screenWidth={width} screenHeight={viewportH}>
+                {inner}
+              </PhoneFrame>
+            ) : (
+              <div className="bg-white" style={{ boxShadow: PAGE_SHEET_SHADOW }}>
+                {inner}
+              </div>
+            )}
+          </div>
         </div>
       </main>
     )
@@ -97,8 +115,8 @@ export default function CanvasPreview({
   // Plain component pages (no pinned/JS content) render the React tree directly,
   // scaled to fit the panel width; the workspace scrolls vertically through the
   // full (scaled) page — the lighter path, identical output to the edit canvas.
-  const frameWidth = width + (mobile ? 24 : 0)
-  const frameHeight = artboardHeight + (mobile ? 24 : 0)
+  const frameWidth = width + (mobile ? PHONE_FRAME_W : 0)
+  const frameHeight = artboardHeight + (mobile ? PHONE_FRAME_H : 0)
   const scale = workspace.w ? Math.min(1, workspace.w / frameWidth) : 1
   const pageContent = (
     <div
@@ -150,12 +168,9 @@ export default function CanvasPreview({
           }}
         >
           {mobile ? (
-            <div
-              className="overflow-hidden rounded-[44px] border-[12px] border-gray-900 bg-white shadow-2xl"
-              style={{ width: frameWidth }}
-            >
+            <PhoneFrame screenWidth={width} screenHeight={artboardHeight}>
               {pageContent}
-            </div>
+            </PhoneFrame>
           ) : pageContent}
         </div>
       </div>

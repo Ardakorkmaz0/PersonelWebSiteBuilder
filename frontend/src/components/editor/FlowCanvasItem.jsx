@@ -753,6 +753,10 @@ function TabsCanvasItem({
     window.addEventListener('pointerup', onUp)
   }
 
+  // Hidden on THIS breakpoint means gone from this canvas, like the published
+  // page. Selected items stay so the docked toolbar can un-hide them.
+  if (hidden && !isSelected) return null
+
   return (
     <div
       onPointerDown={startMove}

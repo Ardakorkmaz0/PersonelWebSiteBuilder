@@ -2327,9 +2327,6 @@ export default function EditorPage() {
                   {/* Selected element's actions live HERE, next to the device
                       controls, instead of floating over the element: one stable
                       spot that never covers the design. */}
-                  {canvasMode === 'edit' && selectedComponentId && (
-                    <CanvasSelectionActions inline componentId={selectedComponentId} />
-                  )}
                   {/* Device controls — moved out of the app header so it stays
                       one row; they act on the canvas this bar belongs to. */}
                   <div className="studio-segment shrink-0">
@@ -2376,6 +2373,12 @@ export default function EditorPage() {
                       <option value="custom">{t('Custom')} - {curW}px</option>
                     )}
                   </select>
+                  {/* Selected element's actions, docked right after the screen
+                      controls: one stable spot instead of floating over (and
+                      covering) the design. */}
+                  {canvasMode === 'edit' && selectedComponentId && (
+                    <CanvasSelectionActions inline componentId={selectedComponentId} />
+                  )}
                   <div
                     className="hidden"
                     aria-label={t('Custom resolution')}

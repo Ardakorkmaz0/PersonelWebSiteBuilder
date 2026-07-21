@@ -739,3 +739,49 @@ describe('align/distribute hardening', () => {
     for (const g of gaps) expect(Math.abs(g - gaps[0])).toBeLessThanOrEqual(1)
   })
 })
+
+describe('setVisibility one-breakpoint rule', () => {
+  const load = () => {
+    useEditorStore.getState().loadSchema({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', components: [
+          { id: 'a', type: 'button', props: {}, styles: {}, layout: { x: 0, y: 0, w: 100, h: 40 } },
+        ],
+      }],
+    })
+    useEditorStore.getState().selectPage('p1')
+  }
+  const item = () => selectCurrentPage(useEditorStore.getState()).components[0]
+
+  it('hides on one breakpoint and lets it be turned back on', () => {
+    load()
+    useEditorStore.getState().setVisibility('a', { hidden: true })
+    expect(item().hidden).toBe(true)
+    useEditorStore.getState().setVisibility('a', { hidden: false })
+    expect(item().hidden).toBe(false)
+  })
+
+  it('refuses to hide BOTH breakpoints — deleting is the way to remove an element', () => {
+    load()
+    useEditorStore.getState().setVisibility('a', { hidden: true })
+    useEditorStore.getState().setVisibility('a', { hiddenMobile: true })
+    expect(item().hidden).toBe(true)
+    expect(item().hiddenMobile).toBeFalsy()
+
+    // ...and the same the other way round.
+    load()
+    useEditorStore.getState().setVisibility('a', { hiddenMobile: true })
+    useEditorStore.getState().setVisibility('a', { hidden: true })
+    expect(item().hiddenMobile).toBe(true)
+    expect(item().hidden).toBeFalsy()
+  })
+
+  it('swapping which breakpoint is hidden still works', () => {
+    load()
+    useEditorStore.getState().setVisibility('a', { hidden: true })
+    useEditorStore.getState().setVisibility('a', { hidden: false, hiddenMobile: true })
+    expect(item().hidden).toBe(false)
+    expect(item().hiddenMobile).toBe(true)
+  })
+})

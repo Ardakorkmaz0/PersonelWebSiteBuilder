@@ -2095,7 +2095,15 @@ export const useEditorStore = create((set, get) => ({
   },
 
   // Per-breakpoint visibility: patch is { hidden } and/or { hiddenMobile }.
+  // Hiding on BOTH breakpoints is refused — an element hidden everywhere is
+  // invisible and unreachable, which is what deleting is for. Keeping one
+  // breakpoint visible also guarantees the item can always be found again
+  // (switch viewport) to turn the other one back on.
   setVisibility: (id, patch) => {
+    const current = findInTree(selectCurrentPage(get()).components, id)
+    if (!current) return
+    const next = { ...current, ...patch }
+    if (next.hidden && next.hiddenMobile) return
     get().record('vis-' + id)
     set((state) => {
       const page = selectCurrentPage(state)

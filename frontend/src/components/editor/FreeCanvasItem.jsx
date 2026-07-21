@@ -371,6 +371,12 @@ export default function FreeCanvasItem({
     window.addEventListener('pointerup', onUp)
   }
 
+  // Hidden on THIS breakpoint means gone from this canvas — exactly like the
+  // published page. It can never get lost: hiding both breakpoints is refused,
+  // so the other viewport still shows it, and while it stays selected its
+  // actions (including un-hide) remain in the docked toolbar bar.
+  if (hidden && !isSelected) return null
+
   return (
     <div
       ref={wrapRef}

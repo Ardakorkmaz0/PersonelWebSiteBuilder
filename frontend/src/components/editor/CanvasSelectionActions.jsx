@@ -131,20 +131,30 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
       : []),
     ['backward', <LayerStepIcon key="backward-icon" />, t('Backward'), () => moveBackward(componentId), !canMoveBackward],
     ['forward', <LayerStepIcon key="forward-icon" forward />, t('Forward'), () => moveForward(componentId), !canMoveForward],
+    // An element may be hidden on ONE breakpoint only — hiding both would make
+    // it invisible everywhere and unreachable, which is what Delete is for.
     [
       'vis-pc',
       <MonitorIcon key="vis-pc-icon" off={pcHidden} />,
-      pcHidden ? t('Show on PC') : t('Hide on PC'),
+      pcHidden
+        ? t('Show on PC')
+        : mobileHidden
+          ? t('Already hidden on Mobile — delete it instead of hiding both')
+          : t('Hide on PC'),
       () => setVisibility(componentId, { hidden: !pcHidden }),
-      false,
+      !pcHidden && mobileHidden,
       pcHidden,
     ],
     [
       'vis-mobile',
       <PhoneIcon key="vis-mobile-icon" off={mobileHidden} />,
-      mobileHidden ? t('Show on Mobile') : t('Hide on Mobile'),
+      mobileHidden
+        ? t('Show on Mobile')
+        : pcHidden
+          ? t('Already hidden on PC — delete it instead of hiding both')
+          : t('Hide on Mobile'),
       () => setVisibility(componentId, { hiddenMobile: !mobileHidden }),
-      false,
+      !mobileHidden && pcHidden,
       mobileHidden,
     ],
     ['delete', <span key="delete-icon" aria-hidden="true">×</span>, t('Delete component'), () => remove(componentId), false],

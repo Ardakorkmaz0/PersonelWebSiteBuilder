@@ -1070,6 +1070,8 @@ export const TURKISH_TRANSLATIONS = {
   'Show on Mobile': 'Mobilde göster',
   'Hide on PC': 'Bilgisayarda gizle',
   'Hide on Mobile': 'Mobilde gizle',
+  'Already hidden on Mobile — delete it instead of hiding both': 'Zaten mobilde gizli — ikisinde birden gizlemek yerine sil',
+  'Already hidden on PC — delete it instead of hiding both': 'Zaten bilgisayarda gizli — ikisinde birden gizlemek yerine sil',
   'Pin navbar': 'Navbar sabitleme',
   'Not fixed': 'Sabit değil',
   'Fixed while scrolling (fixed-top)': 'Kayarken sabit (üstte kalır)',

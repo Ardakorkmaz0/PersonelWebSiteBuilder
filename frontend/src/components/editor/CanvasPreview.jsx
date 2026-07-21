@@ -3,6 +3,7 @@ import { Renderer } from '../renderer/Renderer.jsx'
 import { canvasHeight, flowCanvasHeight } from '../renderer/layout.js'
 import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../../utils/htmlRuntime.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 
 const WORKSPACE_PADDING = 64
 
@@ -80,12 +81,12 @@ export default function CanvasPreview({
         className="min-h-0 flex-1 overflow-hidden bg-[var(--studio-shell)] p-8"
       >
         <div
-          className="mx-auto overflow-hidden bg-white shadow-sm"
+          className="mx-auto overflow-hidden bg-white"
           data-builder-preview-scale={scale}
           data-builder-preview-artboard
           style={mobile
             ? { width: boxW, height: boxH, borderRadius: 44, border: '12px solid #111827', boxSizing: 'content-box' }
-            : { width: boxW, height: boxH }}
+            : { width: boxW, height: boxH, boxShadow: PAGE_SHEET_SHADOW }}
         >
           {inner}
         </div>
@@ -102,8 +103,14 @@ export default function CanvasPreview({
   const pageContent = (
     <div
       data-builder-preview-artboard
-      className={mobile ? '' : 'bg-white shadow-sm'}
-      style={{ position: 'relative', width, minHeight: artboardHeight, overflowX: 'clip' }}
+      className={mobile ? '' : 'bg-white'}
+      style={{
+        position: 'relative',
+        width,
+        minHeight: artboardHeight,
+        overflowX: 'clip',
+        ...(mobile ? {} : { boxShadow: PAGE_SHEET_SHADOW }),
+      }}
     >
       <Renderer
         components={components}

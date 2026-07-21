@@ -7,6 +7,7 @@ import { CANVAS_WIDTH, MOBILE_CANVAS_WIDTH } from '../registry.jsx'
 import FreeCanvasItem from './FreeCanvasItem.jsx'
 import FlowCanvasItem from './FlowCanvasItem.jsx'
 import CanvasMultiActions from './CanvasMultiActions.jsx'
+import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 
@@ -232,10 +233,11 @@ export default function Canvas({
               backgroundSize: `${gridStep}px ${gridStep}px`,
             }
           : {}),
+        // Page sheet shadow (desktop artboard only — the phone frame supplies
+        // its own on mobile) so Edit frames the page exactly like View does.
+        ...(isMobile ? {} : { boxShadow: PAGE_SHEET_SHADOW }),
       }}
-      className={`${isMobile ? '' : 'shadow-sm'} ${
-        isOver ? 'ring-2 ring-[#4f46e5]' : ''
-      }`}
+      className={`${isOver ? 'ring-2 ring-[#4f46e5]' : ''}`}
     >
       {components.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center text-gray-400">

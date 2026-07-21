@@ -383,7 +383,15 @@ export default function FreeCanvasItem({
         cursor: brushMode ? BRUSH_CURSOR : linkMode ? 'crosshair' : stackedRegion ? 'default' : 'move',
         // Pinned items float above the page content while scrolled, mirroring
         // their published z-order; selection chrome still wins.
-        zIndex: isSelected || isLinkSource ? 20 : pinMode ? 10 : 1,
+        // Pinned items stack by their REAL published z-order (pinZIndex), not a
+        // flat value — otherwise DOM order decided it here and, say, a top bar
+        // painted over a side rail in Edit while the rail covered it on the
+        // live site. Selection lifts the item so it stays editable.
+        zIndex: isSelected || isLinkSource
+          ? 1000
+          : pinMode
+            ? Number(props.pinZIndex) || (pinMode === 'fixed' ? 100 : 20)
+            : 1,
         opacity: hidden ? 0.35 : 1,
         // Armed link source stays a solid blue ring (with a light wash) until
         // the next click picks the target — same affordance as HTML mode.

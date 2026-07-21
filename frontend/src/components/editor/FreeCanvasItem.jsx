@@ -130,8 +130,12 @@ export default function FreeCanvasItem({
   }, [isFullHeightRail, canvasScale])
   // Same rule the published page uses: a fixed full-width top bar starts after
   // any fixed side rail, so its brand can't be swallowed by the rail and the
-  // bar sits in the same place here as it does live.
+  // bar sits in the same place here as it does live. DESKTOP ONLY — the phone
+  // layout stacks its blocks full-width (the exported mobile CSS insets
+  // nothing), so applying a desktop rail's width here would squeeze the bar
+  // into a sliver and make Edit disagree with View on mobile.
   const railInset =
+    viewport !== 'mobile' &&
     component.type === 'navbar' &&
     component.props?.navLayout !== 'vertical' &&
     component.props?.scrollBehavior === 'fixed' &&

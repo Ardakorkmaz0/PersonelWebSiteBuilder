@@ -137,3 +137,27 @@ describe('pinnedLayoutStyle Bootstrap fixed-top navbar', () => {
     expect(style.width).toBe(700)
   })
 })
+
+describe('pinnedLayoutStyle rail inset for the fixed top bar', () => {
+  const bar = { type: 'navbar', props: { scrollBehavior: 'fixed' } }
+  const base = { position: 'absolute', left: 0, top: 0, width: '100%', height: 70 }
+
+  it('starts the bar after a fixed LEFT rail so its brand clears the rail', () => {
+    const style = pinnedLayoutStyle(bar, base, { left: 220, right: 0 })
+    expect(style.left).toBe(220)
+    expect(style.right).toBe(0)
+    expect(style.width).toBe('auto')
+  })
+
+  it('reserves room for a right-side rail too', () => {
+    const style = pinnedLayoutStyle(bar, base, { left: 0, right: 260 })
+    expect(style.left).toBe(0)
+    expect(style.right).toBe(260)
+    expect(style.width).toBe('auto')
+  })
+
+  it('stays edge-to-edge when there is no rail', () => {
+    expect(pinnedLayoutStyle(bar, base, { left: 0, right: 0 }).width).toBe('100%')
+    expect(pinnedLayoutStyle(bar, base).width).toBe('100%')
+  })
+})

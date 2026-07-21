@@ -24,6 +24,7 @@ import {
 } from '../components/renderer/layout.js'
 import { regionContentWidth, resolveRegionDock } from './regionLayout.js'
 import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
+import { fixedRailInset } from './railInset.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -65,7 +66,7 @@ function absoluteWrapperStyle(c, layoutKey = 'layout') {
   }
 }
 
-function wrapperStyle(c, viewport, canvasWidth, flowMode, layoutKey = 'layout') {
+function wrapperStyle(c, viewport, canvasWidth, flowMode, layoutKey = 'layout', railInset = null) {
   let base = flowMode
     ? flowItemStyle(c, viewport, canvasWidth)
     : absoluteWrapperStyle(c, layoutKey)
@@ -81,7 +82,7 @@ function wrapperStyle(c, viewport, canvasWidth, flowMode, layoutKey = 'layout') 
   if (!flowMode && c?.props?.scrollBehavior === 'sticky') {
     return { ...base, zIndex: Number(c.props?.pinZIndex) || 20 }
   }
-  return pinnedLayoutStyle(c, base)
+  return pinnedLayoutStyle(c, base, railInset)
 }
 
 // Marker attributes for the runtime stick handler in builderInteractiveTags().
@@ -569,6 +570,9 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
   for (const page of pages) {
     const comps = page.components || []
     const w = page.canvasWidth || 1000
+    // A fixed side rail insets any fixed full-width top bar, so the bar's brand
+    // never disappears under the rail (and lands identically at every width).
+    const railInset = page.flowMode ? null : fixedRailInset(comps)
     css += `\n/* ===== ${page.name} (desktop) ===== */\n`
     if (page.flowMode) {
       css += `.p-${page.id} { width: 100%; min-height: ${flowCanvasHeight(comps, 'pc', w)}px; background: ${cssValue(page.background || '#ffffff')}; display:flex; flex-direction:row; flex-wrap:wrap; align-items:stretch; align-content:flex-start; justify-content:flex-start; gap:${flowGap('pc')}px; padding:0 ${flowSidePad('pc')}px; box-sizing:border-box; }\n`
@@ -586,7 +590,7 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
         }
         if (linksAlign) css += `.c-${c.id} > .nav-inner > .links { ${linksAlign} }\n`
       } else {
-        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false))} ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false, 'layout', railInset))} ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
         if (c.type === 'navbar' && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }

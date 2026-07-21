@@ -6,6 +6,7 @@ import CanvasSelectionActions from './CanvasSelectionActions.jsx'
 import { selectionActionsCanvasWidth } from './canvasSelectionActionsLayout.js'
 import { snapDraggedRect } from '../../utils/snapping.js'
 import { embedAspectLock } from '../../utils/htmlSnippetSizing.js'
+import { fixedRailInset } from '../../utils/railInset.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
@@ -129,9 +130,21 @@ export default function FreeCanvasItem({
       window.removeEventListener('resize', measure)
     }
   }, [isFullHeightRail, canvasScale])
-  const x = viewportStretch ? 0 : layout.x
+  // Same rule the published page uses: a fixed full-width top bar starts after
+  // any fixed side rail, so its brand can't be swallowed by the rail and the
+  // bar sits in the same place here as it does live.
+  const railInset =
+    component.type === 'navbar' &&
+    component.props?.navLayout !== 'vertical' &&
+    component.props?.scrollBehavior === 'fixed' &&
+    component.props?.widthMode !== 'boxed'
+      ? fixedRailInset(page.components)
+      : { left: 0, right: 0 }
+  const railInsetLeft = railInset.left
+  const railInsetRight = railInset.right
+  const x = viewportStretch ? railInset.left : layout.x
   const y = layout.y
-  const w = viewportStretch ? canvasWidth : layout.w
+  const w = viewportStretch ? Math.max(40, canvasWidth - railInset.left - railInset.right) : layout.w
   const h = isFullHeightRail && railHeight ? railHeight : layout.h
   const chromeRect = {
     x,
@@ -197,12 +210,14 @@ export default function FreeCanvasItem({
       // Fixed pins X to the artboard (= the site viewport); sticky keeps design X.
       let targetX = x
       if (pinMode === 'fixed') {
+        // The rail inset is part of the pinned position — without it the pin
+        // would drag an inset top bar back over the rail it just cleared.
         targetX =
           pinX === 'right'
-            ? canvasWidthPx - w - pinOffsetX
+            ? canvasWidthPx - w - pinOffsetX - railInsetRight
             : pinX === 'center'
               ? (canvasWidthPx - w) / 2 + pinOffsetX
-              : pinOffsetX
+              : pinOffsetX + railInsetLeft
         targetX = Math.min(Math.max(targetX, 0), Math.max(0, canvasWidthPx - w))
       }
       const tx = Math.round(targetX - x)
@@ -217,7 +232,7 @@ export default function FreeCanvasItem({
       window.removeEventListener('resize', apply)
       el.style.transform = ''
     }
-  }, [pinMode, pinY, pinX, pinOffsetY, pinOffsetX, x, y, w, h, viewport, canvasScale])
+  }, [pinMode, pinY, pinX, pinOffsetY, pinOffsetX, x, y, w, h, viewport, canvasScale, railInsetLeft, railInsetRight])
 
   function startMove(e) {
     if (e.button !== 0) return

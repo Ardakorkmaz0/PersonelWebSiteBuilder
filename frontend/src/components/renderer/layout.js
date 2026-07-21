@@ -32,7 +32,7 @@ function pinInset(prop, value) {
   return { [prop]: numericProp(value, 0) }
 }
 
-export function pinnedLayoutStyle(component, baseStyle = {}) {
+export function pinnedLayoutStyle(component, baseStyle = {}, railInset = null) {
   const props = component?.props || {}
   const mode = props.scrollBehavior
   if (mode !== 'fixed' && mode !== 'sticky') return baseStyle
@@ -74,15 +74,20 @@ export function pinnedLayoutStyle(component, baseStyle = {}) {
   // A fixed full-width HORIZONTAL navbar is Bootstrap's fixed-top: glued to
   // the viewport top edge-to-edge. Pin offsets must not nudge it sideways —
   // entering fixed mode may not change the design, only the scroll behavior.
+  // When a fixed side rail is present the bar starts AFTER it, so the bar's
+  // own content (its brand) can never be swallowed by the rail — and the bar
+  // lands in the same place at every browser width.
   if (
     mode === 'fixed' &&
     component?.type === 'navbar' &&
     !isVerticalNavbar(component) &&
     component?.props?.widthMode !== 'boxed'
   ) {
-    pinned.left = 0
-    pinned.right = 0
-    pinned.width = '100%'
+    const insetLeft = Math.max(0, numericProp(railInset?.left, 0))
+    const insetRight = Math.max(0, numericProp(railInset?.right, 0))
+    pinned.left = insetLeft
+    pinned.right = insetRight
+    pinned.width = insetLeft || insetRight ? 'auto' : '100%'
     pinned.transform = undefined
   }
 

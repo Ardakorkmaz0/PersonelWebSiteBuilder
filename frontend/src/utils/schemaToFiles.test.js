@@ -223,3 +223,67 @@ describe('schemaToSingleHtml auto-layout container', () => {
     expect(html).not.toContain('display:grid')
   })
 })
+
+describe('schemaToSingleHtml embed breakpoints', () => {
+  // Regression: embeds (html/select/accordion/container/tabs) used to carry an
+  // INLINE desktop layout on their wrapper. Inline styles outrank a media query,
+  // so a phone-sized design still painted them at their PC position and width —
+  // they hung off the side of the screen in View and on the published site while
+  // the edit canvas showed them fitting.
+  it('positions an embed from the stylesheet so the mobile breakpoint wins', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+        canvasWidth: 1920, mobileWidth: 430,
+        components: [{
+          id: 'html_1', type: 'html',
+          props: { html: '<p>Plan</p>', _paletteType: 'select' },
+          styles: { padding: '12px' },
+          layout: { x: 135, y: 288, w: 360, h: 70 },
+          mobileLayout: { x: 20, y: 571, w: 360, h: 90 },
+        }],
+      }],
+    }, 'Embed test')
+
+    expect(html).toContain('<div id="html_1" class="c-html_1">')
+    expect(html).toContain('.c-html_1 { position: absolute;')
+    expect(html).toMatch(/\.c-html_1 \{[^}]*top: 288px;[^}]*width: 360px;[^}]*height: 70px;/)
+    expect(html).toMatch(/ {2}\.c-html_1 \{[^}]*top: 571px;[^}]*height: 90px;/)
+    // The look stays on the inner node — the wrapper rule must not repeat it,
+    // or padding and borders would be applied twice.
+    expect(html).not.toMatch(/\.c-html_1 \{[^}]*padding: 12px/)
+    // The embed's own iframe follows the phone box instead of keeping its PC height.
+    expect(html).toContain('.c-html_1 > iframe { height:90px; }')
+  })
+})
+
+describe('schemaToSingleHtml per-breakpoint visibility', () => {
+  // "Hide on PC" must not leak into the phone: the desktop `display:none` sits
+  // outside the media query, so the mobile rule has to put the display back.
+  it('shows a PC-hidden component again at the mobile breakpoint', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+        canvasWidth: 1000, mobileWidth: 390,
+        components: [
+          {
+            id: 'nav_pc_hidden', type: 'navbar', props: { brand: 'Only phones' }, styles: {},
+            layout: { x: 0, y: 0, w: 1000, h: 64 }, mobileLayout: { x: 0, y: 0, w: 390, h: 64 },
+            hidden: true, hiddenMobile: false,
+          },
+          {
+            id: 'text_mobile_hidden', type: 'text', props: { text: 'Only desktops' }, styles: {},
+            layout: { x: 40, y: 120, w: 400, h: 60 }, mobileLayout: { x: 8, y: 120, w: 300, h: 60 },
+            hidden: false, hiddenMobile: true,
+          },
+        ],
+      }],
+    }, 'Visibility test')
+
+    expect(html).toMatch(/\.c-nav_pc_hidden \{[^}]*display:none;/)
+    expect(html).toMatch(/ {2}\.c-nav_pc_hidden \{[^}]*display:flex;/)
+    expect(html).toMatch(/ {2}\.c-text_mobile_hidden \{[^}]*display:none;/)
+  })
+})

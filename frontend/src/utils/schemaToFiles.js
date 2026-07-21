@@ -13,7 +13,6 @@ import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntim
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
-import { CANVAS_WIDTH } from '../components/registry.jsx'
 import {
   absoluteChildrenHeight,
   flowCanvasHeight,
@@ -216,6 +215,29 @@ function tabsCssVars(props = {}) {
 }
 
 // Flex/layout behaviour each component's wrapper has in the live renderer.
+// The `display` baseRules gives a type. Needed to UN-hide on mobile: the desktop
+// rule's `display:none` for a PC-hidden component would otherwise cascade into
+// the media query and hide it on phones too — "Hide on PC" would silently mean
+// "hide everywhere", which is the one thing the visibility toggles refuse to do.
+function baseDisplay(type) {
+  switch (type) {
+    case 'navbar':
+    case 'heading':
+    case 'text':
+    case 'section':
+    case 'card':
+    case 'button':
+    case 'linkbutton':
+    case 'input':
+      return 'flex'
+    case 'badge':
+    case 'icon':
+      return 'inline-flex'
+    default:
+      return 'block'
+  }
+}
+
 function baseRules(type) {
   switch (type) {
     case 'navbar':
@@ -251,6 +273,15 @@ const NON_WRAP_LINK = new Set([
   'button', 'linkbutton', 'navbar', 'section', 'region', 'tabs', 'container', 'accordion', 'select', 'input', 'html',
 ])
 
+// Types whose CONTENT is serialized with inline styles (see inlineNode). Their
+// outer box still gets a `.c-<id>` class and its geometry from the stylesheet —
+// an inline layout style here could never be overridden by the mobile media
+// query, which used to freeze every embed at its desktop position and size.
+// Their own `styles` ride the inner node, so the wrapper rule stays layout-only.
+const INLINE_NODE_TYPES = new Set([
+  'region', 'container', 'tabs', 'select', 'alert', 'accordion', 'html',
+])
+
 function linkWrap(c, html) {
   const href = !NON_WRAP_LINK.has(c.type) ? sanitizeUrl((c.props || {}).href) : ''
   if (!href) return html
@@ -276,7 +307,11 @@ function regionChildInlineStyle(child, designWidth) {
 
 // Render a node (and a container's whole subtree) with INLINE styles. Used so a
 // container's nested children survive the classed export without recursive CSS.
-function inlineNode(c) {
+// `classedChildren` says a stylesheet already carries this region's per-child
+// geometry (see regionChildCss), so the inline copy is dropped and the mobile
+// media query can reposition the children. Only top-level regions get those
+// rules; a region nested inside a container keeps the inline fallback.
+function inlineNode(c, classedChildren = false) {
   const p = c.props || {}
   const styleStr = styleBlock(c.styles)
   if (c.type === 'region') {
@@ -284,7 +319,8 @@ function inlineNode(c) {
     const designW = regionContentWidth(c)
     const inner = kids.map((ch) => {
       const filled = { ...ch, styles: { ...(ch.styles || {}), width: '100%', height: '100%' } }
-      return `<div class="region-child region-${esc(c.id)}-${esc(ch.id)}" style="${regionChildInlineStyle(ch, designW)}">${linkWrap(filled, inlineNode(filled))}</div>`
+      const geometry = classedChildren ? '' : ` style="${regionChildInlineStyle(ch, designW)}"`
+      return `<div class="region-child region-${esc(c.id)}-${esc(ch.id)}"${geometry}>${linkWrap(filled, inlineNode(filled))}</div>`
     }).join('')
     return `<section style="position:relative;width:100%;height:100%;overflow:hidden;${styleStr}"><div class="region-inner" style="position:relative;width:100%;max-width:${designW}px;height:100%;margin:0 auto;overflow:hidden">${inner}</div></section>`
   }
@@ -505,7 +541,6 @@ ${pageBody(page)}
 
 function pageBody(page, { fixed = 'all' } = {}) {
   const comps = Array.isArray(page.components) ? page.components : []
-  const canvasW = page.canvasWidth || CANVAS_WIDTH
   return comps
     .filter((c) => {
       const isFixed = isFixedComponent(c)
@@ -515,13 +550,14 @@ function pageBody(page, { fixed = 'all' } = {}) {
     })
     .map((c) => {
       const sticky = stickyAttrs(c, page.flowMode)
-      if (['region', 'container', 'tabs', 'select', 'alert', 'accordion', 'html'].includes(c.type)) {
+      if (INLINE_NODE_TYPES.has(c.type)) {
         // Wrap inlineNode types in an outer that mirrors the React Renderer
         // layout: flow mode → flowItemStyle (flex); non-flow → absolute. Without
         // this, top-level container/tabs floated at intrinsic size and the
-        // iframe preview looked broken next to the non-Custom-JS path.
-        const wrap = styleObjectBlock(wrapperStyle(c, 'pc', canvasW, page.flowMode))
-        return `      <div id="${esc(c.id)}"${sticky} style="${wrap}">${linkWrap(c, inlineNode(c))}</div>`
+        // iframe preview looked broken next to the non-Custom-JS path. The box
+        // is positioned by its `.c-<id>` rule, exactly like every other type, so
+        // the mobile breakpoint can move and resize it.
+        return `      <div id="${esc(c.id)}" class="c-${esc(c.id)}"${sticky}>${linkWrap(c, inlineNode(c, c.type === 'region'))}</div>`
       }
       const tag = tagFor(c.type)
       const el =
@@ -582,19 +618,31 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
     for (const c of comps) {
       const hide = c.hidden ? ' display:none;' : ''
       const linksAlign = navbarLinksAlignCss(c)
+      // inlineNode types paint their own look on the inner node; repeating it on
+      // the wrapper would apply padding and borders twice.
+      const own = INLINE_NODE_TYPES.has(c.type) ? '' : `${baseRules(c.type)} ${styleBlock(c.styles)}`
       if (page.flowMode) {
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
-        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, true))} overflow:${fixed ? 'hidden' : 'visible'}; ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, true))} overflow:${fixed ? 'hidden' : 'visible'}; ${own}${hide} }\n`
         if (FLOW_FULL_WIDTH_TYPES.has(c.type) && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner, .c-${c.id} > .section-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }
         if (linksAlign) css += `.c-${c.id} > .nav-inner > .links { ${linksAlign} }\n`
       } else {
-        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false, 'layout', railInset))} ${baseRules(c.type)} ${styleBlock(c.styles)}${hide} }\n`
+        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false, 'layout', railInset))} ${own}${hide} }\n`
         if (c.type === 'navbar' && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }
         if (linksAlign) css += `.c-${c.id} > .nav-inner > .links { ${linksAlign} }\n`
+      }
+      // Desktop geometry for a section's free-placed children, so the mobile
+      // block below (which reflows them into the phone's width) has something to
+      // override. Inline styles here could not be overridden at all.
+      if (c.type === 'region') {
+        const designW = regionContentWidth(c)
+        for (const child of c.children || []) {
+          css += `.region-${esc(c.id)}-${esc(child.id)} { ${regionChildInlineStyle(child, designW)} }\n`
+        }
       }
     }
   }
@@ -609,15 +657,30 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
       css += `  .p-${page.id} { --design-offset:max(0px, calc((100% - ${mw}px) / 2)); width: ${mw}px; min-height: ${pageMinHeight(comps, 'mobileLayout', 400)}px; background: ${cssValue(page.backgroundMobile || page.background || '#ffffff')}; }\n`
     }
     for (const c of comps) {
-      const hide = c.hiddenMobile ? ' display:none;' : ''
+      const hide = c.hiddenMobile
+        ? ' display:none;'
+        : c.hidden
+          ? ` display:${baseDisplay(c.type)};`
+          : ''
       // Per-breakpoint style overrides (stylesMobile) ride the same media
-      // block — the cascade merges them over the desktop rule above.
-      const mobileStyles = c.stylesMobile ? ` ${styleBlock(c.stylesMobile)}` : ''
+      // block — the cascade merges them over the desktop rule above. Skipped for
+      // inlineNode types for the same reason their desktop `styles` are: the
+      // look lives on the inner node, not on this wrapper.
+      const mobileStyles =
+        c.stylesMobile && !INLINE_NODE_TYPES.has(c.type) ? ` ${styleBlock(c.stylesMobile)}` : ''
       if (page.flowMode) {
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
         css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, true))} overflow:${fixed ? 'hidden' : 'visible'};${mobileStyles}${hide} }\n`
       } else {
         css += `  .c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'mobile', mw, false, 'mobileLayout'))}${mobileStyles}${hide} }\n`
+        // An embed's iframe is written with the desktop height baked in (flow
+        // pages have no fixed box to fill, so it can't just be 100%). On an
+        // absolute page the phone box has its own height — resize the iframe to
+        // match, or the embed keeps its PC height inside a taller mobile frame.
+        if (c.type === 'html') {
+          const mh = Math.max(40, Math.round((c.mobileLayout || c.layout || {}).h || 240))
+          css += `  .c-${c.id} > iframe { height:${mh}px; }\n`
+        }
       }
       if (c.type === 'region') {
         for (const child of c.children || []) {

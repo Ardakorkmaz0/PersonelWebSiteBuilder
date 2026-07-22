@@ -156,10 +156,21 @@ def sanitize_props(ctype, props):
                     })
         nav_layout = props.get('navLayout')
         width_mode = props.get('widthMode')
+        # Where the brand and the link group sit in the bar, and how far apart
+        # the links are. These were missing from this allowlist, so every save
+        # silently threw the user's choice away: the editor showed centred links
+        # until the page reloaded, and the published site never saw them at all.
+        brand_align = props.get('brandAlign')
+        links_align = props.get('linksAlign')
+        mobile_nav = props.get('mobileNavMode')
         return {
             'brand': _str(props.get('brand')),
             'links': links,
             'navLayout': nav_layout if nav_layout in ('horizontal', 'centered', 'twoRow', 'vertical') else 'horizontal',
+            'brandAlign': brand_align if brand_align in ('left', 'center', 'right') else 'left',
+            'linksAlign': links_align if links_align in ('left', 'center', 'right') else 'right',
+            'linkGap': _num(props.get('linkGap'), 20, 0, 120),
+            'mobileNavMode': mobile_nav if mobile_nav in ('menu', 'stack') else 'menu',
             'widthMode': width_mode if width_mode in ('full', 'boxed') else 'full',
             'contentWidth': _num(props.get('contentWidth'), 980, 320, 2000),
         }

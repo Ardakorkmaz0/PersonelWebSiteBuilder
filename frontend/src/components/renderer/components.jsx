@@ -10,6 +10,7 @@ import { withBuilderInteractiveHtml } from '../../utils/htmlRuntime.js'
 import { htmlEmbedDocument } from '../../utils/htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from '../../utils/htmlSnippetSizing.js'
 import { scaleCssValue, scaledPx } from './scale.js'
+import { navbarLinkGap, navbarPlacement } from '../../utils/navbarLayout.js'
 import { LanguageContext } from '../../i18n/context.js'
 
 function linkAttrs(href) {
@@ -64,6 +65,9 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
   const mobileMenu = isMobile && !vertical && props.mobileNavMode !== 'stack'
   const stacked = vertical || centered || twoRow || (isMobile && !mobileMenu)
   const linkColumn = vertical || (isMobile && !mobileMenu)
+  // Brand / links placement applies to a horizontal bar on a wide screen; the
+  // stacked layouts and the phone hamburger arrange themselves.
+  const placed = !stacked && !mobileMenu ? navbarPlacement(props) : null
   const menuLabel = language?.t(mobileOpen ? 'Close navigation menu' : 'Open navigation menu')
     || (mobileOpen ? 'Close navigation menu' : 'Open navigation menu')
   return (
@@ -91,13 +95,14 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
           flexDirection: stacked ? 'column' : 'row',
           alignItems: centered ? 'center' : stacked ? 'flex-start' : 'center',
           justifyContent: stacked ? 'flex-start' : 'space-between',
+          ...(placed ? placed.row : null),
           gap: scaledPx(isMobile ? 10 : vertical ? 14 : twoRow ? 10 : 16, boxScale),
           flexWrap: mobileMenu ? 'nowrap' : 'wrap',
           textAlign: centered ? 'center' : undefined,
           position: 'relative',
         }}
       >
-        <span style={{ fontWeight: 'bold', fontSize: '1.125em', ...multilineTextStyle }}>{props.brand}</span>
+        <span style={{ fontWeight: 'bold', fontSize: '1.125em', ...multilineTextStyle, ...(placed ? placed.brand : null) }}>{props.brand}</span>
         {mobileMenu && (
           <button
             type="button"
@@ -131,19 +136,14 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
             flexDirection: mobileMenu || linkColumn ? 'column' : 'row',
             alignItems: centered ? 'center' : linkColumn ? 'stretch' : 'center',
             justifyContent: centered ? 'center' : undefined,
-            // Links position (horizontal layout): auto margins absorb the free
-            // space before justify-content, so 'left' parks the links next to
-            // the brand and 'center' centers them in the remaining row.
-            marginLeft:
-              !stacked && !mobileMenu && props.linksAlign === 'center' ? 'auto' : undefined,
-            marginRight:
-              !stacked && !mobileMenu && ['center', 'left'].includes(props.linksAlign)
-                ? 'auto'
-                : undefined,
-            gap: scaledPx(mobileMenu || linkColumn ? 6 : isMobile ? 16 : 20, boxScale),
+            gap: scaledPx(
+              mobileMenu || linkColumn ? 6 : isMobile ? 16 : navbarLinkGap(props),
+              boxScale,
+            ),
             rowGap: scaledPx(6, boxScale),
             flexWrap: 'wrap',
             width: mobileMenu || linkColumn || twoRow ? '100%' : undefined,
+            ...(placed ? placed.links : null),
             ...(mobileMenu ? {
               position: 'absolute',
               zIndex: 100,

@@ -324,6 +324,51 @@ export function LabeledSelect({ label, value, onChange, options }) {
   )
 }
 
+// One-click position picker: the three choices sit side by side as pressed-in
+// buttons instead of hiding inside a dropdown, so setting where the brand or the
+// links sit is a single click and the current choice is visible at a glance.
+// Each option carries a tiny diagram of the bar with the item in that spot.
+export function LabeledAlign({ label, value, onChange, options }) {
+  return (
+    <div className="block">
+      <span className={labelCls}>{label}</span>
+      <div role="group" aria-label={label} className="flex gap-1">
+        {options.map(([val, text]) => {
+          const on = (value ?? options[0][0]) === val
+          return (
+            <button
+              key={val}
+              type="button"
+              onClick={() => onChange(val)}
+              aria-pressed={on}
+              title={text}
+              className={`flex flex-1 items-center justify-center rounded-lg border px-2 py-1.5 transition ${
+                on
+                  ? 'border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]'
+                  : 'border-[var(--studio-border,#e5e7eb)] text-[var(--studio-text-muted)] hover:border-[#4f46e5] hover:text-[#4f46e5]'
+              }`}
+            >
+              <AlignGlyph position={val} />
+              <span className="sr-only">{text}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// A bar with a block parked left / centre / right — reads faster than the word.
+function AlignGlyph({ position }) {
+  const x = position === 'center' ? 8 : position === 'right' ? 14 : 2
+  return (
+    <svg viewBox="0 0 24 12" width="30" height="15" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="23" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.45" />
+      <rect x={x} y="3" width="8" height="6" rx="1.5" fill="currentColor" />
+    </svg>
+  )
+}
+
 export function LabeledPx({ label, value, onChange }) {
   const match = /^(-?\d+(?:\.\d+)?)/.exec(String(value ?? ''))
   const num = match ? match[1] : ''

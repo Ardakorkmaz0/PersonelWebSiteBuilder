@@ -335,3 +335,38 @@ describe('schemaToSingleHtml box placement', () => {
     expect(html).toMatch(/\.c-quote_1 \{[^}]*top: 240px;/)
   })
 })
+
+describe('schemaToSingleHtml navbar placement', () => {
+  const bar = (props) => schemaToSingleHtml({
+    theme: {},
+    pages: [{
+      id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+      canvasWidth: 1000, mobileWidth: 390,
+      components: [{
+        id: 'nav_1', type: 'navbar',
+        props: { brand: 'Brand', links: [{ label: 'Home', href: '#' }], navLayout: 'horizontal', ...props },
+        styles: {},
+        layout: { x: 0, y: 0, w: 1000, h: 64 },
+        mobileLayout: { x: 0, y: 0, w: 390, h: 64 },
+      }],
+    }],
+  }, 'Nav test')
+
+  it('writes the brand and links placement the editor draws', () => {
+    const html = bar({ brandAlign: 'center', linksAlign: 'right', linkGap: 30 })
+    expect(html).toMatch(/\.c-nav_1 > \.nav-inner > \.brand \{[^}]*position: absolute;/)
+    expect(html).toMatch(/\.c-nav_1 > \.nav-inner > \.links \{[^}]*margin-left: auto;/)
+    expect(html).toMatch(/\.c-nav_1 > \.nav-inner > \.links \{[^}]*gap: 30px;/)
+  })
+
+  // Regression: `order` went through the px-appending serializer and came out as
+  // `order: 1px`, which browsers drop — so a bar told to put its brand after its
+  // links kept the original order once published while the editor swapped them.
+  it('writes flex order unitless so the swap survives', () => {
+    const html = bar({ brandAlign: 'right', linksAlign: 'left' })
+    expect(html).toMatch(/\.c-nav_1 > \.nav-inner > \.brand \{[^}]*order: 1;/)
+    // Anchored to the rule: a bare 'order: 1px' search also hits 'border: 1px'
+    // in the shared stylesheet.
+    expect(html).not.toMatch(/\.c-nav_1 > \.nav-inner > \.brand \{[^}]*order: 1px/)
+  })
+})

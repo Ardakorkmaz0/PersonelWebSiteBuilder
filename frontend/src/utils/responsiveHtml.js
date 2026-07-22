@@ -10,6 +10,7 @@ import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntim
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
+import { navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 import { pinnedLayoutStyle } from '../components/renderer/layout.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
@@ -159,18 +160,20 @@ function navbar(c) {
       return `<a href="${esc(href || '#')}"${linkAttrs(href)}>${multiline(l.label)}</a>`
     })
     .join('\n          ')
-  // Links position (horizontal only): auto margins slide the links block
-  // left / center inside the row; 'right' is the space-between default.
-  const align =
-    layout === 'horizontal' && p.linksAlign === 'left'
-      ? ' style="margin-right:auto"'
-      : layout === 'horizontal' && p.linksAlign === 'center'
-        ? ' style="margin-left:auto;margin-right:auto"'
-        : ''
+  // Brand / links placement (horizontal only) from the shared rules the editor
+  // draws with, so this bar arranges itself exactly the same way.
+  const placed = layout === 'horizontal' ? navbarPlacement(p) : null
+  const attr = (styles) => {
+    const css = Object.entries(styles || {})
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${kebab(k)}:${cssVal(typeof v === 'number' && k !== 'order' ? `${v}px` : v)}`)
+      .join(';')
+    return css ? ` style="${css}"` : ''
+  }
   return `<header class="rh-navbar"${styleAttr(c)}>
-      <div class="rh-container rh-nav-inner rh-nav-${layout}">
-        <span class="rh-brand">${multiline(p.brand)}</span>
-        <nav class="rh-links"${align}>\n          ${links}\n        </nav>
+      <div class="rh-container rh-nav-inner rh-nav-${layout}"${attr(placed?.row)}>
+        <span class="rh-brand"${attr(placed?.brand)}>${multiline(p.brand)}</span>
+        <nav class="rh-links"${attr(placed ? { ...placed.links, gap: navbarLinkGap(p) } : null)}>\n          ${links}\n        </nav>
       </div>
     </header>`
 }

@@ -24,6 +24,7 @@ import {
 import { regionContentWidth, resolveRegionDock } from './regionLayout.js'
 import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
 import { fixedRailInset } from './railInset.js'
+import { navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -33,15 +34,17 @@ function isVerticalNavbar(c) {
   return c?.type === 'navbar' && c.props?.navLayout === 'vertical'
 }
 
-// Links position inside a horizontal navbar ('right' is the space-between
-// default). Auto margins absorb the free row space before justify-content,
-// which is what slides the links block left / center.
-function navbarLinksAlignCss(c) {
-  if (c?.type !== 'navbar' || (c.props?.navLayout || 'horizontal') !== 'horizontal') return ''
-  const v = c.props?.linksAlign
-  if (v === 'left') return 'margin-right:auto;'
-  if (v === 'center') return 'margin-left:auto;margin-right:auto;'
-  return ''
+// Brand / links placement inside a horizontal navbar, straight from the shared
+// rules the React renderer uses — so the published bar arranges itself exactly
+// like the edit canvas. Returns CSS for the row and each of its two items.
+function navbarPlacementCss(c) {
+  if (c?.type !== 'navbar' || (c.props?.navLayout || 'horizontal') !== 'horizontal') return null
+  const placed = navbarPlacement(c.props)
+  return {
+    row: styleObjectBlock(placed.row),
+    brand: styleObjectBlock(placed.brand),
+    links: styleObjectBlock({ ...placed.links, gap: navbarLinkGap(c.props) }),
+  }
 }
 
 function isViewportStretch(c) {
@@ -129,7 +132,11 @@ function styleBlock(styles) {
 function cssUnit(key, value) {
   if (value === undefined || value === null) return ''
   if (typeof value === 'number') {
-    return ['opacity', 'zIndex', 'fontWeight', 'lineHeight'].includes(key)
+    // Unitless CSS properties. `order` belongs here: emitting `order: 1px` is
+    // invalid, the browser drops the whole declaration, and a navbar asked to
+    // put its brand after its links silently kept the original order on the
+    // published page while the editor swapped them.
+    return ['opacity', 'zIndex', 'fontWeight', 'lineHeight', 'order', 'flexGrow', 'flexShrink'].includes(key)
       ? String(value)
       : `${value}px`
   }
@@ -625,7 +632,7 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
     }
     for (const c of comps) {
       const hide = c.hidden ? ' display:none;' : ''
-      const linksAlign = navbarLinksAlignCss(c)
+      const placed = navbarPlacementCss(c)
       // inlineNode types paint their own look on the inner node; repeating it on
       // the wrapper would apply padding and borders twice.
       const own = INLINE_NODE_TYPES.has(c.type) ? '' : `${baseRules(c.type)} ${styleBlock(c.styles)}`
@@ -635,13 +642,21 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
         if (FLOW_FULL_WIDTH_TYPES.has(c.type) && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner, .c-${c.id} > .section-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }
-        if (linksAlign) css += `.c-${c.id} > .nav-inner > .links { ${linksAlign} }\n`
+        if (placed) {
+          if (placed.row) css += `.c-${c.id} > .nav-inner { ${placed.row} }\n`
+          if (placed.brand) css += `.c-${c.id} > .nav-inner > .brand { ${placed.brand} }\n`
+          if (placed.links) css += `.c-${c.id} > .nav-inner > .links { ${placed.links} }\n`
+        }
       } else {
         css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false, 'layout', railInset))} ${own}${hide} }\n`
         if (c.type === 'navbar' && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }
-        if (linksAlign) css += `.c-${c.id} > .nav-inner > .links { ${linksAlign} }\n`
+        if (placed) {
+          if (placed.row) css += `.c-${c.id} > .nav-inner { ${placed.row} }\n`
+          if (placed.brand) css += `.c-${c.id} > .nav-inner > .brand { ${placed.brand} }\n`
+          if (placed.links) css += `.c-${c.id} > .nav-inner > .links { ${placed.links} }\n`
+        }
       }
       // Desktop geometry for a section's free-placed children, so the mobile
       // block below (which reflows them into the phone's width) has something to

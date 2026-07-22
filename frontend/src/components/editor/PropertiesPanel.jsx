@@ -34,6 +34,7 @@ import {
   LabeledColor,
   LabeledSelect,
   LabeledPx,
+  LabeledAlign,
   LabeledNumber,
   LabeledRange,
   LabeledCheckbox,
@@ -685,6 +686,9 @@ function PropControl({ field, value, onChange, extras, pages = [] }) {
   }
   if (field.control === 'px') {
     return <LabeledPx label={label} value={value} onChange={onChange} />
+  }
+  if (field.control === 'align') {
+    return <LabeledAlign label={label} value={value} onChange={onChange} options={options} />
   }
   if (field.control === 'select') {
     return (

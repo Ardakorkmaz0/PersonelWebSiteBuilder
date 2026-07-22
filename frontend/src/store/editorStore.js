@@ -582,6 +582,32 @@ function placeMobile(c, leftX, availW) {
     const w = Math.min(availW, Math.max(120, (c.props?.text || '').length * 10 + 48))
     return { x: Math.round(leftX + (availW - w) / 2), w, h: estMobileHeight(c, w) }
   }
+  // An embed's desktop box has already been fitted to its content, so that width
+  // is what the block actually needs — stretching it across the phone would put
+  // a 358px selection frame around an 88px button. Take the narrower of the two
+  // and centre it, the same way a native button and image are handled above.
+  if (c.type === 'html') {
+    const designed = Math.max(20, Math.round(c.layout?.w || availW))
+    const w = Math.min(availW, designed)
+    // Same width as the desktop box means the content lays out identically, so
+    // its already-fitted height carries over exactly — no estimate, and no 40px
+    // floor padding a 26px badge out to a frame half again its size. Only a
+    // block the phone actually had to narrow needs the re-wrap estimate.
+    const designedH = Math.max(20, Math.round(c.layout?.h || 80))
+    let h
+    if (w === designed) {
+      h = designedH
+    } else if (c.props?._paletteType === 'image') {
+      // A narrowed picture scales; its height follows the width exactly, so this
+      // is not a guess. Text blocks re-wrap TALLER when narrowed, which no
+      // synchronous estimate can predict — they keep the desktop height and the
+      // measured re-fit corrects them.
+      h = Math.max(20, Math.round(designedH * (w / designed)))
+    } else {
+      h = estMobileHeight(c, w)
+    }
+    return { x: Math.round(leftX + (availW - w) / 2), w, h }
+  }
   return { x: leftX, w: availW, h: estMobileHeight(c, availW) }
 }
 

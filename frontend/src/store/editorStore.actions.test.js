@@ -823,3 +823,40 @@ describe('addBlock drop position', () => {
     expect(comps[1].mobileLayout.y).toBeGreaterThan(comps[0].mobileLayout.y)
   })
 })
+
+describe('embed box manual flag', () => {
+  // The auto-fit keeps the box hugging the content, which is right until the
+  // user deliberately sizes a block themselves — from then on their size wins,
+  // and only pressing "Fit to content" hands it back to auto.
+  function oneEmbed() {
+    s().loadSchema({ theme: {}, pages: [{ id: 'p1', name: 'Home', components: [] }] })
+    s().selectPage('p1')
+    s().addBlock([{ type: 'html', x: 10, y: 10, w: 300, h: 100, props: { code: '<p>x</p>' } }], 20)
+    return selectCurrentPage(useEditorStore.getState()).components[0].id
+  }
+  const embed = () => selectCurrentPage(useEditorStore.getState()).components[0]
+
+  it('is not set on a fresh block or by the automatic fit', () => {
+    const id = oneEmbed()
+    expect(embed().props._boxManual).toBeFalsy()
+    s().fitEmbedBox(id, { w: 120, h: 40 })
+    expect(embed().props._boxManual).toBeFalsy()
+  })
+
+  it('is set when the user resizes, and cleared by an explicit fit', () => {
+    const id = oneEmbed()
+    s().setLayout(id, { w: 500, h: 200 })
+    expect(embed().props._boxManual).toBe(true)
+    // A plain move must not claim the box was hand-SIZED.
+    s().fitEmbedBox(id, { w: 120, h: 40 })
+    expect(embed().props._boxManual).toBe(true)
+    s().fitEmbedBox(id, { w: 120, h: 40 }, { releaseManual: true })
+    expect(embed().props._boxManual).toBe(false)
+  })
+
+  it('a move alone does not mark the box manual', () => {
+    const id = oneEmbed()
+    s().setLayout(id, { x: 80, y: 90 })
+    expect(embed().props._boxManual).toBeFalsy()
+  })
+})

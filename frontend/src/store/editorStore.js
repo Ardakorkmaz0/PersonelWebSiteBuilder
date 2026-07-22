@@ -1952,9 +1952,16 @@ export const useEditorStore = create((set, get) => ({
         }
       }
       const before = findInTree(page.components, id)
+      // A SIZE change here is always user-driven (resize handle, Size panel,
+      // align/distribute). Mark the embed so the auto-fit stops overriding the
+      // size they chose; the toolbar's "Fit to content" clears the flag to hand
+      // the block back to auto-sizing.
+      const sized = patch.w !== undefined || patch.h !== undefined
       let components = mapTree(page.components, id, (c) => {
         const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
-        return { ...c, [key]: clampLayout({ ...base, ...patch }, { maxX, maxY }) }
+        const next = { ...c, [key]: clampLayout({ ...base, ...patch }, { maxX, maxY }) }
+        if (sized && c.type === 'html') next.props = { ...c.props, _boxManual: true }
+        return next
       })
       if (isTop && before?.type === 'region' && patch.h !== undefined) {
         const oldLayout = before[key] || before.layout || {}
@@ -1987,7 +1994,10 @@ export const useEditorStore = create((set, get) => ({
   // inside the new box — otherwise componentBoxScale would keep scaling the
   // content against the palette's old guess and the frame would gap again.
   // `record: false` lets the post-drop auto-fit share the drop's undo step.
-  fitEmbedBox: (id, size, { record = true } = {}) => {
+  // `releaseManual` is the explicit "Fit to content" action: it hands a block
+  // the user had hand-sized back to auto-sizing. The automatic re-fit leaves the
+  // flag alone (it never runs on a manual box in the first place).
+  fitEmbedBox: (id, size, { record = true, releaseManual = false } = {}) => {
     const page0 = selectCurrentPage(get())
     const topLevel = isTopLevel(page0.components, id)
     if (record) get().record('fit-' + id)
@@ -1997,7 +2007,11 @@ export const useEditorStore = create((set, get) => ({
       const components = mapTree(page.components, id, (c) => ({
         ...c,
         layout: clampLayout({ x: 0, y: 0, ...(c.layout || {}), ...size }, { maxX }),
-        props: { ...c.props, _baseSize: { w: size.w, h: size.h } },
+        props: {
+          ...c.props,
+          _baseSize: { w: size.w, h: size.h },
+          ...(releaseManual ? { _boxManual: false } : {}),
+        },
       }))
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })

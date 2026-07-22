@@ -42,12 +42,41 @@ describe('decideFitSize', () => {
   })
 
   it('clamps to sane minimums and maximums', () => {
-    expect(decideFitSize({ boxW: 20, measuredH: 4, naturalW: 10 })).toEqual({ w: 80, h: 36 })
+    expect(decideFitSize({ boxW: 8, measuredH: 4, naturalW: 10 })).toEqual({ w: 20, h: 20 })
     expect(decideFitSize({ boxW: 600, measuredH: 99999, naturalW: 0 }).h).toBe(2400)
   })
 
   it('survives missing measurements', () => {
     const out = decideFitSize({ boxW: 300, measuredH: 0, naturalW: undefined })
-    expect(out).toEqual({ w: 300, h: 36 })
+    expect(out).toEqual({ w: 300, h: 20 })
+  })
+})
+
+describe('decideFitSize painted width', () => {
+  // Regression: the ratio guard below refused to shrink exactly the blocks that
+  // needed it most. A palette button ships a 220px box around 89px of ink and a
+  // badge a 170px box around 42px, so both landed just under the 0.45 threshold
+  // and kept a selection frame 2.5-4x wider than the block.
+  it('hugs the measured ink even when it is far narrower than the box', () => {
+    expect(decideFitSize({ boxW: 220, measuredH: 40, naturalW: 88, paintedW: 83 }).w).toBe(89)
+    expect(decideFitSize({ boxW: 170, measuredH: 30, naturalW: 41, paintedW: 36 }).w).toBe(42)
+  })
+
+  // A snippet with its own max-width paints the same width no matter how wide
+  // the box is; max-content reports the longest word instead and is useless here.
+  it('respects a snippet max-width cap', () => {
+    expect(decideFitSize({ boxW: 560, measuredH: 139, naturalW: 122, paintedW: 414 }).w).toBe(420)
+  })
+
+  // Content that fills its box falls back to the old heuristic, so a multi-column
+  // section (whose max-content collapses to one column) still keeps its width.
+  it('keeps the box when the content fills it', () => {
+    expect(decideFitSize({ boxW: 1000, measuredH: 240, naturalW: 366, paintedW: 1000 }).w).toBe(1000)
+  })
+
+  it('never tightens when tightening is switched off', () => {
+    expect(
+      decideFitSize({ boxW: 440, measuredH: 96, naturalW: 221, paintedW: 120, allowTighten: false }).w,
+    ).toBe(440)
   })
 })

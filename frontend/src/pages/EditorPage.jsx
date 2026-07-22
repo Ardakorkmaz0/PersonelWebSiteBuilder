@@ -65,6 +65,7 @@ import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import { MOBILE_EDITOR_QUERY, NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
 import { fitHtmlEmbedLayout } from '../utils/htmlEmbedMeasure.js'
+import { htmlSnippetSize } from '../utils/htmlSnippetSizing.js'
 import {
   EDITOR_AUTO_SAVE_DELAY_MS,
   isEditorSaveShortcut,
@@ -292,6 +293,17 @@ export default function EditorPage() {
   const selectedComponentId = useEditorStore((s) =>
     s.selectedIds.length <= 1 ? s.selectedId : null,
   )
+  // Everything about the selected embed that changes how big it renders. Colours
+  // and alignment are deliberately absent — they never change the size, and
+  // re-measuring on every colour tweak would be wasted work. Drives the re-fit
+  // effect below so the box keeps hugging the content after an edit, not just
+  // at drop time.
+  const selectedEmbedSizeKey = useEditorStore((s) => {
+    const c = (selectCurrentPage(s).components || []).find((x) => x.id === s.selectedId)
+    if (!c || c.type !== 'html' || c.props?._boxManual) return ''
+    const p = c.props || {}
+    return [p.code, p.tweakFont, p.tweakPadding, p.tweakZoom, p.shape].join(' ')
+  })
   const pcWidth = useEditorStore((s) => selectCurrentPage(s).canvasWidth || 1000)
   const pcFold = useEditorStore((s) => selectCurrentPage(s).canvasFold || 0)
   const mobileW = useEditorStore((s) => selectCurrentPage(s).mobileWidth || 390)
@@ -976,24 +988,52 @@ export default function EditorPage() {
   // Always measured/applied at the PC design width: fitEmbedBox re-bases the
   // box + _baseSize there and auto-mode mobile re-derives from it, so a drop
   // made in the Mobile viewport never flips the page into manual-mobile mode.
-  function autoFitDroppedEmbed() {
-    window.setTimeout(async () => {
-      const state = useEditorStore.getState()
-      const componentId = state.selectedId
-      const page = selectCurrentPage(state)
-      const comp = (page.components || []).find((c) => c.id === componentId)
-      if (!comp || comp.type !== 'html') return
-      await fitHtmlEmbedLayout(comp, Math.round(comp.layout?.w || 360), (patch) => {
-        // Re-check the component still exists (fast undo / delete during measure).
-        const fresh = selectCurrentPage(useEditorStore.getState()).components || []
-        if (fresh.some((c) => c.id === componentId)) {
-          // record:false — the fit shares the drop's undo step, so one Undo
-          // removes the block instead of first restoring the guessed size.
-          useEditorStore.getState().fitEmbedBox(componentId, patch, { record: false })
-        }
-      })
-    }, 30)
+  // Measure one embed and snap its box onto the content. `record` false makes
+  // the fit share the caller's undo step (the drop, or the edit that triggered
+  // the re-fit) so one Undo doesn't first restore an intermediate size.
+  async function fitEmbedNow(componentId) {
+    const page = selectCurrentPage(useEditorStore.getState())
+    const comp = (page.components || []).find((c) => c.id === componentId)
+    if (!comp || comp.type !== 'html') return
+    // The user hand-sized this one — their size wins until they press Fit.
+    if (comp.props?._boxManual) return
+    // Measure with at least as much room as the block was DESIGNED for, not
+    // just its current box. A button whose label grew would otherwise be
+    // measured inside its own narrow box: the label wraps, the content now
+    // "fills" the box, and the fit makes it taller and taller instead of wider.
+    // The palette's designed width is the natural ceiling — the box can grow
+    // back up to it, never past it, so a text block never balloons.
+    const designed = comp.props?._paletteType
+      ? htmlSnippetSize(comp.props._paletteType, comp.props._paletteVariant, null)
+      : null
+    const room = Math.max(Math.round(comp.layout?.w || 360), Math.round(designed?.w || 0))
+    await fitHtmlEmbedLayout(comp, room, (patch) => {
+      // Re-check the component still exists (fast undo / delete during measure).
+      const fresh = selectCurrentPage(useEditorStore.getState()).components || []
+      if (fresh.some((c) => c.id === componentId)) {
+        useEditorStore.getState().fitEmbedBox(componentId, patch, { record: false })
+      }
+    })
   }
+
+  function autoFitDroppedEmbed() {
+    window.setTimeout(() => fitEmbedNow(useEditorStore.getState().selectedId), 30)
+  }
+
+  // Keep the box hugging the content AFTER the drop too: edit a block's text or
+  // padding and its size key changes, so re-measure and re-snap. Without this
+  // the selection frame is only honest at drop time and drifts from the block
+  // with every edit. Only fires when the key changes while the SAME block stays
+  // selected — merely clicking a block never resizes it behind the user's back.
+  const embedFitRef = useRef({ id: null, key: '' })
+  useEffect(() => {
+    const seen = embedFitRef.current
+    const changed = seen.id === selectedComponentId && seen.key !== selectedEmbedSizeKey
+    embedFitRef.current = { id: selectedComponentId, key: selectedEmbedSizeKey }
+    if (!changed || !selectedComponentId || !selectedEmbedSizeKey) return undefined
+    const timer = window.setTimeout(() => fitEmbedNow(selectedComponentId), 250)
+    return () => window.clearTimeout(timer)
+  }, [selectedComponentId, selectedEmbedSizeKey])
 
   const HTML_HISTORY_CAP = 50
 

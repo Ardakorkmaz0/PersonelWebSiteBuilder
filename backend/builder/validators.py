@@ -261,6 +261,11 @@ def sanitize_props(ctype, props):
             val = props.get(key)
             if isinstance(val, str) and PALETTE_SLUG_RE.match(val):
                 out[key] = val
+        # Set once the user hand-sizes the box, so the client's auto-fit stops
+        # overriding their size. Must survive a save or the box would silently
+        # snap back to hugging the content on the next reload.
+        if props.get('_boxManual') is True:
+            out['_boxManual'] = True
         base = props.get('_baseSize')
         if isinstance(base, dict):
             w = _num(base.get('w'), 0, 0, 4000)

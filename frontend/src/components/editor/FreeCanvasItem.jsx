@@ -11,6 +11,8 @@ import { useLanguage } from '../../i18n/useLanguage.js'
 const MIN = 20
 const ACCENT = '#4f46e5'
 const HANDLE_SIZE = 10
+// Native types sized by their own content rather than the palette's guess.
+const CONTENT_GROW_TYPES = new Set(['tabs'])
 const HANDLE_OFFSET = HANDLE_SIZE / 2
 const EDGE_HIT_SIZE = 14
 const EDGE_HIT_OFFSET = EDGE_HIT_SIZE / 2
@@ -176,6 +178,31 @@ export default function FreeCanvasItem({
       ? props.scrollBehavior
       : null
   const wrapRef = useRef(null)
+
+  // Native components whose height is decided by their CONTENT, not by the box
+  // the palette guessed. A tabs block with three panels renders ~212px tall in
+  // the 220px box it ships with, but any smaller box and it spills out — in the
+  // edit canvas AND on the published page, since neither clips. Grow the box
+  // onto the content so the selection frame keeps telling the truth. Grow only:
+  // shrinking is the user's call, and only growing can't oscillate.
+  useEffect(() => {
+    if (!CONTENT_GROW_TYPES.has(component.type)) return undefined
+    const timer = window.setTimeout(() => {
+      const node = wrapRef.current?.firstElementChild?.firstElementChild
+      if (!node) return
+      const needed = Math.ceil(node.getBoundingClientRect().height / canvasScale)
+      if (needed > (layout.h || 0) + 1) setLayout(component.id, { h: needed })
+    }, 60)
+    return () => window.clearTimeout(timer)
+  }, [
+    component.id,
+    component.type,
+    component.props,
+    component.children,
+    layout.h,
+    canvasScale,
+    setLayout,
+  ])
   const pinY = props.pinY === 'bottom' ? 'bottom' : 'top'
   const pinX = ['right', 'center'].includes(props.pinX) ? props.pinX : 'left'
   const pinOffsetY = Number(props.pinOffsetY) || 0

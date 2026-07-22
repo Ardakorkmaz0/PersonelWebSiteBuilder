@@ -247,7 +247,7 @@ describe('schemaToSingleHtml embed breakpoints', () => {
     }, 'Embed test')
 
     expect(html).toContain('<div id="html_1" class="c-html_1">')
-    expect(html).toContain('.c-html_1 { position: absolute;')
+    expect(html).toMatch(/\.c-html_1 \{[^}]*position: absolute;/)
     expect(html).toMatch(/\.c-html_1 \{[^}]*top: 288px;[^}]*width: 360px;[^}]*height: 70px;/)
     expect(html).toMatch(/ {2}\.c-html_1 \{[^}]*top: 571px;[^}]*height: 90px;/)
     // The look stays on the inner node — the wrapper rule must not repeat it,
@@ -308,5 +308,30 @@ describe('schemaToSingleHtml preview scrollbars', () => {
       .toContain('html::-webkit-scrollbar { width: 0; height: 0; }')
     // The published page keeps normal scrollbars.
     expect(schemaToSingleHtml(schema, 'T')).not.toContain('html::-webkit-scrollbar')
+  })
+})
+
+describe('schemaToSingleHtml box placement', () => {
+  // Regression: the selection frame in the editor promises a component sits at
+  // its layout x/y. A browser's default margin on the tag broke that promise on
+  // the published page — <blockquote> ships `margin: 1em 40px`, which slides an
+  // absolutely positioned box 40px right and 20px down from its left/top. The
+  // editor hid this because Tailwind's preflight zeroes margins there.
+  it('zeroes the user-agent margin so a box lands on its design position', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+        canvasWidth: 1000, mobileWidth: 390,
+        components: [{
+          id: 'quote_1', type: 'quote', props: { text: 'Placed exactly here' }, styles: {},
+          layout: { x: 40, y: 240, w: 600, h: 160 },
+          mobileLayout: { x: 12, y: 200, w: 360, h: 160 },
+        }],
+      }],
+    }, 'Box test')
+
+    expect(html).toMatch(/\.c-quote_1 \{[^}]*margin: 0px;/)
+    expect(html).toMatch(/\.c-quote_1 \{[^}]*top: 240px;/)
   })
 })

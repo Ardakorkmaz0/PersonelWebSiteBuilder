@@ -66,9 +66,17 @@ function absoluteWrapperStyle(c, layoutKey = 'layout') {
 }
 
 function wrapperStyle(c, viewport, canvasWidth, flowMode, layoutKey = 'layout', railInset = null) {
-  let base = flowMode
-    ? flowItemStyle(c, viewport, canvasWidth)
-    : absoluteWrapperStyle(c, layoutKey)
+  // margin:0 FIRST, so any margin the layout itself wants still wins. A
+  // component box is placed by left/top, and a browser's default margin on the
+  // tag would slide it off that spot: <blockquote> ships `margin: 1em 40px`, so
+  // a quote painted 40px right and 20px below its design position on the
+  // published page while the editor — where Tailwind's preflight zeroes margins
+  // — drew it exactly on the mark. The selection frame was telling the truth and
+  // the export was not. Every tag is covered, not just the ones that bite today.
+  let base = {
+    margin: 0,
+    ...(flowMode ? flowItemStyle(c, viewport, canvasWidth) : absoluteWrapperStyle(c, layoutKey)),
+  }
   if (!flowMode && isViewportStretch(c)) {
     base = { ...base, left: 0, width: '100%' }
   } else if (!flowMode) {

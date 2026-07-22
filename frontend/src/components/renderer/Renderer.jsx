@@ -21,7 +21,7 @@ import {
   pinnedLayoutStyle,
   stylesFor,
 } from './layout.js'
-import { componentBoxScale, scaleBoxStyles, scaleCssValue, scaledPx } from './scale.js'
+import { scaleCssValue, scaledPx } from './scale.js'
 import { regionContentWidth, responsiveRegionChildLayout } from '../../utils/regionLayout.js'
 import { autoLayoutChildStyle, autoLayoutContainerStyle } from '../../utils/autoLayout.js'
 
@@ -205,13 +205,19 @@ export function RenderComponent({
   if (!def) return null
   const Comp = def.Render
   const fixedFlow = flowMode && ['image', 'divider', 'spacer'].includes(component.type)
-  const boxScale = componentBoxScale(component, def, viewport, flowMode)
+  // Resizing a block re-flows its content; it does NOT magnify it. This used to
+  // scale every font, padding and border by sqrt(box area / design area), but
+  // ONLY here — the exported page never did, so a block the user had enlarged
+  // was drawn 1.36x bigger in the editor than on the published site. Content is
+  // enlarged deliberately through the Properties panel's zoom/font controls
+  // instead. Every component still accepts a `boxScale` prop defaulting to 1,
+  // so the plumbing is inert rather than removed.
   const style = {
     width: '100%',
     ...(flowMode ? (fixedFlow ? { height: '100%' } : { minHeight: '100%' }) : { height: '100%' }),
     boxSizing: 'border-box',
     overflow: flowMode ? 'visible' : 'hidden',
-    ...scaleBoxStyles(sanitizeStyles(stylesFor(component, viewport)), boxScale),
+    ...sanitizeStyles(stylesFor(component, viewport)),
   }
 
   // Tabs: header strip + one panel per tab. In the public renderer (no
@@ -224,7 +230,6 @@ export function RenderComponent({
         component={component}
         style={style}
         viewport={viewport}
-        boxScale={boxScale}
         editorPreview={editorPreview}
       />
     )
@@ -308,7 +313,6 @@ export function RenderComponent({
       style={style}
       viewport={viewport}
       contentWidth={contentWidth}
-      boxScale={boxScale}
       editorPreview={editorPreview}
     />
   )

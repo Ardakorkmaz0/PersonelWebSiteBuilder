@@ -1,9 +1,18 @@
+// Resizing a component's box RE-FLOWS its content; it never magnifies it.
+//
+// This file used to assert the opposite: fonts, padding and borders were scaled
+// by sqrt(box area / design area). Only the editor's renderer did that — the
+// exported page ignored it entirely — so a block the user had enlarged was drawn
+// noticeably bigger in the editor than on the published site (measured on a
+// resized accordion: 72px header in Edit vs 53px live, exactly the 1.358 scale
+// factor). The editor now matches the export, and content is enlarged
+// deliberately through the Properties panel's zoom/font controls.
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { registry } from '../registry.jsx'
 import { RenderComponent } from './Renderer.jsx'
 
-function expandedComponent(type, scale = 2) {
+function componentAt(type, scale = 1) {
   const def = registry[type]
   return {
     id: `${type}_scale_test`,
@@ -18,15 +27,15 @@ function expandedComponent(type, scale = 2) {
   }
 }
 
-function renderType(type, scale = 2) {
-  return renderToStaticMarkup(<RenderComponent component={expandedComponent(type, scale)} />)
+function renderType(type, scale = 1) {
+  return renderToStaticMarkup(<RenderComponent component={componentAt(type, scale)} />)
 }
 
-describe('RenderComponent box scaling', () => {
+describe('RenderComponent box sizing', () => {
   it('preserves entered line breaks in visible text', () => {
     const html = renderToStaticMarkup(
       <RenderComponent component={{
-        ...expandedComponent('heading', 1),
+        ...componentAt('heading'),
         props: { text: 'First line\nSecond line', level: 'h2' },
       }} />,
     )
@@ -37,149 +46,43 @@ describe('RenderComponent box scaling', () => {
 
   it('renders every registered component when the box is resized larger', () => {
     for (const type of Object.keys(registry)) {
-      expect(renderType(type)).toContain('width:100%')
+      expect(renderType(type, 2)).toContain('width:100%')
     }
   })
 
-  it('scales button text metrics with the resized box', () => {
-    const html = renderType('button')
+  // The core contract: resizing the box must not change a single TYPE or SPACING
+  // value, for any component type. Two things ARE allowed to track the box: a
+  // band's inner content column and a container's min-height. Those are the box
+  // itself, which is the whole point of resizing; what must not happen is the
+  // text, padding and borders growing with it.
+  const boxDerived = (html) =>
+    html
+      .replace(/max-width:\d+px/g, 'max-width:BOX')
+      .replace(/min-height:\d+px/g, 'min-height:BOX')
 
-    expect(html).toContain('font-size:34px')
-    expect(html).toContain('border-radius:1960px')
+  it('renders identical type and spacing at every box size', () => {
+    for (const type of Object.keys(registry)) {
+      const atDesign = boxDerived(renderType(type, 1))
+      const doubled = boxDerived(renderType(type, 2))
+      const halved = boxDerived(renderType(type, 0.5))
+      expect(doubled, `${type} changed when its box doubled`).toBe(atDesign)
+      expect(halved, `${type} changed when its box halved`).toBe(atDesign)
+    }
   })
 
-  it('scales form field internals with the resized box', () => {
-    const html = renderType('input')
-
-    expect(html).toContain('font-size:30px')
-    expect(html).toContain('height:88px')
-    expect(html).toContain('padding:20px 24px')
-  })
-
-  it('scales alert icon, spacing, and text metrics with the resized box', () => {
-    const html = renderType('alert')
-
-    expect(html).toContain('font-size:32px')
-    expect(html).toContain('gap:20px')
-    expect(html).toContain('width="40px"')
-  })
-
-  it('scales tabs chrome when the tabs box is resized', () => {
-    const html = renderType('tabs')
-
-    expect(html).toContain('font-size:32px')
-    expect(html).toContain('padding:20px 32px')
-    expect(html).toContain('gap:12px')
-  })
-
-  it('scales icons with the resized box', () => {
-    const html = renderType('icon')
-
-    expect(html).toContain('font-size:80px')
-    expect(html).toContain('justify-content:center')
-  })
-
-  it('scales html embed content through the iframe document', () => {
+  // An embed's snippet is handed to the iframe untouched: no scale wrapper, so
+  // the editor's document is byte-for-byte what the export writes.
+  it('never wraps an embed in a scale transform', () => {
     const html = renderToStaticMarkup(
-      <RenderComponent
-        component={{
-          id: 'html_box_scale_test',
-          type: 'html',
-          props: {
-            _baseSize: { w: 220, h: 56 },
-            code: '<div style="width:220px;height:56px;font-size:16px;">Box</div>',
-          },
-          styles: {},
-          layout: { w: 440, h: 112 },
-        }}
-      />,
+      <RenderComponent component={{
+        ...componentAt('html', 3),
+        props: { code: '<p>hello</p>', _baseSize: { w: 100, h: 40 } },
+      }} />,
     )
 
-    expect(html).toContain('data-pwb-embed-scale')
-    expect(html).toContain('--pwb-embed-scale:2')
-    expect(html).toContain('data-pwb-embed-scale-root')
-  })
-
-  it('renders html button embeds as frame-filling controls', () => {
-    const html = renderToStaticMarkup(
-      <RenderComponent
-        component={{
-          id: 'html_button_fill_test',
-          type: 'html',
-          props: {
-            _paletteType: 'button',
-            code: '<a href="#" style="display:inline-block;padding:12px 26px;font-size:16px;">Button</a>',
-          },
-          styles: {},
-          layout: { w: 440, h: 112 },
-        }}
-      />,
-    )
-
-    expect(html).toContain('data-pwb-embed-fill=&quot;control&quot;')
-    expect(html).toContain('width:100vw!important;height:100vh!important')
-    expect(html).not.toContain('data-pwb-embed-scaled=&quot;true&quot;')
-  })
-
-  it('makes html embeds inert in editor preview mode', () => {
-    const html = renderToStaticMarkup(
-      <RenderComponent
-        editorPreview
-        component={{
-          id: 'html_editor_preview_test',
-          type: 'html',
-          props: {
-            code: '<button>Click</button>',
-          },
-          styles: {},
-          layout: { w: 220, h: 80 },
-        }}
-      />,
-    )
-
-    expect(html).toContain('tabindex="-1"')
-    expect(html).toContain('pointer-events:none')
-    expect(html).toContain('user-select:none')
-  })
-
-  it('renders html select embeds as frame-filling forms', () => {
-    const html = renderToStaticMarkup(
-      <RenderComponent
-        component={{
-          id: 'html_select_fill_test',
-          type: 'html',
-          props: {
-            _paletteType: 'select',
-            code: '<div style="display:flex;align-items:center;gap:14px;"><span>Filter</span><select><option>Newest</option></select></div>',
-          },
-          styles: {},
-          layout: { w: 420, h: 96 },
-        }}
-      />,
-    )
-
-    expect(html).toContain('data-pwb-embed-fill=&quot;form&quot;')
-    expect(html).toContain('body[data-pwb-embed-fill=&quot;form&quot;]&gt;*:first-child')
-    expect(html).not.toContain('data-pwb-embed-scaled=&quot;true&quot;')
-  })
-
-  it('lets html icon embeds fill the resized frame', () => {
-    const html = renderToStaticMarkup(
-      <RenderComponent
-        component={{
-          id: 'html_icon_scale_test',
-          type: 'html',
-          props: {
-            _paletteType: 'icon',
-            code: '<span style="display:inline-grid;width:48px;height:48px;">+</span>',
-          },
-          styles: {},
-          layout: { w: 180, h: 180 },
-        }}
-      />,
-    )
-
-    expect(html).toContain('width:100vw!important;height:100vh!important')
-    expect(html).not.toContain('data-pwb-embed-scaled=&quot;true&quot;')
+    // The base stylesheet always DEFINES the scale selectors; what matters is
+    // that the scale is never switched on for this document.
+    expect(html).not.toContain('--pwb-embed-scale:')
+    expect(html).not.toMatch(/data-pwb-embed-scaled=(&quot;|")true/)
   })
 })

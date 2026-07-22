@@ -1281,7 +1281,7 @@ function HtmlWorkspace({
     if (!doc) return
     // Tell the tool manager the document is now ready, so a restored edit/link
     // surface binds its listeners (the first effect pass ran before this load).
-    setLoadTick((t) => t + 1)
+    setLoadTick((tick) => tick + 1)
     if (mode === 'edit') {
       // Drop any connection SVG baked into the document by an older app
       // version — it would otherwise show as a stale arrow that never updates.
@@ -1588,7 +1588,7 @@ function HtmlWorkspace({
             brushTarget={brushTarget}
             recentColors={brushRecentColors}
             onColor={(c) => onBrushColor?.(c)}
-            onTarget={(t) => onBrushTarget?.(t)}
+            onTarget={(target) => onBrushTarget?.(target)}
           />
         )}
 

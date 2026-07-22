@@ -569,7 +569,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
                   onArm={onArmPlacement}
                   onInspect={setPreview}
                   open={openType === item.type}
-                  onToggle={() => setOpenType((t) => (t === item.type ? null : item.type))}
+                  onToggle={() => setOpenType((open) => (open === item.type ? null : item.type))}
                 />
               ))}
             </div>

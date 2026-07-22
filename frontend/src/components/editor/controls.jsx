@@ -402,17 +402,17 @@ export function LabeledCheckbox({ label, checked, onChange, hint }) {
 // children onto the first remaining tab.
 export function TabsEditorControl({ label, value, onChange, activeId, onActiveChange, children, onChildrenChange }) {
   const { t } = useLanguage()
-  const tabs = Array.isArray(value) ? value.filter((t) => t && t.id) : []
+  const tabs = Array.isArray(value) ? value.filter((tab) => tab && tab.id) : []
 
   const genId = () => {
     let n = 1
-    const taken = new Set(tabs.map((t) => t.id))
+    const taken = new Set(tabs.map((tab) => tab.id))
     while (taken.has(`t${n}`)) n += 1
     return `t${n}`
   }
 
   const rename = (id, label) =>
-    onChange(tabs.map((t) => (t.id === id ? { ...t, label } : t)))
+    onChange(tabs.map((tab) => (tab.id === id ? { ...tab, label } : tab)))
 
   const add = () => {
     const id = genId()
@@ -422,7 +422,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
 
   const remove = (id) => {
     if (tabs.length <= 1) return
-    const next = tabs.filter((t) => t.id !== id)
+    const next = tabs.filter((tab) => tab.id !== id)
     onChange(next)
     // Reassign any children that pointed at the removed tab.
     if (children && onChildrenChange) {
@@ -434,7 +434,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
   }
 
   const move = (id, dir) => {
-    const i = tabs.findIndex((t) => t.id === id)
+    const i = tabs.findIndex((tab) => tab.id === id)
     const j = i + dir
     if (i < 0 || j < 0 || j >= tabs.length) return
     const next = [...tabs]
@@ -446,11 +446,11 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
     <div>
       <span className={labelCls}>{label}</span>
       <div className="space-y-2">
-        {tabs.map((t, i) => {
-          const sel = activeId === t.id
+        {tabs.map((tab, i) => {
+          const sel = activeId === tab.id
           return (
             <div
-              key={t.id}
+              key={tab.id}
               className={`rounded-lg border p-2 ${
                 sel ? 'border-[#4f46e5] bg-[#eef2ff]' : 'border-[#e5e7eb]'
               }`}
@@ -458,7 +458,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
               <div className="mb-1 flex items-center justify-between gap-1">
                 <button
                   type="button"
-                  onClick={() => onActiveChange && onActiveChange(t.id)}
+                  onClick={() => onActiveChange && onActiveChange(tab.id)}
                   className={`text-xs font-semibold ${
                     sel ? 'text-[#4f46e5]' : 'text-[#6b7280] hover:text-[#4f46e5]'
                   }`}
@@ -469,7 +469,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => move(t.id, -1)}
+                    onClick={() => move(tab.id, -1)}
                     disabled={i === 0}
                     className="rounded-lg px-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-30"
                     title={t('Move up')}
@@ -478,7 +478,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                   </button>
                   <button
                     type="button"
-                    onClick={() => move(t.id, 1)}
+                    onClick={() => move(tab.id, 1)}
                     disabled={i === tabs.length - 1}
                     className="rounded-lg px-1 text-xs text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-30"
                     title={t('Move down')}
@@ -487,7 +487,7 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
                   </button>
                   <button
                     type="button"
-                    onClick={() => remove(t.id)}
+                    onClick={() => remove(tab.id)}
                     disabled={tabs.length <= 1}
                     className="text-xs text-[#a4262c] hover:underline disabled:text-[#9ca3af] disabled:no-underline"
                   >
@@ -498,9 +498,9 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
               <textarea
                 rows={2}
                 className={`${inputCls} resize-y`}
-                value={t.label ?? ''}
+                value={tab.label ?? ''}
                 placeholder={t('Tab label')}
-                onChange={(e) => rename(t.id, e.target.value)}
+                onChange={(e) => rename(tab.id, e.target.value)}
               />
             </div>
           )

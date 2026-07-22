@@ -271,10 +271,10 @@ function SourceBadge({ source, pinned = false }) {
   )
 }
 
-function labelForSource(source, t) {
-  if (source === 'restore') return t('Restored from history')
-  if (source === 'save') return t('Older saved snapshot')
-  return t('Auto-saved snapshot')
+function labelForSource(source, translate) {
+  if (source === 'restore') return translate('Restored from history')
+  if (source === 'save') return translate('Older saved snapshot')
+  return translate('Auto-saved snapshot')
 }
 
 function formatWhen(iso, language) {

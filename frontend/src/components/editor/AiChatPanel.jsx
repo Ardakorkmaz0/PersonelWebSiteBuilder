@@ -921,7 +921,7 @@ function DividerRow({ label }) {
 // Dedupe + cap the per-call error reasons into a one-paragraph message the
 // user can act on. Beats showing the model's hallucinated "Updated the X"
 // reply when none of the changes actually landed.
-function buildFailureSummary(calls, t) {
+function buildFailureSummary(calls, translate) {
   const reasons = new Set()
   for (const c of calls || []) {
     const e = c?.result?.error
@@ -929,9 +929,9 @@ function buildFailureSummary(calls, t) {
   }
   const list = Array.from(reasons).slice(0, 4).join('\n• ')
   return (
-    t('I tried {count} actions but none of them landed.', { count: calls.length }) + ' '
-    + t('Common causes: the canvas was empty before I started, or I used component IDs that do not exist yet.') + '\n\n'
-    + t('Errors:') + `\n• ${list}\n\n` + t('Try rephrasing the request, or use /undo if anything did slip through.')
+    translate('I tried {count} actions but none of them landed.', { count: calls.length }) + ' '
+    + translate('Common causes: the canvas was empty before I started, or I used component IDs that do not exist yet.') + '\n\n'
+    + translate('Errors:') + `\n• ${list}\n\n` + translate('Try rephrasing the request, or use /undo if anything did slip through.')
   )
 }
 

@@ -610,7 +610,7 @@ export default function CodeProjectPage() {
             component palette, whose picks splice a block into the document. */}
         {leftOpen ? (
           <Sidebar
-            onPickComponent={isHtml ? (t, html) => setPending({ path: activePath, type: t, html }) : undefined}
+            onPickComponent={isHtml ? (type, html) => setPending({ path: activePath, type, html }) : undefined}
             onCollapse={() => setLeftOpen(false)}
             filesPanel={<ProjectFilesPanel />}
           />

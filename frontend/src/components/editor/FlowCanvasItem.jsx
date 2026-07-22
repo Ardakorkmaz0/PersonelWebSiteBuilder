@@ -892,9 +892,9 @@ export function TabsEditor({
   const tabsViewport = useEditorStore((s) => s.viewport)
   const p = component.props || {}
   const tabsList = Array.isArray(p.tabs) && p.tabs.length
-    ? p.tabs.filter((t) => t && t.id)
+    ? p.tabs.filter((tab) => tab && tab.id)
     : [{ id: 't1', label: 'Tab' }]
-  const activeId = tabsList.some((t) => t.id === p.activeId) ? p.activeId : tabsList[0].id
+  const activeId = tabsList.some((tab) => tab.id === p.activeId) ? p.activeId : tabsList[0].id
   const setActiveTab = useEditorStore((s) => s.setActiveTab)
   const select = useEditorStore((s) => s.selectComponent)
   const kids = Array.isArray(component.children) ? component.children : []

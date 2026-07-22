@@ -75,16 +75,16 @@ function RegionRender({ component, style, viewport, editorPreview, canvasDesignW
 function TabsRender({ component, style, viewport, boxScale = 1, editorPreview = false }) {
   const p = component.props || {}
   const tabs = Array.isArray(p.tabs) && p.tabs.length
-    ? p.tabs.filter((t) => t && t.id)
+    ? p.tabs.filter((tab) => tab && tab.id)
     : [{ id: 't1', label: 'Tab' }]
   // The editor passes a controlled activeId via props (so PropertiesPanel can
   // drive it). The public renderer falls back to local state so visitors can
   // click between tabs without any JS shim.
-  const initial = tabs.some((t) => t.id === p.activeId) ? p.activeId : tabs[0].id
+  const initial = tabs.some((tab) => tab.id === p.activeId) ? p.activeId : tabs[0].id
   const [localActive, setLocalActive] = useState(null)
   const activeId =
     component._designTabId ||
-    (tabs.some((t) => t.id === localActive) ? localActive : initial)
+    (tabs.some((tab) => tab.id === localActive) ? localActive : initial)
   const kids = Array.isArray(component.children) ? component.children : []
   const tablistStyle = {
     ...TAB_STYLES.tablist,
@@ -121,20 +121,20 @@ function TabsRender({ component, style, viewport, boxScale = 1, editorPreview = 
       style={{ fontSize: scaledPx(16, boxScale), ...style, display: 'flex', flexDirection: 'column', overflow: 'visible' }}
     >
       <div role="tablist" style={tablistStyle}>
-        {tabs.map((t) => {
-          const sel = t.id === activeId
+        {tabs.map((tab) => {
+          const sel = tab.id === activeId
           return (
             <button
-              key={t.id}
+              key={tab.id}
               type="button"
               role="tab"
               aria-selected={sel ? 'true' : 'false'}
-              data-builder-tab={t.id}
+              data-builder-tab={tab.id}
               data-target={component.id}
               onClick={(e) => {
                 e.preventDefault()
-                if (!component._designTabId) setLocalActive(t.id)
-                if (component._onSelectTab) component._onSelectTab(t.id)
+                if (!component._designTabId) setLocalActive(tab.id)
+                if (component._onSelectTab) component._onSelectTab(tab.id)
               }}
               style={{
                 ...tabBaseStyle,
@@ -143,23 +143,23 @@ function TabsRender({ component, style, viewport, boxScale = 1, editorPreview = 
                 ...(sel ? tabActiveStyle : null),
               }}
             >
-              {t.label || 'Tab'}
+              {tab.label || 'Tab'}
             </button>
           )
         })}
       </div>
-      {tabs.map((t) => {
-        const sel = t.id === activeId
+      {tabs.map((tab) => {
+        const sel = tab.id === activeId
         const panelKids = kids.filter((c) => {
           const id = c.props?.tabId || c.tabId || tabs[0].id
-          return id === t.id
+          return id === tab.id
         })
         const panelHeight = absoluteChildrenHeight(panelKids, 120)
         return (
           <div
-            key={t.id}
+            key={tab.id}
             role="tabpanel"
-            data-builder-panel={t.id}
+            data-builder-panel={tab.id}
             hidden={!sel}
             style={{
               ...panelStyle,

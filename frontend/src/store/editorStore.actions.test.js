@@ -785,3 +785,41 @@ describe('setVisibility one-breakpoint rule', () => {
     expect(item().hiddenMobile).toBe(true)
   })
 })
+
+describe('addBlock drop position', () => {
+  // Regression: addBlock hardcoded the mobile box to y:0, so every palette
+  // block dropped while the Mobile canvas was open jumped to the very top of
+  // the page instead of landing under the cursor — and blocks dropped on the
+  // desktop canvas all stacked at mobile y:0 on top of each other.
+  function emptyManualPage() {
+    s().loadSchema({
+      theme: {},
+      pages: [{ id: 'p1', name: 'Home', components: [], mobileManual: true }],
+    })
+    s().selectPage('p1')
+  }
+  const block = (y) =>
+    s().addBlock([{ type: 'html', x: 20, y: 0, w: 300, h: 100, props: { code: '<p>x</p>' } }], y)
+
+  it('drops where the cursor is on the mobile canvas, and stacks the desktop box', () => {
+    emptyManualPage()
+    s().setViewport('mobile')
+    block(150)
+    block(420)
+    const comps = selectCurrentPage(useEditorStore.getState()).components
+    expect(comps.map((c) => c.mobileLayout.y)).toEqual([150, 420])
+    // The desktop box the user is not looking at stacks instead of piling up.
+    expect(comps[1].layout.y).toBeGreaterThan(comps[0].layout.y)
+  })
+
+  it('drops where the cursor is on the desktop canvas, and stacks the mobile box', () => {
+    emptyManualPage()
+    s().setViewport('pc')
+    block(200)
+    block(520)
+    const comps = selectCurrentPage(useEditorStore.getState()).components
+    expect(comps.map((c) => c.layout.y)).toEqual([200, 520])
+    expect(comps[0].mobileLayout.y).toBeGreaterThan(0)
+    expect(comps[1].mobileLayout.y).toBeGreaterThan(comps[0].mobileLayout.y)
+  })
+})

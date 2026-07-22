@@ -1354,6 +1354,23 @@ export const useEditorStore = create((set, get) => ({
       const pcW = page.canvasWidth || CANVAS_WIDTH
       const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
       const baseY = Math.max(0, Math.round(y))
+      // Which canvas the user actually dropped on. `baseY` is a coordinate in
+      // THAT canvas, so it belongs to that breakpoint's layout; the other
+      // breakpoint gets a stacked default below whatever is already there.
+      // Without this the mobile box was pinned to y:0, so every block dropped
+      // on the phone canvas jumped to the very top of the page — and blocks
+      // dropped on the desktop canvas piled on top of each other on mobile.
+      const onMobile = state.viewport === 'mobile'
+      const desktopStackY =
+        page.components.reduce(
+          (max, c) => Math.max(max, (c.layout?.y || 0) + (c.layout?.h || 0)),
+          24,
+        ) + 16
+      const mobileStackY =
+        page.components.reduce((max, c) => {
+          const l = c.mobileLayout || c.layout || {}
+          return Math.max(max, (l.y || 0) + (l.h || 0))
+        }, MOBILE_PAD) + MOBILE_GAP
       const built = items
         .map((it) => {
           const def = registry[it.type]
@@ -1373,9 +1390,22 @@ export const useEditorStore = create((set, get) => ({
             type: it.type,
             props,
             styles,
-            layout: clampLayout({ x: Math.round(it.x ?? 0), y: baseY + Math.round(it.y ?? 0), w, h }, { maxX: pcW }),
+            layout: clampLayout(
+              {
+                x: onMobile ? 24 : Math.round(it.x ?? 0),
+                y: (onMobile ? desktopStackY : baseY) + Math.round(it.y ?? 0),
+                w,
+                h,
+              },
+              { maxX: pcW },
+            ),
             mobileLayout: clampLayout(
-              { x: MOBILE_PAD, y: Math.round(it.y ?? 0), w: Math.min(w, mobileWidth - MOBILE_PAD * 2), h },
+              {
+                x: onMobile ? Math.round(it.x ?? 0) : MOBILE_PAD,
+                y: (onMobile ? baseY : mobileStackY) + Math.round(it.y ?? 0),
+                w: Math.min(w, mobileWidth - MOBILE_PAD * 2),
+                h,
+              },
               { maxX: mobileWidth },
             ),
             hidden: false,

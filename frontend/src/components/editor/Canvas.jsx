@@ -9,7 +9,7 @@ import FlowCanvasItem from './FlowCanvasItem.jsx'
 import CanvasMultiActions from './CanvasMultiActions.jsx'
 import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import PhoneFrame from './PhoneFrame.jsx'
-import { PHONE_FRAME_H, PHONE_FRAME_W } from './phoneFrameMetrics.js'
+import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 
@@ -70,7 +70,8 @@ export default function Canvas({
   const background = isMobile ? bgMobile : bg
   const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
   const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
-  const frameW = canvasW + (isMobile ? PHONE_FRAME_W : 0)
+  const phone = phoneModel(canvasW)
+  const frameW = canvasW + (isMobile ? phoneFrameW(phone) : 0)
   useEffect(() => {
     const el = scrollElRef.current
     if (!el) return undefined
@@ -418,7 +419,7 @@ export default function Canvas({
       >
         <div
           className="mx-auto"
-          style={{ width: frameW * canvasScale, height: (minHeight + PHONE_FRAME_H) * canvasScale }}
+          style={{ width: frameW * canvasScale, height: (minHeight + phoneFrameH(phone)) * canvasScale }}
         >
           <div
             style={{

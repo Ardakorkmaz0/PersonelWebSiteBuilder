@@ -717,9 +717,9 @@ function slug(name) {
 // A single, self-contained .html file. It preserves the same renderer semantics
 // as public preview: absolute pages keep their exact PC/mobile designs and scale
 // to the visitor's viewport width; flow pages fill the viewport naturally.
-export function schemaToSingleHtml(schema, title = 'My Site') {
+export function schemaToSingleHtml(schema, title = 'My Site', options = {}) {
   const page = (schema?.pages || [])[0] || {}
-  if (!page.flowMode) return schemaToScaledHtml(page, title, schema)
+  if (!page.flowMode) return schemaToScaledHtml(page, title, schema, options)
 
   const css = schemaToCss(
     {
@@ -736,7 +736,18 @@ export function schemaToSingleHtml(schema, title = 'My Site') {
   )
 }
 
-function schemaToScaledHtml(page, title = 'My Site', schema = {}) {
+// The editor's phone mockup asks for this: a desktop iframe paints a classic
+// scrollbar that EATS layout width, so a 360px design would really get ~345 and
+// the preview would disagree with the edit canvas — and a real phone shows no
+// such bar anyway. Preview-only; the published page keeps normal scrollbars.
+function overlayScrollbarCss(options = {}) {
+  if (!options.overlayScrollbars) return ''
+  return `      html { scrollbar-width: none; -ms-overflow-style: none; }
+      html::-webkit-scrollbar { width: 0; height: 0; }
+`
+}
+
+function schemaToScaledHtml(page, title = 'My Site', schema = {}, options = {}) {
   const comps = page.components || []
   const desktopW = page.canvasWidth || 1000
   const mobileW = page.mobileWidth || 390
@@ -775,7 +786,7 @@ ${css}
       .export-stage .page { flex: 0 0 auto; margin: 0; transform-origin: top center; }
       .export-fixed { position: fixed; left: 0; top: 0; width: ${desktopW}px; height: 100vh; transform: scale(1); transform-origin: top left; pointer-events: none; z-index: 2147483000; }
       .export-fixed > * { pointer-events: auto; }
-${customCssBlock(schema?.customCss)}
+${overlayScrollbarCss(options)}${customCssBlock(schema?.customCss)}
     </style>
   </head>
   <body>

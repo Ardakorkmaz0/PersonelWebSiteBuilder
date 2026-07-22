@@ -1499,6 +1499,9 @@ export default function EditorPage() {
             pages: [currentPage],
           },
           title || currentPage.name || 'My Site',
+          // Inside the phone mockup a desktop scrollbar would steal layout width
+          // from the design and look nothing like a phone.
+          { overlayScrollbars: viewport === 'mobile' },
         )
       : ''
   const sizePresets = viewport === 'mobile' ? MOBILE_CANVAS_PRESETS : PC_CANVAS_PRESETS

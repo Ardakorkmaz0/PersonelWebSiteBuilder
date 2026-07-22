@@ -287,3 +287,26 @@ describe('schemaToSingleHtml per-breakpoint visibility', () => {
     expect(html).toMatch(/ {2}\.c-text_mobile_hidden \{[^}]*display:none;/)
   })
 })
+
+describe('schemaToSingleHtml preview scrollbars', () => {
+  const schema = {
+    theme: {},
+    pages: [{
+      id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+      canvasWidth: 1000, mobileWidth: 360,
+      components: [{
+        id: 'nav_1', type: 'navbar', props: { brand: 'X', scrollBehavior: 'fixed' }, styles: {},
+        layout: { x: 0, y: 0, w: 1000, h: 64 }, mobileLayout: { x: 0, y: 0, w: 360, h: 64 },
+      }],
+    }],
+  }
+
+  // Inside the editor's phone mockup a desktop scrollbar would eat layout width
+  // (a 360px design would really get ~345) and look nothing like a phone.
+  it('hides scrollbars only when the caller asks for the phone mockup', () => {
+    expect(schemaToSingleHtml(schema, 'T', { overlayScrollbars: true }))
+      .toContain('html::-webkit-scrollbar { width: 0; height: 0; }')
+    // The published page keeps normal scrollbars.
+    expect(schemaToSingleHtml(schema, 'T')).not.toContain('html::-webkit-scrollbar')
+  })
+})

@@ -370,3 +370,36 @@ describe('schemaToSingleHtml navbar placement', () => {
     expect(html).not.toMatch(/\.c-nav_1 > \.nav-inner > \.brand \{[^}]*order: 1px/)
   })
 })
+
+describe('schemaToSingleHtml motion', () => {
+  const html = (props) => schemaToSingleHtml({
+    theme: {},
+    pages: [{
+      id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+      canvasWidth: 1000, mobileWidth: 390,
+      components: [{
+        id: 'card_1', type: 'card', props: { title: 'Hi', ...props }, styles: {},
+        layout: { x: 20, y: 40, w: 300, h: 160 }, mobileLayout: { x: 8, y: 40, w: 300, h: 160 },
+      }],
+    }],
+  }, 'Motion test')
+
+  it('tags the element and injects the observer + stylesheet', () => {
+    const out = html({ animIn: 'fade-up', animSpeed: 'slow', animDelay: 120, animHover: 'lift' })
+    expect(out).toMatch(/id="card_1"[^>]*data-anim-in="fade-up"/)
+    expect(out).toContain('class="c-card_1 pwb-hover pwb-hover-lift"')
+    expect(out).toMatch(/\.c-card_1 \{[^}]*--pwb-anim-dur: 1150ms;/)
+    expect(out).toMatch(/\.c-card_1 \{[^}]*--pwb-anim-delay: 120ms;/)
+    expect(out).toContain('data-anim-in') // reveal selector target
+    expect(out).toContain('data-builder-motion') // observer script tag
+  })
+
+  it('adds nothing to the ELEMENT for a component with no motion', () => {
+    const out = html({})
+    // The stylesheet always defines the data-anim-in selectors; what matters is
+    // that the card element itself carries neither the attr nor a hover class.
+    expect(out).toMatch(/id="card_1"[^>]*class="c-card_1"/)
+    expect(out).not.toMatch(/id="card_1"[^>]*data-anim-in/)
+    expect(out).not.toMatch(/class="c-card_1 pwb-hover/)
+  })
+})

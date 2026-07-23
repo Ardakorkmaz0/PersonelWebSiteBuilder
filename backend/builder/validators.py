@@ -351,6 +351,11 @@ def _num(value, default, lo, hi):
     return round(max(lo, min(hi, n)))
 
 
+REVEAL_TYPES = ('none', 'fade', 'fade-up', 'fade-down', 'slide-left', 'slide-right', 'zoom')
+HOVER_TYPES = ('none', 'lift', 'grow', 'glow')
+SPEED_TYPES = ('fast', 'normal', 'slow')
+
+
 def sanitize_shared_props(props):
     if not isinstance(props, dict):
         return {}
@@ -358,6 +363,19 @@ def sanitize_shared_props(props):
     dock_x = props.get('dockX')
     if dock_x in ('auto', 'left', 'center', 'right', 'stretch'):
         clean['dockX'] = dock_x
+    # Motion (scroll-reveal + hover). Cross-type, so it lives here rather than in
+    # every per-type branch; slugs + a clamped delay only, so a save can't smuggle
+    # markup or an unbounded value through. Only stored when set, to keep legacy
+    # schemas byte-identical.
+    anim_in = props.get('animIn')
+    if anim_in in REVEAL_TYPES and anim_in != 'none':
+        clean['animIn'] = anim_in
+        anim_speed = props.get('animSpeed')
+        clean['animSpeed'] = anim_speed if anim_speed in SPEED_TYPES else 'normal'
+        clean['animDelay'] = _num(props.get('animDelay'), 0, 0, 3000)
+    anim_hover = props.get('animHover')
+    if anim_hover in HOVER_TYPES and anim_hover != 'none':
+        clean['animHover'] = anim_hover
     mode = props.get('scrollBehavior')
     if mode not in ('fixed', 'sticky'):
         return clean

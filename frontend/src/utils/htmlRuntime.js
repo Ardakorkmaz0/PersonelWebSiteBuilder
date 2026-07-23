@@ -1,3 +1,5 @@
+import { MOTION_CSS, MOTION_OBSERVER_JS } from './motion.js'
+
 const RUNTIME_STYLE = `
   html { scrollbar-gutter: stable; }
   body { min-height: 100%; }
@@ -333,7 +335,7 @@ const RUNTIME_SCRIPT = `
 const SCRIPT_END = '</scr' + 'ipt>'
 
 function runtimeInjection() {
-  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}`
+  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}<style data-builder-motion-style>${MOTION_CSS}</style><script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
 }
 
 // The interactive shim alone (style + script) for static HTML exports that do
@@ -341,7 +343,7 @@ function runtimeInjection() {
 // make tabs/modals/dropdowns work in the published page.
 export function builderInteractiveTags() {
   const styleBlock = `[data-builder-tabs] [role="tab"]{appearance:none;background:var(--builder-tab-bg,transparent);border:0;border-bottom:2px solid transparent;padding:var(--builder-tab-padding,8px 14px);font:inherit;font-weight:500;color:var(--builder-tab-color,#6b7280);cursor:pointer;margin-bottom:-1px;border-radius:var(--builder-tab-radius,0)}[data-builder-tabs] [role="tab"][aria-selected="true"]{background:var(--builder-tab-active-bg,var(--builder-tab-bg,transparent));color:var(--builder-tab-active-color,#1d1d1f);border-bottom-color:var(--builder-tab-active-border,#2563eb)}[data-builder-tabs] [role="tablist"]{display:flex;gap:var(--builder-tab-gap,4px);flex-wrap:wrap;background:var(--builder-tablist-bg,transparent);border-bottom:1px solid var(--builder-tablist-border,#e5e7eb);padding:var(--builder-tablist-padding,0);margin-bottom:12px}[data-builder-tabs] [role="tabpanel"]{background:var(--builder-panel-bg,transparent);border:1px solid var(--builder-panel-border,transparent);border-radius:var(--builder-panel-radius,0);padding:var(--builder-panel-padding,0);box-sizing:border-box}[data-builder-tabs] [role="tabpanel"][hidden]{display:none !important}`
-  return `<style data-builder-interactive-style>${styleBlock}</style><script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}`
+  return `<style data-builder-interactive-style>${styleBlock}</style><script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}<style data-builder-motion-style>${MOTION_CSS}</style><script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
 }
 
 export function withBuilderInteractiveHtml(html) {

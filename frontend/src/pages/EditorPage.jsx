@@ -65,6 +65,7 @@ import { apiError } from '../utils/errors.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import { MOBILE_EDITOR_QUERY, NARROW_EDITOR_QUERY, useMediaQuery } from '../utils/useMediaQuery.js'
 import { fitHtmlEmbedLayout } from '../utils/htmlEmbedMeasure.js'
+import { pageHasMotion } from '../utils/motion.js'
 import { htmlSnippetSize } from '../utils/htmlSnippetSizing.js'
 import {
   EDITOR_AUTO_SAVE_DELAY_MS,
@@ -1528,7 +1529,11 @@ export default function EditorPage() {
     )
   }
 
-  const componentViewNeedsIframe = hasFixedComponent(currentPage?.components)
+  // Motion (reveal + hover) lives in the export layer, so a page that uses it
+  // must render View through the export iframe — otherwise the plain React
+  // preview would show it static, disagreeing with the published page.
+  const componentViewNeedsIframe =
+    hasFixedComponent(currentPage?.components) || pageHasMotion(currentPage)
   const componentViewHtml =
     componentViewNeedsIframe && currentPage
       ? schemaToSingleHtml(

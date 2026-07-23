@@ -13,6 +13,7 @@ import {
   withoutExecutableScripts,
 } from '../utils/htmlRuntime.js'
 import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
+import { pageHasMotion } from '../utils/motion.js'
 import { customCssBlock, safeCustomJs, themeVariablesCss } from '../utils/theme.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import PublicToolbar from '../components/preview/PublicToolbar.jsx'
@@ -349,7 +350,13 @@ export default function PreviewPage() {
     }
     return (site?.schema?.pages || []).some((p) => walk(p?.components))
   }, [site?.schema?.pages])
-  const useIframe = hasCustomJs || hasHtmlEmbed || hasPinnedFixed
+  // Reveal/hover motion lives in the export's stylesheet + observer, so a page
+  // that uses it must publish through the iframe, not the plain React renderer.
+  const hasMotion = useMemo(
+    () => (site?.schema?.pages || []).some((p) => pageHasMotion(p)),
+    [site?.schema?.pages],
+  )
+  const useIframe = hasCustomJs || hasHtmlEmbed || hasPinnedFixed || hasMotion
   const staticMode = searchParams.get('mode') === 'static'
   const iframeHtml = useMemo(() => {
     if (!useIframe || !current?.id) return ''

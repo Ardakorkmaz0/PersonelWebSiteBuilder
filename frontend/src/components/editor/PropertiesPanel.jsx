@@ -1510,6 +1510,60 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           </section>
         )}
 
+        {/* Motion: an entrance the element plays when it scrolls into view, plus
+            a hover effect. Runs on the published page and in View; the edit
+            canvas stays still (switch to View to preview). Pinned bars are
+            positioned by the runtime, which would fight a motion transform, so
+            the section is hidden for them. */}
+        {scrollBehavior === 'normal' && (
+          <section className="space-y-3">
+            <SectionTitle>{t('Motion')}</SectionTitle>
+            <LabeledSelect
+              label={t('Entrance (on scroll)')}
+              value={component.props?.animIn || 'none'}
+              onChange={(v) => updateProps(component.id, { animIn: v })}
+              options={[
+                ['none', t('None')],
+                ['fade', t('Fade in')],
+                ['fade-up', t('Fade up')],
+                ['fade-down', t('Fade down')],
+                ['slide-right', t('Slide from left')],
+                ['slide-left', t('Slide from right')],
+                ['zoom', t('Zoom in')],
+              ]}
+            />
+            {(component.props?.animIn && component.props.animIn !== 'none') && (
+              <div className="grid grid-cols-2 gap-2">
+                <LabeledSelect
+                  label={t('Speed')}
+                  value={component.props?.animSpeed || 'normal'}
+                  onChange={(v) => updateProps(component.id, { animSpeed: v })}
+                  options={[['fast', t('Fast')], ['normal', t('Normal')], ['slow', t('Slow')]]}
+                />
+                <LabeledPx
+                  label={t('Delay (ms)')}
+                  value={component.props?.animDelay ?? 0}
+                  onChange={(v) => updateProps(component.id, { animDelay: parseInt(v, 10) || 0 })}
+                />
+              </div>
+            )}
+            <LabeledSelect
+              label={t('Hover effect')}
+              value={component.props?.animHover || 'none'}
+              onChange={(v) => updateProps(component.id, { animHover: v })}
+              options={[
+                ['none', t('None')],
+                ['lift', t('Lift')],
+                ['grow', t('Grow')],
+                ['glow', t('Glow')],
+              ]}
+            />
+            <p className="text-[11px] leading-snug text-[#9ca3af]">
+              {t('Preview motion by switching to View.')}
+            </p>
+          </section>
+        )}
+
         <section className="space-y-3">
           <SectionTitle>
             {t(showPositionControls ? (extendedMode ? 'Position & Size' : 'Size') : 'Layout Size')}

@@ -25,6 +25,7 @@ import { regionContentWidth, resolveRegionDock } from './regionLayout.js'
 import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
 import { fixedRailInset } from './railInset.js'
 import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
+import { motionClassSuffix, motionCssVars, motionRevealAttr } from './motion.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -514,9 +515,13 @@ function innerHtml(c) {
 
 function openTag(c, extraAttrs = '') {
   const tag = tagFor(c.type)
-  const cls = `c-${c.id}`
+  // Motion: hover classes ride the class attribute, the reveal type rides a data
+  // attribute the injected observer watches. Both come from the single motion
+  // source, so the published bar animates exactly as the editor's Motion panel
+  // promised.
+  const cls = `c-${c.id}${motionClassSuffix(c.props)}`
   // id lets in-page links (#componentId) scroll to this component.
-  const idAttr = ` id="${esc(c.id)}"${extraAttrs}`
+  const idAttr = ` id="${esc(c.id)}"${motionRevealAttr(c.props)}${extraAttrs}`
   if (tag === 'a') {
     const href = sanitizeUrl((c.props || {}).href)
     const ext = /^https?:\/\//i.test(href)
@@ -572,7 +577,7 @@ function pageBody(page, { fixed = 'all' } = {}) {
         // iframe preview looked broken next to the non-Custom-JS path. The box
         // is positioned by its `.c-<id>` rule, exactly like every other type, so
         // the mobile breakpoint can move and resize it.
-        return `      <div id="${esc(c.id)}" class="c-${esc(c.id)}"${sticky}>${linkWrap(c, inlineNode(c, c.type === 'region'))}</div>`
+        return `      <div id="${esc(c.id)}" class="c-${esc(c.id)}${motionClassSuffix(c.props)}"${motionRevealAttr(c.props)}${sticky}>${linkWrap(c, inlineNode(c, c.type === 'region'))}</div>`
       }
       const tag = tagFor(c.type)
       const el =
@@ -636,9 +641,13 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
       // inlineNode types paint their own look on the inner node; repeating it on
       // the wrapper would apply padding and borders twice.
       const own = INLINE_NODE_TYPES.has(c.type) ? '' : `${baseRules(c.type)} ${styleBlock(c.styles)}`
+      // Reveal speed/delay ride the component's own rule as CSS variables the
+      // motion stylesheet reads.
+      const motionVars = styleObjectBlock(motionCssVars(c.props))
+      const motion = motionVars ? ` ${motionVars}` : ''
       if (page.flowMode) {
         const fixed = FLOW_FIXED_HEIGHT_TYPES.has(c.type)
-        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, true))} overflow:${fixed ? 'hidden' : 'visible'}; ${own}${hide} }\n`
+        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, true))} overflow:${fixed ? 'hidden' : 'visible'}; ${own}${motion}${hide} }\n`
         if (FLOW_FULL_WIDTH_TYPES.has(c.type) && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner, .c-${c.id} > .section-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }
@@ -648,7 +657,7 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
           if (placed.links) css += `.c-${c.id} > .nav-inner > .links { ${placed.links} }\n`
         }
       } else {
-        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false, 'layout', railInset))} ${own}${hide} }\n`
+        css += `.c-${c.id} { ${styleObjectBlock(wrapperStyle(c, 'pc', w, false, 'layout', railInset))} ${own}${motion}${hide} }\n`
         if (c.type === 'navbar' && !isVerticalNavbar(c)) {
           css += `.c-${c.id} > .nav-inner { max-width:${Math.round(Number(c.props?.contentWidth) || c.layout?.w || w)}px; }\n`
         }

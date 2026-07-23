@@ -452,6 +452,7 @@ export const TURKISH_TRANSLATIONS = {
   'Brand position': 'Marka konumu',
   'Motion': 'Hareket',
   'Animation': 'Animasyon',
+  'Pick an animation to preview it.': 'Önizlemek için bir animasyon seç.',
   'Example': 'Örnek',
   'This page': 'Bu sayfa',
   'This page is empty': 'Bu sayfa boş',

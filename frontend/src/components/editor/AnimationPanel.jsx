@@ -4,16 +4,17 @@ import { useLanguage } from '../../i18n/useLanguage.js'
 import { Renderer } from '../renderer/Renderer.jsx'
 import { MOTION_CSS } from '../../utils/motion.js'
 
-// Entrance catalog (value → label). Mirrors the Properties-panel options and the
-// motion module's REVEAL_TYPES, minus 'none'. `slide-right` moves IN from the
-// left, so it reads "from left" to the user.
+// Entrance catalog (value → label → hint glyph). Mirrors the Properties-panel
+// options and the motion module's REVEAL_TYPES, minus 'none'. `slide-right`
+// moves IN from the left, so it reads "from left" to the user. The glyph hints
+// the direction without a busy looping demo on every row.
 const ENTRANCES = [
-  ['fade', 'Fade in'],
-  ['fade-up', 'Fade up'],
-  ['fade-down', 'Fade down'],
-  ['slide-right', 'Slide from left'],
-  ['slide-left', 'Slide from right'],
-  ['zoom', 'Zoom in'],
+  ['fade', 'Fade in', '◍'],
+  ['fade-up', 'Fade up', '↑'],
+  ['fade-down', 'Fade down', '↓'],
+  ['slide-right', 'Slide from left', '→'],
+  ['slide-left', 'Slide from right', '←'],
+  ['zoom', 'Zoom in', '⤢'],
 ]
 const HOVERS = [
   ['lift', 'Lift'],
@@ -113,7 +114,7 @@ function PreviewTile({ label, reveal, children }) {
   return (
     <div className="min-w-0 flex-1">
       <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">{label}</div>
-      <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white" style={{ height: 132 }}>
+      <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white" style={{ height: 140 }}>
         <MotionLoop reveal={reveal} durationMs={650} style={{ height: '100%' }}>
           {children}
         </MotionLoop>
@@ -136,14 +137,18 @@ export default function AnimationPanel() {
   })
   const pinned = selected?.props?.scrollBehavior === 'fixed' || selected?.props?.scrollBehavior === 'sticky'
 
+  // Start on the last-used entrance (returning users see it immediately);
+  // a first-timer starts with nothing picked, so the preview + Use appear only
+  // after they click one — the "click → preview → use" flow.
   const [picked, setPicked] = useState(() => {
     try {
-      return localStorage.getItem(LAST_ANIM_KEY) || 'fade-up'
+      return localStorage.getItem(LAST_ANIM_KEY) || null
     } catch {
-      return 'fade-up'
+      return null
     }
   })
   useEffect(() => {
+    if (!picked) return
     try {
       localStorage.setItem(LAST_ANIM_KEY, picked)
     } catch {
@@ -171,62 +176,65 @@ export default function AnimationPanel() {
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
           {t('Entrance (on scroll)')}
         </h2>
-        <div className="grid grid-cols-2 gap-2">
-          {ENTRANCES.map(([value, label]) => (
+        <div className="grid grid-cols-2 gap-1.5">
+          {ENTRANCES.map(([value, label, glyph]) => (
             <button
               key={value}
               type="button"
               onClick={() => setPicked(value)}
-              className={`rounded-lg border p-1.5 text-left transition ${
+              className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12px] font-medium transition ${
                 picked === value
-                  ? 'border-[#4f46e5] bg-[#eef2ff]'
-                  : 'border-[#e5e7eb] hover:border-[#4f46e5]'
+                  ? 'border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]'
+                  : 'border-[#e5e7eb] text-[#374151] hover:border-[#4f46e5]'
               }`}
             >
-              <div className="overflow-hidden rounded bg-[#f8fafc]" style={{ height: 40 }}>
-                <MotionLoop reveal={value} durationMs={600} period={2200} style={{ height: '100%' }}>
-                  <div className="flex h-full items-center justify-center p-1">
-                    <div style={{ width: '70%', height: 14, borderRadius: 4, background: '#4f46e5' }} />
-                  </div>
-                </MotionLoop>
-              </div>
-              <div className="mt-1 truncate text-[11px] font-medium text-[#374151]">{t(label)}</div>
+              <span aria-hidden="true" className="text-sm leading-none opacity-70">{glyph}</span>
+              <span className="truncate">{t(label)}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Preview of the picked entrance — on a sample AND on this page — then
-          the Use button that commits it to the selected element. */}
-      <div className="rounded-xl border border-[#e5e7eb] bg-[#fafafa] p-2.5">
-        <div className="flex gap-2">
-          <PreviewTile label={t('Example')} reveal={picked}>
-            <div className="flex h-full items-center px-2">
-              <SampleSite />
-            </div>
-          </PreviewTile>
-          <PreviewTile label={t('This page')} reveal={picked}>
-            <div className="flex h-full items-center justify-center">
-              <PageThumbnail />
-            </div>
-          </PreviewTile>
+      {/* Only after an entrance is picked: its preview — on a sample AND on this
+          page — then the Use button that commits it to the selected element. */}
+      {picked ? (
+        <div className="rounded-xl border border-[#e5e7eb] bg-[#fafafa] p-2.5">
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-[#4f46e5]">
+            {t('Preview')}: {t(ENTRANCES.find(([v]) => v === picked)?.[1] || '')}
+          </div>
+          <div className="flex gap-2">
+            <PreviewTile label={t('Example')} reveal={picked}>
+              <div className="flex h-full items-center px-2">
+                <SampleSite />
+              </div>
+            </PreviewTile>
+            <PreviewTile label={t('This page')} reveal={picked}>
+              <div className="flex h-full items-center justify-center">
+                <PageThumbnail />
+              </div>
+            </PreviewTile>
+          </div>
+          <button
+            type="button"
+            onClick={applyEntrance}
+            disabled={!selectedId || pinned}
+            className="mt-2.5 w-full rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#4338ca] hover:to-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {selected?.props?.animIn === picked ? t('In use') : t('Use this animation')}
+          </button>
+          <p className="mt-1.5 text-[11px] leading-snug text-[#9ca3af]">
+            {pinned
+              ? t('A pinned bar cannot animate.')
+              : !selectedId
+                ? t('Select an element on the canvas to apply it.')
+                : t('Applies to the selected element. Switch to View to see it play.')}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={applyEntrance}
-          disabled={!selectedId || pinned}
-          className="mt-2.5 w-full rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#4338ca] hover:to-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {selected?.props?.animIn === picked ? t('In use') : t('Use this animation')}
-        </button>
-        <p className="mt-1.5 text-[11px] leading-snug text-[#9ca3af]">
-          {pinned
-            ? t('A pinned bar cannot animate.')
-            : !selectedId
-              ? t('Select an element on the canvas to apply it.')
-              : t('Applies to the selected element. Switch to View to see it play.')}
+      ) : (
+        <p className="rounded-lg border border-dashed border-[#e5e7eb] px-3 py-4 text-center text-[11px] text-[#9ca3af]">
+          {t('Pick an animation to preview it.')}
         </p>
-      </div>
+      )}
 
       <div>
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">

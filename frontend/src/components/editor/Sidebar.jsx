@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 import { useEditorStore } from '../../store/editorStore.js'
-import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon, SparklesIcon } from '../icons.jsx'
+import { ChevronDownIcon, CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import BlockLibrary from './BlockLibrary.jsx'
 import AnimationPanel from './AnimationPanel.jsx'
@@ -497,6 +497,55 @@ const TABS = [
 
 const RAIL_TAB_KEY = 'pwb_rail_tab'
 
+// The rail is ONE control, not a row of tabs: it shows the current section and,
+// on click, drops down to let you pick Files / Components / Animation.
+function RailTabMenu({ tab, setTab }) {
+  const { t } = useLanguage()
+  const [open, setOpen] = useState(false)
+  const [, curLabel, CurIcon] = TABS.find(([id]) => id === tab) || TABS[0]
+  return (
+    <div className="relative flex-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--studio-text)] hover:bg-[var(--studio-panel-raised,#f8fafc)]"
+      >
+        <CurIcon size={15} />
+        <span className="flex-1 text-left">{t(curLabel)}</span>
+        <ChevronDownIcon size={14} />
+      </button>
+      {open && (
+        <>
+          {/* Click-away layer closes the menu. */}
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div
+            role="menu"
+            className="absolute left-2 right-2 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[var(--studio-border,#e5e7eb)] bg-[var(--studio-panel,#fff)] shadow-lg"
+          >
+            {TABS.map(([id, label, Icon]) => (
+              <button
+                key={id}
+                type="button"
+                role="menuitem"
+                onClick={() => { setTab(id); setOpen(false) }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold ${
+                  tab === id
+                    ? 'bg-[#eef2ff] text-[var(--studio-accent-hover)]'
+                    : 'text-[var(--studio-text)] hover:bg-[var(--studio-panel-raised,#f8fafc)]'
+                }`}
+              >
+                <Icon size={15} /> {t(label)}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // The rail remembers which tab you left it on, so reopening the editor lands on
 // Files / Components / Animation where you were — but only among the tabs that
 // exist in this mode (HTML mode has no file explorer).
@@ -536,20 +585,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
     <aside className="studio-panel flex w-60 shrink-0 flex-col overflow-hidden border-r">
       <div className="studio-panel flex shrink-0 items-center border-b">
         {filesPanel ? (
-          TABS.map(([id, label, TabIcon]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`flex flex-1 items-center justify-center gap-1.5 py-2 text-xs font-semibold ${
-                tab === id
-                  ? 'border-b-2 border-[var(--studio-accent)] text-[var(--studio-accent-hover)]'
-                  : 'text-[var(--studio-text-muted)] hover:text-[var(--studio-text)]'
-              }`}
-            >
-              <TabIcon size={15} /> {t(label)}
-            </button>
-          ))
+          <RailTabMenu tab={tab} setTab={setTab} />
         ) : (
           <span className="flex-1 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
             {t('Components')}

@@ -24,7 +24,7 @@ import {
 import { regionContentWidth, resolveRegionDock } from './regionLayout.js'
 import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
 import { fixedRailInset } from './railInset.js'
-import { navbarLinkGap, navbarPlacement } from './navbarLayout.js'
+import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -43,7 +43,7 @@ function navbarPlacementCss(c) {
   return {
     row: styleObjectBlock(placed.row),
     brand: styleObjectBlock(placed.brand),
-    links: styleObjectBlock({ ...placed.links, gap: navbarLinkGap(c.props) }),
+    links: styleObjectBlock({ ...placed.links, columnGap: navbarLinkGap(c.props), rowGap: 6 }),
   }
 }
 
@@ -462,7 +462,7 @@ function innerHtml(c) {
           const ext = /^https?:\/\//i.test(href)
             ? ' target="_blank" rel="noopener noreferrer"'
             : ''
-          return `<a href="${esc(href || '#')}"${ext}>${multiline(l.label)}</a>`
+          return `<a href="${esc(href || '#')}"${ext}>${esc(navLinkLabel(l.label))}</a>`
         })
         .join('\n        ')
       const mobileMode = p.mobileNavMode === 'stack' ? 'stack' : 'menu'

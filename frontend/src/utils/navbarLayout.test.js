@@ -1,7 +1,7 @@
 // The bar is drawn by three separate renderers, so these pin the RULES they all
 // read rather than any one renderer's output.
 import { describe, expect, it } from 'vitest'
-import { navbarLinkGap, navbarPlacement } from './navbarLayout.js'
+import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 
 describe('navbarPlacement', () => {
   it('parks the links at the far edge by default', () => {
@@ -65,5 +65,20 @@ describe('navbarLinkGap', () => {
     expect(navbarLinkGap({ linkGap: 9999 })).toBe(120)
     expect(navbarLinkGap({})).toBe(20)
     expect(navbarLinkGap({ linkGap: 'wide' })).toBe(20)
+  })
+})
+
+describe('navLinkLabel', () => {
+  // Regression: labels carrying accidental leading spaces (from imports or the
+  // AI wizard) showed the padding on the edit canvas (white-space:pre-wrap)
+  // while the published page collapsed it, so the bar looked unevenly spaced in
+  // Edit and even in View. Normalise once, in the shared helper all three
+  // renderers read.
+  it('collapses whitespace runs and trims the ends', () => {
+    expect(navLinkLabel('                Home')).toBe('Home')
+    expect(navLinkLabel('              Contact')).toBe('Contact')
+    expect(navLinkLabel('  Sign   In  ')).toBe('Sign In')
+    expect(navLinkLabel('About')).toBe('About')
+    expect(navLinkLabel(undefined)).toBe('')
   })
 })

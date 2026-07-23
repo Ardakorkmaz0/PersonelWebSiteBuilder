@@ -10,7 +10,7 @@ import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntim
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
-import { navbarLinkGap, navbarPlacement } from './navbarLayout.js'
+import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 import { pinnedLayoutStyle } from '../components/renderer/layout.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
@@ -157,7 +157,7 @@ function navbar(c) {
   const links = (Array.isArray(p.links) ? p.links : [])
     .map((l) => {
       const href = sanitizeUrl(l.href)
-      return `<a href="${esc(href || '#')}"${linkAttrs(href)}>${multiline(l.label)}</a>`
+      return `<a href="${esc(href || '#')}"${linkAttrs(href)}>${esc(navLinkLabel(l.label))}</a>`
     })
     .join('\n          ')
   // Brand / links placement (horizontal only) from the shared rules the editor
@@ -173,7 +173,7 @@ function navbar(c) {
   return `<header class="rh-navbar"${styleAttr(c)}>
       <div class="rh-container rh-nav-inner rh-nav-${layout}"${attr(placed?.row)}>
         <span class="rh-brand"${attr(placed?.brand)}>${multiline(p.brand)}</span>
-        <nav class="rh-links"${attr(placed ? { ...placed.links, gap: navbarLinkGap(p) } : null)}>\n          ${links}\n        </nav>
+        <nav class="rh-links"${attr(placed ? { ...placed.links, columnGap: navbarLinkGap(p), rowGap: 6 } : null)}>\n          ${links}\n        </nav>
       </div>
     </header>`
 }

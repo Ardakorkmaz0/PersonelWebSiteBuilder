@@ -10,7 +10,7 @@ import { withBuilderInteractiveHtml } from '../../utils/htmlRuntime.js'
 import { htmlEmbedDocument } from '../../utils/htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from '../../utils/htmlSnippetSizing.js'
 import { scaleCssValue, scaledPx } from './scale.js'
-import { navbarLinkGap, navbarPlacement } from '../../utils/navbarLayout.js'
+import { navLinkLabel, navbarLinkGap, navbarPlacement } from '../../utils/navbarLayout.js'
 import { LanguageContext } from '../../i18n/context.js'
 
 function linkAttrs(href) {
@@ -168,7 +168,6 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
                 style={{
                   color: 'inherit',
                   textDecoration: 'none',
-                  whiteSpace: 'pre-wrap',
                   display: vertical || mobileMenu ? 'block' : undefined,
                   width: vertical || mobileMenu ? '100%' : undefined,
                   padding: vertical || mobileMenu ? `${scaledPx(10, boxScale)} ${scaledPx(12, boxScale)}` : undefined,
@@ -177,7 +176,7 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
                 }}
                 {...linkAttrs(href)}
               >
-                {link.label}
+                {navLinkLabel(link.label)}
               </a>
             )
           })}

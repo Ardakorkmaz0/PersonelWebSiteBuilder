@@ -28,6 +28,16 @@ export function navbarLinkGap(props, fallback = 20) {
   return Number.isFinite(n) && n >= 0 ? Math.min(120, Math.round(n)) : fallback
 }
 
+// A nav link is a single-line label, so runs of whitespace collapse to one space
+// and the ends are trimmed. This is what a browser does to inline text anyway —
+// the editor was overriding it with white-space:pre-wrap, so labels carrying
+// accidental leading spaces (from an import or the AI wizard, e.g. "      Home")
+// showed the padding on the canvas while the published page, drawn as plain
+// HTML, collapsed it. The bar looked unevenly spaced in Edit and even in View.
+export function navLinkLabel(label) {
+  return String(label ?? '').replace(/\s+/g, ' ').trim()
+}
+
 // True centring, not "centred in whatever space is left over". An item asked to
 // sit in the middle is taken out of the flow and pinned to the bar's centre, so
 // a centred logo is centred against the BAR — half a brand-width off is exactly

@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 import { useEditorStore } from '../../store/editorStore.js'
-import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon } from '../icons.jsx'
+import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import BlockLibrary from './BlockLibrary.jsx'
+import AnimationPanel from './AnimationPanel.jsx'
 import {
   ADDABLE_PALETTE_ITEMS,
   NATIVE_CANVAS_TYPES,
@@ -491,7 +492,24 @@ function BlockThumb({ block, theme }) {
 const TABS = [
   ['files', 'Files', FolderIcon],
   ['components', 'Components', LayersIcon],
+  ['animation', 'Animation', SparklesIcon],
 ]
+
+const RAIL_TAB_KEY = 'pwb_rail_tab'
+
+// The rail remembers which tab you left it on, so reopening the editor lands on
+// Files / Components / Animation where you were — but only among the tabs that
+// exist in this mode (HTML mode has no file explorer).
+function initialTab(hasFiles) {
+  const fallback = hasFiles ? 'files' : 'components'
+  if (!hasFiles) return 'components'
+  try {
+    const saved = localStorage.getItem(RAIL_TAB_KEY)
+    return TABS.some(([id]) => id === saved) ? saved : fallback
+  } catch {
+    return fallback
+  }
+}
 
 
 // Shared left rail for BOTH editor modes: VS Code-style Files | Components
@@ -501,7 +519,15 @@ const TABS = [
 // click/tap-to-place fallback). `onCollapse` hides the whole rail.
 export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, filesPanel }) {
   const { t } = useLanguage()
-  const [tab, setTab] = useState(filesPanel ? 'files' : 'components')
+  const [tab, setTabState] = useState(() => initialTab(!!filesPanel))
+  const setTab = (id) => {
+    setTabState(id)
+    try {
+      localStorage.setItem(RAIL_TAB_KEY, id)
+    } catch {
+      /* private mode — remembering is a nicety */
+    }
+  }
   const [openType, setOpenType] = useState(null)
   const [preview, setPreview] = useState(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -544,6 +570,8 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {filesPanel && tab === 'files' ? (
           filesPanel
+        ) : filesPanel && tab === 'animation' ? (
+          <AnimationPanel />
         ) : (
           <>
             {/* Discovery lives in the BlockLibrary overlay (sections, every
@@ -581,7 +609,8 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
           </>
         )}
       </div>
-      {!(filesPanel && tab === 'files') && (
+      {/* The hover-preview panel belongs to the Components palette only. */}
+      {!(filesPanel && (tab === 'files' || tab === 'animation')) && (
         <PalettePreviewPanel preview={preview} onClose={() => setPreview(null)} />
       )}
       <BlockLibrary

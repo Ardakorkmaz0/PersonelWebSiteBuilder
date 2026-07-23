@@ -229,7 +229,12 @@ export default function FreeCanvasItem({
         // Sticky scrolls with the page until it reaches the pinned edge.
         targetY = pinY === 'bottom' ? Math.min(y, targetY) : Math.max(y, targetY)
       }
-      targetY = Math.min(Math.max(targetY, 0), Math.max(0, canvasH - h))
+      // A NEGATIVE top offset parks the bar slightly off the top edge, exactly
+      // as the published page does with `top: <pinOffsetY>`. Clamping the lower
+      // bound to 0 swallowed that, so the same bar sat 7px lower in Edit than in
+      // View. Let the offset through; the upper clamp still keeps it on-canvas.
+      const lowerBound = pinY === 'bottom' ? 0 : Math.min(0, pinOffsetY)
+      targetY = Math.min(Math.max(targetY, lowerBound), Math.max(0, canvasH - h))
       // Fixed pins X to the artboard (= the site viewport); sticky keeps design X.
       let targetX = x
       if (pinMode === 'fixed') {

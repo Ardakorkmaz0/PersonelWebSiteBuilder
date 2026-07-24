@@ -24,36 +24,34 @@ const HOVERS = [
 
 const LAST_ANIM_KEY = 'pwb_last_anim'
 
-// Replays a reveal on its children in a loop, so a still gallery tile actually
-// demonstrates the motion. Drives the same `[data-anim-in]` / `.pwb-in` classes
-// the published page uses (MOTION_CSS), so the demo matches the real thing — it
-// just re-triggers on a timer instead of a scroll.
-function MotionLoop({ reveal, durationMs = 650, period = 2400, children, className, style }) {
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    let alive = true
-    let show
-    let loop
-    const run = () => {
-      setShown(false)
-      show = setTimeout(() => alive && setShown(true), 90)
-      loop = setTimeout(run, period)
-    }
-    run()
-    return () => {
-      alive = false
-      clearTimeout(show)
-      clearTimeout(loop)
-    }
-  }, [reveal, period])
+// Looping preview animations, as SELF-RUNNING CSS keyframes. An earlier version
+// toggled the export's `.pwb-in` class on a React timer + CSS transition; that
+// depended on precise state/transition timing and, in practice, never visibly
+// played — the preview looked dead. A plain infinite keyframe animation needs no
+// JS and plays in every browser. The start transforms mirror the real motion
+// (motion.js), so the preview reads true: enter, hold, reset, repeat.
+const DEMO_CSS = `
+.pwb-demo{animation-duration:2.6s;animation-iteration-count:infinite;animation-timing-function:cubic-bezier(.16,.84,.44,1);transform-origin:center}
+@keyframes pwb-demo-fade{0%,10%{opacity:0}40%,90%{opacity:1}100%{opacity:0}}
+.pwb-demo-fade{animation-name:pwb-demo-fade}
+@keyframes pwb-demo-fade-up{0%,10%{opacity:0;transform:translateY(26px)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:translateY(26px)}}
+.pwb-demo-fade-up{animation-name:pwb-demo-fade-up}
+@keyframes pwb-demo-fade-down{0%,10%{opacity:0;transform:translateY(-26px)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-26px)}}
+.pwb-demo-fade-down{animation-name:pwb-demo-fade-down}
+@keyframes pwb-demo-slide-right{0%,10%{opacity:0;transform:translateX(-30px)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:translateX(-30px)}}
+.pwb-demo-slide-right{animation-name:pwb-demo-slide-right}
+@keyframes pwb-demo-slide-left{0%,10%{opacity:0;transform:translateX(30px)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:translateX(30px)}}
+.pwb-demo-slide-left{animation-name:pwb-demo-slide-left}
+@keyframes pwb-demo-zoom{0%,10%{opacity:0;transform:scale(.9)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:scale(.9)}}
+.pwb-demo-zoom{animation-name:pwb-demo-zoom}
+`
+
+// Loops `reveal` on its children. `key={reveal}` remounts the inner node when the
+// pick changes, so the animation restarts cleanly from the first frame.
+function MotionLoop({ reveal, children, className, style }) {
   return (
-    <div
-      className={className}
-      data-anim-in={reveal}
-      style={{ '--pwb-anim-dur': `${durationMs}ms`, '--pwb-anim-delay': '0ms', ...style }}
-    >
-      {/* The inner node is the one that animates; toggling pwb-in replays it. */}
-      <div data-anim-in={reveal} className={shown ? 'pwb-in' : ''} style={{ '--pwb-anim-dur': `${durationMs}ms` }}>
+    <div className={className} style={style}>
+      <div key={reveal} className={`pwb-demo pwb-demo-${reveal}`}>
         {children}
       </div>
     </div>
@@ -168,9 +166,10 @@ export default function AnimationPanel() {
   const styleRef = useRef(null)
   return (
     <div className="space-y-4">
-      {/* Motion stylesheet for the previews. Only touches pwb-* / data-anim-in,
-          which exist solely inside these previews in the app. */}
-      <style ref={styleRef}>{MOTION_CSS}</style>
+      {/* Preview styles: the looping demo keyframes plus the export's MOTION_CSS
+          (its .pwb-hover-* rules drive the hover swatches). Both only touch
+          pwb-* selectors, which exist solely inside these previews in the app. */}
+      <style ref={styleRef}>{DEMO_CSS}{MOTION_CSS}</style>
 
       <div>
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">

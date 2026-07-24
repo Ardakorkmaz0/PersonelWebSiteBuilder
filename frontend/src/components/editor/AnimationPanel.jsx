@@ -31,7 +31,7 @@ const LAST_ANIM_KEY = 'pwb_last_anim'
 // JS and plays in every browser. The start transforms mirror the real motion
 // (motion.js), so the preview reads true: enter, hold, reset, repeat.
 const DEMO_CSS = `
-.pwb-demo{animation-duration:2.6s;animation-iteration-count:infinite;animation-timing-function:cubic-bezier(.16,.84,.44,1);transform-origin:center}
+.pwb-demo{animation-duration:2.6s;animation-iteration-count:infinite;animation-timing-function:cubic-bezier(.16,.84,.44,1);animation-delay:-1.4s;transform-origin:center}
 @keyframes pwb-demo-fade{0%,10%{opacity:0}40%,90%{opacity:1}100%{opacity:0}}
 .pwb-demo-fade{animation-name:pwb-demo-fade}
 @keyframes pwb-demo-fade-up{0%,10%{opacity:0;transform:translateY(26px)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:translateY(26px)}}

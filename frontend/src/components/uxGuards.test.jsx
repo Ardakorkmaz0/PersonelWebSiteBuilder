@@ -6,7 +6,6 @@ import UiThemeProvider from '../ui/UiThemeProvider.jsx'
 import ExplorePage from '../pages/ExplorePage.jsx'
 import FavoritesPage from '../pages/FavoritesPage.jsx'
 import TemplatePicker from './editor/TemplatePicker.jsx'
-import DefaultViewportSelect from './editor/DefaultViewportSelect.jsx'
 import MobileEditorPreview from './editor/MobileEditorPreview.jsx'
 import SiteControlCenter from './editor/SiteControlCenter.jsx'
 import PublicToolbar from './preview/PublicToolbar.jsx'
@@ -174,16 +173,6 @@ describe('responsive and accessibility guards', () => {
     expect(screen.getByRole('textbox', { name: 'Search templates' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Favorites' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('combobox', { name: 'Content language' })).toBeInTheDocument()
-  })
-
-  it('uses an explicit PC or mobile editor opening preference', () => {
-    const onChange = vi.fn()
-    renderWithShell(<DefaultViewportSelect value="pc" onChange={onChange} />)
-    const select = screen.getByRole('combobox', { name: 'Editor opening screen' })
-
-    expect(select).toHaveValue('pc')
-    fireEvent.change(select, { target: { value: 'mobile' } })
-    expect(onChange).toHaveBeenCalledWith('mobile')
   })
 
   it('keeps preview navigation and secondary actions in one accessible toolbar', () => {

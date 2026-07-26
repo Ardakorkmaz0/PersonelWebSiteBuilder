@@ -91,7 +91,6 @@ import { useUiTheme } from '../ui/useUiTheme.js'
 import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
 import MobileEditorPreview from '../components/editor/MobileEditorPreview.jsx'
 import SiteControlCenter from '../components/editor/SiteControlCenter.jsx'
-import DefaultViewportSelect from '../components/editor/DefaultViewportSelect.jsx'
 
 // The three panels below all sit behind a toggle / file-mode switch and most
 // editor sessions never open them. Lazy-loading them keeps the initial
@@ -106,14 +105,15 @@ const HistoryPanel = lazy(() => import('../components/editor/HistoryPanel.jsx'))
 const NotesPanel = lazy(() => import('../components/editor/NotesPanel.jsx'))
 const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 
-const DEFAULT_VIEWPORT_KEY = 'pwb_default_editor_viewport'
+// The viewport the editor reopens on: simply the last one the user switched to.
+const LAST_VIEWPORT_KEY = 'pwb_default_editor_viewport'
 const HTML_DEVICE_KEYS = {
   pc: 'pwb_last_html_pc_device',
   mobile: 'pwb_last_html_mobile_device',
 }
 
-function readDefaultViewport() {
-  try { return localStorage.getItem(DEFAULT_VIEWPORT_KEY) === 'mobile' ? 'mobile' : 'pc' }
+function readLastViewport() {
+  try { return localStorage.getItem(LAST_VIEWPORT_KEY) === 'mobile' ? 'mobile' : 'pc' }
   catch { return 'pc' }
 }
 
@@ -367,7 +367,8 @@ export default function EditorPage() {
     try { return localStorage.getItem('pwb_autosave_' + id) === '1' }
     catch { return false }
   })
-  const [defaultViewport, setDefaultViewport] = useState(readDefaultViewport)
+  // Bumped on every switch INTO View, to force a fresh preview document.
+  const [viewNonce, setViewNonce] = useState(0)
   const [leavePromptOpen, setLeavePromptOpen] = useState(false)
   const leaveActionRef = useRef(null)
   const leaveConfirmedRef = useRef(false)
@@ -399,7 +400,7 @@ export default function EditorPage() {
     if (r) setMenuPos((m) => ({ ...m, [key]: { top: Math.round(r.bottom + 6), right: Math.round(window.innerWidth - r.right) } }))
   }
   // HTML mode device frame (selector lives in the shared header).
-  const [htmlDevice, setHtmlDevice] = useState(() => readHtmlDevice(readDefaultViewport()))
+  const [htmlDevice, setHtmlDevice] = useState(() => readHtmlDevice(readLastViewport()))
   const [htmlLandscape, setHtmlLandscape] = useState(false)
   // Component mode View/Edit/Source bar (mirrors the HTML workspace bar).
   // Restored from localStorage so a refresh keeps the surface you were on.
@@ -567,16 +568,26 @@ export default function EditorPage() {
     const next = typeof nextMode === 'function' ? nextMode(canvasMode) : nextMode
     setCanvasMode(next)
     if (next !== 'edit') setBrushMode(false)
+    // Entering View replays the page from the top: bump a nonce that keys the
+    // preview iframe, so it always gets a FRESH document. Without it the same
+    // srcdoc can be reused and the scroll-reveal animations — which only play
+    // once per document — would sit already-revealed on the second visit.
+    if (next === 'view') setViewNonce((n) => n + 1)
   }
   const chooseHtmlDevice = (deviceId) => {
     setHtmlDevice(deviceId)
     const deviceViewport = isMobileDevice(deviceId) ? 'mobile' : 'pc'
-    try { localStorage.setItem(HTML_DEVICE_KEYS[deviceViewport], deviceId) } catch { /* ignore */ }
+    try {
+      localStorage.setItem(HTML_DEVICE_KEYS[deviceViewport], deviceId)
+      localStorage.setItem(LAST_VIEWPORT_KEY, deviceViewport)
+    } catch { /* ignore */ }
   }
-  const chooseDefaultViewport = (nextViewport) => {
+  // Switching PC/Mobile IS the preference: the editor reopens on whichever you
+  // used last, so there is no separate "opening screen" picker to keep in sync.
+  const chooseViewport = (nextViewport) => {
     const normalized = nextViewport === 'mobile' ? 'mobile' : 'pc'
-    setDefaultViewport(normalized)
-    try { localStorage.setItem(DEFAULT_VIEWPORT_KEY, normalized) } catch { /* ignore */ }
+    setViewport(normalized)
+    try { localStorage.setItem(LAST_VIEWPORT_KEY, normalized) } catch { /* ignore */ }
   }
   // Linked local .html file (File System Access API): every Save also writes
   // the document back to this file. { handle, name } or null. Persisted in
@@ -744,7 +755,7 @@ export default function EditorPage() {
         loadSchema(data.schema)
         // A site's saved schema must not decide which device the editor opens
         // on. Apply the user's global PC/Mobile preference after every load.
-        useEditorStore.getState().setViewport(readDefaultViewport())
+        useEditorStore.getState().setViewport(readLastViewport())
         // Restore the page the user was last editing (per-site) so a refresh
         // stays put instead of bouncing back to the home page. Uses the value
         // captured at mount (savedPageOnMount), not a fresh read — the persist
@@ -2251,7 +2262,6 @@ export default function EditorPage() {
                           </option>
                         ))}
                       </select>
-                      <DefaultViewportSelect value={defaultViewport} onChange={chooseDefaultViewport} />
                     </>
                   }
                   fileName={
@@ -2376,7 +2386,7 @@ export default function EditorPage() {
                       one row; they act on the canvas this bar belongs to. */}
                   <div className="studio-segment shrink-0">
                     <button
-                      onClick={() => setViewport('pc')}
+                      onClick={() => chooseViewport('pc')}
                       className={
                         viewport === 'pc'
                           ? 'studio-segment-btn studio-segment-btn-active'
@@ -2386,7 +2396,7 @@ export default function EditorPage() {
                       {t('PC')}
                     </button>
                     <button
-                      onClick={() => setViewport('mobile')}
+                      onClick={() => chooseViewport('mobile')}
                       className={
                         viewport === 'mobile'
                           ? 'studio-segment-btn studio-segment-btn-active'
@@ -2481,7 +2491,6 @@ export default function EditorPage() {
                       ↔
                     </button>
                   </div>
-                  <DefaultViewportSelect value={defaultViewport} onChange={chooseDefaultViewport} />
                   {/* Selected element's actions, docked at the end of the canvas
                       controls: one stable spot instead of floating over (and
                       covering) the design. */}
@@ -2637,7 +2646,11 @@ export default function EditorPage() {
                   />
                 ) : canvasMode === 'view' ? (
                   <CanvasPreview
-                    key={`${currentPage.id}-${viewport}-${componentViewNeedsIframe ? 'iframe' : 'renderer'}`}
+                    // viewNonce is part of the key so every switch into View
+                    // rebuilds the preview from scratch — that is what replays
+                    // the scroll-reveal animations, which only run once per
+                    // document.
+                    key={`${currentPage.id}-${viewport}-${componentViewNeedsIframe ? 'iframe' : 'renderer'}-${viewNonce}`}
                     page={currentPage}
                     viewport={viewport}
                     width={curW}

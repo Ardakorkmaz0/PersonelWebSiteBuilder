@@ -5,6 +5,9 @@ import {
   motionRevealAttr,
   motionCssVars,
   pageHasMotion,
+  MOTION_CSS,
+  MOTION_OBSERVER_JS,
+  REVEAL_TYPES,
 } from './motion.js'
 
 describe('resolveMotion', () => {
@@ -60,5 +63,44 @@ describe('pageHasMotion', () => {
     expect(pageHasMotion({
       components: [{ props: { animIn: 'fade', scrollBehavior: 'fixed' } }],
     })).toBe(false)
+  })
+})
+
+describe('motion safety contract', () => {
+  // The hidden start state must be opt-in, gated on a class the observer script
+  // adds. Without JS nothing is ever hidden — an element stranded at opacity:0
+  // is content the visitor simply cannot see.
+  it('only hides revealed elements under the armed class', () => {
+    expect(MOTION_CSS).toContain('.pwb-anim-armed [data-anim-in]{opacity:0}')
+    // The bare attribute selector must not hide anything on its own.
+    expect(MOTION_CSS).not.toMatch(/(^|\n)\[data-anim-in\]\{[^}]*opacity:0/)
+  })
+
+  it('arms only after the observer script runs, and sweeps unreachable elements', () => {
+    expect(MOTION_OBSERVER_JS).toContain("classList.add('pwb-anim-armed')")
+    // No IntersectionObserver at all → show everything rather than hide it.
+    expect(MOTION_OBSERVER_JS).toContain("if(!('IntersectionObserver' in window)){showAll();return;}")
+    // The sweep re-checks after layout settles and covers a non-scrolling page,
+    // where a below-fold element could never be scrolled into view.
+    expect(MOTION_OBSERVER_JS).toContain('function sweep()')
+    expect(MOTION_OBSERVER_JS).toContain('onScreen||!scrollable')
+    expect(MOTION_OBSERVER_JS).toContain("addEventListener('resize',sweep)")
+  })
+
+  it('ships a start state for every reveal type it offers', () => {
+    for (const type of REVEAL_TYPES) {
+      if (type === 'none' || type === 'fade') continue // fade needs opacity only
+      expect(MOTION_CSS, `${type} has no armed start state`)
+        .toContain(`.pwb-anim-armed [data-anim-in="${type}"]`)
+    }
+  })
+
+  it('accepts the extended catalog', () => {
+    for (const type of ['zoom-out', 'flip', 'rotate', 'blur', 'bounce', 'wipe']) {
+      expect(resolveMotion({ animIn: type })?.reveal).toBe(type)
+    }
+    for (const hover of ['sink', 'tilt']) {
+      expect(resolveMotion({ animHover: hover })?.hover).toBe(hover)
+    }
   })
 })

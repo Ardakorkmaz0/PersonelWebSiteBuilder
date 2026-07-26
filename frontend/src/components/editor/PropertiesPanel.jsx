@@ -1530,6 +1530,12 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                 ['slide-right', t('Slide from left')],
                 ['slide-left', t('Slide from right')],
                 ['zoom', t('Zoom in')],
+                ['zoom-out', t('Zoom out')],
+                ['flip', t('Flip in')],
+                ['rotate', t('Rotate in')],
+                ['blur', t('Blur in')],
+                ['bounce', t('Bounce up')],
+                ['wipe', t('Wipe across')],
               ]}
             />
             {(component.props?.animIn && component.props.animIn !== 'none') && (
@@ -1556,6 +1562,8 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                 ['lift', t('Lift')],
                 ['grow', t('Grow')],
                 ['glow', t('Glow')],
+                ['sink', t('Sink')],
+                ['tilt', t('Tilt')],
               ]}
             />
             <p className="text-[11px] leading-snug text-[#9ca3af]">

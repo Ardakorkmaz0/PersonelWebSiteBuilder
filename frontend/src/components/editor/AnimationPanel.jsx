@@ -15,11 +15,19 @@ const ENTRANCES = [
   ['slide-right', 'Slide from left', '→'],
   ['slide-left', 'Slide from right', '←'],
   ['zoom', 'Zoom in', '⤢'],
+  ['zoom-out', 'Zoom out', '⤡'],
+  ['flip', 'Flip in', '▤'],
+  ['rotate', 'Rotate in', '⟳'],
+  ['blur', 'Blur in', '❂'],
+  ['bounce', 'Bounce up', '⇡'],
+  ['wipe', 'Wipe across', '▶'],
 ]
 const HOVERS = [
   ['lift', 'Lift'],
   ['grow', 'Grow'],
   ['glow', 'Glow'],
+  ['sink', 'Sink'],
+  ['tilt', 'Tilt'],
 ]
 
 const LAST_ANIM_KEY = 'pwb_last_anim'
@@ -44,6 +52,18 @@ const DEMO_CSS = `
 .pwb-demo-slide-left{animation-name:pwb-demo-slide-left}
 @keyframes pwb-demo-zoom{0%,10%{opacity:0;transform:scale(.9)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:scale(.9)}}
 .pwb-demo-zoom{animation-name:pwb-demo-zoom}
+@keyframes pwb-demo-zoom-out{0%,10%{opacity:0;transform:scale(1.12)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:scale(1.12)}}
+.pwb-demo-zoom-out{animation-name:pwb-demo-zoom-out}
+@keyframes pwb-demo-flip{0%,10%{opacity:0;transform:perspective(600px) rotateX(18deg)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:perspective(600px) rotateX(18deg)}}
+.pwb-demo-flip{animation-name:pwb-demo-flip;transform-origin:top center}
+@keyframes pwb-demo-rotate{0%,10%{opacity:0;transform:rotate(-6deg) scale(.92)}40%,90%{opacity:1;transform:none}100%{opacity:0;transform:rotate(-6deg) scale(.92)}}
+.pwb-demo-rotate{animation-name:pwb-demo-rotate}
+@keyframes pwb-demo-blur{0%,10%{opacity:0;filter:blur(8px)}40%,90%{opacity:1;filter:none}100%{opacity:0;filter:blur(8px)}}
+.pwb-demo-blur{animation-name:pwb-demo-blur}
+@keyframes pwb-demo-bounce{0%,10%{opacity:0;transform:translateY(28px)}34%{opacity:1;transform:translateY(-6px)}44%,90%{opacity:1;transform:none}100%{opacity:0;transform:translateY(28px)}}
+.pwb-demo-bounce{animation-name:pwb-demo-bounce}
+@keyframes pwb-demo-wipe{0%,10%{clip-path:inset(0 100% 0 0)}40%,90%{clip-path:inset(0)}100%{clip-path:inset(0 100% 0 0)}}
+.pwb-demo-wipe{animation-name:pwb-demo-wipe}
 `
 
 // Loops `reveal` on its children. `key={reveal}` remounts the inner node when the

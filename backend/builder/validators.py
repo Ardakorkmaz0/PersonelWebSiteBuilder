@@ -351,8 +351,14 @@ def _num(value, default, lo, hi):
     return round(max(lo, min(hi, n)))
 
 
-REVEAL_TYPES = ('none', 'fade', 'fade-up', 'fade-down', 'slide-left', 'slide-right', 'zoom')
-HOVER_TYPES = ('none', 'lift', 'grow', 'glow')
+REVEAL_TYPES = (
+    'none',
+    'fade', 'fade-up', 'fade-down',
+    'slide-left', 'slide-right',
+    'zoom', 'zoom-out',
+    'flip', 'rotate', 'blur', 'bounce', 'wipe',
+)
+HOVER_TYPES = ('none', 'lift', 'grow', 'glow', 'sink', 'tilt')
 SPEED_TYPES = ('fast', 'normal', 'slow')
 
 

@@ -6,8 +6,10 @@ import {
   motionCssVars,
   pageHasMotion,
   MOTION_CSS,
+  MOTION_ARM_JS,
   MOTION_OBSERVER_JS,
   REVEAL_TYPES,
+  motionHeadTags,
 } from './motion.js'
 
 describe('resolveMotion', () => {
@@ -76,10 +78,24 @@ describe('motion safety contract', () => {
     expect(MOTION_CSS).not.toMatch(/(^|\n)\[data-anim-in\]\{[^}]*opacity:0/)
   })
 
-  it('arms only after the observer script runs, and sweeps unreachable elements', () => {
-    expect(MOTION_OBSERVER_JS).toContain("classList.add('pwb-anim-armed')")
-    // No IntersectionObserver at all → show everything rather than hide it.
-    expect(MOTION_OBSERVER_JS).toContain("if(!('IntersectionObserver' in window)){showAll();return;}")
+  it('arms in the head and reveals on a later frame, so the transition can play', () => {
+    // Arming must happen before the body paints; if the hidden state and the
+    // reveal land in one frame the browser has nothing to interpolate and the
+    // animation silently does nothing.
+    expect(MOTION_ARM_JS).toContain("' pwb-anim-armed'")
+    expect(motionHeadTags()).toContain('data-builder-motion-arm')
+    expect(motionHeadTags()).toContain('[data-anim-in]')
+    expect(MOTION_OBSERVER_JS).toMatch(/requestAnimationFrame\(function\(\)\{requestAnimationFrame/)
+    // An arm nobody claims disarms itself, so a blocked observer cannot leave
+    // the page blank.
+    expect(MOTION_ARM_JS).toContain('__pwbMotion')
+    expect(MOTION_OBSERVER_JS).toContain('window.__pwbMotion=1')
+  })
+
+  it('never leaves content hidden when it cannot be revealed', () => {
+    // No IntersectionObserver, or nothing to animate → disarm entirely.
+    expect(MOTION_OBSERVER_JS).toContain("if(!('IntersectionObserver' in window)){disarm();return;}")
+    expect(MOTION_OBSERVER_JS).toContain('if(!els.length){disarm();return;}')
     // The sweep re-checks after layout settles and covers a non-scrolling page,
     // where a below-fold element could never be scrolled into view.
     expect(MOTION_OBSERVER_JS).toContain('function sweep()')

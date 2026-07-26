@@ -25,7 +25,7 @@ import { regionContentWidth, resolveRegionDock } from './regionLayout.js'
 import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
 import { fixedRailInset } from './railInset.js'
 import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
-import { motionClassSuffix, motionCssVars, motionRevealAttr } from './motion.js'
+import { motionClassSuffix, motionCssVars, motionHeadTags, motionRevealAttr } from './motion.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -548,6 +548,7 @@ function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '', theme 
     <title>${esc(fileTitle)}</title>
     <link rel="stylesheet" href="${cssHref}" />
     ${googleFontLinkTag(theme)}
+    ${motionHeadTags()}
   </head>
   <body>
     <div class="page p-${page.id}">
@@ -809,6 +810,7 @@ function schemaToScaledHtml(page, title = 'My Site', schema = {}, options = {}) 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(title)}</title>
     ${googleFontLinkTag(schema?.theme)}
+    ${motionHeadTags()}
     <style>
 ${css}
       html, body { width: 100%; min-height: 100%; overflow-x: hidden; }

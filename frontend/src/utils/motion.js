@@ -103,54 +103,105 @@ export const MOTION_CSS = `
 
 // Reveals each tagged element the first time it scrolls into view.
 //
-// SAFETY FIRST: an element that starts at opacity:0 and never gets revealed is
-// content the visitor simply cannot see, so the hidden start state is opt-in —
-// it only applies under `.pwb-anim-armed`, which this script adds. If the script
-// never runs (no JS, a CSP block, a parse error), nothing is ever hidden and the
-// page reads exactly as it would without motion.
+// SAFETY FIRST: an element stuck at opacity:0 is content the visitor cannot see,
+// so the hidden start state is opt-in — it only applies under `.pwb-anim-armed`.
+// With no JS at all nothing is ever hidden and the page reads exactly as it would
+// without motion.
 //
-// Arming happens synchronously before first paint (this script is parser-blocking
-// at the end of <body>), so there is no flash of un-animated content.
+// Arms the hidden start state, in <head>, BEFORE the body paints.
 //
-// The observer's first callback reports EVERY observed element, so silence means
-// the observer can never fire here (a clipped or zero-size scroll context — which
-// is how a preview pane can differ from a real page). In that case we disarm and
-// show everything rather than leave the page blank.
+// This has to run early. If the page first paints with the content visible and
+// only then gets hidden, you see a flash; worse, if the hidden state and the
+// reveal land in the same frame the browser has no "from" frame to animate from
+// and skips the transition entirely — the element simply appears, which reads as
+// "the animation does nothing".
+//
+// It also carries its own failsafe: if the observer script never runs (blocked,
+// stripped, a parse error further down the page) nothing would ever reveal the
+// content, so after 3s an unclaimed arm disarms itself and the page shows.
+export const MOTION_ARM_JS = `
+(function(){
+  var d=document.documentElement;
+  d.className+=' pwb-anim-armed';
+  setTimeout(function(){
+    if(!window.__pwbMotion)d.className=d.className.replace(' pwb-anim-armed','');
+  },3000);
+})();
+`.trim()
+
 export const MOTION_OBSERVER_JS = `
 (function(){
+  window.__pwbMotion=1;
   var els=[].slice.call(document.querySelectorAll('[data-anim-in]'));
-  if(!els.length)return;
   var root=document.documentElement;
-  function show(el){el.classList.add('pwb-in');}
-  function showAll(){for(var i=0;i<els.length;i++)show(els[i]);}
-  if(!('IntersectionObserver' in window)){showAll();return;}
-  root.classList.add('pwb-anim-armed');
+  function disarm(){root.className=root.className.replace(' pwb-anim-armed','');}
+  if(!els.length){disarm();return;}
+  // Reveal on a LATER frame than the one that painted the armed state, so the
+  // browser has two distinct frames to interpolate between. Adding both in one
+  // frame is exactly what makes a transition silently not play.
+  function show(el){
+    if(el.__pwbShown)return;
+    el.__pwbShown=1;
+    var done=false;
+    function add(){if(done)return;done=true;el.classList.add('pwb-in');}
+    if(window.requestAnimationFrame){
+      requestAnimationFrame(function(){requestAnimationFrame(add);});
+      // requestAnimationFrame is throttled to a standstill in a background tab
+      // or a hidden frame, and content that never reveals is worse than content
+      // that reveals without animating. The timer is only a failsafe: a visible
+      // page paints its next frame in ~16ms, long before this fires.
+      setTimeout(add,400);
+    } else add();
+  }
+  if(!('IntersectionObserver' in window)){disarm();return;}
+  if(root.className.indexOf('pwb-anim-armed')<0)root.className+=' pwb-anim-armed';
   var io=new IntersectionObserver(function(entries){
     for(var i=0;i<entries.length;i++){var e=entries[i];if(e.isIntersecting){show(e.target);io.unobserve(e.target);}}
   },{threshold:.12,rootMargin:'0px 0px -8% 0px'});
   for(var j=0;j<els.length;j++)io.observe(els[j]);
-  // Safety sweep. The observer evaluates once, immediately — and inside a
-  // preview pane that is still sizing itself (or a host that scales the page
-  // after load) that first look can happen against a layout where nothing
-  // intersects. The observer then has no reason to fire again and the element
-  // stays invisible: content the visitor cannot see. So re-check by hand once
-  // the layout has settled, and reveal anything that either IS on screen or
-  // could never be scrolled to because the page does not scroll at all.
+  // Safety sweep — the observer is not trusted on its own.
+  //
+  // It evaluates once, immediately, and inside a preview pane that is still
+  // sizing itself (or a host that rescales the page after load) that first look
+  // can land on a layout where nothing intersects; it then has no reason to fire
+  // again and the element stays invisible. Some embedding contexts never deliver
+  // its callbacks at all. So the same check runs by hand on load, on scroll and
+  // on resize: reveal whatever is on screen, plus anything on a page that cannot
+  // scroll, since scrolling could never bring it into view.
+  var pending=els.slice();
   function sweep(){
+    if(!pending.length)return;
     var vh=window.innerHeight||root.clientHeight||0;
     var docH=Math.max(root.scrollHeight||0,(document.body&&document.body.scrollHeight)||0);
     var scrollable=docH>vh+4;
-    for(var i=0;i<els.length;i++){
-      var el=els[i];
-      if(el.className.indexOf('pwb-in')>-1)continue;
+    var rest=[];
+    for(var i=0;i<pending.length;i++){
+      var el=pending[i];
       var r=el.getBoundingClientRect();
       var onScreen=r.top<vh&&r.bottom>0&&(r.width>0||r.height>0);
       if(onScreen||!scrollable){show(el);io.unobserve(el);}
+      else rest.push(el);
     }
+    pending=rest;
+    if(!pending.length)detach();
+  }
+  function detach(){
+    window.removeEventListener('scroll',sweep,true);
+    window.removeEventListener('resize',sweep);
   }
   if(document.readyState==='complete')setTimeout(sweep,120);
   else window.addEventListener('load',function(){setTimeout(sweep,120);});
+  // Capture phase so a page that scrolls an inner container, not the window,
+  // still reports — the export wraps its page in its own scrolling viewport.
+  window.addEventListener('scroll',sweep,true);
   window.addEventListener('resize',sweep);
   setTimeout(sweep,900);
 })();
 `.trim()
+
+// Head payload: the motion stylesheet plus the arming script, so the hidden
+// start state exists and is painted before any content appears. The observer
+// itself still ships at the end of <body>, where the elements exist.
+export function motionHeadTags() {
+  return `<style data-builder-motion-style>${MOTION_CSS}</style><script data-builder-motion-arm>${MOTION_ARM_JS}</scr` + `ipt>`
+}

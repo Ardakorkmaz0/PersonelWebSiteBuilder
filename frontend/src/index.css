@@ -22,6 +22,8 @@
   --studio-danger: #d94452;
   --studio-success: #25875a;
   --studio-warning: #b56a0b;
+  /* Surface behind a warning message; the only soft tone the palette lacked. */
+  --studio-warning-soft: #fff4ce;
   --studio-shadow: 0 10px 30px rgba(20, 24, 33, 0.08);
   --studio-shadow-menu: 0 18px 48px rgba(20, 24, 33, 0.16);
   --studio-radius-sm: 6px;
@@ -237,6 +239,7 @@
   --studio-danger: #ef6570;
   --studio-success: #5cc994;
   --studio-warning: #e8a44a;
+  --studio-warning-soft: #3b2f14;
   --studio-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
   --studio-shadow-menu: 0 22px 60px rgba(0, 0, 0, 0.48);
 }

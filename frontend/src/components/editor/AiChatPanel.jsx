@@ -574,11 +574,11 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       role="dialog"
       aria-modal="true"
       aria-label={t('AI Assistant')}
-      className="studio-theme-surface fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
+      className="studio-theme-surface fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div data-theme-inverted className="flex items-center gap-2 border-b border-[#e5e7eb] bg-gradient-to-r from-[#4f46e5] to-[#2563eb] px-3 py-2 text-white">
+      <div data-theme-inverted className="flex items-center gap-2 border-b border-[var(--studio-border)] bg-gradient-to-r from-[var(--studio-accent)] to-[var(--studio-accent-pressed)] px-3 py-2 text-white">
         <span className="text-xs font-bold uppercase tracking-wide opacity-90">AI</span>
         <span
           className="truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px]"
@@ -599,7 +599,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             title={isHtmlSite
               ? t('This site is an HTML document — the AI edits the HTML directly here.')
               : t('Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B')}
-            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'components' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'} disabled:cursor-not-allowed disabled:opacity-40`}
+            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'components' ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/10'} disabled:cursor-not-allowed disabled:opacity-40`}
           >
             <LayersIcon size={11} /> {t('Components')}
           </button>
@@ -607,7 +607,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             type="button"
             onClick={() => setAiMode('html')}
             title={t('Ask the model for a full HTML document — best on Llama 3.1 8B / gemma / phi')}
-            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'html' ? 'bg-white text-[#2563eb]' : 'hover:bg-white/10'}`}
+            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'html' ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/10'}`}
           >
             <FileCodeIcon size={11} /> HTML
           </button>
@@ -657,11 +657,11 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       )}
 
       {/* Message list */}
-      <div ref={scrollerRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f9fafb] p-3">
+      <div ref={scrollerRef} className="flex-1 space-y-3 overflow-y-auto bg-[var(--studio-control)] p-3">
         {messages.length === 0 && (
           <div className="space-y-2">
-            <div className="rounded-md border border-dashed border-[#d1d5db] bg-white p-3 text-xs leading-relaxed text-[#6b7280]">
-              <p className="mb-2 font-semibold text-[#374151]">{t('Try a starter:')}</p>
+            <div className="rounded-md border border-dashed border-[var(--studio-border)] bg-[var(--studio-panel)] p-3 text-xs leading-relaxed text-[var(--studio-text-muted)]">
+              <p className="mb-2 font-semibold text-[var(--studio-text)]">{t('Try a starter:')}</p>
               <div className="flex flex-wrap gap-1.5">
                 {SUGGESTION_CHIPS.map((chip) => (
                   <button
@@ -670,14 +670,14 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                     onClick={() => send(chip.prompt)}
                     disabled={!hasKey || busy}
                     title={t(chip.label)}
-                    className="rounded-full border border-[#c5d4ef] bg-[#eef2ff] px-2.5 py-1 text-[11px] font-medium text-[#4f46e5] hover:bg-[#dde7f7] disabled:opacity-50"
+                    className="rounded-full border border-[var(--studio-border)] bg-[var(--studio-accent-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--studio-accent-hover)] hover:bg-[var(--studio-accent-soft)] disabled:opacity-50"
                   >
                     {t(chip.label)}
                   </button>
                 ))}
               </div>
-              <p className="mt-2 text-[10px] text-[#9ca3af]">
-                {t('Or type a free-form request. Type')} <code className="rounded bg-[#f3f4f6] px-1">/help</code> {t('for slash commands.')}
+              <p className="mt-2 text-[10px] text-[var(--studio-text-faint)]">
+                {t('Or type a free-form request. Type')} <code className="rounded bg-[var(--studio-control)] px-1">/help</code> {t('for slash commands.')}
               </p>
             </div>
           </div>
@@ -699,28 +699,28 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           ),
         )}
         {pendingChange && (
-          <div className="overflow-hidden rounded-lg border border-[#a5b4fc] bg-white shadow-sm" role="status">
-            <div className="border-b border-[#e5e7eb] bg-[#eef2ff] px-2.5 py-2">
-              <p className="text-xs font-bold text-[#3730a3]">{t('Review AI change')}</p>
-              <p className="mt-0.5 text-[10px] leading-relaxed text-[#6b7280]">{pendingChange.summary}</p>
+          <div className="overflow-hidden rounded-lg border border-[var(--studio-accent)] bg-[var(--studio-panel)] shadow-sm" role="status">
+            <div className="border-b border-[var(--studio-border)] bg-[var(--studio-accent-soft)] px-2.5 py-2">
+              <p className="text-xs font-bold text-[var(--studio-accent-hover)]">{t('Review AI change')}</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--studio-text-muted)]">{pendingChange.summary}</p>
             </div>
             {pendingChange.kind === 'html' ? (
-              <iframe title={t('AI change preview')} srcDoc={pendingChange.html} sandbox="" className="h-44 w-full border-0 bg-white" />
+              <iframe title={t('AI change preview')} srcDoc={pendingChange.html} sandbox="" className="h-44 w-full border-0 bg-[var(--studio-panel)]" />
             ) : (
               <div className="space-y-2 p-2.5">
-                <p className="text-[11px] text-[#6b7280]">{t('{count} canvas actions are ready to apply.', { count: pendingChange.calls?.length || 1 })}</p>
+                <p className="text-[11px] text-[var(--studio-text-muted)]">{t('{count} canvas actions are ready to apply.', { count: pendingChange.calls?.length || 1 })}</p>
                 <ToolsStrip calls={pendingChange.calls || []} />
               </div>
             )}
-            <div className="flex gap-2 border-t border-[#e5e7eb] p-2">
-              <button type="button" onClick={rejectPendingChange} className="flex-1 rounded-lg border border-[#d1d5db] px-3 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#f3f4f6]">{t('Reject')}</button>
-              <button type="button" onClick={acceptPendingChange} className="flex-1 rounded-lg bg-[#4f46e5] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#4338ca]">{t('Accept')}</button>
+            <div className="flex gap-2 border-t border-[var(--studio-border)] p-2">
+              <button type="button" onClick={rejectPendingChange} className="flex-1 rounded-lg border border-[var(--studio-border)] px-3 py-1.5 text-xs font-semibold text-[var(--studio-text)] hover:bg-[var(--studio-control)]">{t('Reject')}</button>
+              <button type="button" onClick={acceptPendingChange} className="flex-1 rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-pressed)]">{t('Accept')}</button>
             </div>
           </div>
         )}
         {busy && (
-          <div className="flex items-center gap-2 text-xs text-[#6b7280]">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#2563eb]" />
+          <div className="flex items-center gap-2 text-xs text-[var(--studio-text-muted)]">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--studio-accent-pressed)]" />
             <span>
               {messages[messages.length - 1]?.role === 'user'
                 ? t('Thinking with {model}…', { model: modelLabel })
@@ -737,7 +737,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           fonts work in BOTH modes (theme store for component sites, direct
           CSS swap for HTML sites); sections only exist on HTML pages. */}
       {(
-        <div className="border-t border-[#e5e7eb] bg-[#f9fafb] px-2 pb-1.5 pt-1.5">
+        <div className="border-t border-[var(--studio-border)] bg-[var(--studio-control)] px-2 pb-1.5 pt-1.5">
           <div className="flex flex-wrap gap-1.5">
             {[
               ['colors', 'Theme colors', PaletteIcon],
@@ -751,8 +751,8 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                 onClick={() => setQuickPanel(quickPanel === id ? null : id)}
                 className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
                   quickPanel === id
-                    ? 'border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]'
-                    : 'border-[#e5e7eb] bg-white text-[#6b7280] hover:border-[#d1d5db] hover:text-[#374151]'
+                    ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                    : 'border-[var(--studio-border)] bg-[var(--studio-panel)] text-[var(--studio-text-muted)] hover:border-[var(--studio-border)] hover:text-[var(--studio-text)]'
                 }`}
               >
                 {QuickIcon && <QuickIcon size={12} />} {t(label)}
@@ -760,8 +760,8 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             ))}
           </div>
           {quickPanel === 'colors' && (
-            <div className="mt-1.5 rounded-lg border border-[#e5e7eb] bg-white p-2">
-              <div className="mb-1.5 text-[11px] text-[#6b7280]">
+            <div className="mt-1.5 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
+              <div className="mb-1.5 text-[11px] text-[var(--studio-text-muted)]">
                 {t('Pick 1–2 colors — first becomes the primary, second the secondary. Applies instantly, no typing.')}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -789,7 +789,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                       }}
                     >
                       {idx >= 0 && (
-                        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#4f46e5] text-[9px] font-bold text-white">
+                        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--studio-accent)] text-[9px] font-bold text-white">
                           {idx + 1}
                         </span>
                       )}
@@ -801,7 +801,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                 <button
                   type="button"
                   onClick={() => { setPickedColors([]); setQuickPanel(null) }}
-                  className="rounded-lg px-2.5 py-1 text-[11px] text-[#6b7280] hover:bg-[#f3f4f6]"
+                  className="rounded-lg px-2.5 py-1 text-[11px] text-[var(--studio-text-muted)] hover:bg-[var(--studio-control)]"
                 >
                   {t('Cancel')}
                 </button>
@@ -809,7 +809,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                   type="button"
                   disabled={!pickedColors.length || busy}
                   onClick={applyQuickColors}
-                  className="rounded-lg bg-[#4f46e5] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[#4338ca] disabled:bg-[#9ca3af]"
+                  className="rounded-lg bg-[var(--studio-accent)] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[var(--studio-accent-pressed)] disabled:bg-[var(--studio-text-faint)]"
                 >
                   {t('Apply colors')}
                 </button>
@@ -817,8 +817,8 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             </div>
           )}
           {quickPanel === 'font' && (
-            <div className="mt-1.5 rounded-lg border border-[#e5e7eb] bg-white p-2">
-              <div className="mb-1.5 text-[11px] text-[#6b7280]">{t('Pick a font — typography changes, content stays.')}</div>
+            <div className="mt-1.5 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
+              <div className="mb-1.5 text-[11px] text-[var(--studio-text-muted)]">{t('Pick a font — typography changes, content stays.')}</div>
               <div className="flex flex-wrap gap-1.5">
                 {QUICK_FONTS.map((f) => (
                   <button
@@ -826,7 +826,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                     type="button"
                     disabled={busy}
                     onClick={() => applyQuickFont(f)}
-                    className="rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1 text-[12px] text-[#374151] hover:border-[#4f46e5] hover:bg-[#eef2ff] disabled:opacity-40"
+                    className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2.5 py-1 text-[12px] text-[var(--studio-text)] hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] disabled:opacity-40"
                   >
                     {f}
                   </button>
@@ -835,8 +835,8 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             </div>
           )}
           {quickPanel === 'section' && (
-            <div className="mt-1.5 rounded-lg border border-[#e5e7eb] bg-white p-2">
-              <div className="mb-1.5 text-[11px] text-[#6b7280]">{t('Add a ready-made section — your existing content is preserved.')}</div>
+            <div className="mt-1.5 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
+              <div className="mb-1.5 text-[11px] text-[var(--studio-text-muted)]">{t('Add a ready-made section — your existing content is preserved.')}</div>
               <div className="flex flex-wrap gap-1.5">
                 {QUICK_SECTIONS.map(([label, prompt]) => (
                   <button
@@ -847,7 +847,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                       setQuickPanel(null)
                       send(prompt)
                     }}
-                    className="rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1 text-[12px] text-[#374151] hover:border-[#4f46e5] hover:bg-[#eef2ff] disabled:opacity-40"
+                    className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2.5 py-1 text-[12px] text-[var(--studio-text)] hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] disabled:opacity-40"
                   >
                     {t(label)}
                   </button>
@@ -859,7 +859,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       )}
 
       {/* Composer */}
-      <div className="border-t border-[#e5e7eb] bg-white p-2">
+      <div className="border-t border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
         <textarea
           ref={textareaRef}
           value={draft}
@@ -886,15 +886,15 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
               ? t('Tell AI what to build (Enter to send, Shift+Enter for newline)…')
               : t('Set an API key in the right panel first.')
           }
-          className="block w-full resize-none rounded-lg border border-[#d1d5db] bg-white px-2 py-1.5 text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#4f46e5] focus:outline-none disabled:bg-[#f3f4f6] disabled:text-[#9ca3af]"
+          className="block w-full resize-none rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2 py-1.5 text-sm text-[var(--studio-text)] placeholder:text-[var(--studio-text-faint)] focus:border-[var(--studio-accent)] focus:outline-none disabled:bg-[var(--studio-control)] disabled:text-[var(--studio-text-faint)]"
         />
-        <div className="mt-1 flex items-center justify-between text-[11px] text-[#6b7280]">
+        <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--studio-text-muted)]">
           <span>{t('Press Ctrl+Z to undo any change the AI made.')}</span>
           <button
             type="button"
             onClick={send}
             disabled={!hasKey || busy || !draft.trim()}
-            className="rounded-lg bg-[#4f46e5] px-3 py-1 text-xs font-semibold text-white hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
+            className="rounded-lg bg-[var(--studio-accent)] px-3 py-1 text-xs font-semibold text-white hover:bg-[var(--studio-accent-pressed)] disabled:cursor-not-allowed disabled:bg-[var(--studio-text-faint)]"
           >
             {busy ? '…' : t('Send')}
           </button>
@@ -910,10 +910,10 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
 function DividerRow({ label }) {
   const { t } = useLanguage()
   return (
-    <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[#9ca3af]">
-      <span className="h-px flex-1 bg-[#e5e7eb]" />
+    <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[var(--studio-text-faint)]">
+      <span className="h-px flex-1 bg-[var(--studio-control-hover)]" />
       <span>{label || t('New conversation')}</span>
-      <span className="h-px flex-1 bg-[#e5e7eb]" />
+      <span className="h-px flex-1 bg-[var(--studio-control-hover)]" />
     </div>
   )
 }
@@ -938,7 +938,7 @@ function buildFailureSummary(calls, translate) {
 function UserBubble({ text }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tr-[2px] bg-[#2563eb] px-3 py-2 text-sm leading-snug text-white shadow-sm">
+      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tr-[2px] bg-[var(--studio-accent-pressed)] px-3 py-2 text-sm leading-snug text-white shadow-sm">
         {text}
       </div>
     </div>
@@ -951,14 +951,14 @@ function AssistantBubble({ text, toolCallCount, allFailed }) {
   // ✗ pills above this bubble can't be mistaken for a successful change.
   const bubbleCls = allFailed
     ? 'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-red-200 bg-red-50 px-3 py-2 text-sm leading-snug text-red-900 shadow-sm'
-    : 'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm leading-snug text-[#111827] shadow-sm'
+    : 'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2 text-sm leading-snug text-[var(--studio-text)] shadow-sm'
   return (
     <div className="flex flex-col items-start gap-1">
       <div className={bubbleCls}>
         {text || t('Done.')}
       </div>
       {toolCallCount === 0 && (
-        <span className="text-[10px] italic text-[#a4262c]">
+        <span className="text-[10px] italic text-[var(--studio-danger)]">
           {t('No tools called — the canvas was not changed.')}
         </span>
       )}
@@ -982,7 +982,7 @@ function ToolsStrip({ calls }) {
             : JSON.stringify(c.args, null, 2)
           const cls = failed
             ? 'rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 line-through decoration-red-400'
-            : 'rounded-full border border-[#c5d4ef] bg-[#eef2ff] px-2 py-0.5 text-[10px] font-medium text-[#4f46e5]'
+            : 'rounded-full border border-[var(--studio-border)] bg-[var(--studio-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--studio-accent-hover)]'
           return (
             <span key={i} title={tooltip} className={cls}>
               {c.name}

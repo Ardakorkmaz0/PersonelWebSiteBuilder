@@ -7,15 +7,13 @@ import {
   pickBestLocalModel,
   setModel,
 } from '../../utils/aiAssistant.js'
-import AiChatPanel from './AiChatPanel.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Compact toolbar button that opens the AI chat panel.
 // Replaces the earlier single-line prompt input — the chat panel itself
 // holds the input, history, and per-turn tool calls.
-export default function AiBar({ currentHtml = '', onApplyHtml }) {
+export default function AiBar({ open = false, onOpenChange }) {
   const { t } = useLanguage()
-  const [open, setOpen] = useState(false)
   const [hasKey, setHasKey] = useState(() => !!getApiKey())
 
   // Re-check the saved key whenever the window is focused — covers the user
@@ -56,7 +54,8 @@ export default function AiBar({ currentHtml = '', onApplyHtml }) {
     <>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => onOpenChange?.(!open)}
+        aria-pressed={open}
         title={hasKey ? t('Open AI assistant') : t('Set an AI provider key first')}
         className={`studio-btn h-8 shrink-0 ${
           open
@@ -74,12 +73,6 @@ export default function AiBar({ currentHtml = '', onApplyHtml }) {
         <span className="hidden lg:inline">AI</span>
         {!hasKey && <span className="ml-0.5 rounded bg-white/20 px-1 text-[9px]">{t('setup')}</span>}
       </button>
-      <AiChatPanel
-        open={open}
-        onClose={() => setOpen(false)}
-        currentHtml={currentHtml}
-        onApplyHtml={onApplyHtml}
-      />
     </>
   )
 }

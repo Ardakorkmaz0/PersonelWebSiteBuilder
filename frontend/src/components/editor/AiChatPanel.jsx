@@ -118,7 +118,14 @@ function restoreEditorPreviewState(snapshot) {
 // reply (left-aligned), or a tool-calls strip (rendered between the user turn
 // and the assistant reply). The store still records every tool call, so
 // Ctrl+Z walks the canvas back exactly like a manual edit would.
-export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHtml }) {
+export default function AiChatPanel({
+  open,
+  onClose,
+  currentHtml = '',
+  onApplyHtml,
+  presentation = 'compact',
+  onPresentationChange,
+}) {
   const { t } = useLanguage()
   const [messages, setMessages] = useState(() => readHistory())
   const lastSendAt = useRef(0)
@@ -598,29 +605,58 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
 
   if (!open) return null
 
+  const workspacePresentation = presentation === 'workspace'
+
   return (
     <div
-      role="dialog"
-      aria-modal="true"
+      role={workspacePresentation ? 'complementary' : 'dialog'}
+      aria-modal={workspacePresentation ? undefined : 'true'}
       aria-label={t('AI Assistant')}
-      className="studio-theme-surface fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] shadow-2xl"
+      className={workspacePresentation
+        ? 'studio-theme-surface relative z-20 flex h-full w-[clamp(380px,32vw,520px)] shrink-0 flex-col overflow-hidden border-l border-[var(--studio-border)] bg-[var(--studio-panel)]'
+        : 'studio-theme-surface fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] shadow-2xl'}
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div data-theme-inverted className="flex items-center gap-2 border-b border-[var(--studio-border)] bg-gradient-to-r from-[var(--studio-accent)] to-[var(--studio-accent-pressed)] px-3 py-2 text-white">
-        <span className="text-xs font-bold uppercase tracking-wide opacity-90">AI</span>
-        <span
-          className="truncate rounded-full bg-white/20 px-2 py-0.5 text-[10px]"
+      <div
+        data-theme-inverted={workspacePresentation ? undefined : ''}
+        className={`flex items-center gap-2 border-b border-[var(--studio-border)] px-3 py-2 ${
+          workspacePresentation
+            ? 'min-h-[58px] bg-[var(--studio-panel-raised)] text-[var(--studio-text)]'
+            : 'bg-gradient-to-r from-[var(--studio-accent)] to-[var(--studio-accent-pressed)] text-white'
+        }`}
+      >
+        {workspacePresentation && (
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
+            <SparklesIcon size={15} />
+          </span>
+        )}
+        <span className={workspacePresentation ? 'min-w-0' : ''}>
+          <span className="block text-xs font-bold uppercase tracking-wide opacity-90">
+            {workspacePresentation ? t('AI design assistant') : 'AI'}
+          </span>
+          {workspacePresentation && (
+            <span className="block truncate text-[10px] font-medium text-[var(--studio-text-muted)]">
+              {t('Working beside the current page')} · {modelLabel}
+            </span>
+          )}
+        </span>
+        {!workspacePresentation && <span
+          className={`truncate rounded-full px-2 py-0.5 text-[10px] ${
+            workspacePresentation
+              ? 'border border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)]'
+              : 'bg-white/20'
+          }`}
           title={t('Active model: {model}', { model: modelLabel })}
         >
           {modelLabel}
-        </span>
+        </span>}
         {/* Mode toggle — Components uses the schema tool calls; HTML asks the
             model for a full document and ships it to site.html (the strong
             path on weak local models that can't tool-call). On an HTML site
             the toggle is locked to HTML: the schema isn't rendered there, so
             Components-mode edits would be invisible. */}
-        <div className="ml-1 flex overflow-hidden rounded-full bg-white/15 text-[10px] font-medium">
+        <div className={`${workspacePresentation ? 'hidden' : 'ml-1 flex'} overflow-hidden rounded-full bg-white/15 text-[10px] font-medium`}>
           <button
             type="button"
             onClick={() => setAiMode('components')}
@@ -643,14 +679,26 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         </div>
         <button
           type="button"
+          onClick={() => onPresentationChange?.(workspacePresentation ? 'compact' : 'workspace')}
+          title={workspacePresentation ? t('Use the small floating AI window') : t('Dock AI beside the canvas')}
+          className={`ml-auto rounded-lg px-2 py-1 text-[10px] font-semibold ${
+            workspacePresentation
+              ? 'border border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)] hover:text-[var(--studio-text)]'
+              : 'hover:bg-white/15'
+          }`}
+        >
+          {workspacePresentation ? t('Small window') : t('Dock')}
+        </button>
+        {!workspacePresentation && <button
+          type="button"
           onClick={freshChat}
           disabled={messages.length === 0 || messages[messages.length - 1]?.role === 'divider'}
           title={t('Start a new conversation — AI forgets older topics, your scrollback stays')}
-          className="ml-auto rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
+          className="rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
         >
           {t('New')}
-        </button>
-        <button
+        </button>}
+        {!workspacePresentation && <button
           type="button"
           onClick={clearChat}
           disabled={messages.length === 0}
@@ -658,14 +706,18 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           className="rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
         >
           {t('Clear')}
-        </button>
+        </button>}
         <button
           type="button"
           onClick={() => setShowSettings((v) => !v)}
           title={t('AI settings — provider, key and model')}
           aria-label={t('AI settings')}
           aria-pressed={showSettings}
-          className={`rounded px-1.5 py-1 ${showSettings ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/15'}`}
+          className={`rounded px-1.5 py-1 ${
+            workspacePresentation
+              ? showSettings ? 'bg-[var(--studio-control)] text-[var(--studio-accent-hover)]' : 'hover:bg-[var(--studio-control-hover)]'
+              : showSettings ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/15'
+          }`}
         >
           <CogIcon size={13} />
         </button>
@@ -674,11 +726,49 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           onClick={onClose}
           title={t('Close')}
           aria-label={t('Close AI panel')}
-          className="rounded px-2 py-0.5 text-base hover:bg-white/15"
+          className={`rounded px-2 py-0.5 text-base ${workspacePresentation ? 'hover:bg-[var(--studio-control-hover)]' : 'hover:bg-white/15'}`}
         >
           ×
         </button>
       </div>
+
+      {workspacePresentation && (
+        <div className="flex items-center gap-2 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2">
+          <div className="studio-segment min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={() => setAiMode('components')}
+              disabled={isHtmlSite}
+              className={effectiveAiMode === 'components' ? 'studio-segment-btn studio-segment-btn-active flex-1' : 'studio-segment-btn flex-1'}
+            >
+              <LayersIcon size={11} /> {t('Components')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAiMode('html')}
+              className={effectiveAiMode === 'html' ? 'studio-segment-btn studio-segment-btn-active flex-1' : 'studio-segment-btn flex-1'}
+            >
+              <FileCodeIcon size={11} /> HTML
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={freshChat}
+            disabled={messages.length === 0 || messages[messages.length - 1]?.role === 'divider'}
+            className="studio-btn studio-btn-secondary h-7 px-2 text-[10px] disabled:opacity-40"
+          >
+            {t('New')}
+          </button>
+          <button
+            type="button"
+            onClick={clearChat}
+            disabled={messages.length === 0}
+            className="studio-btn h-7 px-2 text-[10px] disabled:opacity-40"
+          >
+            {t('Clear')}
+          </button>
+        </div>
+      )}
 
       {/* Settings sheet — same component the Properties → AI tab renders. */}
       {showSettings && (
@@ -1109,21 +1199,19 @@ function AssistantBubble({ text, toolCallCount, allFailed }) {
 
 function ToolsStrip({ calls }) {
   const { t } = useLanguage()
+  const schema = useEditorStore((state) => state.schema)
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex max-w-full flex-wrap gap-1">
+    <div className="w-full space-y-1.5">
         {(calls || []).map((c, i) => {
           // Tool calls that returned ok:false (stale IDs, validation errors,
           // etc.) get painted red with a strike so the user can tell at a
           // glance that the AI's claim of "done" didn't fully land. Tooltip
           // surfaces the error reason on hover.
           const failed = c.result && c.result.ok === false
-          const tooltip = failed
-            ? `${t('Failed')}: ${c.result?.error || t('unknown')}\n\n${t('Args')}:\n${JSON.stringify(c.args, null, 2)}`
-            : JSON.stringify(c.args, null, 2)
+          const change = describeToolChange(c, schema, t)
           const cls = failed
-            ? 'rounded-full border px-2 py-0.5 text-[10px] font-medium text-[var(--studio-danger)] line-through'
-            : 'rounded-full border border-[var(--studio-border)] bg-[var(--studio-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--studio-accent-hover)]'
+            ? 'border-[color-mix(in_srgb,var(--studio-danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--studio-danger)_8%,var(--studio-panel))]'
+            : 'border-[var(--studio-border)] bg-[var(--studio-panel)]'
           const style = failed
             ? {
                 borderColor: 'color-mix(in srgb, var(--studio-danger) 40%, transparent)',
@@ -1131,14 +1219,147 @@ function ToolsStrip({ calls }) {
               }
             : undefined
           return (
-            <span key={i} title={tooltip} className={cls} style={style}>
-              {c.name}
-            </span>
+            <details key={`${c.name}-${i}`} className={`group rounded-lg border px-2.5 py-2 ${cls}`} style={style}>
+              <summary className="flex cursor-pointer list-none items-start gap-2">
+                <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${failed ? 'bg-[var(--studio-danger)]' : 'bg-[var(--studio-success)]'}`}>
+                  {failed ? '×' : '✓'}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-[11px] font-semibold ${failed ? 'text-[var(--studio-danger)]' : 'text-[var(--studio-text)]'}`}>
+                    {failed ? t('Change failed') : change.title}
+                  </span>
+                  <span className="mt-0.5 block break-words text-[10px] leading-relaxed text-[var(--studio-text-muted)]">
+                    {failed ? c.result?.error || t('Unknown error') : change.detail}
+                  </span>
+                </span>
+                <span className="text-[10px] text-[var(--studio-text-faint)] transition group-open:rotate-180">⌄</span>
+              </summary>
+              <div className="mt-2 border-t border-[var(--studio-border)] pt-2">
+                <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--studio-text-faint)]">{t('Technical details')}</div>
+                <pre className="max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-md bg-[var(--studio-control)] p-2 text-[9px] leading-relaxed text-[var(--studio-text-muted)]">{JSON.stringify({ action: c.name, arguments: c.args, result: c.result }, null, 2)}</pre>
+              </div>
+            </details>
           )
         })}
-      </div>
     </div>
   )
+}
+
+function describeToolChange(call, schema, translate) {
+  const args = call?.args || {}
+  const component = findSchemaComponent(schema, args.id)
+  const target = componentLabel(component, translate)
+  const patch = args.patch || {}
+  const entries = Object.entries(patch)
+  const detail = entries.length
+    ? entries.slice(0, 4).map(([key, value]) => `${friendlyField(key, translate)}: ${shortValue(value)}`).join(' · ')
+    : ''
+
+  switch (call?.name) {
+    case 'addComponent':
+      return { title: translate('{type} added', { type: translate(componentTypeLabel(args.type)) }), detail: translate('A new component was placed on the current page.') }
+    case 'addSection':
+      return { title: translate('Section added'), detail: args.background ? `${translate('Background')}: ${args.background}` : translate('A new full-width section was created.') }
+    case 'removeComponent':
+      return { title: translate('{target} deleted', { target }), detail: translate('The component was removed from the current page.') }
+    case 'duplicateComponent':
+      return { title: translate('{target} duplicated', { target }), detail: translate('A copy was created beside the original component.') }
+    case 'replaceComponentText':
+      return { title: translate('{target} text changed', { target }), detail: shortValue(args.text) }
+    case 'updateProps': {
+      const textKey = ['text', 'label', 'title', 'heading', 'brand'].find((key) => Object.hasOwn(patch, key))
+      if (textKey) return { title: translate('{target} text changed', { target }), detail: shortValue(patch[textKey]) }
+      return { title: translate('{target} settings updated', { target }), detail: detail || translate('Component settings were updated.') }
+    }
+    case 'updateStyles':
+      return { title: translate('{target} appearance updated', { target }), detail: detail || translate('Colors and visual styles were updated.') }
+    case 'setLayout':
+      return { title: translate('{target} layout updated', { target }), detail: detail || translate('Position or size was changed.') }
+    case 'centerHorizontally':
+      return { title: translate('{target} centered', { target }), detail: translate('The component was centered horizontally.') }
+    case 'moveToEnd':
+      return { title: translate('{target} moved forward', { target }), detail: translate('Its stacking/order position was updated.') }
+    case 'moveToStart':
+      return { title: translate('{target} moved backward', { target }), detail: translate('Its stacking/order position was updated.') }
+    case 'updateTheme':
+      return { title: translate('Site theme updated'), detail: detail || translate('Theme colors and typography were applied to the design.') }
+    case 'setMotion':
+      return { title: translate('{target} animation updated', { target }), detail: Object.entries(args).filter(([key]) => key !== 'id').map(([key, value]) => `${friendlyField(key, translate)}: ${shortValue(value)}`).join(' · ') }
+    case 'setNavbarLayout':
+      return { title: translate('Navbar layout updated'), detail: Object.entries(args).filter(([key]) => key !== 'id').map(([key, value]) => `${friendlyField(key, translate)}: ${shortValue(value)}`).join(' · ') }
+    case 'setLinks':
+      return { title: translate('Navbar links updated'), detail: translate('{count} links were configured.', { count: Array.isArray(args.links) ? args.links.length : 0 }) }
+    case 'setPageMeta':
+      return { title: translate('Page SEO updated'), detail: Object.entries(args).filter(([key]) => key !== 'pageId').map(([key, value]) => `${friendlyField(key, translate)}: ${shortValue(value)}`).join(' · ') }
+    case 'addPage':
+      return { title: translate('Page added'), detail: args.name || translate('A new page was created.') }
+    case 'selectPage':
+      return { title: translate('Active page changed'), detail: translate('AI continued working on another page.') }
+    case 'applyTemplate':
+      return { title: translate('Template applied'), detail: args.name || translate('The current page design was replaced.') }
+    default:
+      return { title: humanizeAction(call?.name, translate), detail: detail || translate('The requested change was applied.') }
+  }
+}
+
+function findSchemaComponent(schema, id) {
+  if (!id) return null
+  const visit = (items) => {
+    for (const item of items || []) {
+      if (item.id === id) return item
+      const nested = visit(item.children)
+      if (nested) return nested
+    }
+    return null
+  }
+  for (const page of schema?.pages || []) {
+    const found = visit(page.components)
+    if (found) return found
+  }
+  return null
+}
+
+function componentLabel(component, translate) {
+  if (!component) return translate('Component')
+  return translate(componentTypeLabel(component.type))
+}
+
+function componentTypeLabel(type) {
+  const labels = {
+    button: 'Button', navbar: 'Navbar', text: 'Text', heading: 'Heading',
+    image: 'Image', region: 'Section', html: 'HTML block', form: 'Form',
+    card: 'Card', divider: 'Divider', footer: 'Footer',
+  }
+  return labels[type] || String(type || 'Component').replace(/[-_]/g, ' ')
+}
+
+function friendlyField(key, translate) {
+  const labels = {
+    text: 'Text', label: 'Label', title: 'Title', backgroundColor: 'Background',
+    color: 'Text color', fontSize: 'Font size', fontFamily: 'Font', widthMode: 'Width',
+    mobileNavMode: 'Mobile menu', navLayout: 'Layout', scrollBehavior: 'Scroll behavior',
+    x: 'Horizontal position', y: 'Vertical position', w: 'Width', h: 'Height',
+    animIn: 'Entrance', animHover: 'Hover effect', animSpeed: 'Animation speed', animDelay: 'Delay',
+    seoTitle: 'SEO title', seoDescription: 'SEO description', seoImage: 'Share image',
+  }
+  return translate(labels[key] || String(key).replace(/([a-z])([A-Z])/g, '$1 $2'))
+}
+
+function shortValue(value) {
+  if (value == null || value === '') return '—'
+  if (typeof value === 'object') {
+    const rendered = JSON.stringify(value)
+    return rendered.length > 90 ? `${rendered.slice(0, 87)}…` : rendered
+  }
+  const rendered = String(value)
+  return rendered.length > 110 ? `${rendered.slice(0, 107)}…` : rendered
+}
+
+function humanizeAction(value, translate) {
+  const label = String(value || 'Change')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (letter) => letter.toUpperCase())
+  return translate(label)
 }
 
 function rand() {

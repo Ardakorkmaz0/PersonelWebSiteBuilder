@@ -8,6 +8,7 @@ import FavoritesPage from '../pages/FavoritesPage.jsx'
 import TemplatePicker from './editor/TemplatePicker.jsx'
 import MobileEditorPreview from './editor/MobileEditorPreview.jsx'
 import SiteControlCenter from './editor/SiteControlCenter.jsx'
+import AiChatPanel from './editor/AiChatPanel.jsx'
 import PublicToolbar from './preview/PublicToolbar.jsx'
 import { Navbar } from './renderer/components.jsx'
 import { listSites } from '../api/sites.js'
@@ -251,5 +252,37 @@ describe('responsive and accessibility guards', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Readiness' }))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('renders AI as a docked workspace and keeps the compact interface available', () => {
+    const onPresentationChange = vi.fn()
+    renderWithShell(
+      <AiChatPanel
+        open
+        presentation="workspace"
+        onPresentationChange={onPresentationChange}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('complementary', { name: 'AI Assistant' })).toHaveClass('border-l')
+    expect(screen.getByText('AI design assistant')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Small window' }))
+    expect(onPresentationChange).toHaveBeenCalledWith('compact')
+  })
+
+  it('describes AI edits in user language instead of exposing tool names as the result', () => {
+    localStorage.setItem('pwb_ai_chat_history', JSON.stringify([
+      {
+        id: 'tool-change',
+        role: 'tools',
+        calls: [{ name: 'updateProps', args: { id: 'button-1', patch: { text: 'Contact us' } }, result: { ok: true } }],
+      },
+    ]))
+
+    renderWithShell(<AiChatPanel open presentation="workspace" onClose={vi.fn()} />)
+
+    expect(screen.getByText('Component text changed')).toBeInTheDocument()
+    expect(screen.getByText('Contact us')).toBeInTheDocument()
   })
 })

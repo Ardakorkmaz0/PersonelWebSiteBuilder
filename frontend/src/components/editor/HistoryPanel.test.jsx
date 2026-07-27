@@ -51,4 +51,17 @@ describe('HistoryPanel save sources and pins', () => {
     fireEvent.click(screen.getByRole('checkbox'))
     expect(onAutoSaveEnabled).toHaveBeenCalledWith(true)
   })
+
+  it('filters the timeline without mixing manual and automatic saves', async () => {
+    renderPanel()
+    await screen.findByText('Manual save')
+
+    fireEvent.click(screen.getByRole('button', { name: /Manual 1/i }))
+    expect(screen.getByText('Manual save')).toBeInTheDocument()
+    expect(screen.queryByText('Auto-saved snapshot')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Automatic 1/i }))
+    expect(screen.queryByText('Manual save')).not.toBeInTheDocument()
+    expect(screen.getByText('Auto-saved snapshot')).toBeInTheDocument()
+  })
 })

@@ -20,6 +20,7 @@ import {
   MOBILE_CANVAS_PRESETS,
 } from '../components/registry.jsx'
 import AiBar from '../components/editor/AiBar.jsx'
+import AiChatPanel from '../components/editor/AiChatPanel.jsx'
 import Sidebar from '../components/editor/Sidebar.jsx'
 import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
 import {
@@ -107,6 +108,7 @@ const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 
 // The viewport the editor reopens on: simply the last one the user switched to.
 const LAST_VIEWPORT_KEY = 'pwb_default_editor_viewport'
+const AI_PANEL_LAYOUT_KEY = 'pwb_ai_panel_layout'
 const HTML_DEVICE_KEYS = {
   pc: 'pwb_last_html_pc_device',
   mobile: 'pwb_last_html_mobile_device',
@@ -115,6 +117,11 @@ const HTML_DEVICE_KEYS = {
 function readLastViewport() {
   try { return localStorage.getItem(LAST_VIEWPORT_KEY) === 'mobile' ? 'mobile' : 'pc' }
   catch { return 'pc' }
+}
+
+function readAiPanelLayout() {
+  try { return localStorage.getItem(AI_PANEL_LAYOUT_KEY) === 'compact' ? 'compact' : 'workspace' }
+  catch { return 'workspace' }
 }
 
 function readHtmlDevice(viewport) {
@@ -374,6 +381,8 @@ export default function EditorPage() {
   const leaveConfirmedRef = useRef(false)
   const discardLeaveRef = useRef(false)
   const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiPanelLayout, setAiPanelLayout] = useState(readAiPanelLayout)
   const [moreOpen, setMoreOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -384,6 +393,10 @@ export default function EditorPage() {
   const [notesOpen, setNotesOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [controlCenterOpen, setControlCenterOpen] = useState(false)
+
+  useEffect(() => {
+    try { localStorage.setItem(AI_PANEL_LAYOUT_KEY, aiPanelLayout) } catch { /* ignore */ }
+  }, [aiPanelLayout])
   // The Import/Tools menus are position:fixed, anchored to their trigger
   // button's on-screen rect (computed on open) — robust regardless of header
   // layout (the single-row strip scrolls horizontally; fixed positioning
@@ -1588,6 +1601,12 @@ export default function EditorPage() {
       : hasUnsavedChanges
         ? { label: t('Unsaved'), tone: 'var(--studio-warning)' }
         : { label: t('Saved'), tone: 'var(--studio-success)' }
+  const effectiveAiPanelLayout = isNarrow ? 'compact' : aiPanelLayout
+  const aiWorkspaceOpen = aiOpen && effectiveAiPanelLayout === 'workspace'
+  const applyAiDocument = (html) => {
+    const placed = workspaceRef.current?.applyAiHtml?.(html) ?? html
+    commitHtml(placed)
+  }
   const showLegacyHeader = false
 
   return (
@@ -1619,13 +1638,7 @@ export default function EditorPage() {
         </div>
 
         <div className="ml-auto flex min-w-0 items-center gap-1">
-          <AiBar
-            currentHtml={siteHtml}
-            onApplyHtml={(html) => {
-              const placed = workspaceRef.current?.applyAiHtml?.(html) ?? html
-              commitHtml(placed)
-            }}
-          />
+          <AiBar open={aiOpen} onOpenChange={setAiOpen} />
           <span className="mx-1 hidden h-5 w-px bg-[var(--studio-border)] lg:block" aria-hidden />
           <button type="button" onClick={() => (currentPageIsHtml ? undoHtml() : undo())} disabled={currentPageIsHtml ? !htmlPast.length : !canUndo} title={t('Undo (Ctrl+Z)')} className="studio-icon-btn hidden md:inline-flex">
             <UndoIcon size={16} />
@@ -1841,19 +1854,7 @@ export default function EditorPage() {
           {/* AI stays available in BOTH modes — in HTML mode the chat's HTML
               path iterates on site.html, so hiding it there would orphan the
               whole flow. */}
-          <AiBar
-            currentHtml={siteHtml}
-            onApplyHtml={(html) => {
-              // The AI chat shipped a fresh document. Let the workspace
-              // post-process it first: it relocates bottom-appended additions
-              // next to whatever the user is looking at and remembers which
-              // block to scroll/flash after the reload. Mark dirty so the
-              // toolbar's "Unsaved changes" hint kicks in; the user still has
-              // to press Save to commit it server-side.
-              const placed = workspaceRef.current?.applyAiHtml?.(html) ?? html
-              commitHtml(placed) // applyAiHtml already reseeded the workspace
-            }}
-          />
+          <AiBar open={aiOpen} onOpenChange={setAiOpen} />
           {/* Guided full-site generation — the onboarding path for a blank
               site, but always reachable for a fresh start. */}
           <button
@@ -2191,7 +2192,7 @@ export default function EditorPage() {
               {/* Left rail: VS Code-style Files tab (pages as .html files) +
                   the component palette. Picking a palette item splices that
                   component's snippet into the document where the user points. */}
-              <RailSlot
+              {!aiWorkspaceOpen && <RailSlot
                 side="left"
                 label="Files"
                 open={leftOpen}
@@ -2215,7 +2216,7 @@ export default function EditorPage() {
                     />
                   }
                 />
-              </RailSlot>
+              </RailSlot>}
               {/* The workspace renders for EMPTY pages too — same toolbar and
                   chrome, with the starter card where the page would show. */}
               <Suspense fallback={<PanelFallback />}>
@@ -2290,7 +2291,7 @@ export default function EditorPage() {
               </Suspense>
               {/* Right rail in HTML mode: element properties when something
                   is selected in the edit iframe, site settings otherwise. */}
-              <RailSlot
+              {!aiWorkspaceOpen && <RailSlot
                 side="right"
                 label={htmlSelection ? 'Element' : 'Settings'}
                 open={rightOpen}
@@ -2330,11 +2331,11 @@ export default function EditorPage() {
                     )}
                   </div>
                 </div>
-              </RailSlot>
+              </RailSlot>}
             </>
           ) : (
             <>
-              <RailSlot
+              {!aiWorkspaceOpen && <RailSlot
                 side="left"
                 label="Files"
                 open={leftOpen}
@@ -2362,7 +2363,7 @@ export default function EditorPage() {
                     />
                   }
                 />
-              </RailSlot>
+              </RailSlot>}
               {/* Canvas column with the same View/Edit/Source bar the HTML
                   workspace has — identical chrome in both editor modes. */}
               <div className="flex min-w-0 flex-1 flex-col">
@@ -2671,7 +2672,7 @@ export default function EditorPage() {
                   </div>
                 )}
               </div>
-              <RailSlot
+              {!aiWorkspaceOpen && <RailSlot
                 side="right"
                 label={t('Properties')}
                 open={rightOpen}
@@ -2726,8 +2727,19 @@ export default function EditorPage() {
                   )}
                 </div>
               </div>
-              </RailSlot>
+              </RailSlot>}
             </>
+          )}
+
+          {aiWorkspaceOpen && (
+            <AiChatPanel
+              open
+              presentation="workspace"
+              onPresentationChange={setAiPanelLayout}
+              onClose={() => setAiOpen(false)}
+              currentHtml={siteHtml}
+              onApplyHtml={applyAiDocument}
+            />
           )}
 
           {dragOver && (
@@ -2750,6 +2762,17 @@ export default function EditorPage() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {aiOpen && effectiveAiPanelLayout === 'compact' && (
+        <AiChatPanel
+          open
+          presentation="compact"
+          onPresentationChange={setAiPanelLayout}
+          onClose={() => setAiOpen(false)}
+          currentHtml={siteHtml}
+          onApplyHtml={applyAiDocument}
+        />
+      )}
 
       {templateOpen && (
         <Suspense fallback={null}>

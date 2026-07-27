@@ -554,6 +554,13 @@ def validate_and_clean_schema(schema):
             'name': _str(page.get('name'), 'Page')[:80],
             # Optional organizational folder label (shown in the editor's page tree).
             'folder': _str(page.get('folder'))[:80],
+            # Search + social metadata. Clipped to the lengths Google and the
+            # link-preview scrapers actually read, so an over-long value is
+            # stored the way it will be shown rather than silently truncated
+            # later. The image goes through the same allowlist as any user image.
+            'seoTitle': _str(page.get('seoTitle'))[:70],
+            'seoDescription': _str(page.get('seoDescription'))[:200],
+            'seoImage': sanitize_image_src(page.get('seoImage')),
             'background': sanitize_color(page.get('background')),
             'backgroundMobile': sanitize_color(page.get('backgroundMobile')),
             # Per-breakpoint artboard width + optional "fold" (visible-screen) guide.

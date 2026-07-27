@@ -44,7 +44,7 @@ import {
   HtmlContentControl,
   TabsEditorControl,
 } from './controls.jsx'
-import { FileIcon, MoveIcon, PaletteIcon, SparklesIcon } from '../icons.jsx'
+import { CodeIcon, FileIcon, MoveIcon, PaletteIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
@@ -506,6 +506,17 @@ const ADVANCED_STYLE_KEYS = [
 ]
 
 const PROPS_TAB_KEY = 'pwb_props_tab'
+const PAGE_TAB_KEY = 'pwb_page_tab'
+
+// The Page panel's sections. Code and AI are hidden in Simple mode, so the tab
+// list is built from what is actually available rather than showing tabs that
+// open onto nothing.
+const PAGE_TABS = [
+  ['page', 'Page', FileIcon],
+  ['theme', 'Theme', PaletteIcon],
+  ['code', 'Code', CodeIcon],
+  ['ai', 'AI', SparklesIcon],
+]
 
 // The four Properties sections. Short labels — the panel is 288px wide.
 const PROPS_TABS = [
@@ -781,6 +792,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
   const renamePage = useEditorStore((s) => s.renamePage)
   const setPageFolder = useEditorStore((s) => s.setPageFolder)
+  const setPageMeta = useEditorStore((s) => s.setPageMeta)
   const setVisibility = useEditorStore((s) => s.setVisibility)
   const autoArrangeMobile = useEditorStore((s) => s.autoArrangeMobile)
   const duplicateComponent = useEditorStore((s) => s.duplicateComponent)
@@ -805,6 +817,22 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     setPropsTabState(tab)
     try { localStorage.setItem(PROPS_TAB_KEY, tab) } catch { /* ignore */ }
   }
+  // Simple mode strips Code and AI entirely, so the visible tab list is derived
+  // rather than fixed — a tab that would open onto nothing is never drawn.
+  const pageTabs = PAGE_TABS.filter(([id]) => !simpleMode || (id !== 'code' && id !== 'ai'))
+  const [pageTab, setPageTabState] = useState(() => {
+    try {
+      const saved = localStorage.getItem(PAGE_TAB_KEY)
+      return PAGE_TABS.some(([id]) => id === saved) ? saved : 'page'
+    } catch { return 'page' }
+  })
+  const setPageTab = (tab) => {
+    setPageTabState(tab)
+    try { localStorage.setItem(PAGE_TAB_KEY, tab) } catch { /* ignore */ }
+  }
+  // Switching into Simple mode can leave the remembered tab hidden; fall back to
+  // the first visible one instead of rendering an empty panel.
+  const activePageTab = pageTabs.some(([id]) => id === pageTab) ? pageTab : pageTabs[0][0]
 
   const isMobile = viewport === 'mobile'
   const isFlow = !!page.flowMode
@@ -986,9 +1014,16 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               : t(isMobile ? 'Mobile layout - nothing selected' : 'PC layout - nothing selected')}
           </p>
         </div>
-        <div className="flex-1 space-y-5 overflow-y-auto p-4">
-          <section className="space-y-3">
-            <SectionTitle>{t('Page')}</SectionTitle>
+        <PanelTabs
+          value={activePageTab}
+          onChange={setPageTab}
+          tabs={pageTabs.map(([id, label, Icon]) => [id, t(label), Icon])}
+        />
+
+        <div className="flex-1 space-y-1 overflow-y-auto px-4 pb-4">
+          {activePageTab === 'page' && (
+            <>
+        <PanelGroup id="page-basics" title={t('Page')} defaultOpen>
             <LabeledText
               label={t('Page name')}
               value={page.name}
@@ -1022,22 +1057,69 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                 {t('Auto-arrange mobile layout')}
               </button>
             )}
-          </section>
+        </PanelGroup>
+        <PanelGroup id="page-seo" title={t('SEO & sharing')} defaultOpen>
+          <LabeledText
+            label={t('Search title')}
+            value={page.seoTitle || ''}
+            onChange={(v) => setPageMeta(page.id, { seoTitle: v })}
+            placeholder={page.name}
+          />
+          <LabeledTextarea
+            label={t('Search description')}
+            value={page.seoDescription || ''}
+            onChange={(v) => setPageMeta(page.id, { seoDescription: v })}
+            rows={3}
+            placeholder={t('One or two sentences describing this page.')}
+          />
+          <p className="text-[11px] leading-snug text-[#9ca3af]">
+            {t('{count}/160 characters — search engines cut off longer descriptions.', {
+              count: (page.seoDescription || '').length,
+            })}
+          </p>
+          <LabeledImage
+            label={t('Sharing image')}
+            value={page.seoImage || ''}
+            onChange={(v) => setPageMeta(page.id, { seoImage: v })}
+          />
+          <p className="text-[11px] leading-snug text-[#9ca3af]">
+            {t('Shown when the page is shared on social apps. 1200x630 works best.')}
+          </p>
+        </PanelGroup>
+          <p className="text-xs leading-relaxed text-[#6b7280]">
+            {isFlow
+              ? t('Flow mode uses one document order that adapts across PC and mobile.')
+              : isMobile
+                ? t('Mobile is a separate design. Drag and resize components on the phone, or auto-arrange them into a clean single column.')
+                : t('Select a component on the canvas to edit its content, style, position and size.')}
+          </p>
+            </>
+          )}
 
-          <section className="space-y-3">
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-              <SectionTitle>{t('Theme')}</SectionTitle>
-              <button
-                type="button"
-                onClick={() => (htmlMode ? onApplyThemeToHtml?.(theme) : applyTheme())}
-                title={htmlMode
-                  ? t('Apply this palette + font to every HTML page')
-                  : t('Apply the theme to every component')}
-                className="shrink-0 rounded-lg border border-[var(--studio-accent)] px-2 py-1 text-xs font-semibold text-[var(--studio-accent-hover)] hover:bg-[var(--studio-accent-soft)]"
-              >
-                {htmlMode ? t('Apply to pages') : t('Apply to design')}
-              </button>
-            </div>
+          {activePageTab === 'theme' && (
+            <>
+        <PanelGroup
+          id="theme-presets"
+          title={
+            <>
+              {t('Theme')}
+              <span className="ml-1 font-normal normal-case text-[#9ca3af]">({t('whole site')})</span>
+            </>
+          }
+          defaultOpen
+        >
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => (htmlMode ? onApplyThemeToHtml?.(theme) : applyTheme())}
+              title={htmlMode
+                ? t('Apply this palette + font to every HTML page')
+                : t('Apply the theme to every component')}
+              className="shrink-0 rounded-lg border border-[var(--studio-accent)] px-2 py-1 text-xs font-semibold text-[var(--studio-accent-hover)] hover:bg-[var(--studio-accent-soft)]"
+            >
+              {htmlMode ? t('Apply to pages') : t('Apply to design')}
+            </button>
+          </div>
             {/* One-click presets: set the palette AND restyle everything —
                 the component schema (component mode) or every HTML page's
                 document (HTML mode). New components inherit the active theme. */}
@@ -1072,7 +1154,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               value={theme.primaryColor}
               onChange={(v) => updateTheme({ primaryColor: v })}
             />
-            {!simpleMode && <>
+        </PanelGroup>
+
+        {!simpleMode && (
+          <>
+            <PanelGroup id="theme-colors" title={t('Colors')} defaultOpen>
             <LabeledColor
               label={t('Text color')}
               value={theme.textColor}
@@ -1108,6 +1194,8 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               value={theme.headerTextColor}
               onChange={(v) => updateTheme({ headerTextColor: v })}
             />
+            </PanelGroup>
+            <PanelGroup id="theme-type" title={t('Type & corners')}>
             <LabeledSelect
               label={t('Font')}
               value={theme.fontFamily}
@@ -1130,11 +1218,15 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               onChange={(v) => updateTheme({ shadow: v })}
               placeholder={t('e.g. 0 8px 24px rgba(0,0,0,0.12)')}
             />
-            </>}
-          </section>
+            </PanelGroup>
+          </>
+        )}
+            </>
+          )}
 
-          {!simpleMode && <section className="space-y-3">
-            <SectionTitle>{t('Custom CSS')}</SectionTitle>
+          {activePageTab === 'code' && (
+            <>
+        <PanelGroup id="custom-css" title={t('Custom CSS')}>
             <SnippetPicker
               groups={CSS_SNIPPET_GROUPS}
               list={cssSnippets}
@@ -1148,10 +1240,8 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               mono
               placeholder=".page { scroll-behavior: smooth; }"
             />
-          </section>}
-
-          {!simpleMode && <section className="space-y-3">
-            <SectionTitle>{t('Custom JavaScript')}</SectionTitle>
+        </PanelGroup>
+        <PanelGroup id="custom-js" title={t('Custom JavaScript')}>
             <p className="text-xs leading-relaxed text-[#6b7280]">
               {t('Runs on the published site inside a sandboxed iframe — full DOM, fetch, setTimeout, third-party CDNs, etc. Cannot reach this app or the visitor session.')}
             </p>
@@ -1168,18 +1258,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               mono
               placeholder={'document.addEventListener("DOMContentLoaded", () => {\n  // your code\n})'}
             />
-          </section>}
+        </PanelGroup>
+            </>
+          )}
 
-          {!simpleMode && <AiAssistantSection />}
-
-
-          <p className="text-xs leading-relaxed text-[#6b7280]">
-            {isFlow
-              ? t('Flow mode uses one document order that adapts across PC and mobile.')
-              : isMobile
-                ? t('Mobile is a separate design. Drag and resize components on the phone, or auto-arrange them into a clean single column.')
-                : t('Select a component on the canvas to edit its content, style, position and size.')}
-          </p>
+          {activePageTab === 'ai' && <AiAssistantSection />}
         </div>
       </div>
     )

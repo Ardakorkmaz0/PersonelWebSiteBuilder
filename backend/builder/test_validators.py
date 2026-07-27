@@ -413,3 +413,32 @@ class TestValidateAndCleanSchema:
         assert region['props']['contentWidth'] == 1200
         assert region['children'][0]['type'] == 'heading'
         assert region['children'][0]['props']['dockX'] == 'right'
+
+
+def test_page_seo_fields_survive_a_save():
+    """Page metadata is on the page allowlist, so it is not dropped on save."""
+    clean = validate_and_clean_schema({'pages': [{
+        'id': 'p1', 'name': 'Home', 'components': [],
+        'seoTitle': 'Ada Lovelace', 'seoDescription': 'Analytical engines.',
+        'seoImage': 'https://cdn.example.com/card.png',
+    }]})['pages'][0]
+    assert clean['seoTitle'] == 'Ada Lovelace'
+    assert clean['seoDescription'] == 'Analytical engines.'
+    assert clean['seoImage'] == 'https://cdn.example.com/card.png'
+
+
+def test_page_seo_text_is_clipped_to_what_search_engines_read():
+    clean = validate_and_clean_schema({'pages': [{
+        'id': 'p1', 'name': 'Home', 'components': [],
+        'seoTitle': 'T' * 200, 'seoDescription': 'D' * 500,
+    }]})['pages'][0]
+    assert len(clean['seoTitle']) == 70
+    assert len(clean['seoDescription']) == 200
+
+
+def test_page_seo_image_rejects_a_script_url():
+    clean = validate_and_clean_schema({'pages': [{
+        'id': 'p1', 'name': 'Home', 'components': [],
+        'seoImage': 'javascript:alert(1)',
+    }]})['pages'][0]
+    assert clean['seoImage'] == ''

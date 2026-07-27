@@ -12,6 +12,7 @@ import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
 import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 import { motionHeadTags } from './motion.js'
+import { pageSeoTitle, seoHeadTags } from './seoTags.js'
 import { pinnedLayoutStyle } from '../components/renderer/layout.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
@@ -397,7 +398,8 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${esc(title)}</title>
+    <title>${esc(pageSeoTitle(page, title))}</title>
+    ${seoHeadTags(page, title)}
     ${googleFontLinkTag(schema?.theme)}
     ${motionHeadTags()}
     <style>

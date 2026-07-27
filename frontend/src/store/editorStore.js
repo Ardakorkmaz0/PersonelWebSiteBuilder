@@ -1104,6 +1104,17 @@ export const useEditorStore = create((set, get) => ({
     }))
   },
 
+  // Search + social metadata for ONE page: { seoTitle, seoDescription, seoImage }.
+  // One action for all three so typing across the fields collapses into a single
+  // undo step per field rather than one per keystroke group.
+  setPageMeta: (id, patch) => {
+    get().record('meta-page-' + id + '-' + Object.keys(patch).join('-'))
+    set((state) => ({
+      schema: mapPage(state.schema, id, (p) => ({ ...p, ...patch })),
+      dirty: true,
+    }))
+  },
+
   duplicatePage: (id) => {
     get().record('dup-page')
     set((state) => {

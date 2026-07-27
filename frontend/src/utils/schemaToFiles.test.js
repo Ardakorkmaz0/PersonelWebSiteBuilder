@@ -403,3 +403,48 @@ describe('schemaToSingleHtml motion', () => {
     expect(out).not.toMatch(/class="c-card_1 pwb-hover/)
   })
 })
+
+describe('schemaToSingleHtml page SEO', () => {
+  const build = (meta) => schemaToSingleHtml({
+    theme: {},
+    pages: [{
+      id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+      canvasWidth: 1000, mobileWidth: 390, components: [], ...meta,
+    }],
+  }, 'Fallback title')
+
+  it('writes the search and social tags when the fields are filled', () => {
+    const html = build({
+      seoTitle: 'Ada Lovelace — Portfolio',
+      seoDescription: 'Selected work in analytical engines.',
+      seoImage: 'https://cdn.example.com/card.png',
+    })
+    expect(html).toContain('<title>Ada Lovelace — Portfolio</title>')
+    expect(html).toContain('<meta name="description" content="Selected work in analytical engines." />')
+    expect(html).toContain('<meta property="og:title" content="Ada Lovelace — Portfolio" />')
+    expect(html).toContain('<meta property="og:image" content="https://cdn.example.com/card.png" />')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />')
+  })
+
+  // An empty og:image or description is worse than none — scrapers render the
+  // empty result — so an unset field emits no tag. The title always exists
+  // (it falls back to the page/site name), so its tag is always worth writing.
+  it('omits the tags whose fields are unset', () => {
+    const html = build({})
+    expect(html).toContain('<title>Fallback title</title>')
+    expect(html).toContain('<meta property="og:title" content="Fallback title" />')
+    expect(html).not.toContain('og:image')
+    expect(html).not.toContain('og:description')
+    expect(html).not.toContain('name="description"')
+  })
+
+  it('escapes the values and refuses a javascript: image', () => {
+    const html = build({
+      seoTitle: 'A "quoted" <tag>',
+      seoImage: 'javascript:alert(1)',
+    })
+    expect(html).toContain('<meta property="og:title" content="A &quot;quoted&quot; &lt;tag&gt;" />')
+    expect(html).not.toContain('javascript:alert')
+    expect(html).not.toContain('og:image')
+  })
+})

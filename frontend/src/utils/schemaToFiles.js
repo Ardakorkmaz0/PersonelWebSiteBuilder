@@ -26,6 +26,7 @@ import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
 import { fixedRailInset } from './railInset.js'
 import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 import { motionClassSuffix, motionCssVars, motionHeadTags, motionRevealAttr } from './motion.js'
+import { pageSeoTitle, seoHeadTags } from './seoTags.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -545,7 +546,8 @@ function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '', theme 
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${esc(fileTitle)}</title>
+    <title>${esc(pageSeoTitle(page, fileTitle))}</title>
+    ${seoHeadTags(page, fileTitle)}
     <link rel="stylesheet" href="${cssHref}" />
     ${googleFontLinkTag(theme)}
     ${motionHeadTags()}
@@ -808,7 +810,8 @@ function schemaToScaledHtml(page, title = 'My Site', schema = {}, options = {}) 
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${esc(title)}</title>
+    <title>${esc(pageSeoTitle(page, title))}</title>
+    ${seoHeadTags(page, title)}
     ${googleFontLinkTag(schema?.theme)}
     ${motionHeadTags()}
     <style>

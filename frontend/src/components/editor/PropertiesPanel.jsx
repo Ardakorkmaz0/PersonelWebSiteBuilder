@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { registry } from '../registry.jsx'
-import SegmentedToggle from './SegmentedToggle.jsx'
+import PanelTabs from './PanelTabs.jsx'
+import PanelGroup from './PanelGroup.jsx'
 import AiComponentEdit from './AiComponentEdit.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
 import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS, normalizeTheme } from '../../utils/theme.js'
@@ -43,7 +44,7 @@ import {
   HtmlContentControl,
   TabsEditorControl,
 } from './controls.jsx'
-import { PaletteIcon } from '../icons.jsx'
+import { FileIcon, MoveIcon, PaletteIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
@@ -504,7 +505,15 @@ const ADVANCED_STYLE_KEYS = [
   'cursor', 'overflow',
 ]
 
-const PROPERTIES_MODE_KEY = 'pwb_properties_mode'
+const PROPS_TAB_KEY = 'pwb_props_tab'
+
+// The four Properties sections. Short labels — the panel is 288px wide.
+const PROPS_TABS = [
+  ['content', 'Content', FileIcon],
+  ['design', 'Design', PaletteIcon],
+  ['layout', 'Layout', MoveIcon],
+  ['motion', 'Motion', SparklesIcon],
+]
 
 const SCROLL_BEHAVIOR_OPTIONS = [
   ['normal', 'Normal'],
@@ -543,20 +552,6 @@ const STYLE_GROUPS = [
   { title: 'Border', keys: ['borderRadius', 'borderWidth', 'borderStyle', 'borderColor'] },
   { title: 'Effects', keys: ['boxShadow', 'opacity', 'objectFit'] },
 ]
-
-const BASIC_STYLE_KEYS = new Set([
-  'fontSize',
-  'fontWeight',
-  'textAlign',
-  'color',
-  'backgroundColor',
-  'borderRadius',
-  'borderWidth',
-  'borderColor',
-  'boxShadow',
-  'opacity',
-  'objectFit',
-])
 
 // Find a component anywhere in the tree (containers and tabs nest children).
 const NESTING_TYPES = new Set(['container', 'tabs', 'region'])
@@ -751,10 +746,17 @@ function groupedStyles(keys) {
   return groups
 }
 
-function visibleStyleGroups(keys, mode) {
-  if (mode === 'extended') return groupedStyles(keys)
-  return groupedStyles((keys || []).filter((key) => BASIC_STYLE_KEYS.has(key)))
+// Every group is available now; the everyday ones open by default and the rest
+// stay collapsed, which is what the old Basic/Extended switch used to decide.
+function visibleStyleGroups(keys) {
+  return groupedStyles(keys)
 }
+
+// Groups that start expanded — the ones people reach for constantly. Anything
+// else is one click away inside its own collapsed group.
+const OPEN_BY_DEFAULT = new Set(['Typography', 'Colors', 'Spacing'])
+// Spacing is layout, not looks, so it lives under the Layout tab.
+const LAYOUT_STYLE_GROUP = 'Spacing'
 
 export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, simpleMode = false }) {
   const { t } = useLanguage()
@@ -792,13 +794,17 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const setTabsChildren = useEditorStore((s) => s.setTabsChildren)
   const applyThemeToComponent = useEditorStore((s) => s.applyThemeToComponent)
   const copyComponentToPage = useEditorStore((s) => s.copyComponentToPage)
-  const [propertiesMode, setPropertiesModeState] = useState(() => {
+  // Which Properties tab is open, remembered like the left rail's section.
+  const [propsTab, setPropsTabState] = useState(() => {
     try {
-      return localStorage.getItem(PROPERTIES_MODE_KEY) === 'extended' ? 'extended' : 'basic'
-    } catch {
-      return 'basic'
-    }
+      const saved = localStorage.getItem(PROPS_TAB_KEY)
+      return PROPS_TABS.some(([id]) => id === saved) ? saved : 'content'
+    } catch { return 'content' }
   })
+  const setPropsTab = (tab) => {
+    setPropsTabState(tab)
+    try { localStorage.setItem(PROPS_TAB_KEY, tab) } catch { /* ignore */ }
+  }
 
   const isMobile = viewport === 'mobile'
   const isFlow = !!page.flowMode
@@ -859,11 +865,10 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     ? page.backgroundMobile || page.background || '#ffffff'
     : page.background || '#ffffff'
   const theme = schema.theme || DEFAULT_THEME
-  const extendedMode = !simpleMode && propertiesMode === 'extended'
-  const setPropertiesMode = (mode) => {
-    setPropertiesModeState(mode)
-    try { localStorage.setItem(PROPERTIES_MODE_KEY, mode) } catch { /* ignore */ }
-  }
+  // Extra hints and the X/Y fields used to hide behind a Basic/Extended switch
+  // in this panel. That switch is gone — collapsible groups do that job — so
+  // they now follow the app-wide Simple mode alone.
+  const extendedMode = !simpleMode
 
   if (selectedLayoutItems.length > 1) {
     return (
@@ -874,13 +879,6 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               <h2 className="truncate text-sm font-semibold text-[#111827]">{t('Selection')}</h2>
               <p className="truncate text-xs text-[#6b7280]">{t('{count} items selected', { count: selectedLayoutItems.length })}</p>
             </div>
-            {!simpleMode && (
-              <SegmentedToggle
-                value={propertiesMode}
-                onChange={setPropertiesMode}
-                options={[['basic', t('Basic')], ['extended', t('Extend')]]}
-              />
-            )}
           </div>
         </div>
 
@@ -1221,8 +1219,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     })
   }
   const contentSection = (def.editableProps || []).length > 0 ? (
-    <section className="space-y-3">
-      <SectionTitle>{t('Content')}</SectionTitle>
+    <PanelGroup id="content" title={t('Content')} defaultOpen>
       {/* Navbars lead with pinning, Bootstrap-style — "is this bar fixed?" is
           the first question a nav asks. Exactly two states, and toggling MUST
           NOT change the design: a full-width bar stays edge-to-edge where it
@@ -1319,18 +1316,17 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           }
         />
       ))}
-    </section>
+    </PanelGroup>
   ) : null
   const linkSection = LINKABLE_TYPES.has(component.type) ? (
-    <section className="space-y-3">
-      <SectionTitle>{t('Link')}</SectionTitle>
+    <PanelGroup id="link" title={t('Link')} defaultOpen>
       <LinkTargetControl
         label={t('Wrap in a link')}
         value={component.props.href}
         pages={schema.pages}
         onChange={(val) => updateProps(component.id, { href: val })}
       />
-    </section>
+    </PanelGroup>
   ) : null
 
   // Auto-layout for containers: a Stack/Row/Grid flow makes the children reflow
@@ -1338,8 +1334,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   // screen compatibility. 'Free' keeps the classic absolute mini-canvas.
   const containerFlow = component.props.flow || 'free'
   const layoutSection = component.type === 'container' ? (
-    <section className="space-y-3">
-      <SectionTitle>{t('Layout')}</SectionTitle>
+    <PanelGroup id="flow" title={t('Layout')} defaultOpen>
       <LabeledSelect
         label={t('Flow')}
         value={containerFlow}
@@ -1399,29 +1394,39 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           )}
         </>
       )}
-    </section>
+    </PanelGroup>
   ) : null
+
+  // A tab with nothing in it reads as broken, so say so plainly instead. Only
+  // Content and Design can end up empty (a container has no text or styles of
+  // its own); Layout and Motion always have something.
+  const emptyTabHint = (
+    <p className="px-1 py-6 text-center text-[11px] leading-snug text-[var(--studio-text-faint,#9ca3af)]">
+      {t('Nothing to set here for this component.')}
+    </p>
+  )
+  const contentTabEmpty = !contentSection && !linkSection && componentPresets.length === 0
+  const designTabEmpty =
+    visibleStyleGroups(def.editableStyles || []).filter((g) => g.title !== LAYOUT_STYLE_GROUP).length === 0
+    && !extendedMode
 
   return (
     <div className="studio-properties-panel flex h-full min-w-0 flex-col overflow-hidden">
       <div className="border-b border-[#e5e7eb] px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-[#111827]">{t(def.label)}</h2>
-            <p className="truncate text-xs text-[#6b7280]">{component.id}</p>
-          </div>
-          {!simpleMode && (
-            <SegmentedToggle
-              value={propertiesMode}
-              onChange={setPropertiesMode}
-              options={[['basic', t('Basic')], ['extended', t('Extend')]]}
-            />
-          )}
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold text-[#111827]">{t(def.label)}</h2>
+          <p className="truncate text-xs text-[#6b7280]">{component.id}</p>
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-4">
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-[#eef2ff] px-3 py-2">
+      <PanelTabs
+        value={propsTab}
+        onChange={setPropsTab}
+        tabs={PROPS_TABS.map(([id, label, Icon]) => [id, t(label), Icon])}
+      />
+
+      <div className="flex-1 space-y-1 overflow-y-auto px-4 pb-4">
+        <div className="mt-4 flex items-center justify-between gap-2 rounded-lg bg-[#eef2ff] px-3 py-2">
           <span className="text-xs font-semibold text-[#4f46e5]">
             {isFlow ? t('Editing HTML flow layout') : t('Editing {viewport} layout', { viewport: t(isMobile ? 'Mobile' : 'PC') })}
           </span>
@@ -1436,12 +1441,23 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           )}
         </div>
 
+        {propsTab === 'content' && (
+          <>
+            {contentTabEmpty && emptyTabHint}
         {/* Main properties FIRST — the thing you dropped the component for
             (its image, text, links) must not hide below secondary tooling. */}
         {component.type === 'region' && isMobile ? null : contentSection}
         {linkSection}
-        {layoutSection}
-
+        {componentPresets.length > 0 && (
+          <PanelGroup id="presets" title={t('Presets')}>
+            <LabeledSelect
+              label={t('Component preset')}
+              value=""
+              onChange={(value) => value && applyComponentPreset(component.id, value)}
+              options={presetOptions(component.type).map(([value, label]) => [value, t(label)])}
+            />
+          </PanelGroup>
+        )}
         <AiComponentEdit
           component={component}
           onApply={(styles, props) => {
@@ -1449,136 +1465,86 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             if (props && Object.keys(props).length) updateProps(component.id, props)
           }}
         />
+          </>
+        )}
 
-        {component.type === 'region' && (
-          <section className="space-y-3">
-            <SectionTitle>{t('Section order')}</SectionTitle>
-            <div className="grid grid-cols-2 gap-2">
+        {propsTab === 'design' && (
+          <>
+            {designTabEmpty && emptyTabHint}
+        {/* Mobile viewport = per-breakpoint styling: controls read the merged
+            view (override ?? desktop) and writes land in stylesMobile only. */}
+        {isMobile && !isFlow && (
+          <div className="space-y-2 rounded-lg bg-[#eef2ff] px-3 py-2">
+            <p className="text-[11px] leading-snug text-[#4f46e5]">
+              {t('Style edits here apply to MOBILE only. Clear a field to fall back to the PC value.')}
+            </p>
+            {component.stylesMobile && Object.keys(component.stylesMobile).length > 0 && (
               <button
                 type="button"
-                disabled={regionIndex <= 0}
-                onClick={() => moveRegion(component.id, 'up')}
-                className="rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => clearMobileStyles(component.id)}
+                className="rounded-lg border border-[#4f46e5] bg-white px-2 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#e0e7ff]"
               >
-                ↑ {t('Move section up')}
+                {t('Reset mobile styles')} ({Object.keys(component.stylesMobile).length})
               </button>
-              <button
-                type="button"
-                disabled={regionIndex < 0 || regionIndex >= orderedRegions.length - 1}
-                onClick={() => moveRegion(component.id, 'down')}
-                className="rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ↓ {t('Move section down')}
-              </button>
-            </div>
-            <p className="text-[11px] leading-snug text-[#9ca3af]">
-              {t('Sections stay stacked; changing the height pushes the content below.')}
-            </p>
-          </section>
-        )}
-
-        {parentComponent?.type === 'region' && !isMobile && (
-          <section className="space-y-3">
-            <SectionTitle>{t('Dock to section')}</SectionTitle>
-            <LabeledSelect
-              label={t('Horizontal docking')}
-              value={component.props?.dockX || 'auto'}
-              onChange={(value) => updateProps(component.id, { dockX: value })}
-              options={[
-                ['auto', t('Auto (nearest edge)')],
-                ['left', t('Left')],
-                ['center', t('Center')],
-                ['right', t('Right')],
-                ['stretch', t('Stretch')],
-              ]}
-            />
-            <p className="text-[11px] leading-snug text-[#9ca3af]">
-              {t('Docking keeps this element attached to the chosen grid edge as the screen width changes.')}
-            </p>
-          </section>
-        )}
-
-        {componentPresets.length > 0 && (
-          <section className="space-y-3">
-            <SectionTitle>{t('Presets')}</SectionTitle>
-            <LabeledSelect
-              label={t('Component preset')}
-              value=""
-              onChange={(value) => value && applyComponentPreset(component.id, value)}
-              options={presetOptions(component.type).map(([value, label]) => [value, t(label)])}
-            />
-          </section>
-        )}
-
-        {/* Motion: an entrance the element plays when it scrolls into view, plus
-            a hover effect. Runs on the published page and in View; the edit
-            canvas stays still (switch to View to preview). Pinned bars are
-            positioned by the runtime, which would fight a motion transform, so
-            the section is hidden for them. */}
-        {scrollBehavior === 'normal' && (
-          <section className="space-y-3">
-            <SectionTitle>{t('Motion')}</SectionTitle>
-            <LabeledSelect
-              label={t('Entrance (on scroll)')}
-              value={component.props?.animIn || 'none'}
-              onChange={(v) => updateProps(component.id, { animIn: v })}
-              options={[
-                ['none', t('None')],
-                ['fade', t('Fade in')],
-                ['fade-up', t('Fade up')],
-                ['fade-down', t('Fade down')],
-                ['slide-right', t('Slide from left')],
-                ['slide-left', t('Slide from right')],
-                ['zoom', t('Zoom in')],
-                ['zoom-out', t('Zoom out')],
-                ['flip', t('Flip in')],
-                ['rotate', t('Rotate in')],
-                ['blur', t('Blur in')],
-                ['bounce', t('Bounce up')],
-                ['wipe', t('Wipe across')],
-              ]}
-            />
-            {(component.props?.animIn && component.props.animIn !== 'none') && (
-              <div className="grid grid-cols-2 gap-2">
-                <LabeledSelect
-                  label={t('Speed')}
-                  value={component.props?.animSpeed || 'normal'}
-                  onChange={(v) => updateProps(component.id, { animSpeed: v })}
-                  options={[['fast', t('Fast')], ['normal', t('Normal')], ['slow', t('Slow')]]}
-                />
-                <LabeledPx
-                  label={t('Delay (ms)')}
-                  value={component.props?.animDelay ?? 0}
-                  onChange={(v) => updateProps(component.id, { animDelay: parseInt(v, 10) || 0 })}
-                />
-              </div>
             )}
-            <LabeledSelect
-              label={t('Hover effect')}
-              value={component.props?.animHover || 'none'}
-              onChange={(v) => updateProps(component.id, { animHover: v })}
-              options={[
-                ['none', t('None')],
-                ['lift', t('Lift')],
-                ['grow', t('Grow')],
-                ['glow', t('Glow')],
-                ['sink', t('Sink')],
-                ['tilt', t('Tilt')],
-              ]}
-            />
-            <p className="text-[11px] leading-snug text-[#9ca3af]">
-              {t('Preview motion by switching to View.')}
-            </p>
-          </section>
+          </div>
+        )}
+        {visibleStyleGroups(def.editableStyles || [])
+          .filter((group) => group.title !== LAYOUT_STYLE_GROUP)
+          .map((group) => (
+          <PanelGroup
+            key={group.title}
+            id={`style-${group.title}`}
+            title={t(group.title)}
+            defaultOpen={OPEN_BY_DEFAULT.has(group.title)}
+          >
+            {group.keys.map((styleKey) => (
+              <StyleControl
+                key={styleKey}
+                styleKey={styleKey}
+                value={
+                  isMobile && !isFlow
+                    ? (component.stylesMobile?.[styleKey] ?? component.styles[styleKey])
+                    : component.styles[styleKey]
+                }
+                onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
+              />
+              ))}
+          </PanelGroup>
+          ))}
+        {extendedMode && (
+          <PanelGroup id="advanced-css" title={t('Advanced CSS')}>
+            {ADVANCED_STYLE_KEYS.map((styleKey) => (
+              <StyleControl
+                key={styleKey}
+                styleKey={styleKey}
+                value={
+                  isMobile && !isFlow
+                    ? (component.stylesMobile?.[styleKey] ?? component.styles[styleKey])
+                    : component.styles[styleKey]
+                }
+                onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
+              />
+            ))}
+          </PanelGroup>
+        )}
+          </>
         )}
 
-        <section className="space-y-3">
-          <SectionTitle>
-            {t(showPositionControls ? (extendedMode ? 'Position & Size' : 'Size') : 'Layout Size')}
-            <span className="ml-1 font-normal normal-case text-[#9ca3af]">
-              ({t(isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC')})
-            </span>
-          </SectionTitle>
+        {propsTab === 'layout' && (
+          <>
+        <PanelGroup
+          id="size"
+          defaultOpen
+          title={
+            <>
+              {t(showPositionControls ? 'Position & Size' : 'Layout Size')}
+              <span className="ml-1 font-normal normal-case text-[#9ca3af]">
+                ({t(isFlow ? 'all screens' : isMobile ? 'mobile' : 'PC')})
+              </span>
+            </>
+          }
+        >
           <div className="grid grid-cols-2 gap-2">
             {showPositionControls && extendedMode && (
               <>
@@ -1631,72 +1597,91 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               {t('Fit to content')}
             </button>
           )}
-        </section>
-
-        {component.type !== 'region' && (
-        <section className="space-y-3">
-          <SectionTitle>{t('Scroll')}</SectionTitle>
-          <LabeledSelect
-            label={t('Behavior')}
-            value={scrollBehavior}
-            onChange={setScrollBehavior}
-            options={SCROLL_BEHAVIOR_OPTIONS.map(([value, label]) => [value, t(label)])}
-          />
-          {scrollBehavior !== 'normal' && (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <LabeledSelect
-                  label={t('Vertical edge')}
-                  value={component.props?.pinY || 'top'}
-                  onChange={(v) => updateProps(component.id, { pinY: v })}
-                  options={PIN_Y_OPTIONS.map(([value, label]) => [value, t(label)])}
-                />
-                <LabeledSelect
-                  label={t('Horizontal edge')}
-                  value={component.props?.pinX || 'left'}
-                  onChange={(v) => updateProps(component.id, { pinX: v })}
-                  options={PIN_X_OPTIONS.map(([value, label]) => [value, t(label)])}
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <LabeledNumber
-                  label={t('Y offset')}
-                  value={component.props?.pinOffsetY ?? 0}
-                  onChange={(v) => updateProps(component.id, { pinOffsetY: v })}
-                />
-                <LabeledNumber
-                  label={t('X offset')}
-                  value={component.props?.pinOffsetX ?? 0}
-                  onChange={(v) => updateProps(component.id, { pinOffsetX: v })}
-                />
-                <LabeledNumber
-                  label={t('Layer')}
-                  value={component.props?.pinZIndex ?? (scrollBehavior === 'fixed' ? 100 : 20)}
-                  onChange={(v) => updateProps(component.id, { pinZIndex: v })}
-                />
-              </div>
-              {extendedMode && (
-                <p className="text-[11px] leading-snug text-[#9ca3af]">
-                  {t('Sticky keeps the item in the page flow until it reaches the edge. Fixed pins it to the browser viewport.')}
-                </p>
-              )}
-            </>
-          )}
-        </section>
+        </PanelGroup>
+        {layoutSection}
+        {visibleStyleGroups(def.editableStyles || [])
+          .filter((group) => group.title === LAYOUT_STYLE_GROUP)
+          .map((group) => (
+          <PanelGroup
+            key={group.title}
+            id={`style-${group.title}`}
+            title={t(group.title)}
+            defaultOpen={OPEN_BY_DEFAULT.has(group.title)}
+          >
+            {group.keys.map((styleKey) => (
+              <StyleControl
+                key={styleKey}
+                styleKey={styleKey}
+                value={
+                  isMobile && !isFlow
+                    ? (component.stylesMobile?.[styleKey] ?? component.styles[styleKey])
+                    : component.styles[styleKey]
+                }
+                onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
+              />
+              ))}
+          </PanelGroup>
+          ))}
+        {component.type === 'region' && (
+          <PanelGroup id="region-order" title={t('Section order')} defaultOpen>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={regionIndex <= 0}
+                onClick={() => moveRegion(component.id, 'up')}
+                className="rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ↑ {t('Move section up')}
+              </button>
+              <button
+                type="button"
+                disabled={regionIndex < 0 || regionIndex >= orderedRegions.length - 1}
+                onClick={() => moveRegion(component.id, 'down')}
+                className="rounded-lg border border-[#d1d5db] px-2 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ↓ {t('Move section down')}
+              </button>
+            </div>
+            <p className="text-[11px] leading-snug text-[#9ca3af]">
+              {t('Sections stay stacked; changing the height pushes the content below.')}
+            </p>
+          </PanelGroup>
         )}
-
+        {parentComponent?.type === 'region' && !isMobile && (
+          <PanelGroup id="dock" title={t('Dock to section')} defaultOpen>
+            <LabeledSelect
+              label={t('Horizontal docking')}
+              value={component.props?.dockX || 'auto'}
+              onChange={(value) => updateProps(component.id, { dockX: value })}
+              options={[
+                ['auto', t('Auto (nearest edge)')],
+                ['left', t('Left')],
+                ['center', t('Center')],
+                ['right', t('Right')],
+                ['stretch', t('Stretch')],
+              ]}
+            />
+            <p className="text-[11px] leading-snug text-[#9ca3af]">
+              {t('Docking keeps this element attached to the chosen grid edge as the screen width changes.')}
+            </p>
+          </PanelGroup>
+        )}
         {/* Align & Distribute. Live snap guides still help while dragging; these
             give precise, one-click control. One selection aligns to the
             artboard; a multi-selection (shift-click on the canvas) aligns the
             items to each other and can distribute equal gaps. */}
         {showPositionControls && component.type !== 'region' && (
-          <section className="space-y-2">
-            <SectionTitle>
-              {t('Align & Distribute')}
-              {selectedIds.length > 1 && (
-                <span className="ml-1 font-normal normal-case text-[#9ca3af]">({t('{count} selected', { count: selectedIds.length })})</span>
-              )}
-            </SectionTitle>
+          <PanelGroup
+            id="align"
+            title={
+              <>
+                {t('Align & Distribute')}
+                {selectedIds.length > 1 && (
+                  <span className="ml-1 font-normal normal-case text-[#9ca3af]">({t('{count} selected', { count: selectedIds.length })})</span>
+                )}
+              </>
+            }
+          >
             {extendedMode && (
               <p className="text-[11px] leading-snug text-[#9ca3af]">
                 {selectedIds.length > 1
@@ -1743,11 +1728,9 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                 ↕ {t('Distribute')}
               </button>
             </div>
-          </section>
+          </PanelGroup>
         )}
-
-        <section className="space-y-2">
-          <SectionTitle>{t('Responsive')}</SectionTitle>
+        <PanelGroup id="visibility" title={t('Responsive')}>
           <LabeledCheckbox
             label={t('Show on PC')}
             checked={!component.hidden}
@@ -1758,61 +1741,123 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             checked={!component.hiddenMobile}
             onChange={(checked) => setVisibility(component.id, { hiddenMobile: !checked })}
           />
-        </section>
-
-        {/* Mobile viewport = per-breakpoint styling: controls read the merged
-            view (override ?? desktop) and writes land in stylesMobile only. */}
-        {isMobile && !isFlow && (
-          <div className="space-y-2 rounded-lg bg-[#eef2ff] px-3 py-2">
-            <p className="text-[11px] leading-snug text-[#4f46e5]">
-              {t('Style edits here apply to MOBILE only. Clear a field to fall back to the PC value.')}
-            </p>
-            {component.stylesMobile && Object.keys(component.stylesMobile).length > 0 && (
-              <button
-                type="button"
-                onClick={() => clearMobileStyles(component.id)}
-                className="rounded-lg border border-[#4f46e5] bg-white px-2 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#e0e7ff]"
-              >
-                {t('Reset mobile styles')} ({Object.keys(component.stylesMobile).length})
-              </button>
-            )}
-          </div>
+        </PanelGroup>
+          </>
         )}
 
-        {visibleStyleGroups(def.editableStyles || [], propertiesMode).map((group) => (
-          <section key={group.title} className="space-y-3">
-            <SectionTitle>{t(group.title)}</SectionTitle>
-            {group.keys.map((styleKey) => (
-              <StyleControl
-                key={styleKey}
-                styleKey={styleKey}
-                value={
-                  isMobile && !isFlow
-                    ? (component.stylesMobile?.[styleKey] ?? component.styles[styleKey])
-                    : component.styles[styleKey]
-                }
-                onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
-              />
-            ))}
-          </section>
-        ))}
-
-        {extendedMode && (
-          <section className="space-y-3">
-            <SectionTitle>{t('Advanced CSS')}</SectionTitle>
-            {ADVANCED_STYLE_KEYS.map((styleKey) => (
-              <StyleControl
-                key={styleKey}
-                styleKey={styleKey}
-                value={
-                  isMobile && !isFlow
-                    ? (component.stylesMobile?.[styleKey] ?? component.styles[styleKey])
-                    : component.styles[styleKey]
-                }
-                onChange={(val) => updateStyles(component.id, { [styleKey]: val })}
-              />
-            ))}
-          </section>
+        {propsTab === 'motion' && (
+          <>
+        {/* Motion: an entrance the element plays when it scrolls into view, plus
+            a hover effect. Runs on the published page and in View; the edit
+            canvas stays still (switch to View to preview). Pinned bars are
+            positioned by the runtime, which would fight a motion transform, so
+            the section is hidden for them. */}
+        {scrollBehavior === 'normal' && (
+          <PanelGroup id="motion" title={t('Motion')} defaultOpen>
+            <LabeledSelect
+              label={t('Entrance (on scroll)')}
+              value={component.props?.animIn || 'none'}
+              onChange={(v) => updateProps(component.id, { animIn: v })}
+              options={[
+                ['none', t('None')],
+                ['fade', t('Fade in')],
+                ['fade-up', t('Fade up')],
+                ['fade-down', t('Fade down')],
+                ['slide-right', t('Slide from left')],
+                ['slide-left', t('Slide from right')],
+                ['zoom', t('Zoom in')],
+                ['zoom-out', t('Zoom out')],
+                ['flip', t('Flip in')],
+                ['rotate', t('Rotate in')],
+                ['blur', t('Blur in')],
+                ['bounce', t('Bounce up')],
+                ['wipe', t('Wipe across')],
+              ]}
+            />
+            {(component.props?.animIn && component.props.animIn !== 'none') && (
+              <div className="grid grid-cols-2 gap-2">
+                <LabeledSelect
+                  label={t('Speed')}
+                  value={component.props?.animSpeed || 'normal'}
+                  onChange={(v) => updateProps(component.id, { animSpeed: v })}
+                  options={[['fast', t('Fast')], ['normal', t('Normal')], ['slow', t('Slow')]]}
+                />
+                <LabeledPx
+                  label={t('Delay (ms)')}
+                  value={component.props?.animDelay ?? 0}
+                  onChange={(v) => updateProps(component.id, { animDelay: parseInt(v, 10) || 0 })}
+                />
+              </div>
+            )}
+            <LabeledSelect
+              label={t('Hover effect')}
+              value={component.props?.animHover || 'none'}
+              onChange={(v) => updateProps(component.id, { animHover: v })}
+              options={[
+                ['none', t('None')],
+                ['lift', t('Lift')],
+                ['grow', t('Grow')],
+                ['glow', t('Glow')],
+                ['sink', t('Sink')],
+                ['tilt', t('Tilt')],
+              ]}
+            />
+            <p className="text-[11px] leading-snug text-[#9ca3af]">
+              {t('Preview motion by switching to View.')}
+            </p>
+          </PanelGroup>
+        )}
+        {component.type !== 'region' && (
+        <PanelGroup id="scroll" title={t('Scroll')} defaultOpen>
+          <LabeledSelect
+            label={t('Behavior')}
+            value={scrollBehavior}
+            onChange={setScrollBehavior}
+            options={SCROLL_BEHAVIOR_OPTIONS.map(([value, label]) => [value, t(label)])}
+          />
+          {scrollBehavior !== 'normal' && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <LabeledSelect
+                  label={t('Vertical edge')}
+                  value={component.props?.pinY || 'top'}
+                  onChange={(v) => updateProps(component.id, { pinY: v })}
+                  options={PIN_Y_OPTIONS.map(([value, label]) => [value, t(label)])}
+                />
+                <LabeledSelect
+                  label={t('Horizontal edge')}
+                  value={component.props?.pinX || 'left'}
+                  onChange={(v) => updateProps(component.id, { pinX: v })}
+                  options={PIN_X_OPTIONS.map(([value, label]) => [value, t(label)])}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <LabeledNumber
+                  label={t('Y offset')}
+                  value={component.props?.pinOffsetY ?? 0}
+                  onChange={(v) => updateProps(component.id, { pinOffsetY: v })}
+                />
+                <LabeledNumber
+                  label={t('X offset')}
+                  value={component.props?.pinOffsetX ?? 0}
+                  onChange={(v) => updateProps(component.id, { pinOffsetX: v })}
+                />
+                <LabeledNumber
+                  label={t('Layer')}
+                  value={component.props?.pinZIndex ?? (scrollBehavior === 'fixed' ? 100 : 20)}
+                  onChange={(v) => updateProps(component.id, { pinZIndex: v })}
+                />
+              </div>
+              {extendedMode && (
+                <p className="text-[11px] leading-snug text-[#9ca3af]">
+                  {t('Sticky keeps the item in the page flow until it reaches the edge. Fixed pins it to the browser viewport.')}
+                </p>
+              )}
+            </>
+          )}
+        </PanelGroup>
+        )}
+          </>
         )}
       </div>
 

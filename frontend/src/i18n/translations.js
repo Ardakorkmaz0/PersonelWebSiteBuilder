@@ -451,6 +451,8 @@ export const TURKISH_TRANSLATIONS = {
   'Element slides the whole box inside its row — e.g. push the navbar links to the left or center.': 'Öğe, kutuyu satırı içinde kaydırır — örn. navbar linklerini sola veya ortaya itin.',
   'Brand position': 'Marka konumu',
   'Motion': 'Hareket',
+  'Design': 'Tasarım',
+  'Nothing to set here for this component.': 'Bu bileşen için burada ayar yok.',
   'Zoom out': 'Uzaklaşarak gel',
   'Flip in': 'Çevrilerek gel',
   'Rotate in': 'Dönerek gel',

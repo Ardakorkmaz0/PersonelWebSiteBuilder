@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { registry } from '../components/registry.jsx'
 import { AI_PROVIDERS, getModelsFor } from '../utils/aiProviders.js'
+import { SUGGESTION_STRINGS } from '../utils/aiSuggestions.js'
 import { SUGGESTION_CHIPS } from '../utils/aiTemplates.js'
 import { WIZARD_FONTS, WIZARD_MOODS, WIZARD_SECTIONS, WIZARD_SITE_TYPES } from '../utils/aiWizard.js'
 import { COMPONENT_PRESETS } from '../utils/componentPresets.js'
@@ -63,6 +64,7 @@ function visibleCatalogStrings() {
   }
   for (const item of [...WIZARD_SITE_TYPES, ...WIZARD_SECTIONS, ...WIZARD_MOODS, ...WIZARD_FONTS]) add(item.label)
   for (const chip of SUGGESTION_CHIPS) add(chip.label)
+  add(...SUGGESTION_STRINGS)
   for (const snippet of [...jsSnippets, ...cssSnippets]) add(snippet.category, snippet.name, snippet.description)
   for (const [, label] of ICON_OPTIONS) add(label)
   add(

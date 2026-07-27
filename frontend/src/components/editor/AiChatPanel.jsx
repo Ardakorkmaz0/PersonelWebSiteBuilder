@@ -35,7 +35,9 @@ const QUICK_SECTIONS = [
   ['Contact', 'Add a contact section with an email call-to-action card, matching the current design.'],
 ]
 import { useEditorStore } from '../../store/editorStore.js'
-import { LayersIcon, FileCodeIcon, PaletteIcon, PlusIcon } from '../icons.jsx'
+import { buildAiSuggestions, readSuggestionContext } from '../../utils/aiSuggestions.js'
+import AiSettings from './AiSettings.jsx'
+import { LayersIcon, FileCodeIcon, PaletteIcon, PlusIcon, CogIcon, LightbulbIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Per-tab chat history persistence. Kept in localStorage so a refresh while
@@ -126,6 +128,13 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
   const [error, setError] = useState('')
   const scrollerRef = useRef(null)
   const textareaRef = useRef(null)
+  // Provider/key/model live behind this toggle instead of in another panel:
+  // the moment you notice the key is missing is the moment you are looking
+  // at the chat, so that is where the fix belongs.
+  const [showSettings, setShowSettings] = useState(false)
+  // Suggestion ids the user already acted on. Re-offering "add a navbar" to
+  // someone who just asked for a navbar is what makes suggestions feel canned.
+  const [usedSuggestions, setUsedSuggestions] = useState([])
   // 'components' uses the schema tool calls; 'html' asks the model for a full
   // HTML document and ships it to site.html. The HTML path is what the user
   // actually wants for "make me a youtube site" with weak local models —
@@ -215,6 +224,26 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
     getModel(provider) ||
     providerInfo?.label ||
     'AI'
+
+  // Suggestions are recomputed on every render straight from editor state, so
+  // they describe the page as it is right now rather than as it was when the
+  // message was written. Both surfaces come from the same call: the starter
+  // cards on an empty chat, and the follow-ups under a finished reply.
+  const suggestionCtx = open ? readSuggestionContext() : null
+  const lastMessage = messages[messages.length - 1]
+  const followUpsVisible =
+    !busy && !pendingChange && !showSettings && lastMessage?.role === 'assistant' && !lastMessage.allFailed
+  const suggestions = suggestionCtx
+    ? buildAiSuggestions(suggestionCtx, {
+        limit: messages.length === 0 ? 4 : 3,
+        exclude: usedSuggestions,
+      })
+    : []
+
+  function sendSuggestion(s) {
+    setUsedSuggestions((ids) => (ids.includes(s.id) ? ids : [...ids, s.id]))
+    send(s.prompt)
+  }
 
   // Auto-scroll to bottom on new message.
   useEffect(() => {
@@ -632,6 +661,16 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         </button>
         <button
           type="button"
+          onClick={() => setShowSettings((v) => !v)}
+          title={t('AI settings — provider, key and model')}
+          aria-label={t('AI settings')}
+          aria-pressed={showSettings}
+          className={`rounded px-1.5 py-1 ${showSettings ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/15'}`}
+        >
+          <CogIcon size={13} />
+        </button>
+        <button
+          type="button"
           onClick={onClose}
           title={t('Close')}
           aria-label={t('Close AI panel')}
@@ -641,27 +680,70 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         </button>
       </div>
 
-      {/* Empty state / no API key */}
-      {!hasKey && (
-        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          {t('Paste a free key for {provider} (or any other provider) in the right panel — Properties → AI Assistant. Set up more than one and the chat auto-switches when one hits its quota.', { provider: t(providerInfo?.label || 'this provider') })}
+      {/* Settings sheet — same component the Properties → AI tab renders. */}
+      {showSettings && (
+        <div className="flex-1 overflow-y-auto bg-[var(--studio-control)] p-3">
+          <div className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-3">
+            <AiSettings showHeading={false} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSettings(false)}
+            className="mt-3 w-full rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-pressed)]"
+          >
+            {t('Back to chat')}
+          </button>
+        </div>
+      )}
+
+      {/* No API key — one tap away from fixing it, right here. */}
+      {!showSettings && !hasKey && (
+        <div className="flex items-start gap-2 border-b border-[var(--studio-border)] bg-[var(--studio-warning-soft)] px-3 py-2 text-xs text-[var(--studio-warning)]">
+          <span className="flex-1">
+            {t('No key for {provider} yet. Add one in Settings — it stays in your browser.', { provider: t(providerInfo?.label || 'this provider') })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="shrink-0 rounded-lg bg-[var(--studio-warning)] px-2 py-0.5 text-[11px] font-semibold text-white"
+          >
+            {t('Open settings')}
+          </button>
         </div>
       )}
       {/* Weak-model heads-up: gemma / phi base models weren't tuned for
           tool calling and routinely invent fake function names. Save the
           user a confused round-trip by suggesting a stronger swap up front. */}
-      {hasKey && /\b(?:gemma|phi)\b/i.test(modelLabel) && (
-        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      {!showSettings && hasKey && /\b(?:gemma|phi)\b/i.test(modelLabel) && (
+        <div className="border-b border-[var(--studio-border)] bg-[var(--studio-warning-soft)] px-3 py-2 text-xs text-[var(--studio-warning)]">
           <span className="font-semibold">{t('Heads-up:')}</span> {t('{model} was not trained for tool calling. Switch to qwen2.5 or llama3.1 via Settings → Model.', { model: modelLabel })}
         </div>
       )}
 
       {/* Message list */}
-      <div ref={scrollerRef} className="flex-1 space-y-3 overflow-y-auto bg-[var(--studio-control)] p-3">
+      <div
+        ref={scrollerRef}
+        className={`${showSettings ? 'hidden' : 'flex-1'} space-y-3 overflow-y-auto bg-[var(--studio-control)] p-3`}
+      >
         {messages.length === 0 && (
           <div className="space-y-2">
+            {suggestions.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="px-0.5 text-xs font-semibold text-[var(--studio-text)]">
+                  {t('Suggested for this page')}
+                </p>
+                {suggestions.map((s) => (
+                  <SuggestionCard
+                    key={s.id}
+                    suggestion={s}
+                    disabled={!hasKey || busy}
+                    onPick={sendSuggestion}
+                  />
+                ))}
+              </div>
+            )}
             <div className="rounded-md border border-dashed border-[var(--studio-border)] bg-[var(--studio-panel)] p-3 text-xs leading-relaxed text-[var(--studio-text-muted)]">
-              <p className="mb-2 font-semibold text-[var(--studio-text)]">{t('Try a starter:')}</p>
+              <p className="mb-2 font-semibold text-[var(--studio-text)]">{t('Or start from a look:')}</p>
               <div className="flex flex-wrap gap-1.5">
                 {SUGGESTION_CHIPS.map((chip) => (
                   <button
@@ -728,8 +810,28 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
             </span>
           </div>
         )}
+        {/* Follow-ups — "what next?" answered from the page as it stands after
+            the change that just landed, so the list moves on with the work. */}
+        {followUpsVisible && messages.length > 0 && suggestions.length > 0 && (
+          <div className="space-y-1.5 pt-1">
+            <p className="flex items-center gap-1 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--studio-text-faint)]">
+              <LightbulbIcon size={11} /> {t('What next?')}
+            </p>
+            {suggestions.map((s) => (
+              <SuggestionCard key={s.id} suggestion={s} disabled={!hasKey || busy} onPick={sendSuggestion} />
+            ))}
+          </div>
+        )}
         {error && (
-          <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">{t(error)}</div>
+          <div
+            className="rounded border p-2 text-xs text-[var(--studio-danger)]"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--studio-danger) 40%, transparent)',
+              background: 'color-mix(in srgb, var(--studio-danger) 10%, var(--studio-panel))',
+            }}
+          >
+            {t(error)}
+          </div>
         )}
       </div>
 
@@ -737,7 +839,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           fonts work in BOTH modes (theme store for component sites, direct
           CSS swap for HTML sites); sections only exist on HTML pages. */}
       {(
-        <div className="border-t border-[var(--studio-border)] bg-[var(--studio-control)] px-2 pb-1.5 pt-1.5">
+        <div className={`${showSettings ? 'hidden' : ''} border-t border-[var(--studio-border)] bg-[var(--studio-control)] px-2 pb-1.5 pt-1.5`}>
           <div className="flex flex-wrap gap-1.5">
             {[
               ['colors', 'Theme colors', PaletteIcon],
@@ -784,7 +886,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
                       className="relative h-7 w-7 rounded-full border border-black/10"
                       style={{
                         background: hex,
-                        outline: idx >= 0 ? '2px solid #4f46e5' : 'none',
+                        outline: idx >= 0 ? '2px solid var(--studio-accent)' : 'none',
                         outlineOffset: '1px',
                       }}
                     >
@@ -859,7 +961,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
       )}
 
       {/* Composer */}
-      <div className="border-t border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
+      <div className={`${showSettings ? 'hidden' : ''} border-t border-[var(--studio-border)] bg-[var(--studio-panel)] p-2`}>
         <textarea
           ref={textareaRef}
           value={draft}
@@ -884,7 +986,7 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
           placeholder={
             hasKey
               ? t('Tell AI what to build (Enter to send, Shift+Enter for newline)…')
-              : t('Set an API key in the right panel first.')
+              : t('Set an API key first — the gear button above.')
           }
           className="block w-full resize-none rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2 py-1.5 text-sm text-[var(--studio-text)] placeholder:text-[var(--studio-text-faint)] focus:border-[var(--studio-accent)] focus:outline-none disabled:bg-[var(--studio-control)] disabled:text-[var(--studio-text-faint)]"
         />
@@ -901,6 +1003,37 @@ export default function AiChatPanel({ open, onClose, currentHtml = '', onApplyHt
         </div>
       </div>
     </div>
+  )
+}
+
+// One tap-to-send suggestion. The second line is the reason it is being
+// offered ("this page has no navbar") — without it a suggestion reads as a
+// generic list, and the user has no way to tell it looked at their page.
+function SuggestionCard({ suggestion, disabled, onPick }) {
+  const { t } = useLanguage()
+  const vars = suggestion.vars
+    ? Object.fromEntries(Object.entries(suggestion.vars).map(([k, v]) => [k, t(v)]))
+    : undefined
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onPick(suggestion)}
+      title={suggestion.prompt}
+      className="flex w-full items-start gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2 text-left transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="mt-0.5 shrink-0 text-[var(--studio-accent)]">
+        <SparklesIcon size={12} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold text-[var(--studio-text)]">
+          {t(suggestion.label, vars)}
+        </span>
+        <span className="block text-[10px] leading-snug text-[var(--studio-text-muted)]">
+          {t(suggestion.why, vars)}
+        </span>
+      </span>
+    </button>
   )
 }
 
@@ -949,12 +1082,20 @@ function AssistantBubble({ text, toolCallCount, allFailed }) {
   const { t } = useLanguage()
   // Failure-aware tinting: red border + light pink background so a wall of
   // ✗ pills above this bubble can't be mistaken for a successful change.
+  const base =
+    'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border px-3 py-2 text-sm leading-snug shadow-sm'
   const bubbleCls = allFailed
-    ? 'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-red-200 bg-red-50 px-3 py-2 text-sm leading-snug text-red-900 shadow-sm'
-    : 'max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tl-[2px] border border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2 text-sm leading-snug text-[var(--studio-text)] shadow-sm'
+    ? `${base} text-[var(--studio-danger)]`
+    : `${base} border-[var(--studio-border)] bg-[var(--studio-panel)] text-[var(--studio-text)]`
+  const failedStyle = allFailed
+    ? {
+        borderColor: 'color-mix(in srgb, var(--studio-danger) 40%, transparent)',
+        background: 'color-mix(in srgb, var(--studio-danger) 10%, var(--studio-panel))',
+      }
+    : undefined
   return (
     <div className="flex flex-col items-start gap-1">
-      <div className={bubbleCls}>
+      <div className={bubbleCls} style={failedStyle}>
         {text || t('Done.')}
       </div>
       {toolCallCount === 0 && (
@@ -981,10 +1122,16 @@ function ToolsStrip({ calls }) {
             ? `${t('Failed')}: ${c.result?.error || t('unknown')}\n\n${t('Args')}:\n${JSON.stringify(c.args, null, 2)}`
             : JSON.stringify(c.args, null, 2)
           const cls = failed
-            ? 'rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 line-through decoration-red-400'
+            ? 'rounded-full border px-2 py-0.5 text-[10px] font-medium text-[var(--studio-danger)] line-through'
             : 'rounded-full border border-[var(--studio-border)] bg-[var(--studio-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--studio-accent-hover)]'
+          const style = failed
+            ? {
+                borderColor: 'color-mix(in srgb, var(--studio-danger) 40%, transparent)',
+                background: 'color-mix(in srgb, var(--studio-danger) 10%, var(--studio-panel))',
+              }
+            : undefined
           return (
-            <span key={i} title={tooltip} className={cls}>
+            <span key={i} title={tooltip} className={cls} style={style}>
               {c.name}
             </span>
           )

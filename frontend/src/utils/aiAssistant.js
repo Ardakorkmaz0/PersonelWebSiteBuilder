@@ -35,6 +35,7 @@ import {
   setModel,
   setProvider,
 } from './aiProviders.js'
+import { HOVER_TYPES, REVEAL_TYPES, SPEED_TYPES } from './motion.js'
 import { TEMPLATES } from './aiTemplates.js'
 import { SYSTEM_PROMPT } from './aiSystemPrompt.js'
 
@@ -70,14 +71,29 @@ export { SUGGESTION_CHIPS } from './aiTemplates.js'
 // Compact snapshot of the schema the model can reason about without burning
 // thousands of tokens on full style maps. Keeps ids stable so subsequent
 // tool calls (update / remove) can address each component.
+// Props worth spending snapshot tokens on before the rest. The old "first six
+// keys" cut was insertion-ordered, so a card's `title` could fall off the end
+// while a layout flag survived — and the model would then rewrite text it
+// could not see.
+const PRIORITY_PROPS = [
+  'text', 'title', 'heading', 'subheading', 'label', 'brand', 'placeholder',
+  'src', 'href', 'links', 'items', 'options', 'tabs',
+  'animIn', 'animHover', 'scrollBehavior', 'flow', 'navLayout', 'linksAlign',
+]
+
 function schemaSnapshot() {
   const s = useEditorStore.getState()
   const briefProps = (c) => {
     const p = c.props || {}
-    const keys = Object.keys(p).slice(0, 6)
+    const own = Object.keys(p)
+    const keys = [
+      ...PRIORITY_PROPS.filter((k) => own.includes(k)),
+      ...own.filter((k) => !PRIORITY_PROPS.includes(k)),
+    ].slice(0, 8)
     const out = {}
     for (const k of keys) {
       const v = p[k]
+      if (v === '' || v === null || v === undefined) continue
       if (typeof v === 'string') out[k] = v.length > 60 ? v.slice(0, 57) + '...' : v
       else if (typeof v === 'number' || typeof v === 'boolean') out[k] = v
       else if (Array.isArray(v)) out[k] = `[${v.length}]`
@@ -105,20 +121,62 @@ function schemaSnapshot() {
       hiddenMobile: c.hiddenMobile || undefined,
       children: Array.isArray(c.children) ? walk(c.children) : undefined,
     }))
+  // What the user is looking at and pointing at. Without this the model has to
+  // guess what "this" means in "make this red" — the single most common way a
+  // request used to land on the wrong component.
+  const selected = s.selectedId ? findDeep(s.schema, s.selectedId) : null
   return {
     currentPageId: s.currentPageId,
+    viewport: s.viewport,
+    selection: selected
+      ? {
+          id: selected.id,
+          type: selected.type,
+          note: 'The user has this component selected — "this"/"it" in their request almost certainly means this one.',
+        }
+      : null,
+    multiSelection: (s.selectedIds || []).length > 1 ? s.selectedIds : undefined,
     pages: s.schema.pages.map((p) => ({
       id: p.id,
       name: p.name,
+      mode: p.mode,
       flowMode: p.flowMode,
       canvasWidth: p.canvasWidth,
       mobileWidth: p.mobileWidth,
+      background: p.background,
+      seoTitle: p.seoTitle || undefined,
+      seoDescription: p.seoDescription || undefined,
       components: walk(p.components),
     })),
     theme: s.schema.theme,
     customCss: (s.schema.customCss || '').length > 0,
     customJs: (s.schema.customJs || '').length > 0,
   }
+}
+
+// Every component id that exists right now, newest page first. Used to turn
+// "Component not found" into an error the model can actually act on.
+function knownIds(limit = 40) {
+  const s = useEditorStore.getState()
+  return [...collectIds(s.schema)].slice(0, limit)
+}
+
+// Guard for every tool that takes an id. The store's updaters are no-ops on an
+// unknown id and report nothing, so without this the model would be told "ok"
+// for a change that never happened — then confidently tell the user it was
+// done. Returns an error result to return as-is, or null when the id is good.
+function checkId(id, label = 'Component') {
+  if (!id || typeof id !== 'string') {
+    return { ok: false, error: `${label} id is required. Use an id from the schema snapshot.` }
+  }
+  const node = findDeep(useEditorStore.getState().schema, id)
+  if (!node) {
+    return {
+      ok: false,
+      error: `${label} not found: "${id}". It does not exist (any more). Valid ids right now: ${knownIds().join(', ') || 'none — the page is empty'}.`,
+    }
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -446,6 +504,67 @@ function toolDeclarations() {
       },
     },
     {
+      name: 'setMotion',
+      description:
+        "Give a component an entrance animation and/or a hover effect. This is the ONLY way to animate — animations are not styles. The entrance plays when the element scrolls into view, in View mode and on the published site. Fixed/sticky bars cannot animate.",
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          animIn: { type: 'string', enum: REVEAL_TYPES, description: "Entrance animation. 'none' removes it." },
+          animHover: { type: 'string', enum: HOVER_TYPES, description: "Hover effect. 'none' removes it." },
+          animSpeed: { type: 'string', enum: SPEED_TYPES },
+          animDelay: { type: 'number', description: 'Delay in ms, 0-3000. Stagger a row of cards with 0, 100, 200, ...' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'setPageMeta',
+      description:
+        'Set the search and social metadata of a page: the <title>, the description Google shows under it, and the image used for link previews. Use this whenever the user mentions SEO, Google, sharing or link previews.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pageId: { type: 'string', description: 'Optional — defaults to the current page.' },
+          seoTitle: { type: 'string', description: 'Under 60 characters.' },
+          seoDescription: { type: 'string', description: 'Under 155 characters.' },
+          seoImage: { type: 'string', description: 'Absolute https:// image URL for the preview card.' },
+        },
+      },
+    },
+    {
+      name: 'setNavbarLayout',
+      description:
+        'Position the navbar contents: where the brand and links sit, the gap between links, full-width vs boxed, phone behaviour, and whether the bar stays pinned while scrolling. Use this instead of updateStyles for anything about WHERE navbar items are.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'The navbar component id.' },
+          navLayout: { type: 'string', enum: ['horizontal', 'centered', 'twoRow', 'vertical'] },
+          brandAlign: { type: 'string', enum: ['left', 'center', 'right'] },
+          linksAlign: { type: 'string', enum: ['left', 'center', 'right'] },
+          linkGap: { type: 'number', description: 'Space between links in px.' },
+          widthMode: { type: 'string', enum: ['full', 'boxed'] },
+          mobileNavMode: { type: 'string', enum: ['menu', 'stack'], description: "'menu' = hamburger, 'stack' = links wrap under the brand." },
+          scrollBehavior: { type: 'string', enum: ['static', 'sticky', 'fixed'], description: 'Pin the bar while the page scrolls.' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'addSection',
+      description:
+        'Add a full-width section band that stacks below the previous one and holds other components inside it (hero, features, footer, ...). Prefer this over a bare container when the user asks for a "section" or a page band. Returns the new id — pass it as parentId to put components inside.',
+      parameters: {
+        type: 'object',
+        properties: {
+          background: { type: 'string', description: 'Optional background colour, e.g. #0f172a.' },
+          height: { type: 'number', description: 'Optional band height in design pixels (default 420).' },
+        },
+      },
+    },
+    {
       name: 'applyTemplate',
       description:
         "Wipe the current page and replace it with a polished prebuilt design. Use this whenever the user asks for a named look ('GitHub style', 'dark', 'Apple-like', 'minimal landing', 'portfolio'). Internally clears the page, sets a matching theme + Custom CSS, and drops a coherent set of components (navbar, hero section, content sections, footer). Always prefer this over hand-crafting a many-step plan when the user names a style.",
@@ -481,44 +600,38 @@ export function executeTool(rawName, args) {
   const name = normaliseToolName(rawName)
   switch (name) {
     case 'addComponent': {
+      if (a.parentId) {
+        const bad = checkId(a.parentId, 'Parent')
+        if (bad) return bad
+      }
       const before = collectIds(store.schema)
       store.addComponent(a.type, Math.round(a.x || 24), Math.round(a.y || 24), a.parentId || null)
       const newId = firstNewId(collectIds(useEditorStore.getState().schema), before)
       return { ok: true, id: newId }
     }
     case 'updateProps':
-      store.updateProps(a.id, a.patch || {})
-      return { ok: true }
+      return checkId(a.id) || (store.updateProps(a.id, a.patch || {}), { ok: true })
     case 'updateStyles':
-      store.updateStyles(a.id, a.patch || {})
-      return { ok: true }
+      return checkId(a.id) || (store.updateStyles(a.id, a.patch || {}), { ok: true })
     case 'setLayout':
-      store.setLayout(a.id, a.patch || {})
-      return { ok: true }
+      return checkId(a.id) || (store.setLayout(a.id, a.patch || {}), { ok: true })
     case 'removeComponent':
-      store.removeComponent(a.id)
-      return { ok: true }
+      return checkId(a.id) || (store.removeComponent(a.id), { ok: true })
     case 'duplicateComponent':
-      store.duplicateComponent(a.id)
-      return { ok: true }
+      return checkId(a.id) || (store.duplicateComponent(a.id), { ok: true })
     // Store names are bringToFront / sendToBack but those are confusing in a
     // flow-mode (vertical document) context — expose them to the model as
     // moveToEnd / moveToStart instead.
     case 'moveToEnd':
-      store.bringToFront(a.id)
-      return { ok: true }
+      return checkId(a.id) || (store.bringToFront(a.id), { ok: true })
     case 'moveToStart':
-      store.sendToBack(a.id)
-      return { ok: true }
+      return checkId(a.id) || (store.sendToBack(a.id), { ok: true })
     case 'moveForward':
-      store.moveForward(a.id)
-      return { ok: true }
+      return checkId(a.id) || (store.moveForward(a.id), { ok: true })
     case 'moveBackward':
-      store.moveBackward(a.id)
-      return { ok: true }
+      return checkId(a.id) || (store.moveBackward(a.id), { ok: true })
     case 'setActiveTab':
-      store.setActiveTab(a.id, a.tabId)
-      return { ok: true }
+      return checkId(a.id) || (store.setActiveTab(a.id, a.tabId), { ok: true })
     case 'setCustomCss':
       store.setCustomCss(a.code || '')
       return { ok: true }
@@ -532,9 +645,14 @@ export function executeTool(rawName, args) {
       const newId = after.find((id) => !before.includes(id))
       return { ok: true, id: newId }
     }
-    case 'selectPage':
+    case 'selectPage': {
+      const pages = useEditorStore.getState().schema.pages
+      if (!pages.some((pg) => pg.id === a.id)) {
+        return { ok: false, error: `Page not found: "${a.id}". Pages: ${pages.map((pg) => `${pg.id} (${pg.name})`).join(', ')}.` }
+      }
       store.selectPage(a.id)
       return { ok: true }
+    }
     case 'updateTheme':
       store.updateTheme(a.patch || {})
       // The store ships theme variables via CSS — but already-placed
@@ -554,6 +672,8 @@ export function executeTool(rawName, args) {
       return { ok: true, x: newX }
     }
     case 'setLinks': {
+      const badLinks = checkId(a.id, 'Navbar')
+      if (badLinks) return badLinks
       const links = Array.isArray(a.links) ? a.links.map((l) => ({
         label: String(l?.label || ''),
         href: String(l?.href || ''),
@@ -562,6 +682,8 @@ export function executeTool(rawName, args) {
       return { ok: true, count: links.length }
     }
     case 'setSelectOptions': {
+      const badSelect = checkId(a.id)
+      if (badSelect) return badSelect
       const opts = Array.isArray(a.options) ? a.options.map((s) => String(s)) : []
       const patch = { options: opts.join('\n') }
       if (typeof a.placeholder === 'string') patch.placeholder = a.placeholder
@@ -569,6 +691,8 @@ export function executeTool(rawName, args) {
       return { ok: true, count: opts.length }
     }
     case 'setTabs': {
+      const badTabs = checkId(a.id)
+      if (badTabs) return badTabs
       const tabs = Array.isArray(a.tabs) ? a.tabs.map((t) => ({
         id: String(t?.id || ''),
         label: String(t?.label || ''),
@@ -588,6 +712,8 @@ export function executeTool(rawName, args) {
       return { ok: true, field }
     }
     case 'setHidden': {
+      const badHidden = checkId(a.id)
+      if (badHidden) return badHidden
       const patch = {}
       if (typeof a.hidden === 'boolean') patch.hidden = a.hidden
       if (typeof a.hiddenMobile === 'boolean') patch.hiddenMobile = a.hiddenMobile
@@ -596,17 +722,125 @@ export function executeTool(rawName, args) {
       return { ok: true }
     }
     case 'alignComponent':
-      store.alignComponent(a.id, a.mode)
-      return { ok: true }
-    case 'distributeSiblings':
+      return checkId(a.id) || (store.alignComponent(a.id, a.mode), { ok: true })
+    case 'distributeSiblings': {
+      if (a.parentId) {
+        const bad = checkId(a.parentId, 'Parent')
+        if (bad) return bad
+      }
       store.distributeSiblings(a.parentId || null, a.axis === 'x' ? 'x' : 'y')
       return { ok: true }
+    }
     case 'clearPage': {
       const before = useEditorStore.getState()
       const page = before.schema.pages.find((p) => p.id === before.currentPageId)
       const ids = (page?.components || []).map((c) => c.id)
       ids.forEach((id) => store.removeComponent(id))
       return { ok: true, removed: ids.length }
+    }
+    case 'setMotion': {
+      const bad = checkId(a.id)
+      if (bad) return bad
+      const node = findDeep(store.schema, a.id)
+      // A pinned bar is positioned by an inline transform at runtime, which
+      // would fight the animation's transform and win. Say so, rather than
+      // writing a prop that renders nothing.
+      const pinned = node.props?.scrollBehavior === 'fixed' || node.props?.scrollBehavior === 'sticky'
+      if (pinned && (a.animIn || a.animHover)) {
+        return { ok: false, error: 'This component is pinned (fixed/sticky) and cannot be animated. Unpin it first: setNavbarLayout({scrollBehavior:"static"}).' }
+      }
+      const patch = {}
+      const enumField = (key, allowed) => {
+        const v = a[key]
+        if (typeof v !== 'string') return null
+        if (!allowed.includes(v)) return `Unknown ${key} "${v}". Choose one of: ${allowed.join(', ')}.`
+        patch[key] = v
+        return null
+      }
+      const motionError =
+        enumField('animIn', REVEAL_TYPES) ||
+        enumField('animHover', HOVER_TYPES) ||
+        enumField('animSpeed', SPEED_TYPES)
+      if (motionError) return { ok: false, error: motionError }
+      if (Number.isFinite(Number(a.animDelay))) {
+        patch.animDelay = Math.min(3000, Math.max(0, Math.round(Number(a.animDelay))))
+      }
+      if (!Object.keys(patch).length) {
+        return { ok: false, error: 'Provide at least one of animIn, animHover, animSpeed, animDelay.' }
+      }
+      store.updateProps(a.id, patch)
+      return {
+        ok: true,
+        applied: patch,
+        note: 'Animations play in View mode and on the published site, not on the edit canvas.',
+      }
+    }
+    case 'setPageMeta': {
+      const state = useEditorStore.getState()
+      const pageId = a.pageId || state.currentPageId
+      if (!state.schema.pages.some((pg) => pg.id === pageId)) {
+        return { ok: false, error: `Page not found: "${pageId}". Pages: ${state.schema.pages.map((pg) => pg.id).join(', ')}.` }
+      }
+      const patch = {}
+      if (typeof a.seoTitle === 'string') patch.seoTitle = a.seoTitle.slice(0, 70)
+      if (typeof a.seoDescription === 'string') patch.seoDescription = a.seoDescription.slice(0, 200)
+      if (typeof a.seoImage === 'string') patch.seoImage = a.seoImage
+      if (!Object.keys(patch).length) {
+        return { ok: false, error: 'Provide at least one of seoTitle, seoDescription, seoImage.' }
+      }
+      store.setPageMeta(pageId, patch)
+      return { ok: true, pageId, applied: Object.keys(patch) }
+    }
+    case 'setNavbarLayout': {
+      const bad = checkId(a.id, 'Navbar')
+      if (bad) return bad
+      const node = findDeep(store.schema, a.id)
+      if (node.type !== 'navbar') {
+        return { ok: false, error: `Component "${a.id}" is a ${node.type}, not a navbar. setNavbarLayout only applies to navbars.` }
+      }
+      const enums = {
+        navLayout: ['horizontal', 'centered', 'twoRow', 'vertical'],
+        brandAlign: ['left', 'center', 'right'],
+        linksAlign: ['left', 'center', 'right'],
+        widthMode: ['full', 'boxed'],
+        mobileNavMode: ['menu', 'stack'],
+        scrollBehavior: ['static', 'sticky', 'fixed'],
+      }
+      const patch = {}
+      for (const [key, allowed] of Object.entries(enums)) {
+        const v = a[key]
+        if (typeof v !== 'string') continue
+        if (!allowed.includes(v)) {
+          return { ok: false, error: `Unknown ${key} "${v}". Choose one of: ${allowed.join(', ')}.` }
+        }
+        patch[key] = v
+      }
+      if (Number.isFinite(Number(a.linkGap))) patch.linkGap = Math.max(0, Math.round(Number(a.linkGap)))
+      if (!Object.keys(patch).length) {
+        return { ok: false, error: `Provide at least one of: ${[...Object.keys(enums), 'linkGap'].join(', ')}.` }
+      }
+      store.updateProps(a.id, patch)
+      return { ok: true, applied: patch }
+    }
+    case 'addSection': {
+      const before = collectIds(store.schema)
+      store.addComponent('region', 0, 0, null)
+      const newId = firstNewId(collectIds(useEditorStore.getState().schema), before)
+      if (!newId) return { ok: false, error: 'Could not create the section.' }
+      // A band's background is a STYLE on the region, not a prop — props go
+      // through the server's allowlist and a `background` key would be dropped
+      // on the next save, leaving the colour to vanish on reload.
+      if (typeof a.background === 'string' && a.background) {
+        store.updateStyles(newId, { backgroundColor: a.background })
+      }
+      if (Number.isFinite(Number(a.height))) {
+        store.setLayout(newId, { h: Math.max(80, Math.round(Number(a.height))) })
+      }
+      return {
+        ok: true,
+        id: newId,
+        note: 'Pass this id as parentId to addComponent to place components inside the band.',
+      }
     }
     case 'applyTemplate': {
       // Weak local models often invent a template name from the user's topic
@@ -665,6 +899,22 @@ export function executeTool(rawName, args) {
     default:
       return { ok: false, error: `Unknown tool "${rawName}" (normalised to "${name}"). Use one of the declared tool names exactly.` }
   }
+}
+
+// Does this prompt ask for a CHANGE, or is it a question about the builder?
+// Used by the self-check round: a change request that produced zero tool calls
+// is a reply the user cannot trust, while "what can you do?" is supposed to
+// come back as plain text with the canvas untouched.
+//
+// Exported so tests can pin the classification.
+export function looksLikeChangeRequest(prompt) {
+  const raw = String(prompt || '').toLowerCase().trim()
+  if (!raw) return false
+  if (raw.startsWith('/')) return false
+  const META = /(what can you|what do you do|who are you|which model|list templates|show me templates|^help$|neler yapabilir|ne yapabilir|nas[iı]l çal[iı]ş)/i
+  if (META.test(raw)) return false
+  const CHANGE = /(add|make|change|set|update|create|build|remove|delete|move|align|rename|replace|apply|style|colou?r|animate|resize|fix|write|ekle|yap|de[gğ]i[sş]tir|ayarla|olu[sş]tur|kur|sil|kald[iı]r|ta[sş][iı]|hizala|g[uü]ncelle|renk|canland[iı]r|d[uü]zelt|yaz)/i
+  return CHANGE.test(raw)
 }
 
 // Last-ditch recovery for models that don't tool-call at all (gemma-family is
@@ -1573,7 +1823,7 @@ ${s}
   return { html, coerced: true, grafted: false }
 }
 
-export async function runAiPrompt(prompt, { maxRounds = 3, history = [] } = {}) {
+export async function runAiPrompt(prompt, { maxRounds = 5, history = [] } = {}) {
   const candidates = readyProviders()
   if (!candidates.length) {
     throw new Error('No AI provider is set up yet. Open Settings (Properties → AI Assistant) and paste any free key, or pick Local AI if you have Ollama running.')
@@ -1640,7 +1890,7 @@ export async function runAiPrompt(prompt, { maxRounds = 3, history = [] } = {}) 
   throw lastErr
 }
 
-async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
+async function runAiPromptOnce(prompt, { maxRounds = 5, history = [] } = {}) {
   const provider = getProvider()
   const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
   const apiKey = getApiKey(provider)
@@ -1674,6 +1924,11 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
 
   let finalText = ''
   const calls = []
+  // Each self-correction fires at most once per turn — a model that keeps
+  // making the same mistake would otherwise burn every remaining round on it.
+  let repairedIds = false
+  let repairedArgs = false
+  let nudgedEmpty = false
   for (let round = 0; round < maxRounds; round += 1) {
     const isFirst = round === 0
     const parts = await callProvider(
@@ -1690,6 +1945,24 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
 
     if (functionCalls.length === 0) {
       finalText = textParts.map((p) => p.text).join('\n').trim() || 'Done.'
+      // Self-check: the model signed off without ever changing anything, yet
+      // the user asked for a change. That reply is a lie the user only finds
+      // out about by looking at the canvas — so challenge it once, with the
+      // live schema, before accepting it.
+      if (!nudgedEmpty && calls.length === 0 && looksLikeChangeRequest(prompt) && round < maxRounds - 1) {
+        nudgedEmpty = true
+        turns.push({ role: 'model', text: finalText })
+        turns.push({
+          role: 'user',
+          text:
+            'You did not call a single tool, so NOTHING on the page changed — the user asked for a change, not a description. '
+            + 'Do it now by emitting real function calls against the ids in this snapshot. '
+            + 'If the request truly needs no change, say so in one sentence and call nothing.\n\n'
+            + 'Current schema:\n'
+            + JSON.stringify(schemaSnapshot(), null, 2),
+        })
+        continue
+      }
       if (finalText) turns.push({ role: 'model', text: finalText })
       break
     }
@@ -1738,6 +2011,13 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
     const staleCalls = toolResults.filter(
       (r) => r.name !== 'applyTemplate' && r.response && r.response.ok === false && /not found/i.test(r.response.error || ''),
     )
+    // Any other failure worth one repair round: a rejected enum value, a wrong
+    // component type, a missing argument. These are all fixable from the error
+    // text alone, and letting the model try again beats handing the user a row
+    // of red pills under a cheerful "done".
+    const otherFailures = toolResults.filter(
+      (r) => r.response && r.response.ok === false && !/not found/i.test(r.response.error || ''),
+    )
     if (appliedTemplate && (NEEDS_TEMPLATE_NUDGE || staleCalls.length > 0)) {
       const freshSnapshot = schemaSnapshot()
       const reason = staleCalls.length > 0
@@ -1753,6 +2033,29 @@ async function runAiPromptOnce(prompt, { maxRounds = 3, history = [] } = {}) {
           + 'Do not stop until every default placeholder string has been replaced.\n\n'
           + 'New schema:\n'
           + JSON.stringify(freshSnapshot, null, 2),
+      })
+    } else if (staleCalls.length > 0 && !repairedIds) {
+      // Stale IDs without a template: the model invented an id, or reused one
+      // from an earlier turn that has since been deleted. Give it the live id
+      // list once — repeating this every round would loop forever on a model
+      // that simply cannot get it right.
+      repairedIds = true
+      turns.push({
+        role: 'user',
+        text:
+          `${staleCalls.length} of your tool calls targeted component IDs that do not exist, so those changes did NOT happen. `
+          + 'Never invent ids. Re-emit those calls using ids from this snapshot, and skip any that no longer make sense.\n\n'
+          + 'Current schema:\n'
+          + JSON.stringify(schemaSnapshot(), null, 2),
+      })
+    } else if (otherFailures.length > 0 && !repairedArgs) {
+      repairedArgs = true
+      turns.push({
+        role: 'user',
+        text:
+          `${otherFailures.length} of your tool calls were rejected and did NOT change anything:\n`
+          + otherFailures.map((r) => `- ${r.name}: ${r.response.error}`).join('\n')
+          + '\n\nFix the arguments and re-emit only those calls. Do not claim the work is done until they succeed.',
       })
     }
   }

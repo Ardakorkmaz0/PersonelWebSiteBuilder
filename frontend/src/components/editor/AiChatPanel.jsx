@@ -614,110 +614,36 @@ export default function AiChatPanel({
       aria-label={t('AI Assistant')}
       className={workspacePresentation
         ? 'studio-theme-surface relative z-20 flex h-full w-[clamp(380px,32vw,520px)] shrink-0 flex-col overflow-hidden border-l border-[var(--studio-border)] bg-[var(--studio-panel)]'
-        : 'studio-theme-surface fixed right-4 top-20 z-[120] flex h-[min(70vh,640px)] w-[min(92vw,460px)] flex-col overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] shadow-2xl'}
+        : 'studio-theme-surface fixed right-2 top-[60px] z-[120] flex h-[calc(100vh-68px)] max-h-[720px] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] sm:right-4 sm:top-[68px] sm:h-[calc(100vh-84px)] sm:w-[440px]'}
+      style={workspacePresentation ? undefined : { boxShadow: 'var(--studio-shadow-menu)' }}
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div
-        data-theme-inverted={workspacePresentation ? undefined : ''}
-        className={`flex items-center gap-2 border-b border-[var(--studio-border)] px-3 py-2 ${
-          workspacePresentation
-            ? 'min-h-[58px] bg-[var(--studio-panel-raised)] text-[var(--studio-text)]'
-            : 'bg-gradient-to-r from-[var(--studio-accent)] to-[var(--studio-accent-pressed)] text-white'
-        }`}
-      >
-        {workspacePresentation && (
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
-            <SparklesIcon size={15} />
-          </span>
-        )}
-        <span className={workspacePresentation ? 'min-w-0' : ''}>
-          <span className="block text-xs font-bold uppercase tracking-wide opacity-90">
-            {workspacePresentation ? t('AI design assistant') : 'AI'}
-          </span>
-          {workspacePresentation && (
-            <span className="block truncate text-[10px] font-medium text-[var(--studio-text-muted)]">
-              {t('Working beside the current page')} · {modelLabel}
-            </span>
-          )}
+      <div className="flex min-h-[60px] items-center gap-2.5 border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-2.5 text-[var(--studio-text)]">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color-mix(in_srgb,var(--studio-accent)_24%,var(--studio-border))] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
+          <SparklesIcon size={16} />
         </span>
-        {!workspacePresentation && <span
-          className={`truncate rounded-full px-2 py-0.5 text-[10px] ${
-            workspacePresentation
-              ? 'border border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)]'
-              : 'bg-white/20'
-          }`}
-          title={t('Active model: {model}', { model: modelLabel })}
-        >
-          {modelLabel}
-        </span>}
-        {/* Mode toggle — Components uses the schema tool calls; HTML asks the
-            model for a full document and ships it to site.html (the strong
-            path on weak local models that can't tool-call). On an HTML site
-            the toggle is locked to HTML: the schema isn't rendered there, so
-            Components-mode edits would be invisible. */}
-        <div className={`${workspacePresentation ? 'hidden' : 'ml-1 flex'} overflow-hidden rounded-full bg-white/15 text-[10px] font-medium`}>
-          <button
-            type="button"
-            onClick={() => setAiMode('components')}
-            disabled={isHtmlSite}
-            title={isHtmlSite
-              ? t('This site is an HTML document — the AI edits the HTML directly here.')
-              : t('Use the schema tools — best on Qwen3 / Gemini / Groq Llama 70B')}
-            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'components' ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/10'} disabled:cursor-not-allowed disabled:opacity-40`}
-          >
-            <LayersIcon size={11} /> {t('Components')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setAiMode('html')}
-            title={t('Ask the model for a full HTML document — best on Llama 3.1 8B / gemma / phi')}
-            className={`flex items-center gap-1 px-2 py-0.5 transition ${effectiveAiMode === 'html' ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/10'}`}
-          >
-            <FileCodeIcon size={11} /> HTML
-          </button>
-        </div>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-bold">{t('AI design assistant')}</span>
+          <span className="block truncate text-[10px] font-medium text-[var(--studio-text-muted)]">
+            {modelLabel} · {effectiveAiMode === 'html' ? 'HTML' : t('Components')}
+          </span>
+        </span>
         <button
           type="button"
           onClick={() => onPresentationChange?.(workspacePresentation ? 'compact' : 'workspace')}
           title={workspacePresentation ? t('Use the small floating AI window') : t('Dock AI beside the canvas')}
-          className={`ml-auto rounded-lg px-2 py-1 text-[10px] font-semibold ${
-            workspacePresentation
-              ? 'border border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)] hover:text-[var(--studio-text)]'
-              : 'hover:bg-white/15'
-          }`}
+          className="studio-btn studio-btn-secondary h-7 shrink-0 px-2 text-[10px]"
         >
           {workspacePresentation ? t('Small window') : t('Dock')}
         </button>
-        {!workspacePresentation && <button
-          type="button"
-          onClick={freshChat}
-          disabled={messages.length === 0 || messages[messages.length - 1]?.role === 'divider'}
-          title={t('Start a new conversation — AI forgets older topics, your scrollback stays')}
-          className="rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
-        >
-          {t('New')}
-        </button>}
-        {!workspacePresentation && <button
-          type="button"
-          onClick={clearChat}
-          disabled={messages.length === 0}
-          title={t('Clear chat history entirely')}
-          className="rounded px-2 py-0.5 text-[11px] hover:bg-white/15 disabled:opacity-40"
-        >
-          {t('Clear')}
-        </button>}
         <button
           type="button"
           onClick={() => setShowSettings((v) => !v)}
           title={t('AI settings — provider, key and model')}
           aria-label={t('AI settings')}
           aria-pressed={showSettings}
-          className={`rounded px-1.5 py-1 ${
-            workspacePresentation
-              ? showSettings ? 'bg-[var(--studio-control)] text-[var(--studio-accent-hover)]' : 'hover:bg-[var(--studio-control-hover)]'
-              : showSettings ? 'bg-white text-[var(--studio-accent-pressed)]' : 'hover:bg-white/15'
-          }`}
+          className={`studio-icon-btn h-7 w-7 shrink-0 ${showSettings ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
         >
           <CogIcon size={13} />
         </button>
@@ -726,14 +652,13 @@ export default function AiChatPanel({
           onClick={onClose}
           title={t('Close')}
           aria-label={t('Close AI panel')}
-          className={`rounded px-2 py-0.5 text-base ${workspacePresentation ? 'hover:bg-[var(--studio-control-hover)]' : 'hover:bg-white/15'}`}
+          className="studio-icon-btn h-7 w-7 shrink-0 text-base"
         >
           ×
         </button>
       </div>
 
-      {workspacePresentation && (
-        <div className="flex items-center gap-2 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2">
           <div className="studio-segment min-w-0 flex-1">
             <button
               type="button"
@@ -767,8 +692,7 @@ export default function AiChatPanel({
           >
             {t('Clear')}
           </button>
-        </div>
-      )}
+      </div>
 
       {/* Settings sheet — same component the Properties → AI tab renders. */}
       {showSettings && (

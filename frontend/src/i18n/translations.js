@@ -2037,4 +2037,6 @@ export const TURKISH_TRANSLATIONS = {
   'Automatic': 'Otomatik',
   'Recovery': 'Kurtarma',
   'Recovery points appear here when you restore an older save.': 'Eski bir kaydı geri yüklediğinizde kurtarma noktaları burada görünür.',
+  'Changes save automatically': 'Değişiklikler otomatik kaydedilir',
+  'Manual save only': 'Yalnızca manuel kayıt',
 }

@@ -34,7 +34,7 @@ describe('HistoryPanel save sources and pins', () => {
 
   it('separates manual and automatic saves without using the pin as the source', async () => {
     const { container } = renderPanel()
-    expect(container.firstChild).toHaveClass('studio-theme-surface')
+    expect(container.firstChild).toHaveClass('studio-theme-surface', 'rounded-2xl')
     expect(await screen.findByText('Manual save')).toBeInTheDocument()
     expect(screen.getByText('Auto-saved snapshot')).toBeInTheDocument()
     expect(screen.getAllByText(/manual|auto/i).length).toBeGreaterThan(1)

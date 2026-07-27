@@ -285,4 +285,13 @@ describe('responsive and accessibility guards', () => {
     expect(screen.getByText('Component text changed')).toBeInTheDocument()
     expect(screen.getByText('Contact us')).toBeInTheDocument()
   })
+
+  it('uses the studio surface instead of the legacy gradient in the compact AI window', () => {
+    renderWithShell(<AiChatPanel open presentation="compact" onClose={vi.fn()} />)
+
+    const dialog = screen.getByRole('dialog', { name: 'AI Assistant' })
+    expect(dialog).toHaveClass('rounded-2xl', 'border-[var(--studio-border-strong)]')
+    expect(dialog.querySelector('[data-theme-inverted]')).not.toBeInTheDocument()
+    expect(screen.getByText('AI design assistant')).toBeInTheDocument()
+  })
 })

@@ -104,65 +104,66 @@ export default function HistoryPanel({
   const { manualSaves, autosaves, recoverySaves } = groupSiteVersions(rows)
 
   return (
-    <>
     <aside
       aria-label={t('Saves & history')}
-      className="studio-theme-surface fixed bottom-0 right-0 top-[52px] z-[115] flex w-[min(100vw,440px)] flex-col overflow-hidden border-l border-[var(--studio-border)] bg-[var(--studio-panel)] shadow-2xl"
+      className="studio-theme-surface fixed right-2 top-[60px] z-[115] flex h-[calc(100vh-68px)] max-h-[720px] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] sm:right-4 sm:top-[68px] sm:h-[calc(100vh-84px)] sm:w-[440px]"
+      style={{ boxShadow: 'var(--studio-shadow-menu)' }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="flex min-h-[64px] items-center gap-3 border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-4 py-3">
+      <div className="flex min-h-[60px] items-center gap-2.5 border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-2.5">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
           <ClockIcon size={17} />
         </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-bold text-[var(--studio-text)]">{t('Saves & history')}</span>
-          <span className="block text-[10px] text-[var(--studio-text-muted)]">{t('Return to an earlier version without losing your current work.')}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-bold text-[var(--studio-text)]">{t('Saves & history')}</span>
+          <span className="block truncate text-[10px] text-[var(--studio-text-muted)]">{t('Return to an earlier version without losing your current work.')}</span>
         </span>
         <button
           type="button"
           onClick={onClose}
           title={t('Close')}
           aria-label={t('Close history panel')}
-          className="ml-auto rounded-lg px-2 py-1 text-lg text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
+          className="studio-icon-btn h-7 w-7 shrink-0 text-lg"
         >
           ×
         </button>
       </div>
 
       <div className="border-b border-[var(--studio-border)] bg-[var(--studio-panel)] p-3">
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-control)] px-3 py-2.5">
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs font-semibold text-[var(--studio-text)]">{t('Automatic saving')}</span>
-          <span className="block text-[10px] leading-relaxed text-[var(--studio-text-muted)]">
-            {autoSaveEnabled
-              ? t('On: changes are saved after a short pause.')
-              : t('Off: only the Save button creates a save.')}
-          </span>
-        </span>
-        <input
-          type="checkbox"
-          checked={autoSaveEnabled}
-          onChange={(e) => onAutoSaveEnabled?.(e.target.checked)}
-          className="h-4 w-4 accent-[var(--studio-accent)]"
-        />
-        <span className="w-7 text-right text-[10px] font-bold uppercase text-[var(--studio-accent-hover)]">
-          {autoSaveEnabled ? t('On') : t('Off')}
-        </span>
-      </label>
-      </div>
-
-      <div className="border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 pb-3">
+        <div className="flex items-stretch gap-2">
+          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-control)] px-3 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[11px] font-semibold text-[var(--studio-text)]">{t('Automatic saving')}</span>
+              <span className="block truncate text-[9px] text-[var(--studio-text-muted)]">
+                {autoSaveEnabled ? t('Changes save automatically') : t('Manual save only')}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={autoSaveEnabled}
+              onChange={(e) => onAutoSaveEnabled?.(e.target.checked)}
+              className="sr-only"
+            />
+            <span
+              aria-hidden
+              className={`relative h-5 w-9 shrink-0 rounded-full border transition ${
+                autoSaveEnabled
+                  ? 'border-[var(--studio-accent)] bg-[var(--studio-accent)]'
+                  : 'border-[var(--studio-border-strong)] bg-[var(--studio-panel-raised)]'
+              }`}
+            >
+              <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow-sm transition ${autoSaveEnabled ? 'left-[18px]' : 'left-0.5'}`} />
+            </span>
+          </label>
         <button
           type="button"
           disabled={busy}
           onClick={newCheckpoint}
-          className="studio-btn studio-btn-primary w-full justify-center py-2 disabled:opacity-50"
+          className="studio-btn studio-btn-primary shrink-0 justify-center px-3 disabled:opacity-50"
         >
           <PlusIcon size={14} /> {t('New named save')}
         </button>
-        <p className="mt-1.5 text-[10px] leading-relaxed text-[var(--studio-text-faint)]">
-          {t('A named save you can always come back to — kept until you delete it.')}
-        </p>
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-2">
@@ -177,14 +178,14 @@ export default function HistoryPanel({
             type="button"
             onClick={() => setFilter(value)}
             aria-label={`${t(label)} ${count}`}
-            className={`min-w-0 flex-1 rounded-lg px-2 py-1.5 text-[10px] font-semibold transition ${
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[10px] font-semibold transition ${
               filter === value
                 ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
                 : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
             }`}
           >
-            <span className="block truncate">{t(label)}</span>
-            <span className="text-[9px] opacity-70">{count}</span>
+            <span className="truncate">{t(label)}</span>
+            <span className="rounded-full bg-[var(--studio-control)] px-1.5 py-0.5 text-[8px] opacity-80">{count}</span>
           </button>
         ))}
       </div>
@@ -202,9 +203,9 @@ export default function HistoryPanel({
                 {t('Manual saves appear here when you press Save or create a named checkpoint.')}
               </p>
             ) : (
-              <ul className="mb-4 space-y-1.5">
+              <ul className="mb-4 space-y-2">
                 {manualSaves.map((v) => (
-                  <li key={v.id} className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
+                  <li key={v.id} className="rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] p-3 transition hover:border-[var(--studio-border-strong)]">
                     <div className="flex items-center gap-2">
                       <SourceBadge source={v.source} pinned={v.pinned} />
                       <div className="min-w-0 flex-1">
@@ -212,7 +213,7 @@ export default function HistoryPanel({
                         <p className="text-[10px] text-[var(--studio-text-muted)]">{formatWhen(v.created_at, language)}</p>
                       </div>
                     </div>
-                    <div className="mt-1.5 flex justify-end gap-1.5">
+                    <div className="mt-2.5 flex flex-wrap justify-end gap-1.5 border-t border-[var(--studio-border)] pt-2">
                       <SlotBtn disabled={busy} onClick={() => restore(v.id)}>{t('Load')}</SlotBtn>
                       {v.pinned && <SlotBtn disabled={busy} onClick={() => overwrite(v)}>{t('Save over')}</SlotBtn>}
                       <SlotBtn disabled={busy} onClick={() => togglePin(v)}>{v.pinned ? t('Unpin') : t('Pin')}</SlotBtn>
@@ -233,9 +234,9 @@ export default function HistoryPanel({
                 {t('Auto-saves appear here as you work (the editor keeps the last 30).')}
               </p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {autosaves.map((v) => (
-                  <li key={v.id} className="flex items-center gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
+                  <li key={v.id} className="flex items-center gap-2 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] p-3 transition hover:border-[var(--studio-border-strong)]">
                     <SourceBadge source={v.source} pinned={v.pinned} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[12px] font-medium text-[var(--studio-text)]">{v.label || labelForSource(v.source, t)}</p>
@@ -253,9 +254,9 @@ export default function HistoryPanel({
             {(filter === 'all' || filter === 'recovery') && recoverySaves.length > 0 && (
               <>
                 <SectionTitle>{t('Recovery points')} ({recoverySaves.length})</SectionTitle>
-                <ul className="space-y-1.5">
+                <ul className="space-y-2">
                   {recoverySaves.map((v) => (
-                    <li key={v.id} className="flex items-center gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2">
+                    <li key={v.id} className="flex items-center gap-2 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] p-3 transition hover:border-[var(--studio-border-strong)]">
                       <SourceBadge source={v.source} pinned={v.pinned} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[12px] font-medium text-[var(--studio-text)]">{v.label || labelForSource(v.source, t)}</p>
@@ -286,13 +287,6 @@ export default function HistoryPanel({
         )}
       </div>
     </aside>
-    <button
-      type="button"
-      aria-label={t('Close history panel')}
-      onClick={onClose}
-      className="fixed inset-0 z-[114] cursor-default bg-black/20"
-    />
-    </>
   )
 }
 
@@ -301,15 +295,22 @@ function SectionTitle({ children }) {
 }
 
 function SlotBtn({ children, onClick, disabled, danger }) {
+  const dangerStyle = danger
+    ? {
+        borderColor: 'color-mix(in srgb, var(--studio-danger) 34%, var(--studio-border))',
+        background: 'color-mix(in srgb, var(--studio-danger) 7%, var(--studio-panel))',
+      }
+    : undefined
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-lg border px-2 py-0.5 text-[11px] font-medium disabled:opacity-50 ${
+      style={dangerStyle}
+      className={`rounded-md border px-2 py-1 text-[10px] font-semibold transition disabled:opacity-50 ${
         danger
-          ? 'border-red-200 text-[var(--studio-danger)] hover:bg-red-50'
-          : 'border-[var(--studio-border)] text-[var(--studio-text)] hover:bg-[var(--studio-control)]'
+          ? 'text-[var(--studio-danger)] hover:brightness-110'
+          : 'border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text)]'
       }`}
     >
       {children}

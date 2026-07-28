@@ -1420,7 +1420,15 @@ export default function EditorPage() {
       )
     )
       return
-    commitHtml(schemaToResponsiveHtml(useEditorStore.getState().schema, title), { reseedWorkspace: true })
+    // schemaToResponsiveHtml always reads pages[0], but commitHtml writes the
+    // result onto the CURRENT page — so handing it the whole schema turned any
+    // page but the first into a copy of the home page. Wrap the page being
+    // converted, the way the Code panel already does.
+    const state = useEditorStore.getState()
+    const page = state.schema.pages.find((p) => p.id === currentPageId) || state.schema.pages[0]
+    commitHtml(schemaToResponsiveHtml({ ...state.schema, pages: [page] }, title), {
+      reseedWorkspace: true,
+    })
     setPageMode(currentPageId, 'html')
   }
 

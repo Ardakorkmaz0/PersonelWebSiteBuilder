@@ -11,11 +11,12 @@ import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
 import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
+import { autoLayoutChildCss, autoLayoutContainerCss, isAutoLayout } from './autoLayout.js'
 import { motionHeadTags } from './motion.js'
 import { pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
 import { pinnedLayoutStyle } from '../components/renderer/layout.js'
 
-const FULL_WIDTH = new Set(['navbar', 'section', 'divider'])
+const FULL_WIDTH = new Set(['navbar', 'section', 'region', 'divider'])
 
 function isFullWidthComponent(c) {
   return FULL_WIDTH.has(c?.type) && !(c?.type === 'navbar' && c.props?.navLayout === 'vertical')
@@ -172,9 +173,16 @@ function navbar(c) {
       .join(';')
     return css ? ` style="${css}"` : ''
   }
+  // Phone behaviour: 'menu' collapses the links behind a hamburger (the
+  // toggle is driven by the shared builder runtime already injected below),
+  // 'stack' wraps them under the brand. Same contract as the published
+  // export — this writer used to ignore the setting entirely.
+  const mobileMode = p.mobileNavMode === 'stack' ? 'stack' : 'menu'
+  const menuBg = cssVal(c.styles?.backgroundColor || '#1d1d1f')
   return `<header class="rh-navbar"${styleAttr(c)}>
-      <div class="rh-container rh-nav-inner rh-nav-${layout}"${attr(placed?.row)}>
+      <div class="rh-container rh-nav-inner rh-nav-${layout} rh-nav-mobile-${mobileMode}" data-builder-mobile-nav style="--rh-nav-menu-bg:${menuBg}"${attr(placed?.row)}>
         <span class="rh-brand"${attr(placed?.brand)}>${multiline(p.brand)}</span>
+        <button type="button" class="rh-nav-toggle" data-builder-mobile-nav-toggle aria-label="Open navigation menu" aria-expanded="false">☰</button>
         <nav class="rh-links"${attr(placed ? { ...placed.links, columnGap: navbarLinkGap(p), rowGap: 6 } : null)}>\n          ${links}\n        </nav>
       </div>
     </header>`
@@ -184,6 +192,27 @@ function section(c) {
   const p = c.props || {}
   return `<section class="rh-section"${styleAttr(c)}>
       ${sectionInnerHtml(p, c.styles || {})}
+    </section>`
+}
+
+// A Section band (`region`) holds free-positioned children inside a full-width
+// strip. Absolute coordinates have no meaning in a reflowing document, so the
+// children go through the same reading-row grouping the page body uses: rows
+// that sat side by side stay side by side and collapse on a phone.
+//
+// Without this the type fell through to the switch's default and the entire
+// band — background, children and all — rendered as an empty string, which is
+// what made a Section-built site show up blank in the dashboard thumbnails.
+function regionBand(c) {
+  const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+  const rows = readingRows(kids)
+    .map((row) => {
+      const multi = row.length > 1
+      return `<div class="rh-row">${row.map((ch) => item(ch, multi)).join('')}</div>`
+    })
+    .join('')
+  return `<section class="rh-region"${styleAttr(c)}>
+      <div class="rh-container"><div class="rh-wrap">${rows}</div></div>
     </section>`
 }
 
@@ -269,6 +298,15 @@ function itemEl(c, multi, colOverride) {
       return `<details class="${cls}"${styleAttr(c, `${col};border:1px solid #e5e7eb;border-radius:10px;padding:2px 16px`)}><summary style="cursor:pointer;font-weight:600;padding:12px 0">${multiline(p.title)}</summary><div style="padding-bottom:14px;color:#4b5563">${multiline(p.text)}</div></details>`
     case 'container': {
       const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+      // Auto-layout containers flow their children as flex/grid. Same shared
+      // rules the canvas and the published export use, so a Stack/Row/Grid
+      // does not silently fall back to absolute boxes here.
+      if (isAutoLayout(p)) {
+        const inner = kids
+          .map((ch) => `<div style="${autoLayoutChildCss(ch, p)}">${item(ch, false, 'flex:1 1 auto')}</div>`)
+          .join('')
+        return `<div class="${cls}"${styleAttr(c, `${col};${autoLayoutContainerCss(p)}`)}>${inner}</div>`
+      }
       const h = absolutePanelHeight(kids, Math.round(c.layout?.h || 160))
       const inner = kids
         .map((ch) => {
@@ -387,6 +425,7 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
       flush()
       if (c.type === 'navbar') body += '\n    ' + navbar(c)
       else if (c.type === 'section') body += '\n    ' + section(c)
+      else if (c.type === 'region') body += '\n    ' + regionBand(c)
       else body += `\n    <hr class="rh-divider"${styleAttr(c)} />`
     }
     flushInline()
@@ -431,6 +470,9 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
       .rh-card { align-self: stretch; padding: 24px; }
       .rh-card-title { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
       .rh-section { width: 100%; padding: 56px 0; }
+      .rh-region { width: 100%; }
+      .rh-region > .rh-container > .rh-wrap { padding: 40px 0; }
+      .rh-nav-toggle { display: none; appearance: none; width: 36px; height: 36px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
       .rh-divider { border: none; height: 1px; background: #d2d2d7; width: 100%; margin: 8px 0; }
       h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.12; }
       h2 { font-size: clamp(24px, 4vw, 34px); line-height: 1.2; }
@@ -440,6 +482,11 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
         .rh-col { min-width: 0; }
         .rh-row .rh-btn { align-self: center; }
         .rh-nav-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+        .rh-nav-mobile-menu:not(.rh-nav-vertical) { position: relative; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: nowrap; }
+        .rh-nav-mobile-menu:not(.rh-nav-vertical) .rh-nav-toggle { display: inline-flex; }
+        .rh-nav-mobile-menu:not(.rh-nav-vertical) .rh-links { display: none; position: absolute; z-index: 100; top: calc(100% + 8px); left: 0; right: 0; width: 100%; flex-direction: column; align-items: stretch; gap: 6px; padding: 10px; border: 1px solid currentColor; border-radius: 10px; background: var(--rh-nav-menu-bg, #1d1d1f); box-shadow: 0 12px 28px rgba(0,0,0,.2); }
+        .rh-nav-mobile-menu:not(.rh-nav-vertical)[data-mobile-open="true"] .rh-links { display: flex; }
+        .rh-nav-mobile-menu:not(.rh-nav-vertical) .rh-links a { display: block; width: 100%; padding: 10px 12px; border-radius: 8px; }
         .rh-section { padding: 40px 0; }
         .rh-wrap { gap: 24px; padding: 28px 0; }
       }

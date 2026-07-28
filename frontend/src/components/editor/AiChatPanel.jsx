@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AI_PROVIDERS,
   SUGGESTION_CHIPS,
@@ -232,22 +232,39 @@ export default function AiChatPanel({
     providerInfo?.label ||
     'AI'
 
-  // Suggestions are recomputed on every render straight from editor state, so
-  // they describe the page as it is right now rather than as it was when the
-  // message was written. Both surfaces come from the same call: the starter
-  // cards on an empty chat, and the follow-ups under a finished reply.
-  const suggestionCtx = open ? readSuggestionContext() : null
+  // Cheap signature of the things the suggestion rules key off. Subscribing to
+  // it (rather than reading the store imperatively during render) is what makes
+  // the cards follow the canvas: drop a navbar with the panel open and the
+  // "add a navbar" card goes away on the spot. Deliberately a few scalars and
+  // no component scan, so this does not re-render the panel on every keystroke.
+  const suggestionSignal = useEditorStore((state) => {
+    const page = state.schema.pages.find((pg) => pg.id === state.currentPageId)
+    return `${page?.id}|${page?.components?.length}|${state.selectedId}|${state.schema.pages.length}`
+  })
   const lastMessage = messages[messages.length - 1]
   const followUpsVisible =
     !busy && !pendingChange && !showSettings && lastMessage?.role === 'assistant' && !lastMessage.allFailed
-  const suggestions = suggestionCtx
-    ? buildAiSuggestions(suggestionCtx, {
-        limit: messages.length === 0 ? 4 : 3,
-        exclude: usedSuggestions,
-      })
-    : []
+  const suggestions = useMemo(
+    () => (open
+      ? buildAiSuggestions(readSuggestionContext(), {
+          limit: messages.length === 0 ? 4 : 3,
+          exclude: usedSuggestions,
+        })
+      : []),
+    // suggestionSignal is the subscription that makes this recompute; the
+    // linter can't see through it, hence the explicit dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open, suggestionSignal, messages.length, usedSuggestions],
+  )
 
   function sendSuggestion(s) {
+    // Only burn the suggestion once the request is actually going out. send()
+    // refuses while it is busy or a change is awaiting review, and a card that
+    // vanished on a refused click would never come back.
+    if (busy || pendingChange) {
+      send(s.prompt)
+      return
+    }
     setUsedSuggestions((ids) => (ids.includes(s.id) ? ids : [...ids, s.id]))
     send(s.prompt)
   }
@@ -1033,7 +1050,7 @@ function SuggestionCard({ suggestion, disabled, onPick }) {
       type="button"
       disabled={disabled}
       onClick={() => onPick(suggestion)}
-      title={suggestion.prompt}
+      title={`${t(suggestion.label, vars)} — ${t(suggestion.why, vars)}`}
       className="flex w-full items-start gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2 text-left transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span className="mt-0.5 shrink-0 text-[var(--studio-text-muted)]">

@@ -89,3 +89,27 @@ describe('buildAiSuggestions', () => {
     expect(buildAiSuggestions(null)).toEqual([])
   })
 })
+
+describe('buildAiSuggestions never breaks the panel it renders in', () => {
+  // This runs during the AI panel's render, so a rule that throws would take
+  // the whole panel down rather than just lose a card.
+  it('survives a context with no types array', () => {
+    expect(() => buildAiSuggestions({ componentCount: 2 })).not.toThrow()
+  })
+
+  it('skips a rule whose data is malformed instead of throwing', () => {
+    const out = buildAiSuggestions({
+      componentCount: 1, types: [], pageCount: 1, selected: { type: 'card' },
+    })
+    expect(Array.isArray(out)).toBe(true)
+    expect(out.map((s) => s.id)).not.toContain('restyle-selected')
+  })
+
+  it('still returns the rules that do work when a neighbour is broken', () => {
+    const out = buildAiSuggestions({
+      componentCount: 3, types: ['text'], pageCount: 1, hasMotion: false,
+      selected: { type: 'card' },
+    })
+    expect(out.map((s) => s.id)).toContain('add-navbar')
+  })
+})

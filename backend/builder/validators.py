@@ -600,6 +600,11 @@ def validate_and_clean_schema(schema):
             'mobileFold': _num(page.get('mobileFold'), 0, 0, 20000),
             'mobileManual': bool(page.get('mobileManual')),
             'flowMode': bool(page.get('flowMode')),
+            # Which editor a page opens in. Derived from `html` when absent
+            # (old data), but stored explicitly so an HTML page whose document
+            # has been emptied does not silently turn back into a component
+            # canvas on the next load.
+            'mode': 'html' if page.get('mode') == 'html' or _page_html(page.get('html')).strip() else 'empty',
             # Multi-page HTML sites keep one full document per page.
             'html': _page_html(page.get('html')),
             'components': [sanitize_component(c) for c in comps],

@@ -48,7 +48,9 @@ export function readSuggestionContext() {
     selected: selected
       ? {
           type: selected.type,
-          label: typeLabel(selected.type),
+          // Never undefined: a legacy or unknown type falls back to its own
+          // type name, so the rules that interpolate this always have a word.
+          label: typeLabel(selected.type) || 'component',
           hasMotion: !!selected.props?.animIn && selected.props.animIn !== 'none',
         }
       : null,
@@ -205,20 +207,22 @@ export function buildAiSuggestions(ctx, { limit = 4, exclude = [] } = {}) {
   for (const rule of rules) {
     if (out.length >= limit) break
     if (skip.has(rule.id)) continue
-    let matches
+    // The whole resolution is guarded, not just `when`: `vars` and `prompt`
+    // read the context too, and a rule that throws in either would take the
+    // entire AI panel down with it — this runs during render. A rule that
+    // cannot describe the current page is simply not offered.
     try {
-      matches = !!rule.when(ctx)
+      if (!rule.when(ctx)) continue
+      out.push({
+        id: rule.id,
+        label: rule.label,
+        why: rule.why,
+        vars: typeof rule.vars === 'function' ? rule.vars(ctx) : undefined,
+        prompt: typeof rule.prompt === 'function' ? rule.prompt(ctx) : rule.prompt,
+      })
     } catch {
-      matches = false // a malformed context must never break the panel
+      /* malformed context — skip this rule, keep the rest */
     }
-    if (!matches) continue
-    out.push({
-      id: rule.id,
-      label: rule.label,
-      why: rule.why,
-      vars: typeof rule.vars === 'function' ? rule.vars(ctx) : undefined,
-      prompt: typeof rule.prompt === 'function' ? rule.prompt(ctx) : rule.prompt,
-    })
   }
   return out
 }

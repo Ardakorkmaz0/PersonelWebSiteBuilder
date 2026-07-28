@@ -501,3 +501,25 @@ def test_icon_keeps_its_accessible_label():
         'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 48, 'h': 48},
     })
     assert clean['props']['label'] == 'Favourite'
+
+
+def test_page_editor_mode_survives_an_emptied_html_document():
+    """`mode` was not stored, so it was re-derived from the html on load: an
+    HTML page whose document had been cleared silently turned back into a
+    component canvas."""
+    clean = validate_and_clean_schema({'pages': [{
+        'id': 'p1', 'name': 'Home', 'components': [], 'mode': 'html', 'html': '',
+    }]})['pages'][0]
+    assert clean['mode'] == 'html'
+
+
+def test_page_without_mode_is_derived_from_its_document():
+    doc = '<!doctype html><html><body>hi</body></html>'
+    legacy = validate_and_clean_schema({'pages': [{
+        'id': 'p1', 'name': 'Home', 'components': [], 'html': doc,
+    }]})['pages'][0]
+    plain = validate_and_clean_schema({'pages': [{
+        'id': 'p1', 'name': 'Home', 'components': [],
+    }]})['pages'][0]
+    assert legacy['mode'] == 'html'
+    assert plain['mode'] == 'empty'

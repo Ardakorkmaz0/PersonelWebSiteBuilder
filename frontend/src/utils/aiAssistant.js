@@ -17,7 +17,7 @@
 // sanitize_custom_js, ALLOWED_COMPONENT_TYPES). Worst case the model
 // proposes a javascript: href — sanitize_url drops it before save.
 
-import { useEditorStore } from '../store/editorStore.js'
+import { selectCurrentPage, useEditorStore } from '../store/editorStore.js'
 import { registry } from '../components/registry.jsx'
 import {
   AI_PROVIDERS,
@@ -154,29 +154,60 @@ function schemaSnapshot() {
   }
 }
 
-// Every component id that exists right now, newest page first. Used to turn
+// Every component id on the page currently being edited. Used to turn
 // "Component not found" into an error the model can actually act on.
 function knownIds(limit = 40) {
-  const s = useEditorStore.getState()
-  return [...collectIds(s.schema)].slice(0, limit)
+  const page = selectCurrentPage(useEditorStore.getState())
+  const out = []
+  const walk = (arr) => {
+    for (const c of arr || []) {
+      out.push(c.id)
+      if (Array.isArray(c.children)) walk(c.children)
+    }
+  }
+  walk(page?.components)
+  return out.slice(0, limit)
 }
 
-// Guard for every tool that takes an id. The store's updaters are no-ops on an
-// unknown id and report nothing, so without this the model would be told "ok"
-// for a change that never happened — then confidently tell the user it was
-// done. Returns an error result to return as-is, or null when the id is good.
+// The page an id lives on, or null. The snapshot lists every page, so the
+// model can and does reach for an id that exists — just not here.
+function pageOwning(id) {
+  const state = useEditorStore.getState()
+  const walk = (arr) => (arr || []).some((c) => c.id === id || walk(c.children))
+  return state.schema.pages.find((p) => walk(p.components)) || null
+}
+
+// Guard for every tool that takes an id. Two separate traps, both of which
+// used to be reported as success:
+//
+//  1. An id that exists nowhere. The store's updaters are silent no-ops on an
+//     unknown id, so the model was told "ok" for a change that never happened
+//     and then confidently told the user it was done.
+//  2. An id that exists on ANOTHER page. The updaters only ever touch the
+//     current page, so the call is just as much a no-op — but the id looks
+//     real, which is why checking existence across the whole schema was not
+//     enough. Name the page and the fix instead.
+//
+// Returns an error result to return as-is, or null when the id is usable.
 function checkId(id, label = 'Component') {
   if (!id || typeof id !== 'string') {
     return { ok: false, error: `${label} id is required. Use an id from the schema snapshot.` }
   }
-  const node = findDeep(useEditorStore.getState().schema, id)
-  if (!node) {
+  const state = useEditorStore.getState()
+  const page = selectCurrentPage(state)
+  const onThisPage = knownIds(Infinity).includes(id)
+  if (onThisPage) return null
+  const owner = pageOwning(id)
+  if (owner) {
     return {
       ok: false,
-      error: `${label} not found: "${id}". It does not exist (any more). Valid ids right now: ${knownIds().join(', ') || 'none — the page is empty'}.`,
+      error: `${label} "${id}" is on page "${owner.name}" (${owner.id}), but the editor is on "${page?.name}" (${page?.id}) and every edit applies to the current page only. Call selectPage({id:"${owner.id}"}) first, then repeat this call.`,
     }
   }
-  return null
+  return {
+    ok: false,
+    error: `${label} not found: "${id}". It does not exist (any more). Valid ids on this page: ${knownIds().join(', ') || 'none — the page is empty'}.`,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -662,8 +693,9 @@ export function executeTool(rawName, args) {
       try { store.applyTheme() } catch { /* applyTheme is optional */ }
       return { ok: true, autoApplied: true }
     case 'centerHorizontally': {
+      const badCenter = checkId(a.id)
+      if (badCenter) return badCenter
       const node = findDeep(store.schema, a.id)
-      if (!node) return { ok: false, error: 'Component not found' }
       const page = store.schema.pages.find((p) => p.components.some((c) => c.id === a.id))
       const canvasW = page?.canvasWidth || 1000
       const w = Math.round(node.layout?.w || 200)
@@ -704,8 +736,9 @@ export function executeTool(rawName, args) {
       return { ok: true, count: tabs.length }
     }
     case 'replaceComponentText': {
+      const badText = checkId(a.id)
+      if (badText) return badText
       const node = findDeep(store.schema, a.id)
-      if (!node) return { ok: false, error: 'Component not found' }
       const field = pickTextField(node.type, a.field || 'auto')
       if (!field) return { ok: false, error: `No editable text field on ${node.type}` }
       store.updateProps(a.id, { [field]: String(a.text || '') })

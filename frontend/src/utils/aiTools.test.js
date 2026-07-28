@@ -166,3 +166,58 @@ describe('looksLikeChangeRequest', () => {
     expect(looksLikeChangeRequest('')).toBe(false)
   })
 })
+
+describe('id validation across pages', () => {
+  // The snapshot lists every page, so the model reaches for ids that exist but
+  // are not reachable: the store's updaters only ever touch the current page,
+  // so those calls used to be silent no-ops reported as success.
+  function twoPages() {
+    const id = add('heading')
+    executeTool('updateProps', { id, patch: { text: 'ORIGINAL' } })
+    useEditorStore.getState().addPage('Second')
+    const second = useEditorStore.getState().schema.pages[1].id
+    useEditorStore.getState().selectPage(second)
+    return id
+  }
+
+  it('refuses an id that lives on another page and names that page', () => {
+    const id = twoPages()
+    const res = executeTool('updateProps', { id, patch: { text: 'CHANGED' } })
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/selectPage/)
+    expect(res.error).toContain('Second')
+    expect(useEditorStore.getState().schema.pages[0].components[0].props.text).toBe('ORIGINAL')
+  })
+
+  it('refuses a cross-page delete instead of reporting a phantom success', () => {
+    const id = twoPages()
+    expect(executeTool('removeComponent', { id }).ok).toBe(false)
+    expect(useEditorStore.getState().schema.pages[0].components).toHaveLength(1)
+  })
+
+  it('refuses cross-page setMotion, replaceComponentText and centerHorizontally', () => {
+    const id = twoPages()
+    expect(executeTool('setMotion', { id, animIn: 'fade-up' }).ok).toBe(false)
+    expect(executeTool('replaceComponentText', { id, text: 'x' }).ok).toBe(false)
+    expect(executeTool('centerHorizontally', { id }).ok).toBe(false)
+    const original = useEditorStore.getState().schema.pages[0].components[0]
+    expect(original.props.animIn).toBeUndefined()
+    expect(original.props.text).toBe('ORIGINAL')
+  })
+
+  it('works again once the model switches to that page', () => {
+    const id = twoPages()
+    const home = useEditorStore.getState().schema.pages[0].id
+    expect(executeTool('selectPage', { id: home }).ok).toBe(true)
+    expect(executeTool('updateProps', { id, patch: { text: 'CHANGED' } }).ok).toBe(true)
+    expect(useEditorStore.getState().schema.pages[0].components[0].props.text).toBe('CHANGED')
+  })
+
+  it('only lists ids from the current page in the not-found error', () => {
+    const id = twoPages()
+    useEditorStore.getState().addComponent('text')
+    const res = executeTool('updateProps', { id: 'ghost_1', patch: {} })
+    expect(res.error).not.toContain(id)
+    expect(res.error).toMatch(/text_/)
+  })
+})

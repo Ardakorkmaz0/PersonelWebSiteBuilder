@@ -11,7 +11,13 @@ import { recolorHtml } from '../utils/htmlRecolor.js'
 import { regionContentWidth } from '../utils/regionLayout.js'
 
 const HISTORY_LIMIT = 60
+// Gap between two same-key edits that still counts as one gesture.
 const COALESCE_MS = 500
+// Hard ceiling on how long one gesture may keep absorbing edits. Without it,
+// every keystroke pushed the window forward, so typing with no half-second
+// pause never produced a second undo entry — a minute of writing collapsed
+// into a single step and one Ctrl+Z threw all of it away.
+const COALESCE_MAX_MS = 2500
 
 const MOBILE_PAD = 16
 const MOBILE_GAP = 16
@@ -921,6 +927,30 @@ function clampLayout(l, bounds = {}) {
   return { x, y, w, h }
 }
 
+// The box a component must stay inside, for whichever breakpoint is being
+// edited. Shared by setLayout and setLayoutMany so a group gesture obeys the
+// same edges as a single one — they used to differ, and dragging or nudging a
+// MULTI selection could push components off the artboard entirely, where they
+// are invisible and unclickable until an undo or a reload.
+function layoutBoundsFor(page, id, key) {
+  const isTop = isTopLevel(page.components, id)
+  if (isTop) {
+    if (page.flowMode) return {}
+    return {
+      maxX: key === 'mobileLayout'
+        ? page.mobileWidth || MOBILE_CANVAS_WIDTH
+        : page.canvasWidth || CANVAS_WIDTH,
+    }
+  }
+  const parent = findParentInTree(page.components, id)
+  if (!parent) return {}
+  const maxX = parentDesignWidth(parent, key === 'mobileLayout' && parent.type === 'region'
+    ? page.mobileWidth || MOBILE_CANVAS_WIDTH
+    : undefined)
+  const parentLayout = key === 'mobileLayout' ? parent.mobileLayout || parent.layout : parent.layout
+  return { maxX, maxY: Math.round(parentLayout?.h || 0) || undefined }
+}
+
 // Clamp an artboard width / fold value to sane bounds (mirrors the backend).
 function clampWidth(value, def, lo, hi) {
   const n = Number(value)
@@ -1008,6 +1038,7 @@ function normalizeSchema(schema, options = {}) {
 // History coalescing keys (module-level so they survive set() calls).
 let lastKey = null
 let lastTime = 0
+let burstStart = 0
 
 export const useEditorStore = create((set, get) => ({
   schema: emptySchema(),
@@ -1083,12 +1114,18 @@ export const useEditorStore = create((set, get) => ({
   // (a drag or a run of keystrokes becomes a single undo step).
   record: (key) => {
     const now = Date.now()
-    if (key && key === lastKey && now - lastTime < COALESCE_MS) {
+    if (
+      key
+      && key === lastKey
+      && now - lastTime < COALESCE_MS
+      && now - burstStart < COALESCE_MAX_MS
+    ) {
       lastTime = now
       return
     }
     lastKey = key
     lastTime = now
+    burstStart = now
     set((state) => ({
       past: [...state.past.slice(-(HISTORY_LIMIT - 1)), state.schema],
       future: [],
@@ -1099,6 +1136,7 @@ export const useEditorStore = create((set, get) => ({
     const normalized = normalizeSchema(schema)
     lastKey = null
     lastTime = 0
+    burstStart = 0
     set({
       schema: normalized,
       currentPageId: normalized.pages[0].id,
@@ -1706,7 +1744,10 @@ export const useEditorStore = create((set, get) => ({
           const patch = updates[c.id]
           if (patch) {
             const base = c[key] || c.layout || { x: 0, y: 0, w: 200, h: 80 }
-            return { ...c, [key]: { ...base, ...patch } }
+            return {
+              ...c,
+              [key]: clampLayout({ ...base, ...patch }, layoutBoundsFor(page, c.id, key)),
+            }
           }
           return Array.isArray(c.children) ? { ...c, children: apply(c.children) } : c
         })
@@ -1827,7 +1868,6 @@ export const useEditorStore = create((set, get) => ({
   // Arm/disarm the link tool. Leaving the tool always drops the pending source.
   setLinkMode: (v) =>
     set({ linkMode: !!v, linkSourceId: v ? get().linkSourceId : null }),
-  cancelLink: () => set({ linkSourceId: null }),
 
   // Click handler for the link tool: first click picks a link-capable source
   // (a button/link or any wrap-in-<a> component); second click binds it to the
@@ -2070,22 +2110,7 @@ export const useEditorStore = create((set, get) => ({
       // right/bottom edge. Top-level free-canvas items clamp to the active
       // artboard; nested children clamp to their parent's box.
       const isTop = isTopLevel(page.components, id)
-      let maxX, maxY
-      if (isTop && !page.flowMode) {
-        maxX =
-          key === 'mobileLayout'
-            ? page.mobileWidth || MOBILE_CANVAS_WIDTH
-            : page.canvasWidth || CANVAS_WIDTH
-      } else if (!isTop) {
-        const parent = findParentInTree(page.components, id)
-        if (parent) {
-          maxX = parentDesignWidth(parent, key === 'mobileLayout' && parent.type === 'region'
-            ? page.mobileWidth || MOBILE_CANVAS_WIDTH
-            : undefined)
-          const parentLayout = key === 'mobileLayout' ? parent.mobileLayout || parent.layout : parent.layout
-          maxY = Math.round(parentLayout?.h || 0) || undefined
-        }
-      }
+      const { maxX, maxY } = layoutBoundsFor(page, id, key)
       const before = findInTree(page.components, id)
       // A SIZE change here is always user-driven (resize handle, Size panel,
       // align/distribute). Mark the embed so the auto-fit stops overriding the

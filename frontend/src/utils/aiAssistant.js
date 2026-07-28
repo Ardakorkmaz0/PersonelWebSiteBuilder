@@ -644,8 +644,30 @@ export function executeTool(rawName, args) {
       return checkId(a.id) || (store.updateProps(a.id, a.patch || {}), { ok: true })
     case 'updateStyles':
       return checkId(a.id) || (store.updateStyles(a.id, a.patch || {}), { ok: true })
-    case 'setLayout':
-      return checkId(a.id) || (store.setLayout(a.id, a.patch || {}), { ok: true })
+    case 'setLayout': {
+      const bad = checkId(a.id)
+      if (bad) return bad
+      // The id was checked but the VALUES were not: a patch like {x:"left"}
+      // stored NaN in the layout and still came back ok:true — the same false
+      // success the id guard exists to prevent, one level down.
+      const patch = {}
+      for (const key of ['x', 'y', 'w', 'h']) {
+        const raw = a.patch?.[key]
+        if (raw === undefined) continue
+        // Number(null) and Number('') are both 0, which would silently slide
+        // the component to the origin instead of reporting a bad argument.
+        const n = raw === null || raw === '' ? NaN : Number(raw)
+        if (!Number.isFinite(n)) {
+          return { ok: false, error: `setLayout ${key} must be a number, got ${JSON.stringify(raw)}. Use design pixels, e.g. {"x": 120}.` }
+        }
+        patch[key] = Math.round(n)
+      }
+      if (!Object.keys(patch).length) {
+        return { ok: false, error: 'Provide at least one of x, y, w, h (in design pixels).' }
+      }
+      store.setLayout(a.id, patch)
+      return { ok: true, applied: patch }
+    }
     case 'removeComponent':
       return checkId(a.id) || (store.removeComponent(a.id), { ok: true })
     case 'duplicateComponent':

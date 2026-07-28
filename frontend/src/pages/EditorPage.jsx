@@ -70,7 +70,7 @@ import { pageHasMotion } from '../utils/motion.js'
 import { htmlSnippetSize } from '../utils/htmlSnippetSizing.js'
 import {
   EDITOR_AUTO_SAVE_DELAY_MS,
-  isEditorSaveShortcut,
+  editorShortcutScope,
   shouldBlockEditorUnload,
   shouldRunEditorAutoSave,
 } from '../utils/editorLeave.js'
@@ -828,11 +828,18 @@ export default function EditorPage() {
   // Keyboard shortcuts: undo/redo, duplicate, delete, arrow-nudge.
   useEffect(() => {
     function onKey(e) {
-      const el = e.target
-      const tag = (el.tagName || '').toLowerCase()
-      const typing =
-        tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
       const mod = e.ctrlKey || e.metaKey
+      // editorShortcutScope owns the ordering: Save stays live while typing,
+      // everything else yields to the focused field. See its comment for what
+      // went wrong when undo was checked first.
+      const scope = editorShortcutScope(e)
+      if (scope === 'save') {
+        e.preventDefault()
+        const lifecycle = saveLifecycleRef.current
+        if (!lifecycle?.loading) lifecycle?.save(lifecycle.published)
+        return
+      }
+      if (scope === 'field') return
 
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
@@ -848,13 +855,6 @@ export default function EditorPage() {
         else redo()
         return
       }
-      if (isEditorSaveShortcut(e)) {
-        e.preventDefault()
-        const lifecycle = saveLifecycleRef.current
-        if (!lifecycle?.loading) lifecycle?.save(lifecycle.published)
-        return
-      }
-      if (typing) return
 
       // Cheat-sheet: Ctrl+/ or ? toggles it (any mode).
       if ((mod && e.key === '/') || e.key === '?') {

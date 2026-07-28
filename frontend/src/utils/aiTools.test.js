@@ -221,3 +221,43 @@ describe('id validation across pages', () => {
     expect(res.error).toMatch(/text_/)
   })
 })
+
+describe('setLayout argument validation', () => {
+  // The id was guarded but the VALUES were not, so a patch like {x:"left"}
+  // stored NaN in the layout and still reported ok:true.
+  it('refuses a non-numeric coordinate instead of storing NaN', () => {
+    const id = add('heading')
+    const before = { ...page().components[0].layout }
+    const res = executeTool('setLayout', { id, patch: { x: 'left' } })
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/must be a number/)
+    expect(page().components[0].layout).toEqual(before)
+  })
+
+  it('refuses null and rejects the whole call, not just the bad key', () => {
+    const id = add('heading')
+    const res = executeTool('setLayout', { id, patch: { x: 120, y: null } })
+    expect(res.ok).toBe(false)
+    expect(page().components[0].layout.x).not.toBe(120)
+  })
+
+  it('needs at least one coordinate', () => {
+    const id = add('heading')
+    expect(executeTool('setLayout', { id, patch: {} }).ok).toBe(false)
+    expect(executeTool('setLayout', { id }).ok).toBe(false)
+  })
+
+  it('accepts and rounds real numbers', () => {
+    const id = add('heading')
+    const res = executeTool('setLayout', { id, patch: { x: 120.4, y: 60.6 } })
+    expect(res.ok).toBe(true)
+    expect(res.applied).toEqual({ x: 120, y: 61 })
+    expect(page().components[0].layout).toMatchObject({ x: 120, y: 61 })
+  })
+
+  it('accepts a numeric string, since models often quote numbers', () => {
+    const id = add('heading')
+    expect(executeTool('setLayout', { id, patch: { x: '80' } }).ok).toBe(true)
+    expect(page().components[0].layout.x).toBe(80)
+  })
+})

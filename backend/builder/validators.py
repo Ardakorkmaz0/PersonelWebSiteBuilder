@@ -189,7 +189,14 @@ def sanitize_props(ctype, props):
     if ctype in ('divider', 'spacer'):
         return {}
     if ctype in ('button', 'linkbutton'):
-        return {'text': _str(props.get('text')), 'href': sanitize_url(props.get('href'))}
+        return {
+            'text': _str(props.get('text')),
+            'href': sanitize_url(props.get('href')),
+            # Optional leading glyph. A slug the client maps to one of its own
+            # inline SVGs — never rendered as markup — so a length cap is the
+            # only guard it needs.
+            'icon': _str(props.get('icon'))[:40],
+        }
     if ctype == 'image':
         return {
             'src': sanitize_image_src(props.get('src')),
@@ -197,7 +204,17 @@ def sanitize_props(ctype, props):
             'href': sanitize_url(props.get('href')),
         }
     if ctype == 'section':
-        return {'heading': _str(props.get('heading'))}
+        # A text band is five fields, not one. Rebuilding only `heading` here
+        # silently dropped the eyebrow, the body copy and the call-to-action on
+        # every save — including the body copy a freshly dropped band ships
+        # with — and the loss only surfaced on the next load.
+        return {
+            'eyebrow': _str(props.get('eyebrow')),
+            'heading': _str(props.get('heading')),
+            'text': _str(props.get('text')),
+            'buttonText': _str(props.get('buttonText')),
+            'buttonHref': sanitize_url(props.get('buttonHref')),
+        }
     if ctype == 'region':
         return {'contentWidth': _num(props.get('contentWidth'), 980, 320, 2000)}
     if ctype == 'card':
@@ -219,6 +236,10 @@ def sanitize_props(ctype, props):
         return {
             'name': _str(props.get('name'))[:40],
             'href': sanitize_url(props.get('href')),
+            # The accessible label the export writes into role="img"/aria-label.
+            # Dropping it here quietly undid the only a11y control this
+            # component has.
+            'label': _str(props.get('label'))[:120],
         }
     if ctype == 'input':
         itype = props.get('inputType')

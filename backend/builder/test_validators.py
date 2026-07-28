@@ -442,3 +442,62 @@ def test_page_seo_image_rejects_a_script_url():
         'seoImage': 'javascript:alert(1)',
     }]})['pages'][0]
     assert clean['seoImage'] == ''
+
+
+def _one_component(component):
+    """Round-trip a single component through the save gate."""
+    return validate_and_clean_schema({
+        'pages': [{'id': 'p1', 'name': 'Home', 'components': [component]}],
+    })['pages'][0]['components'][0]
+
+
+def test_text_band_keeps_every_field_the_editor_offers():
+    """A section exposes five fields; rebuilding only `heading` used to throw
+    the other four away on every save — including the body copy a freshly
+    dropped band ships with — and the loss only surfaced on the next load."""
+    clean = _one_component({
+        'id': 's1', 'type': 'section',
+        'props': {
+            'eyebrow': 'WHAT WE DO',
+            'heading': 'Design that ships',
+            'text': 'A short paragraph that introduces the section.',
+            'buttonText': 'See the work',
+            'buttonHref': 'https://example.com/work',
+        },
+        'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 1000, 'h': 280},
+    })
+    assert clean['props'] == {
+        'eyebrow': 'WHAT WE DO',
+        'heading': 'Design that ships',
+        'text': 'A short paragraph that introduces the section.',
+        'buttonText': 'See the work',
+        'buttonHref': 'https://example.com/work',
+    }
+
+
+def test_text_band_button_link_still_goes_through_the_url_guard():
+    clean = _one_component({
+        'id': 's1', 'type': 'section',
+        'props': {'heading': 'H', 'buttonHref': 'javascript:alert(1)'},
+        'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 1000, 'h': 280},
+    })
+    assert clean['props']['buttonHref'] == ''
+
+
+def test_button_keeps_its_icon():
+    for ctype in ('button', 'linkbutton'):
+        clean = _one_component({
+            'id': 'b1', 'type': ctype,
+            'props': {'text': 'Contact', 'href': '#contact', 'icon': 'mail'},
+            'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 160, 'h': 44},
+        })
+        assert clean['props']['icon'] == 'mail', ctype
+
+
+def test_icon_keeps_its_accessible_label():
+    clean = _one_component({
+        'id': 'i1', 'type': 'icon',
+        'props': {'name': 'star', 'label': 'Favourite'},
+        'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 48, 'h': 48},
+    })
+    assert clean['props']['label'] == 'Favourite'

@@ -403,7 +403,6 @@ export function landingTemplate(title = 'My Site', theme) {
         <span class="brand">${t}</span>
         <span class="spacer"></span>
         <a class="link" href="#features">Features</a>
-        <a class="link" href="#pricing">Pricing</a>
         <a class="cta" href="#start">Get started</a>
       </div>
     </header>

@@ -643,6 +643,11 @@ ${navbar(t, links, ['#subscribe', 'Subscribe'])}
     <h3 style="font-size:22px;">${po.h}</h3><p>${po.p}</p>
   </a>`).join('')}
 </div></section>
+<section id="about"><div class="container narrow">
+  ${sectionHead('About', 'Who is writing this', '')}
+  <p>I build software for a living and write about the parts that turn out to be
+  harder than they look. No hot takes — just what actually worked, and what did not.</p>
+</div></section>
 ${ctaBand('One essay a month', 'No spam, no growth hacks — just the writing. Unsubscribe anytime.', ['mailto:hello@example.com?subject=Subscribe', 'Subscribe by email']).replace('id="contact"', 'id="subscribe"')}
 ${footerCols(t, links, 'Essays on product, design, and engineering.')}`
   return doc(p, t, `${t} — Blog`, body)

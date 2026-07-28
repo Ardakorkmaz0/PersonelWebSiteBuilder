@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   listAdminUsers,
@@ -109,6 +109,9 @@ function UsersTab() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(0) // id currently acting on
   const [q, setQ] = useState('') // search: username / email / display name
+  // Mirror of `q` readable from an in-flight request's continuation.
+  const qRef = useRef(q)
+  useEffect(() => { qRef.current = q }, [q])
 
   // Debounced search — refetch page 1 whenever the query changes (empty query
   // loads immediately on mount). `ignore` drops a stale response if the user
@@ -136,7 +139,12 @@ function UsersTab() {
     if (loadingMore || !hasMore) return
     setLoadingMore(true)
     try {
-      const d = await listAdminUsers(page + 1, q)
+      // The search effect resets the list whenever the query changes; without
+      // this guard a page-2 response for the OLD query landed in the NEW list
+      // and pushed the counter past the new query's real page 2.
+      const requested = q
+      const d = await listAdminUsers(page + 1, requested)
+      if (requested !== qRef.current) return
       const { rows, hasMore: more } = readPage(d)
       setUsers((prev) => [...(prev || []), ...rows])
       setPage((p) => p + 1)

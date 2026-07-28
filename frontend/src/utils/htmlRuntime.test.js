@@ -6,8 +6,10 @@
 // jsdom is slower than just asserting on the source text).
 import { describe, expect, it } from 'vitest'
 import {
+  builderInteractiveJs,
   builderInteractiveTags,
   withBuilderInteractiveHtml,
+  withBuilderRuntimeHtml,
   withViewportMeta,
 } from './htmlRuntime.js'
 
@@ -131,12 +133,74 @@ describe('withBuilderInteractiveHtml', () => {
     expect(out).toMatch(/data-builder-interactive/)
   })
 
-  it('is idempotent enough that nesting an already-injected doc still parses', () => {
-    // We DO inject twice intentionally when an HTML embed sits inside another
-    // iframe — once on the outer doc, once on the embed's own srcdoc — but
-    // each injection should produce valid HTML so the parser doesn't choke.
+  it('never installs a second copy into the same document', () => {
+    // Two copies of the runtime bind two identical click handlers, and they
+    // cancel each other out — the hamburger opens on the first and closes on
+    // the second, so the mobile menu never appears. Every builder export
+    // already embeds the runtime, so the display-time injectors have to skip.
     const once = withBuilderInteractiveHtml('<html><body></body></html>')
     const twice = withBuilderInteractiveHtml(once)
-    expect((twice.match(/data-builder-interactive>/g) || []).length).toBeGreaterThanOrEqual(2)
+    expect(twice).toBe(once)
+  })
+
+  it("leaves an embed's own document alone — that is a separate iframe", () => {
+    // An HTML embed inside a page gets its own srcdoc + its own injection.
+    // That is a different document string, so it still receives a copy.
+    const outer = withBuilderInteractiveHtml('<html><body>outer</body></html>')
+    const embed = withBuilderInteractiveHtml('<html><body>embed</body></html>')
+    expect(outer).toMatch(/data-builder-interactive/)
+    expect(embed).toMatch(/data-builder-interactive/)
+  })
+})
+
+// The one place these tests DO execute the script: proving that a document
+// which ends up with two copies still behaves like one. Everything else stays
+// source-text assertions, per the note at the top of this file.
+//
+// One test, not two: listeners bound to `document` survive between tests, so a
+// second test that re-ran the script would measure the leftovers rather than
+// the guard.
+describe('the interactive runtime installs exactly once per document', () => {
+  it('two copies still open the mobile menu on one click', () => {
+    document.body.innerHTML = `
+      <div data-builder-mobile-nav data-mobile-open="false">
+        <span>Brand</span>
+        <button type="button" data-builder-mobile-nav-toggle aria-expanded="false">☰</button>
+        <div class="links"><a href="#top">Home</a></div>
+      </div>`
+    const root = document.querySelector('[data-builder-mobile-nav]')
+    const toggle = document.querySelector('[data-builder-mobile-nav-toggle]')
+
+    // Load it twice, exactly as a re-injected export would.
+    new Function(builderInteractiveJs())()
+    new Function(builderInteractiveJs())()
+
+    // Before the install guard the second copy's handler closed the menu in
+    // the same click the first one opened it, so it never appeared at all.
+    toggle.click()
+    expect(root.getAttribute('data-mobile-open')).toBe('true')
+    toggle.click()
+    expect(root.getAttribute('data-mobile-open')).toBe('false')
+  })
+})
+
+describe('display-time injectors never duplicate an embedded runtime', () => {
+  it('withBuilderInteractiveHtml leaves an export untouched', () => {
+    const exported = withBuilderInteractiveHtml('<html><body>x</body></html>')
+    expect(withBuilderInteractiveHtml(exported)).toBe(exported)
+  })
+
+  it('withBuilderRuntimeHtml adds only the editor half to an export', () => {
+    const exported = withBuilderInteractiveHtml('<html><head></head><body>x</body></html>')
+    const out = withBuilderRuntimeHtml(exported)
+    const count = (re) => (out.match(re) || []).length
+    expect(count(/data-builder-interactive>/g)).toBe(1)
+    expect(count(/data-builder-runtime-script/g)).toBe(1)
+  })
+
+  it('withBuilderRuntimeHtml still ships everything for a plain document', () => {
+    const out = withBuilderRuntimeHtml('<html><head></head><body>x</body></html>')
+    expect(out).toMatch(/data-builder-runtime-script/)
+    expect(out).toMatch(/data-builder-interactive>/)
   })
 })

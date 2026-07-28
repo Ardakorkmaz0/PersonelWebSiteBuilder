@@ -1451,9 +1451,21 @@ export default function EditorPage() {
   // page holding the document, and the answers seed the publish metadata
   // (title always follows the brand the user typed; category/tags only fill
   // in when still at their defaults, so they never clobber a curated setup).
+  // Both "apply a template" and "apply the wizard's site" switch the page to
+  // HTML mode. Guarding on siteHtml alone missed the case that matters most:
+  // a page with a full COMPONENT design has no HTML yet, so the swap happened
+  // with no confirmation at all. The design survives in the schema (Remove
+  // HTML brings it back), but it should still be the user's call.
+  function pageHasWork() {
+    if (siteHtml.trim()) return true
+    const state = useEditorStore.getState()
+    const page = state.schema.pages.find((p) => p.id === currentPageId)
+    return (page?.components || []).length > 0
+  }
+
   function applyWizardSite({ html, title: nextTitle, category: nextCategory, tags: nextTags }) {
     if (
-      siteHtml.trim() &&
+      pageHasWork() &&
       !window.confirm(
         t('Replace this page with the AI-generated site? Undo brings the old page back, and nothing is saved until you press Save.'),
       )
@@ -1473,7 +1485,7 @@ export default function EditorPage() {
   function pickTemplate(tpl, contentLanguage = 'en') {
     setTemplateOpen(false)
     if (
-      siteHtml.trim() &&
+      pageHasWork() &&
       !window.confirm(
         t('Start from the “{name}” template? This page current content changes (Undo brings it back). Nothing is saved until you press Save.', { name: t(tpl.name) }),
       )

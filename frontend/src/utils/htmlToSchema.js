@@ -154,9 +154,11 @@ function buildWalker(win) {
       return
     }
     if (tag === 'nav' || ((tag === 'header' || tag === 'footer') && el.querySelector('a'))) {
+      // A javascript: href sanitizes to '' — keeping the item would import a
+      // menu entry that looks real and does nothing. Drop it with the link.
       const links = [...el.querySelectorAll('a')]
         .map((a) => ({ label: clean(a.textContent), href: sanitizeUrl(a.getAttribute('href')) }))
-        .filter((l) => l.label)
+        .filter((l) => l.label && l.href)
         .slice(0, 10)
       let brand = clean(el.querySelector('h1,h2,h3,strong,.brand,.logo')?.textContent)
       if (!brand) brand = clean(el.querySelector('img')?.getAttribute('alt')) || 'Brand'

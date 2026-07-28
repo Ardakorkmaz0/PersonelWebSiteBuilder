@@ -221,6 +221,13 @@ const INTERACTIVE_SCRIPT = `
       update();
     }
     function init() {
+      // A document can end up carrying two copies of this script — an export
+      // already contains it, and a viewer that injects the runtime adds
+      // another. Two identical click handlers cancel each other out: the
+      // hamburger opens on the first and closes on the second, so the menu
+      // never appears. Install once per document, whatever the copy count.
+      if (window.__pwbInteractiveReady) return;
+      window.__pwbInteractiveReady = true;
       document.addEventListener('click', onClick);
       document.addEventListener('submit', onSubmit);
       window.addEventListener('message', function (event) {
@@ -340,6 +347,12 @@ function runtimeInjection() {
   return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}<style data-builder-motion-style>${MOTION_CSS}</style><script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
 }
 
+// The editor-only half: the readonly-enforcement runtime WITHOUT the shared
+// interactive shim, for documents that already carry the shim.
+function editorOnlyRuntimeInjection() {
+  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}`
+}
+
 // The interactive shim alone (style + script) for static HTML exports that do
 // not need the editor's readonly enforcement — only the runtime behaviours that
 // make tabs/modals/dropdowns work in the published page.
@@ -357,7 +370,15 @@ export function builderInteractiveJs() {
   return `${MOTION_ARM_JS}\n${INTERACTIVE_SCRIPT}\n${MOTION_OBSERVER_JS}`
 }
 
+// Does this document already carry the interactive runtime? Anything the
+// builder itself wrote does — both exporters embed builderInteractiveTags —
+// so re-injecting on display would ship it twice.
+function hasInteractiveRuntime(html) {
+  return /data-builder-interactive\b/.test(String(html || ''))
+}
+
 export function withBuilderInteractiveHtml(html) {
+  if (hasInteractiveRuntime(html)) return String(html || '')
   const inject = builderInteractiveTags()
   let out = String(html || '')
   if (/<style[^>]*data-pwb-embed-reset/i.test(out) && /<\/head>/i.test(out)) {
@@ -369,7 +390,10 @@ export function withBuilderInteractiveHtml(html) {
 }
 
 export function withBuilderRuntimeHtml(html) {
-  const inject = runtimeInjection()
+  // The editor's readonly runtime is a superset of the interactive one, so a
+  // document that already has the interactive half only needs the editor part
+  // — injecting the whole thing would duplicate the shared handlers.
+  const inject = hasInteractiveRuntime(html) ? editorOnlyRuntimeInjection() : runtimeInjection()
   let out = String(html || '')
   if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
   if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + inject)
@@ -564,9 +588,12 @@ export function installBuilderRuntime(iframe) {
   }
 }
 
-// Same-origin sandbox is only safe for scripts-disabled editing/inspection modes.
-export const HTML_SANDBOX =
-  'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation'
+// NOTE: there is deliberately no exported "allow-scripts + allow-same-origin"
+// sandbox. That pair cancels the sandbox out — the frame could reach this
+// app's origin and read the visitor's session — and an exported constant with
+// a reassuring name is exactly how such a value gets picked by mistake. The
+// two surfaces that need same-origin (the editor's DOM-inspection frame and
+// the HTML importer) set the attribute inline, WITHOUT allow-scripts.
 
 // View mode runs JavaScript but keeps an opaque iframe origin so imported pages
 // cannot read the editor app's localStorage or parent DOM.

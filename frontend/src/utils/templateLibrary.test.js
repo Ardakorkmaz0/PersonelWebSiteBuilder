@@ -3,6 +3,7 @@
 // variant would show up as a blank/garbled thumbnail in the gallery.
 import { describe, expect, it } from 'vitest'
 import { TEMPLATE_COUNT, TEMPLATE_LIBRARY } from './templateLibrary.js'
+import { SITE_TEMPLATES } from './htmlTemplates.js'
 
 const ALL = TEMPLATE_LIBRARY.flatMap((c) => c.variants.map((v) => ({ cat: c.id, ...v })))
 
@@ -41,5 +42,30 @@ describe('TEMPLATE_LIBRARY', () => {
       expect(cat.icon, cat.id).toBeTruthy()
       expect(cat.variants.length, cat.id).toBeGreaterThanOrEqual(8)
     }
+  })
+})
+
+describe('shipped templates keep their promises', () => {
+  // A nav item that scrolls nowhere is the first thing a visitor clicks. Both
+  // the site starters and the component gallery shipped some: the SaaS landing
+  // page advertised Pricing with no pricing section, and every blog variant
+  // linked About twice (nav + footer) with no About section.
+  const dead = (html, label) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    const bad = []
+    for (const a of doc.querySelectorAll('a[href^="#"]')) {
+      const id = a.getAttribute('href').slice(1)
+      if (!id || id === 'top') continue
+      if (!doc.getElementById(id)) bad.push(`${label}: #${id}`)
+    }
+    return bad
+  }
+
+  it('every component template variant', () => {
+    expect(ALL.flatMap((tpl) => dead(tpl.build('Smoke Test'), tpl.id))).toEqual([])
+  })
+
+  it('every HTML site starter', () => {
+    expect(SITE_TEMPLATES.flatMap((tpl) => dead(tpl.build('Smoke Test'), tpl.id))).toEqual([])
   })
 })

@@ -342,6 +342,39 @@ function regionChildInlineStyle(child, designWidth) {
 
 // Render a node (and a container's whole subtree) with INLINE styles. Used so a
 // container's nested children survive the classed export without recursive CSS.
+// Children of a region / container / tabs. `hidden` and `hiddenMobile` are
+// PER-BREAKPOINT switches — "hide on PC" must still show on a phone — so a
+// child is only dropped from the document when BOTH are set. Filtering on
+// `hidden` alone (what this used to do) deleted a PC-hidden child from the
+// mobile layout too, while the edit canvas kept showing it: an Edit vs View
+// mismatch on exactly the control that promises per-breakpoint behaviour.
+function visibleChildren(c) {
+  const kids = Array.isArray(c.children) ? c.children : []
+  return kids.filter((ch) => !(ch.hidden && ch.hiddenMobile))
+}
+
+// Hook for the per-breakpoint display rules emitted by nestedVisibilityCss.
+// Only added when the child actually has a visibility switch set, so the
+// markup of every existing design is byte-identical.
+function nestedClass(ch) {
+  return ch.hidden || ch.hiddenMobile ? ` n-${esc(ch.id)}` : ''
+}
+
+// Every nested child on a page that carries a visibility switch.
+function nestedWithVisibility(components) {
+  const out = []
+  const walk = (arr) => {
+    for (const c of arr || []) {
+      for (const ch of c.children || []) {
+        if (ch.hidden || ch.hiddenMobile) out.push(ch)
+      }
+      walk(c.children)
+    }
+  }
+  walk(components)
+  return out
+}
+
 // `classedChildren` says a stylesheet already carries this region's per-child
 // geometry (see regionChildCss), so the inline copy is dropped and the mobile
 // media query can reposition the children. Only top-level regions get those
@@ -350,17 +383,17 @@ function inlineNode(c, classedChildren = false) {
   const p = c.props || {}
   const styleStr = styleBlock(c.styles)
   if (c.type === 'region') {
-    const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+    const kids = visibleChildren(c)
     const designW = regionContentWidth(c)
     const inner = kids.map((ch) => {
       const filled = { ...ch, styles: { ...(ch.styles || {}), width: '100%', height: '100%' } }
       const geometry = classedChildren ? '' : ` style="${regionChildInlineStyle(ch, designW)}"`
-      return `<div class="region-child region-${esc(c.id)}-${esc(ch.id)}"${geometry}>${linkWrap(filled, inlineNode(filled))}</div>`
+      return `<div class="region-child region-${esc(c.id)}-${esc(ch.id)}${nestedClass(ch)}"${geometry}>${linkWrap(filled, inlineNode(filled))}</div>`
     }).join('')
     return `<section style="position:relative;width:100%;height:100%;overflow:hidden;${styleStr}"><div class="region-inner" style="position:relative;width:100%;max-width:${designW}px;height:100%;margin:0 auto;overflow:hidden">${inner}</div></section>`
   }
   if (c.type === 'container') {
-    const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+    const kids = visibleChildren(c)
     // Auto-layout: children flow (flex/grid) and reflow on any screen.
     const autoCss = autoLayoutContainerCss(c.props)
     if (autoCss) {
@@ -368,7 +401,7 @@ function inlineNode(c, classedChildren = false) {
         .map((ch) => {
           const filled = { ...ch, styles: { ...(ch.styles || {}), width: '100%' } }
           const childCss = autoLayoutChildCss(ch, c.props)
-          return `<div style="${childCss}">${linkWrap(filled, inlineNode(filled))}</div>`
+          return `<div class="${nestedClass(ch).trim()}" style="${childCss}">${linkWrap(filled, inlineNode(filled))}</div>`
         })
         .join('')
       return `<div style="${autoCss};${styleStr}">${inner}</div>`
@@ -386,7 +419,7 @@ function inlineNode(c, classedChildren = false) {
           : { ...ch, styles: { ...(ch.styles || {}), width: '100%', height: '100%' } }
         const wrapH = grows ? '' : `;height:${Math.round(l.h || 80)}px`
         const wrapMinH = grows ? `;min-height:${Math.round(l.h || 80)}px` : ''
-        return `<div style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px${wrapH}${wrapMinH}">${linkWrap(filled, inlineNode(filled))}</div>`
+        return `<div class="${nestedClass(ch).trim()}" style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px${wrapH}${wrapMinH}">${linkWrap(filled, inlineNode(filled))}</div>`
       })
       .join('')
     return `<div style="display:block;position:relative;min-height:${h}px;${styleStr}">${inner}</div>`
@@ -395,7 +428,7 @@ function inlineNode(c, classedChildren = false) {
     const tabs = (Array.isArray(p.tabs) ? p.tabs : []).filter((t) => t && t.id)
     const safeTabs = tabs.length ? tabs : [{ id: 't1', label: 'Tab' }]
     const activeId = safeTabs.some((t) => t.id === p.activeId) ? p.activeId : safeTabs[0].id
-    const kids = (Array.isArray(c.children) ? c.children : []).filter((ch) => !ch.hidden)
+    const kids = visibleChildren(c)
     const strip = safeTabs
       .map(
         (t) =>
@@ -714,6 +747,21 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
       }
     }
   }
+  // Nested children hidden on PC. A min-width block (rather than a base rule
+  // the mobile block would then have to undo) means we never have to guess
+  // what display value to restore on a flex / grid / absolute wrapper.
+  const pcHidden = pages
+    .flatMap((page) => nestedWithVisibility(page.components || []))
+    .filter((ch) => ch.hidden)
+  if (pcHidden.length) {
+    css += `
+@media (min-width: ${MOBILE_BREAKPOINT + 1}px) {
+`
+    for (const ch of pcHidden) css += `  .n-${esc(ch.id)} { display:none; }
+`
+    css += `}
+`
+  }
   // Mobile
   css += `\n@media (max-width: ${MOBILE_BREAKPOINT}px) {\n`
   for (const page of pages) {
@@ -759,6 +807,12 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
           css += `  .region-${esc(c.id)}-${esc(child.id)} { left:${childX}px;right:auto;top:${Math.max(0, Math.round(layout.y || 0))}px;width:${childWidth}px;height:${Math.max(4, Math.round(layout.h || 80))}px;max-width:100%;transform:none;${child.hiddenMobile ? 'display:none;' : ''} }\n`
         }
       }
+    }
+  }
+  for (const page of pages) {
+    for (const ch of nestedWithVisibility(page.components || [])) {
+      if (ch.hiddenMobile) css += `  .n-${esc(ch.id)} { display:none; }
+`
     }
   }
   css += `  .nav-inner:not(.nav-vertical):not(.nav-mobile-stack) { position:relative; flex-direction:row; align-items:center; justify-content:space-between; gap:10px; flex-wrap:nowrap; }\n`

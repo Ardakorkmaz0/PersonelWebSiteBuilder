@@ -516,3 +516,56 @@ describe('schemaToSingleHtml page SEO', () => {
     expect(html).toContain('<meta name="twitter:description" content="Kısa açıklama" />')
   })
 })
+
+describe('nested children keep per-breakpoint visibility', () => {
+  // `hidden` / `hiddenMobile` are per-breakpoint switches. Nested children used
+  // to be filtered on `hidden` alone, which deleted a PC-hidden child from the
+  // mobile layout too — while the edit canvas, which is viewport-aware, kept
+  // showing it.
+  const child = (id, text, flags = {}) => ({
+    id, type: 'heading', props: { text }, styles: {},
+    layout: { x: 10, y: 10, w: 200, h: 60 }, ...flags,
+  })
+  const build = (kids, parentType = 'container') => schemaToSingleHtml({
+    theme: {},
+    pages: [{
+      id: 'p1', name: 'Home', background: '#fff', canvasWidth: 1000, mobileWidth: 390,
+      components: [{
+        id: 'parent1', type: parentType, props: { contentWidth: 980 }, styles: {},
+        layout: { x: 0, y: 0, w: 1000, h: 400 }, children: kids,
+      }],
+    }],
+  }, 'T')
+  const desktopBlock = (html) => (html.match(/@media \(min-width: 769px\) \{[\s\S]*?\n\}/) || [''])[0]
+  const mobileBlock = (html) => (html.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/) || [''])[0]
+
+  it('keeps a PC-hidden child in the document and hides it on desktop only', () => {
+    const html = build([child('k1', 'Desktop hidden', { hidden: true })])
+    expect(html).toContain('Desktop hidden')
+    expect(desktopBlock(html)).toContain('.n-k1 { display:none; }')
+    expect(mobileBlock(html)).not.toContain('.n-k1')
+  })
+
+  it('hides a mobile-hidden child on mobile only', () => {
+    const html = build([child('k2', 'Mobile hidden', { hiddenMobile: true })])
+    expect(html).toContain('Mobile hidden')
+    expect(mobileBlock(html)).toContain('.n-k2 { display:none; }')
+    expect(desktopBlock(html)).not.toContain('.n-k2')
+  })
+
+  it('drops a child hidden at both breakpoints', () => {
+    expect(build([child('k3', 'Gone', { hidden: true, hiddenMobile: true })])).not.toContain('Gone')
+  })
+
+  it('leaves an unflagged child completely untouched', () => {
+    const html = build([child('k4', 'Plain')])
+    expect(html).toContain('Plain')
+    expect(html).not.toContain('n-k4')
+  })
+
+  it('applies the same rules inside a Section band', () => {
+    const html = build([child('k5', 'Band child', { hidden: true })], 'region')
+    expect(html).toContain('Band child')
+    expect(desktopBlock(html)).toContain('.n-k5 { display:none; }')
+  })
+})

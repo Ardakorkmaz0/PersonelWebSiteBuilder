@@ -757,7 +757,8 @@ class PublicSiteView(APIView):
 
     def get(self, request, slug):
         try:
-            site = Site.objects.get(slug=slug)
+            # select_related: the owner is read below for the suspension check.
+            site = Site.objects.select_related('owner').get(slug=slug)
         except Site.DoesNotExist:
             return Response(
                 {'detail': 'Site not found.'},
@@ -766,6 +767,15 @@ class PublicSiteView(APIView):
         is_owner = (
             request.user.is_authenticated and site.owner_id == request.user.id
         )
+        # A suspended owner's published work is off the platform, same as on the
+        # profile page and in search — otherwise "suspend" only blocked login
+        # while every published URL kept serving. The owner still reaches their
+        # own site so nothing is lost to them.
+        if not site.owner.is_active and not is_owner:
+            return Response(
+                {'detail': 'Site not found or not published.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         if not site.published and not is_owner:
             return Response(
                 {'detail': 'Site not found or not published.'},
@@ -790,7 +800,7 @@ class SiteViewCountView(APIView):
 
     def post(self, request, slug):
         is_owner = request.user.is_authenticated
-        qs = Site.objects.filter(slug=slug, published=True)
+        qs = Site.objects.filter(slug=slug, published=True, owner__is_active=True)
         if is_owner:
             qs = qs.exclude(owner_id=request.user.id)
         # F() so concurrent views don't clobber each other; update() touches the
@@ -942,8 +952,12 @@ class ExploreView(ListAPIView):
     pagination_class = ExplorePagination
 
     def get_queryset(self):
+        # owner__is_active matters: suspending an account is supposed to take
+        # its work off the platform, and the profile page and the header search
+        # already behave that way. Without it the feed — the most visible
+        # surface of all — kept showing a suspended creator's sites.
         qs = (
-            Site.objects.filter(published=True)
+            Site.objects.filter(published=True, owner__is_active=True)
             .select_related('owner', 'owner__profile')
             .annotate(favorite_count=Count('favorited_by'))
             .order_by('-hot_score', '-updated_at')

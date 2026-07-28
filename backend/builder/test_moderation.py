@@ -189,3 +189,57 @@ class TestAdminModeration:
         assert resp.status_code == 200
         r.refresh_from_db()
         assert r.status == 'dismissed' and r.resolved_at is not None
+
+
+@pytest.mark.django_db
+class TestSuspensionTakesContentDown:
+    """Suspending an account is meant to remove its work from the platform —
+    the profile page already 404s and the header search already filters. The
+    Discover feed and the public site URL did not, so a suspension only
+    blocked login while every published page kept serving."""
+
+    def test_feed_drops_a_suspended_creators_sites(self, client, admin, alice):
+        author, _ = alice
+        _, atok = admin
+        Site.objects.create(owner=author, title='Still here', published=True, slug='still-here')
+        assert any(s['title'] == 'Still here' for s in client.get('/api/explore/').data['results'])
+
+        _auth(client, atok)
+        client.post(f'/api/admin/users/{author.id}/suspend/', {'suspend': True}, format='json')
+
+        fresh = APIClient()
+        assert not any(s['title'] == 'Still here' for s in fresh.get('/api/explore/').data['results'])
+
+    def test_public_url_stops_serving_a_suspended_creators_site(self, client, admin, alice):
+        author, _ = alice
+        _, atok = admin
+        Site.objects.create(owner=author, title='Public', published=True, slug='public-one')
+        assert APIClient().get('/api/public/sites/public-one/').status_code == 200
+
+        _auth(client, atok)
+        client.post(f'/api/admin/users/{author.id}/suspend/', {'suspend': True}, format='json')
+
+        assert APIClient().get('/api/public/sites/public-one/').status_code == 404
+
+    def test_views_are_not_counted_for_a_suspended_creator(self, client, admin, alice):
+        author, _ = alice
+        _, atok = admin
+        site = Site.objects.create(owner=author, title='Counted', published=True, slug='counted')
+        _auth(client, atok)
+        client.post(f'/api/admin/users/{author.id}/suspend/', {'suspend': True}, format='json')
+
+        APIClient().post('/api/public/sites/counted/view/')
+        site.refresh_from_db()
+        assert site.view_count == 0
+
+    def test_reinstating_puts_everything_back(self, client, admin, alice):
+        author, _ = alice
+        _, atok = admin
+        Site.objects.create(owner=author, title='Back', published=True, slug='back-again')
+        _auth(client, atok)
+        client.post(f'/api/admin/users/{author.id}/suspend/', {'suspend': True}, format='json')
+        client.post(f'/api/admin/users/{author.id}/suspend/', {'suspend': False}, format='json')
+
+        fresh = APIClient()
+        assert fresh.get('/api/public/sites/back-again/').status_code == 200
+        assert any(s['title'] == 'Back' for s in fresh.get('/api/explore/').data['results'])

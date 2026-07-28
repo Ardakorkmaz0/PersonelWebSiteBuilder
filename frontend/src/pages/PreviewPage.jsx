@@ -120,7 +120,6 @@ export default function PreviewPage() {
           if (!active) return
           setSite(data)
           setStatus('ok')
-          if (data?.title) document.title = data.title
         })
         .catch((e) => {
           if (!active) return
@@ -147,10 +146,14 @@ export default function PreviewPage() {
 
   // Apply launch metadata to the public page, so the readiness settings also
   // drive search results, social previews, and the browser tab.
+  // The app's own title, captured once on mount. Reading it lazily inside the
+  // effect below picked up the title THIS page had already set, so navigating
+  // away left the visited site's name in the browser tab.
+  const appTitleRef = useRef(typeof document === 'undefined' ? '' : document.title)
   useEffect(() => {
     if (!site) return undefined
     const seo = site.site_options?.seo || {}
-    const previousTitle = document.title
+    const previousTitle = appTitleRef.current
     document.title = seo.title?.trim() || site.title || previousTitle
     const touched = []
     const setMeta = (attribute, key, content) => {

@@ -20,6 +20,10 @@ export default function RegisterPage() {
   const [captcha, setCaptcha] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Matches the sign-in form: unchecked keeps the session in
+  // sessionStorage so it ends with the tab. Registering used to persist
+  // to localStorage unconditionally, with no way to say otherwise.
+  const [remember, setRemember] = useState(true)
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
   const cfg = usePublicConfig()
@@ -38,7 +42,7 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       const { token, user } = await register(username, email, password, captcha)
-      setAuth(token, user, true)
+      setAuth(token, user, remember)
       navigate('/')
     } catch (err) {
       setError(apiError(err, t('Registration failed.')))
@@ -51,7 +55,7 @@ export default function RegisterPage() {
     setError('')
     try {
       const { token, user } = await googleLogin(credential)
-      setAuth(token, user, true)
+      setAuth(token, user, remember)
       navigate('/')
     } catch (err) {
       setError(apiError(err, t('Google sign-in failed.')))
@@ -130,6 +134,16 @@ export default function RegisterPage() {
               <span>{t('8+ chars, mix letters, numbers & symbols.')}</span>
               {password && <span style={{ color: strength.color }}>{t(strength.label)}</span>}
             </span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-[#374151]">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 rounded border-[#d1d5db] text-[#4f46e5] focus:ring-[#4f46e5]"
+            />
+            {t('Remember me')}
           </label>
 
           {/* reCAPTCHA renders only when VITE_RECAPTCHA_SITE_KEY is set. */}

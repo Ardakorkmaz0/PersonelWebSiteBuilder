@@ -93,13 +93,20 @@ export default function ExplorePage() {
     if (loadingMore || !data.hasMore) return
     setLoadingMore(true)
     try {
-      const result = await listExplore({ category, search: '', page: data.page + 1 })
-      setData((previous) => ({
-        ...previous,
-        items: [...previous.items, ...result.results],
-        page: previous.page + 1,
-        hasMore: !!result.next,
-      }))
+      const requested = category
+      const result = await listExplore({ category: requested, search: '', page: data.page + 1 })
+      setData((previous) => {
+        // Switching category while this was in flight resets the feed. Without
+        // this check the old category's second page landed in the new list and
+        // pushed the page counter past the new category's real page 2.
+        if (previous.category !== requested) return previous
+        return {
+          ...previous,
+          items: [...previous.items, ...result.results],
+          page: previous.page + 1,
+          hasMore: !!result.next,
+        }
+      })
     } catch (requestError) {
       setError(apiError(requestError))
     } finally {

@@ -131,7 +131,7 @@ function readBrowserFramePreference() {
 }
 
 function readHtmlDevice(viewport) {
-  const fallback = viewport === 'mobile' ? 'iphone15' : 'fit'
+  const fallback = viewport === 'mobile' ? 'iphone15pro' : 'fit'
   try {
     const saved = localStorage.getItem(HTML_DEVICE_KEYS[viewport])
     return DEVICES.some((device) => device.id === saved) && isMobileDevice(saved) === (viewport === 'mobile')
@@ -602,6 +602,7 @@ export default function EditorPage() {
     if (next === 'view') setViewNonce((n) => n + 1)
   }
   const chooseHtmlDevice = (deviceId) => {
+    if (deviceId !== htmlDevice) workspaceRef.current?.prepareFrameChange?.()
     setHtmlDevice(deviceId)
     const deviceViewport = isMobileDevice(deviceId) ? 'mobile' : 'pc'
     try {
@@ -1131,6 +1132,12 @@ export default function EditorPage() {
   }
 
   function editBrowserPage(pageId) {
+    if (currentPageIsHtml) {
+      try { localStorage.setItem(`pwb_htmlmode_${id}`, 'edit') } catch { /* ignore */ }
+      if (pageId === currentPageId) workspaceRef.current?.showEdit?.()
+      else switchToPage(pageId)
+      return
+    }
     switchToPage(pageId)
     switchCanvasMode('edit')
   }
@@ -2337,6 +2344,17 @@ export default function EditorPage() {
                       </select>
                     </>
                   }
+                  browserFrame={browserFrameEnabled}
+                  onBrowserFrameToggle={toggleBrowserFrame}
+                  browserSiteTitle={title}
+                  browserFavicon={siteOptions?.seo?.favicon || siteOptions?.favicon || ''}
+                  browserAddress={currentPage.canonicalUrl || customDomain || `${slug || 'preview'}.sitebuilder.local`}
+                  browserPages={storePages}
+                  browserCurrentPageId={currentPageId}
+                  onBrowserPageSelect={switchToPage}
+                  onBrowserPageEdit={editBrowserPage}
+                  onBrowserFaviconEdit={editBrowserFavicon}
+                  onBrowserAddressChange={changeBrowserAddress}
                   fileName={
                     (localFile?.pageId === currentPageId && localFile?.name) ||
                     pageFileName(currentPage, currentPageIndex === 0)
@@ -2365,7 +2383,7 @@ export default function EditorPage() {
                   is selected in the edit iframe, site settings otherwise. */}
               {!aiWorkspaceOpen && <RailSlot
                 side="right"
-                label={htmlSelection ? 'Element' : 'Settings'}
+                label={t('Properties')}
                 open={rightOpen}
                 narrow={isNarrow}
                 onOpen={() => setRail('right', true)}
@@ -2373,14 +2391,14 @@ export default function EditorPage() {
               >
                 <div className="studio-panel flex w-72 min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l">
                   <div className="flex items-center justify-between border-b border-[var(--studio-border)] px-3 py-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
-                      {htmlSelection ? 'Element' : 'Site settings'}
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[var(--studio-text-muted)]">
+                      {t('Properties')}
                     </span>
                     <button
                       type="button"
                       onClick={() => setRail('right', false)}
                       title={t('Hide panel')}
-                      className="rounded-md px-1.5 py-0.5 text-xs text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
+                      className="studio-icon-btn h-7 w-7 text-xs"
                     >
                       »
                     </button>
@@ -2389,6 +2407,7 @@ export default function EditorPage() {
                     {htmlSelection ? (
                       <HtmlElementPanel
                         info={htmlSelection}
+                        viewport={isMobileDevice(htmlDevice) ? 'mobile' : 'pc'}
                         pages={storePages}
                         onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
                         onSelectParent={() => workspaceRef.current?.selectParent?.()}
@@ -2396,6 +2415,7 @@ export default function EditorPage() {
                         onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
                         onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}
                         onDelete={() => workspaceRef.current?.deleteSelected?.()}
+                        onResetMobile={() => workspaceRef.current?.resetSelectedMobileStyles?.()}
                         onClose={() => workspaceRef.current?.clearSelection?.()}
                       />
                     ) : (

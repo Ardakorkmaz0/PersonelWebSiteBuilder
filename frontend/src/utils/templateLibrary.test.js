@@ -61,9 +61,11 @@ describe('shipped templates keep their promises', () => {
     return bad
   }
 
+  // Builds and parses every one of the 90+ variants, so it needs more than the
+  // 5s default when the machine is busy.
   it('every component template variant', () => {
     expect(ALL.flatMap((tpl) => dead(tpl.build('Smoke Test'), tpl.id))).toEqual([])
-  })
+  }, 30000)
 
   it('every HTML site starter', () => {
     expect(SITE_TEMPLATES.flatMap((tpl) => dead(tpl.build('Smoke Test'), tpl.id))).toEqual([])

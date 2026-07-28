@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent } from '@testing-library/react'
+import { createRef } from 'react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import LanguageProvider from '../../i18n/LanguageProvider.jsx'
 import { serializeDocument } from '../../utils/htmlPlacement.js'
-import { installSelectionResizeChrome } from './HtmlWorkspace.jsx'
+import HtmlWorkspace, { installSelectionResizeChrome } from './HtmlWorkspace.jsx'
 import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
 
 describe('HTML source save state', () => {
@@ -9,6 +11,94 @@ describe('HTML source save state', () => {
     expect(hasUnsavedSourceDraft('source', '<p>new</p>', '<p>old</p>')).toBe(true)
     expect(hasUnsavedSourceDraft('source', '<p>same</p>', '<p>same</p>')).toBe(false)
     expect(hasUnsavedSourceDraft('view', '<p>new</p>', '<p>old</p>')).toBe(false)
+  })
+})
+
+describe('HTML workspace device chrome', () => {
+  beforeEach(() => {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      disconnect() {}
+    }
+  })
+
+  it('uses a transient real-mobile viewport in Edit mode', () => {
+    localStorage.setItem('pwb_htmlmode_viewport-test', 'edit')
+    render(
+      <LanguageProvider>
+        <HtmlWorkspace
+          persistKey="viewport-test"
+          html="<html><head><title>Test</title></head><body><header>Wide header</header></body></html>"
+          deviceId="iphone15pro"
+        />
+      </LanguageProvider>,
+    )
+
+    const source = screen.getByTitle('site').getAttribute('srcdoc') || ''
+    expect(source).toContain('name="viewport"')
+    expect(source).toContain('data-pwb-injected')
+  })
+
+  it('shows BrowserFrame on desktop but keeps the real phone frame on mobile', () => {
+    const { unmount } = render(
+      <LanguageProvider>
+        <HtmlWorkspace
+          persistKey="browser-desktop"
+          html="<html><body><main>Desktop</main></body></html>"
+          deviceId="desktop-16-9"
+          browserFrame
+          onBrowserFrameToggle={vi.fn()}
+        />
+      </LanguageProvider>,
+    )
+    expect(document.querySelector('[data-builder-browser-frame]')).not.toBeNull()
+    unmount()
+
+    render(
+      <LanguageProvider>
+        <HtmlWorkspace
+          persistKey="browser-mobile"
+          html="<html><body><main>Mobile</main></body></html>"
+          deviceId="iphone15pro"
+          browserFrame
+          onBrowserFrameToggle={vi.fn()}
+        />
+      </LanguageProvider>,
+    )
+    expect(document.querySelector('[data-builder-browser-frame]')).toBeNull()
+    expect(document.querySelector('[data-builder-phone-frame]')).not.toBeNull()
+  })
+
+  it('snapshots the live edit document before a device frame remount', () => {
+    localStorage.setItem('pwb_htmlmode-frame-snapshot', 'edit')
+    const workspaceRef = createRef()
+    const onCommit = vi.fn()
+    const html = '<html><head></head><body><h1>Original</h1></body></html>'
+    const renderWorkspace = (deviceId) => (
+      <LanguageProvider>
+        <HtmlWorkspace
+          ref={workspaceRef}
+          persistKey="frame-snapshot"
+          html={html}
+          deviceId={deviceId}
+          onCommit={onCommit}
+        />
+      </LanguageProvider>
+    )
+    const { rerender } = render(renderWorkspace('iphone15pro'))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const iframe = screen.getByTitle('site')
+    iframe.contentDocument.head.innerHTML = '<style data-pwb-responsive-overrides>@media (max-width:767px){[data-pwb-mobile-font-size]{font-size:var(--pwb-mobile-font-size)!important}}</style>'
+    iframe.contentDocument.body.innerHTML = '<h1 data-pwb-mobile-font-size style="--pwb-mobile-font-size: 30px">Changed</h1>'
+
+    act(() => workspaceRef.current.prepareFrameChange())
+    expect(onCommit).toHaveBeenCalledWith(expect.stringContaining('Changed'))
+
+    rerender(renderWorkspace('desktop-16-9'))
+    const remountedSource = screen.getByTitle('site').getAttribute('srcdoc') || ''
+    expect(remountedSource).toContain('data-pwb-mobile-font-size')
+    expect(remountedSource).toContain('--pwb-mobile-font-size: 30px')
+    expect(remountedSource).toContain('Changed')
   })
 })
 

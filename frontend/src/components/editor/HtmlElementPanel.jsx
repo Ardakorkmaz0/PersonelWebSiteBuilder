@@ -8,10 +8,11 @@ import {
   LabeledTextarea,
   LinkTargetControl,
 } from './controls.jsx'
-import SegmentedToggle from './SegmentedToggle.jsx'
+import PanelGroup from './PanelGroup.jsx'
+import PanelTabs from './PanelTabs.jsx'
+import { CodeIcon, CopyIcon, MoreHorizontalIcon, TrashIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
-// Friendly names for the tag chip — users think "Heading", not "h2".
 const TAG_LABELS = {
   h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', h4: 'Heading 4',
   h5: 'Heading 5', h6: 'Heading 6', p: 'Paragraph', a: 'Link',
@@ -62,8 +63,6 @@ const ALIGN_OPTIONS_FLEX = [
   ['flex-end', 'End'],
 ]
 
-// Mirror the component-mode html panel's style controls so both modes edit the
-// same visual properties.
 const BORDER_STYLE_OPTIONS = [
   ['', 'Default'],
   ['none', 'None'],
@@ -87,18 +86,12 @@ const OVERFLOW_OPTIONS = [
   ['scroll', 'Scroll'],
 ]
 
-const HTML_ELEMENT_MODE_KEY = 'pwb_html_element_properties_mode'
+const PANEL_TABS = [
+  ['content', 'Content'],
+  ['design', 'Design'],
+  ['layout', 'Layout'],
+]
 
-function SectionTitle({ children }) {
-  return (
-    <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-[#6b7280] first:mt-0">
-      {children}
-    </h3>
-  )
-}
-
-// Tiny inline align glyphs (text lines / a box inside its row) — the panel is
-// 288px wide, so icon buttons beat three word-buttons per row.
 function TextAlignGlyph({ side }) {
   const x = side === 'center' ? [2, 4, 3] : side === 'right' ? [2, 6, 4] : [2, 2, 2]
   return (
@@ -118,7 +111,6 @@ function BoxAlignGlyph({ side }) {
   )
 }
 
-// One row of segmented icon buttons; clicking the active choice clears it.
 function AlignButtons({ label, value, onPick, kind, t }) {
   const Glyph = kind === 'text' ? TextAlignGlyph : BoxAlignGlyph
   const titles = kind === 'text'
@@ -126,18 +118,20 @@ function AlignButtons({ label, value, onPick, kind, t }) {
     : { left: t('Place at the left'), center: t('Place in the center'), right: t('Place at the right') }
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-xs text-[#374151]">{label}</span>
-      <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5">
+      <span className="text-xs font-medium text-[var(--studio-text-muted)]">{label}</span>
+      <div className="flex items-center rounded-lg border border-[var(--studio-border)] bg-[var(--studio-control)] p-0.5">
         {['left', 'center', 'right'].map((side) => (
           <button
             key={side}
             type="button"
             title={titles[side]}
+            aria-label={titles[side]}
+            aria-pressed={value === side}
             onClick={() => onPick(value === side ? '' : side)}
             className={
               value === side
-                ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white'
-                : 'rounded-md px-2.5 py-1 text-[#374151] hover:bg-[#f3f4f6]'
+                ? 'rounded-md bg-[var(--studio-accent)] px-2.5 py-1 text-white shadow-sm'
+                : 'rounded-md px-2.5 py-1 text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
             }
           >
             <Glyph side={side} />
@@ -148,12 +142,9 @@ function AlignButtons({ label, value, onPick, kind, t }) {
   )
 }
 
-// Properties panel for the element selected inside the HTML edit iframe.
-// Mirrors the component-mode panel: content, typography, colours, then the
-// duplicate/move/delete actions. All edits hit the live DOM via the
-// workspace's imperative API — `info` is just the current snapshot.
 export default function HtmlElementPanel({
   info,
+  viewport = 'pc',
   pages = [],
   onChange,
   onSelectParent,
@@ -161,332 +152,262 @@ export default function HtmlElementPanel({
   onMoveUp,
   onMoveDown,
   onDelete,
+  onResetMobile,
   onClose,
 }) {
   const { t } = useLanguage()
-  const translatedOptions = (options) => options.map(([value, label]) => [value, t(label)])
-  const [propertiesMode, setPropertiesModeState] = useState(() => {
-    try {
-      return localStorage.getItem(HTML_ELEMENT_MODE_KEY) === 'extended' ? 'extended' : 'basic'
-    } catch {
-      return 'basic'
-    }
-  })
-  const extendedMode = propertiesMode === 'extended'
-  const setPropertiesMode = (mode) => {
-    setPropertiesModeState(mode)
-    try { localStorage.setItem(HTML_ELEMENT_MODE_KEY, mode) } catch { /* ignore */ }
-  }
+  const [tab, setTab] = useState('content')
+  const [actionsOpen, setActionsOpen] = useState(false)
   if (!info) return null
-  const label = t(TAG_LABELS[info.tag] || `<${info.tag}>`)
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-      <div className="mb-1 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-[#111827]">{label}</div>
-          <div className="max-w-[200px] truncate text-xs text-[#9ca3af]" title={info.classes}>
-            &lt;{info.tag}&gt;{info.classes ? ` .${info.classes.split(' ').join(' .')}` : ''}
-          </div>
-        </div>
-        <SegmentedToggle
-          value={propertiesMode}
-          onChange={setPropertiesMode}
-          options={[['basic', t('Basic')], ['extended', t('Extend')]]}
-        />
-        <button
-          type="button"
-          onClick={onClose}
-          title={t('Deselect (back to site settings)')}
-          className="rounded px-2 py-1 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
-        >
-          ×
-        </button>
-      </div>
 
-      {/* Breadcrumb + Select parent — the way to reach a container (section,
-          div) you can't click directly. */}
-      {info.hasParent && (
-        <div className="mb-2 flex items-center gap-1.5">
+  const translatedOptions = (options) => options.map(([value, label]) => [value, t(label)])
+  const label = t(TAG_LABELS[info.tag] || `<${info.tag}>`)
+  const isMobile = viewport === 'mobile'
+  const hasContent = info.canEditText || info.href !== null || info.src !== null
+  const panelLabel = t(PANEL_TABS.find(([id]) => id === tab)?.[1] || 'Content')
+
+  return (
+    <div className="studio-properties-panel flex h-full min-w-0 flex-col overflow-hidden">
+      <div className="border-b border-[var(--studio-border)] px-3 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color-mix(in_srgb,var(--studio-accent)_18%,var(--studio-border))] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-text)]">
+            <CodeIcon size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-semibold text-[var(--studio-text)]">{label}</h2>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+              <span className="inline-flex shrink-0 items-center rounded-full bg-[var(--studio-control)] px-2 py-0.5 text-[10px] font-semibold text-[var(--studio-text-muted)]">
+                {t(isMobile ? 'Mobile' : 'PC')}
+              </span>
+              <span className="min-w-0 truncate font-mono text-[10px] text-[var(--studio-text-faint)]" title={info.classes}>
+                &lt;{info.tag}&gt;{info.classes ? ` .${info.classes.split(' ').join(' .')}` : ''}
+              </span>
+            </div>
+          </div>
           <button
             type="button"
-            onClick={onSelectParent}
-            title={t('Select the containing {tag}', { tag: info.parentTag })}
-            className="flex items-center gap-1 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-xs font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
+            onClick={onClose}
+            aria-label={t('Deselect (back to site settings)')}
+            title={t('Deselect (back to site settings)')}
+            className="studio-icon-btn h-9 w-9 shrink-0 border border-[var(--studio-border)] bg-[var(--studio-control)] text-lg"
           >
-            ↑ {t('Select parent')}
-            <span className="text-[#9ca3af]">&lt;{info.parentTag}&gt;</span>
+            ×
           </button>
         </div>
-      )}
-      {info.ancestors?.length > 0 && (
-        <div className="mb-3 truncate text-[11px] text-[#9ca3af]" title={info.ancestors.join(' › ')}>
-          {info.ancestors.join(' › ')} › <span className="text-[#4f46e5]">{info.tag}</span>
-        </div>
-      )}
 
-      {(info.canEditText || info.href !== null || info.src !== null) && (
-        <>
-          <SectionTitle>{t('Content')}</SectionTitle>
-          <div className="space-y-2">
-            {info.canEditText && (
-              <LabeledTextarea
-                label={t('Text')}
-                value={info.text}
-                onChange={(v) => onChange({ text: v })}
-                rows={3}
-              />
+        {(info.hasParent || info.ancestors?.length > 0) && (
+          <div className="mt-3 flex min-w-0 items-center gap-2">
+            {info.hasParent && (
+              <button
+                type="button"
+                onClick={onSelectParent}
+                title={t('Select the containing {tag}', { tag: info.parentTag })}
+                className="studio-btn studio-btn-secondary shrink-0 px-2 py-1 text-[11px] text-[var(--studio-accent-text)]"
+              >
+                ↑ {t('Select parent')} &lt;{info.parentTag}&gt;
+              </button>
             )}
-            {info.href !== null && (
-              <LinkTargetControl
-                label={t('Link (href)')}
-                value={info.href}
-                onChange={(v) => onChange({ href: v })}
-                pages={pages}
-              />
-            )}
-            {info.src !== null && (
-              <LabeledText
-                label={t('Image URL (src)')}
-                value={info.src}
-                onChange={(v) => onChange({ src: v })}
-                placeholder="https://..."
-              />
-            )}
-            {info.alt !== null && (
-              <LabeledText
-                label={t('Alt text')}
-                value={info.alt}
-                onChange={(v) => onChange({ alt: v })}
-                placeholder={t('Describe the image')}
-              />
+            {info.ancestors?.length > 0 && (
+              <span className="min-w-0 truncate text-[10px] text-[var(--studio-text-faint)]" title={info.ancestors.join(' › ')}>
+                {info.ancestors.join(' › ')} › {info.tag}
+              </span>
             )}
           </div>
-        </>
-      )}
-
-      {/* One-click alignment — the answer to "shift this left/right". Text
-          nudges the writing; Element slides the whole box inside its row
-          (auto side margins, which also work on flex children like navbar
-          links — no Display/Justify digging required). */}
-      <SectionTitle>{t('Align')}</SectionTitle>
-      <div className="space-y-2">
-        <AlignButtons
-          label={t('Text')}
-          kind="text"
-          value={info.textAlign === 'start' ? 'left' : info.textAlign === 'end' ? 'right' : info.textAlign}
-          onPick={(v) => onChange({ textAlign: v })}
-          t={t}
-        />
-        <AlignButtons
-          label={t('Element')}
-          kind="box"
-          value={info.alignBlock}
-          onPick={(v) => onChange({ alignBlock: v })}
-          t={t}
-        />
-        <p className="text-[11px] leading-snug text-[#9ca3af]">
-          {t('Element slides the whole box inside its row — e.g. push the navbar links to the left or center.')}
-        </p>
-      </div>
-
-      <SectionTitle>{t('Typography')}</SectionTitle>
-      <div className="space-y-2">
-        <LabeledNumber
-          label={t('Font size (px)')}
-          value={info.fontSize}
-          onChange={(v) => onChange({ fontSize: v })}
-        />
-        <LabeledSelect
-          label={t('Font weight')}
-          value={info.fontWeight}
-          onChange={(v) => onChange({ fontWeight: v })}
-          options={translatedOptions(WEIGHT_OPTIONS)}
-        />
-        <LabeledSelect
-          label={t('Text align')}
-          value={info.textAlign}
-          onChange={(v) => onChange({ textAlign: v })}
-          options={translatedOptions(ALIGN_OPTIONS)}
-        />
-      </div>
-
-      <SectionTitle>{t('Colors')}</SectionTitle>
-      <div className="space-y-2">
-        <LabeledColor
-          label={t('Text color')}
-          value={info.color || '#000000'}
-          onChange={(v) => onChange({ color: v })}
-        />
-        <LabeledColor
-          label={t('Background')}
-          value={info.background || '#ffffff'}
-          onChange={(v) => onChange({ background: v })}
-        />
-      </div>
-
-      <SectionTitle>{t('Box')}</SectionTitle>
-      <div className="space-y-2">
-        <LabeledNumber
-          label={t('Padding (px)')}
-          value={info.padding}
-          onChange={(v) => onChange({ padding: v })}
-        />
-        <LabeledNumber
-          label={t('Corner radius (px)')}
-          value={info.radius}
-          onChange={(v) => onChange({ radius: v })}
-        />
-      </div>
-
-      <SectionTitle>{t(extendedMode ? 'Size & spacing' : 'Size')}</SectionTitle>
-      <div className="space-y-2">
-        <LabeledNumber
-          label={t('Width (px, 0 = auto)')}
-          value={info.width}
-          onChange={(v) => onChange({ width: v })}
-        />
-        <LabeledNumber
-          label={t('Height (px, 0 = auto)')}
-          value={info.height}
-          onChange={(v) => onChange({ height: v })}
-        />
-        {extendedMode && (
-          <>
-            <LabeledNumber
-              label={t('Margin top (px)')}
-              value={info.marginTop}
-              onChange={(v) => onChange({ marginTop: v })}
-            />
-            <LabeledNumber
-              label={t('Margin bottom (px)')}
-              value={info.marginBottom}
-              onChange={(v) => onChange({ marginBottom: v })}
-            />
-            <LabeledSelect
-              label={t('Display')}
-              value={info.display}
-              onChange={(v) => onChange({ display: v })}
-              options={translatedOptions(DISPLAY_OPTIONS)}
-            />
-          </>
         )}
       </div>
 
-      {extendedMode && (
-        <>
-      <SectionTitle>{t('Border')}</SectionTitle>
-      <div className="space-y-2">
-        <LabeledNumber
-          label={t('Border width (px)')}
-          value={info.borderWidth}
-          onChange={(v) => onChange({ borderWidth: v })}
-        />
-        <LabeledColor
-          label={t('Border color')}
-          value={info.borderColor || '#000000'}
-          onChange={(v) => onChange({ borderColor: v })}
-        />
-        <LabeledSelect
-          label={t('Border style')}
-          value={info.borderStyle}
-          onChange={(v) => onChange({ borderStyle: v })}
-          options={translatedOptions(BORDER_STYLE_OPTIONS)}
-        />
-      </div>
+      <PanelTabs
+        value={tab}
+        onChange={setTab}
+        tabs={PANEL_TABS.map(([id, tabLabel]) => [id, t(tabLabel)])}
+      />
 
-      {/* Effects — parity with the component-mode html panel (shadow / opacity
-          / overflow), applied to this element only. */}
-      <SectionTitle>{t('Effects')}</SectionTitle>
-      <div className="space-y-2">
-        <LabeledSelect
-          label={t('Shadow')}
-          value={info.boxShadow}
-          onChange={(v) => onChange({ boxShadow: v })}
-          options={translatedOptions(SHADOW_OPTIONS)}
-        />
-        <LabeledRange
-          label={t('Opacity')}
-          value={info.opacity}
-          onChange={(v) => onChange({ opacity: v })}
-        />
-        <LabeledSelect
-          label={t('Overflow')}
-          value={info.overflow}
-          onChange={(v) => onChange({ overflow: v })}
-          options={translatedOptions(OVERFLOW_OPTIONS)}
-        />
-      </div>
+      <div
+        role="tabpanel"
+        aria-label={panelLabel}
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[var(--studio-panel-muted)] p-3"
+      >
+        {tab === 'content' && (
+          <>
+            {hasContent ? (
+              <PanelGroup id="html-content" title={t('Content')} defaultOpen>
+                {info.canEditText && (
+                  <LabeledTextarea
+                    label={t('Text')}
+                    value={info.text}
+                    onChange={(value) => onChange({ text: value })}
+                    rows={4}
+                  />
+                )}
+                {info.href !== null && (
+                  <LinkTargetControl
+                    label={t('Link (href)')}
+                    value={info.href}
+                    onChange={(value) => onChange({ href: value })}
+                    pages={pages}
+                  />
+                )}
+                {info.src !== null && (
+                  <LabeledText
+                    label={t('Image URL (src)')}
+                    value={info.src}
+                    onChange={(value) => onChange({ src: value })}
+                    placeholder="https://..."
+                  />
+                )}
+                {info.alt !== null && (
+                  <LabeledText
+                    label={t('Alt text')}
+                    value={info.alt}
+                    onChange={(value) => onChange({ alt: value })}
+                    placeholder={t('Describe the image')}
+                  />
+                )}
+              </PanelGroup>
+            ) : (
+              <div className="rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-4 text-xs leading-relaxed text-[var(--studio-text-muted)]">
+                {t('This element has no editable text, link or image content.')}
+              </div>
+            )}
+            <div className="rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-2 text-[11px] leading-relaxed text-[var(--studio-text-faint)]">
+              {t('Tip: you can also click into the page and type directly. Style changes here are applied to this element only.')}
+            </div>
+          </>
+        )}
 
-      {/* Layout controls — the practical way to space/align the items inside a
-          row container like a navbar (which is a flex box, not a plain block). */}
-      <SectionTitle>{t('Layout (rows / flex)')}</SectionTitle>
-      <div className="space-y-2">
-        <LabeledSelect
-          label={t('Justify (horizontal)')}
-          value={info.justifyContent}
-          onChange={(v) => onChange({ justifyContent: v })}
-          options={translatedOptions(JUSTIFY_OPTIONS)}
-        />
-        <LabeledSelect
-          label={t('Align (vertical)')}
-          value={info.alignItems}
-          onChange={(v) => onChange({ alignItems: v })}
-          options={translatedOptions(ALIGN_OPTIONS_FLEX)}
-        />
-        <LabeledNumber
-          label={t('Gap between items (px)')}
-          value={info.gap}
-          onChange={(v) => onChange({ gap: v })}
-        />
-        <p className="text-[11px] leading-snug text-[#9ca3af]">
-          {t('Tip: set Display to “Flex” first if these do not take effect — they arrange the element direct children (e.g. a navbar links).')}
-        </p>
-      </div>
+        {tab === 'design' && (
+          <>
+            {isMobile && (
+              <div className="rounded-xl border border-[color-mix(in_srgb,var(--studio-accent)_22%,var(--studio-border))] bg-[var(--studio-accent-soft)] px-3 py-2.5">
+                <p className="text-[11px] leading-relaxed text-[var(--studio-accent-text)]">
+                  {t('Style edits here apply to MOBILE only. Clear a field to fall back to the PC value.')}
+                </p>
+                {info.mobileOverrideCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={onResetMobile}
+                    className="studio-btn studio-btn-secondary mt-2 px-2 py-1 text-[11px]"
+                  >
+                    {t('Reset mobile styles')} ({info.mobileOverrideCount})
+                  </button>
+                )}
+              </div>
+            )}
+            <PanelGroup id="html-typography" title={t('Typography')} defaultOpen>
+              <LabeledNumber label={t('Font size (px)')} value={info.fontSize} onChange={(value) => onChange({ fontSize: value })} />
+              <LabeledSelect label={t('Font weight')} value={info.fontWeight} onChange={(value) => onChange({ fontWeight: value })} options={translatedOptions(WEIGHT_OPTIONS)} />
+              <LabeledSelect label={t('Text align')} value={info.textAlign} onChange={(value) => onChange({ textAlign: value })} options={translatedOptions(ALIGN_OPTIONS)} />
+            </PanelGroup>
+            <PanelGroup id="html-colors" title={t('Colors')} defaultOpen>
+              <LabeledColor label={t('Text color')} value={info.color || '#000000'} onChange={(value) => onChange({ color: value })} />
+              <LabeledColor label={t('Background')} value={info.background || '#ffffff'} onChange={(value) => onChange({ background: value })} />
+            </PanelGroup>
+            <PanelGroup id="html-box" title={t('Box')}>
+              <LabeledNumber label={t('Padding (px)')} value={info.padding} onChange={(value) => onChange({ padding: value })} />
+              <LabeledNumber label={t('Corner radius (px)')} value={info.radius} onChange={(value) => onChange({ radius: value })} />
+            </PanelGroup>
+            <PanelGroup id="html-border" title={t('Border')}>
+              <LabeledNumber label={t('Border width (px)')} value={info.borderWidth} onChange={(value) => onChange({ borderWidth: value })} />
+              <LabeledColor label={t('Border color')} value={info.borderColor || '#000000'} onChange={(value) => onChange({ borderColor: value })} />
+              <LabeledSelect label={t('Border style')} value={info.borderStyle} onChange={(value) => onChange({ borderStyle: value })} options={translatedOptions(BORDER_STYLE_OPTIONS)} />
+            </PanelGroup>
+            <PanelGroup id="html-effects" title={t('Effects')}>
+              <LabeledSelect label={t('Shadow')} value={info.boxShadow} onChange={(value) => onChange({ boxShadow: value })} options={translatedOptions(SHADOW_OPTIONS)} />
+              <LabeledRange label={t('Opacity')} value={info.opacity} onChange={(value) => onChange({ opacity: value })} />
+              <LabeledSelect label={t('Overflow')} value={info.overflow} onChange={(value) => onChange({ overflow: value })} options={translatedOptions(OVERFLOW_OPTIONS)} />
+            </PanelGroup>
+          </>
+        )}
 
-        </>
-      )}
-
-      <p className="mt-3 text-xs leading-relaxed text-[#d1d5db]">
-        {t('Tip: you can also click into the page and type directly. Style changes here are applied to this element only.')}
-      </p>
+        {tab === 'layout' && (
+          <>
+            {isMobile && (
+              <div className="rounded-xl border border-[color-mix(in_srgb,var(--studio-accent)_22%,var(--studio-border))] bg-[var(--studio-accent-soft)] px-3 py-2 text-[11px] leading-relaxed text-[var(--studio-accent-text)]">
+                {t('Layout edits here apply to MOBILE only. Desktop values stay unchanged.')}
+              </div>
+            )}
+            <PanelGroup id="html-align" title={t('Align')} defaultOpen>
+              <AlignButtons
+                label={t('Text')}
+                kind="text"
+                value={info.textAlign === 'start' ? 'left' : info.textAlign === 'end' ? 'right' : info.textAlign}
+                onPick={(value) => onChange({ textAlign: value })}
+                t={t}
+              />
+              <AlignButtons
+                label={t('Element')}
+                kind="box"
+                value={(isMobile ? info.mobileAlignBlock : '') || info.alignBlock}
+                onPick={(value) => onChange({ alignBlock: value })}
+                t={t}
+              />
+              <p className="text-[11px] leading-relaxed text-[var(--studio-text-faint)]">
+                {t('Element slides the whole box inside its row — e.g. push the navbar links to the left or center.')}
+              </p>
+            </PanelGroup>
+            <PanelGroup id="html-size-spacing" title={t('Size & spacing')} defaultOpen>
+              <LabeledNumber label={t('Width (px, 0 = auto)')} value={info.width} onChange={(value) => onChange({ width: value })} />
+              <LabeledNumber label={t('Height (px, 0 = auto)')} value={info.height} onChange={(value) => onChange({ height: value })} />
+              <LabeledNumber label={t('Margin top (px)')} value={info.marginTop} onChange={(value) => onChange({ marginTop: value })} />
+              <LabeledNumber label={t('Margin bottom (px)')} value={info.marginBottom} onChange={(value) => onChange({ marginBottom: value })} />
+              <LabeledSelect label={t('Display')} value={info.display} onChange={(value) => onChange({ display: value })} options={translatedOptions(DISPLAY_OPTIONS)} />
+            </PanelGroup>
+            <PanelGroup id="html-flex-layout" title={t('Layout (rows / flex)')}>
+              <LabeledSelect label={t('Justify (horizontal)')} value={info.justifyContent} onChange={(value) => onChange({ justifyContent: value })} options={translatedOptions(JUSTIFY_OPTIONS)} />
+              <LabeledSelect label={t('Align (vertical)')} value={info.alignItems} onChange={(value) => onChange({ alignItems: value })} options={translatedOptions(ALIGN_OPTIONS_FLEX)} />
+              <LabeledNumber label={t('Gap between items (px)')} value={info.gap} onChange={(value) => onChange({ gap: value })} />
+              <p className="text-[11px] leading-relaxed text-[var(--studio-text-faint)]">
+                {t('Tip: set Display to “Flex” first if these do not take effect — they arrange the element direct children (e.g. a navbar links).')}
+              </p>
+            </PanelGroup>
+          </>
+        )}
       </div>
 
       <div
         role="region"
         aria-label={t('Arrange')}
-        className="shrink-0 border-t border-[#e5e7eb] bg-white p-3 shadow-[0_-8px_20px_rgba(15,23,42,0.06)]"
+        className="shrink-0 border-t border-[var(--studio-border)] bg-[var(--studio-panel)] p-3 shadow-[0_-10px_28px_color-mix(in_srgb,var(--studio-shell)_72%,transparent)]"
       >
-        <div className="grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={onDuplicate}
-          className="rounded-lg bg-[#f3f4f6] px-2 py-2 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-        >
-          {t('Duplicate')}
-        </button>
-        <button
-          type="button"
-          onClick={onMoveUp}
-          className="rounded-lg bg-[#f3f4f6] px-2 py-2 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-        >
-          {t('Move up')}
-        </button>
-        <button
-          type="button"
-          onClick={onMoveDown}
-          className="rounded-lg bg-[#f3f4f6] px-2 py-2 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-        >
-          {t('Move down')}
-        </button>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2">
+          <button type="button" onClick={onDuplicate} className="studio-btn studio-btn-secondary min-w-0 px-2 text-xs">
+            <CopyIcon size={14} className="shrink-0" />
+            <span className="truncate">{t('Duplicate')}</span>
+          </button>
+          <button
+            type="button"
+            aria-label={t('Delete component')}
+            onClick={onDelete}
+            className="studio-btn min-w-0 border border-[color-mix(in_srgb,var(--studio-danger)_34%,var(--studio-border))] bg-[var(--studio-danger-soft)] px-2 text-xs text-[var(--studio-danger)] hover:bg-[color-mix(in_srgb,var(--studio-danger)_16%,var(--studio-panel-raised))]"
+          >
+            <TrashIcon size={14} className="shrink-0" />
+            <span className="truncate">{t('Delete')}</span>
+          </button>
+          <button
+            type="button"
+            aria-label={t('More actions')}
+            title={t('More actions')}
+            aria-expanded={actionsOpen}
+            onClick={() => setActionsOpen((open) => !open)}
+            className={`studio-icon-btn h-9 w-9 border ${
+              actionsOpen
+                ? 'border-[color-mix(in_srgb,var(--studio-accent)_34%,var(--studio-border))] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-text)]'
+                : 'border-[var(--studio-border)] bg-[var(--studio-control)]'
+            }`}
+          >
+            <MoreHorizontalIcon size={16} />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="mt-2 w-full rounded-lg border border-[#d69ca5] bg-[#fde7e9] px-2 py-2 text-sm font-medium text-[#a4262c] hover:bg-[#f6d5d9]"
-        >
-          {t('Delete component')}
-        </button>
+        {actionsOpen && (
+          <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-2 shadow-[var(--studio-shadow-sm)]">
+            <button type="button" onClick={onMoveUp} className="studio-btn bg-[var(--studio-control)] px-2 py-1.5 text-xs">
+              {t('Move up')}
+            </button>
+            <button type="button" onClick={onMoveDown} className="studio-btn bg-[var(--studio-control)] px-2 py-1.5 text-xs">
+              {t('Move down')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

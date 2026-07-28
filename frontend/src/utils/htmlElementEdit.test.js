@@ -4,7 +4,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   applyElementPatch,
+  applyMobileElementPatch,
   bindLinkToTarget,
+  clearMobileElementStyles,
   cssColorToHex,
   describeElement,
   duplicateElement,
@@ -21,6 +23,7 @@ import {
 import { closestPlaceableBlock, insertPositionForY } from './htmlPlacement.js'
 
 beforeEach(() => {
+  document.head.querySelector('style[data-pwb-responsive-overrides]')?.remove()
   document.body.innerHTML = `
     <section id="hero">
       <h1 id="title">Hello <strong id="bold">world</strong></h1>
@@ -327,6 +330,40 @@ describe('applyElementPatch — effects (parity with component mode)', () => {
     expect(p.style.getPropertyValue('overflow')).toBe('hidden')
     applyElementPatch(p, { overflow: 'visible' })
     expect(p.style.getPropertyValue('overflow')).toBe('')
+  })
+})
+
+describe('applyMobileElementPatch', () => {
+  it('stores visual edits in a mobile media override without changing desktop inline styles', () => {
+    const p = document.getElementById('para')
+    applyMobileElementPatch(p, { width: 320, color: '#ff0000', marginTop: 0 })
+
+    expect(p.style.width).toBe('')
+    expect(p.style.getPropertyValue('--pwb-mobile-width')).toBe('320px')
+    expect(p).toHaveAttribute('data-pwb-mobile-width')
+    expect(p.style.getPropertyValue('--pwb-mobile-margin-top')).toBe('0px')
+    const style = document.querySelector('style[data-pwb-responsive-overrides]')
+    expect(style?.textContent).toContain('@media (max-width: 767px)')
+    expect(style?.textContent).toContain('var(--pwb-mobile-width)')
+  })
+
+  it('keeps content edits shared across screens', () => {
+    const p = document.getElementById('para')
+    applyMobileElementPatch(p, { text: 'Mobile-friendly text' })
+    expect(p.textContent).toBe('Mobile-friendly text')
+    expect(document.querySelector('style[data-pwb-responsive-overrides]')).toBeNull()
+  })
+
+  it('clears only mobile overrides and removes the stylesheet when unused', () => {
+    const p = document.getElementById('para')
+    p.style.width = '640px'
+    applyMobileElementPatch(p, { width: 320, padding: 16 })
+    clearMobileElementStyles(p)
+
+    expect(p.style.width).toBe('640px')
+    expect(p.style.getPropertyValue('--pwb-mobile-width')).toBe('')
+    expect(p).not.toHaveAttribute('data-pwb-mobile-width')
+    expect(document.querySelector('style[data-pwb-responsive-overrides]')).toBeNull()
   })
 })
 

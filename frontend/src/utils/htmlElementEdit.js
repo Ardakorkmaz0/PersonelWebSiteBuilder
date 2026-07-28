@@ -1,5 +1,84 @@
 import { readElementMultilineText, writeElementMultilineText } from './domMultilineText.js'
 
+const MOBILE_STYLE_TAG_ATTR = 'data-pwb-responsive-overrides'
+const MOBILE_VAR_PREFIX = '--pwb-mobile-'
+const MOBILE_STYLE_FIELDS = [
+  ['font-size', 'font-size'],
+  ['font-weight', 'font-weight'],
+  ['text-align', 'text-align'],
+  ['color', 'color'],
+  ['background-color', 'background-color'],
+  ['padding', 'padding'],
+  ['border-radius', 'border-radius'],
+  ['width', 'width'],
+  ['height', 'height'],
+  ['margin-top', 'margin-top'],
+  ['margin-bottom', 'margin-bottom'],
+  ['display', 'display'],
+  ['border-width', 'border-width'],
+  ['border-color', 'border-color'],
+  ['border-style', 'border-style'],
+  ['box-shadow', 'box-shadow'],
+  ['opacity', 'opacity'],
+  ['overflow', 'overflow'],
+  ['margin-left', 'margin-left'],
+  ['margin-right', 'margin-right'],
+  ['justify-content', 'justify-content'],
+  ['align-items', 'align-items'],
+  ['gap', 'gap'],
+]
+
+const MOBILE_OVERRIDE_SELECTOR = MOBILE_STYLE_FIELDS
+  .map(([name]) => `[data-pwb-mobile-${name}]`)
+  .join(',')
+
+const MOBILE_OVERRIDE_CSS = `
+@media (max-width: 767px) {
+${MOBILE_STYLE_FIELDS.map(([name, property]) => (
+    `  [data-pwb-mobile-${name}] { ${property}: var(${MOBILE_VAR_PREFIX}${name}) !important; }`
+  )).join('\n')}
+}`
+
+function ensureMobileOverrideStyle(doc) {
+  if (!doc) return null
+  let style = doc.querySelector(`style[${MOBILE_STYLE_TAG_ATTR}]`)
+  if (style) return style
+  style = doc.createElement('style')
+  style.setAttribute(MOBILE_STYLE_TAG_ATTR, '')
+  style.textContent = MOBILE_OVERRIDE_CSS
+  ;(doc.head || doc.documentElement).appendChild(style)
+  return style
+}
+
+function setMobileStyle(el, name, value) {
+  const attr = `data-pwb-mobile-${name}`
+  const variable = `${MOBILE_VAR_PREFIX}${name}`
+  if (value === '' || value == null) {
+    el.removeAttribute(attr)
+    el.style.removeProperty(variable)
+    return
+  }
+  el.setAttribute(attr, '')
+  el.style.setProperty(variable, String(value))
+}
+
+function removeUnusedMobileOverrideStyle(doc) {
+  if (!doc?.querySelector(MOBILE_OVERRIDE_SELECTOR)) {
+    doc?.querySelector(`style[${MOBILE_STYLE_TAG_ATTR}]`)?.remove()
+  }
+}
+
+export function mobileElementOverrideCount(el) {
+  if (!el?.attributes) return 0
+  return [...el.attributes].filter((attr) => attr.name.startsWith('data-pwb-mobile-')).length
+}
+
+export function clearMobileElementStyles(el) {
+  if (!el?.style) return
+  MOBILE_STYLE_FIELDS.forEach(([name]) => setMobileStyle(el, name, ''))
+  removeUnusedMobileOverrideStyle(el.ownerDocument)
+}
+
 // Element-level inspect/edit helpers for the HTML-mode properties panel.
 // The edit iframe is same-origin, so the panel mutates the clicked element's
 // live DOM node directly through these helpers and the workspace re-serializes
@@ -117,6 +196,16 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
           : el.style.marginRight === 'auto'
             ? 'left'
             : '',
+    mobileAlignBlock:
+      el.style.getPropertyValue('--pwb-mobile-margin-left') === 'auto' &&
+      el.style.getPropertyValue('--pwb-mobile-margin-right') === 'auto'
+        ? 'center'
+        : el.style.getPropertyValue('--pwb-mobile-margin-left') === 'auto'
+          ? 'right'
+          : el.style.getPropertyValue('--pwb-mobile-margin-right') === 'auto'
+            ? 'left'
+            : '',
+    mobileOverrideCount: mobileElementOverrideCount(el),
   }
 }
 
@@ -279,6 +368,97 @@ export function applyElementPatch(el, patch = {}) {
     const n = Number(patch.gap)
     setImp('gap', n > 0 ? `${n}px` : '')
   }
+}
+
+// In HTML mode, content is shared across breakpoints while visual edits made
+// on a phone preview should not overwrite desktop inline styles. Mobile values
+// are persisted as guarded custom properties under one compact media rule.
+export function applyMobileElementPatch(el, patch = {}) {
+  if (!el || el.nodeType !== 1) return
+
+  const contentPatch = {}
+  for (const key of ['text', 'href', 'src', 'alt']) {
+    if (patch[key] !== undefined) contentPatch[key] = patch[key]
+  }
+  if (Object.keys(contentPatch).length) applyElementPatch(el, contentPatch)
+
+  const hasStylePatch = Object.keys(patch).some((key) => !['text', 'href', 'src', 'alt'].includes(key))
+  if (!hasStylePatch) return
+  ensureMobileOverrideStyle(el.ownerDocument)
+
+  const pxAboveZero = (value) => {
+    const n = Number(value)
+    return n > 0 ? `${n}px` : ''
+  }
+  const pxIncludingZero = (value) => {
+    if (value === '' || value == null) return ''
+    const n = Number(value)
+    return Number.isFinite(n) ? `${n}px` : ''
+  }
+  const direct = (key, name) => {
+    if (patch[key] !== undefined) setMobileStyle(el, name, patch[key])
+  }
+
+  if (patch.fontSize !== undefined) setMobileStyle(el, 'font-size', pxAboveZero(patch.fontSize))
+  direct('fontWeight', 'font-weight')
+  direct('textAlign', 'text-align')
+  direct('color', 'color')
+  direct('background', 'background-color')
+  if (patch.padding !== undefined) setMobileStyle(el, 'padding', pxAboveZero(patch.padding))
+  if (patch.radius !== undefined) setMobileStyle(el, 'border-radius', pxIncludingZero(patch.radius))
+  if (patch.width !== undefined) setMobileStyle(el, 'width', pxAboveZero(patch.width))
+  if (patch.height !== undefined) setMobileStyle(el, 'height', pxAboveZero(patch.height))
+  if (patch.marginTop !== undefined) setMobileStyle(el, 'margin-top', pxIncludingZero(patch.marginTop))
+  if (patch.marginBottom !== undefined) setMobileStyle(el, 'margin-bottom', pxIncludingZero(patch.marginBottom))
+  direct('display', 'display')
+
+  if (patch.borderWidth !== undefined) {
+    const width = pxAboveZero(patch.borderWidth)
+    setMobileStyle(el, 'border-width', width)
+    if (width && !el.hasAttribute('data-pwb-mobile-border-style')) {
+      setMobileStyle(el, 'border-style', 'solid')
+    }
+    if (!width) setMobileStyle(el, 'border-style', '')
+  }
+  direct('borderColor', 'border-color')
+  if (patch.borderStyle !== undefined) {
+    const style = patch.borderStyle || ''
+    setMobileStyle(el, 'border-style', style)
+    if (style && style !== 'none' && !el.hasAttribute('data-pwb-mobile-border-width')) {
+      setMobileStyle(el, 'border-width', '1px')
+    }
+  }
+  direct('boxShadow', 'box-shadow')
+  if (patch.opacity !== undefined) {
+    const n = Number(patch.opacity)
+    setMobileStyle(
+      el,
+      'opacity',
+      patch.opacity === '' || !Number.isFinite(n) ? '' : String(Math.max(0, Math.min(1, n))),
+    )
+  }
+  direct('overflow', 'overflow')
+
+  if (patch.alignBlock !== undefined) {
+    if (patch.alignBlock === 'left') {
+      setMobileStyle(el, 'margin-left', '0')
+      setMobileStyle(el, 'margin-right', 'auto')
+    } else if (patch.alignBlock === 'center') {
+      setMobileStyle(el, 'margin-left', 'auto')
+      setMobileStyle(el, 'margin-right', 'auto')
+    } else if (patch.alignBlock === 'right') {
+      setMobileStyle(el, 'margin-left', 'auto')
+      setMobileStyle(el, 'margin-right', '0')
+    } else {
+      setMobileStyle(el, 'margin-left', '')
+      setMobileStyle(el, 'margin-right', '')
+    }
+  }
+  direct('justifyContent', 'justify-content')
+  direct('alignItems', 'align-items')
+  if (patch.gap !== undefined) setMobileStyle(el, 'gap', pxAboveZero(patch.gap))
+
+  removeUnusedMobileOverrideStyle(el.ownerDocument)
 }
 
 // Insert a deep clone right after the element. Returns the clone (the panel

@@ -3,11 +3,14 @@ import {
   HTML_ALLOW,
   HTML_VIEW_SANDBOX,
   withBuilderRuntimeHtml,
+  withEditorViewportMeta,
   withViewportMeta,
 } from '../../utils/htmlRuntime.js'
 import { DEVICES, isMobileDevice } from '../../utils/htmlDevices.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
+import BrowserFrame from './BrowserFrame.jsx'
+import { browserFrameH, browserFrameW } from './browserFrameMetrics.js'
 import {
   DRAG_MIME,
   closestPlaceableBlock,
@@ -33,7 +36,9 @@ import {
 } from '../../utils/htmlPlacement.js'
 import {
   applyElementPatch,
+  applyMobileElementPatch,
   bindLinkToTarget,
+  clearMobileElementStyles,
   describeElement,
   duplicateElement,
   ensureAnchor,
@@ -48,7 +53,7 @@ import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
 import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
 import BrushControls from './BrushControls.jsx'
-import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon } from '../icons.jsx'
+import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
@@ -432,6 +437,17 @@ function HtmlWorkspace({
   // Device frame picker (PC/Mobile + size dropdown) rendered by the editor —
   // lives in this toolbar so the single-row app header stays uncluttered.
   deviceControls = null,
+  browserFrame = false,
+  onBrowserFrameToggle,
+  browserSiteTitle = 'My Site',
+  browserFavicon = '',
+  browserAddress = 'preview.sitebuilder.local',
+  browserPages = [],
+  browserCurrentPageId = '',
+  onBrowserPageSelect,
+  onBrowserPageEdit,
+  onBrowserFaviconEdit,
+  onBrowserAddressChange,
   persistKey,
   onCommit,
   onRequestSave,
@@ -765,6 +781,19 @@ function HtmlWorkspace({
     return html
   }, [html, mode, sourceDraft])
 
+  // Phone/desktop and browser-shell changes replace the iframe's parent, while
+  // BrowserFrame's reload control deliberately remounts its child. Snapshot the
+  // live edit document first so those useful preview actions can never reopen
+  // an older editSeed and discard typing or panel changes.
+  const prepareForFrameChange = useCallback(() => {
+    if (mode !== 'edit') return readHtml()
+    const currentHtml = readHtml()
+    setEditSeed(currentHtml)
+    onCommit?.(currentHtml)
+    clearSelection()
+    return currentHtml
+  }, [clearSelection, mode, onCommit, readHtml])
+
   // Plain statements, NOT logic inside a setMode updater: updater functions
   // run during render, so calling onCommit (a parent setState) from one
   // triggers React's "cannot update a component while rendering" error.
@@ -915,6 +944,8 @@ function HtmlWorkspace({
 
   useImperativeHandle(ref, () => ({
     getHtml: readHtml,
+    prepareFrameChange: prepareForFrameChange,
+    showEdit: () => switchMode('edit'),
     // Which CSS rules (in the given [{ path, content }] files) style the
     // currently-selected element — for the Code-project "jump to CSS" panel.
     matchCssRules: (cssFiles) => matchingCssRules(selectedRef.current, cssFiles),
@@ -924,7 +955,12 @@ function HtmlWorkspace({
     // Files-panel affordance: clicking the open file toggles its source view.
     toggleSource: () => switchMode(mode === 'source' ? 'view' : 'source'),
     updateSelectedElement: (patch) =>
-      mutateSelected((doc, el) => { applyElementPatch(el, patch) }),
+      mutateSelected((doc, el) => {
+        if (isMobileDevice(deviceId)) applyMobileElementPatch(el, patch)
+        else applyElementPatch(el, patch)
+      }),
+    resetSelectedMobileStyles: () =>
+      mutateSelected((doc, el) => { clearMobileElementStyles(el) }),
     duplicateSelected: () =>
       mutateSelected((doc, el) => {
         const clone = duplicateElement(el)
@@ -970,21 +1006,27 @@ function HtmlWorkspace({
       flashNode(doc, anchor)
       return true
     },
-  }), [applyAiHtml, clearSelection, installSelectedElementChrome, mode, mutateSelected, onCommit, onElementSelect, onLinkArmedChange, readHtml, setDocument, switchMode])
+  }), [applyAiHtml, clearSelection, deviceId, installSelectedElementChrome, mode, mutateSelected, onCommit, onElementSelect, onLinkArmedChange, prepareForFrameChange, readHtml, setDocument, switchMode])
 
   const device = DEVICES.find((d) => d.id === deviceId) || DEVICES[0]
   const isFit = device.id === 'fit'
-  const contentW = isFit ? Math.max(320, Math.round(stage.w - 24)) : landscape ? device.h : device.w
+  const mobileDevice = isMobileDevice(device.id)
+  const framedPhone = !isFit && !landscape && mobileDevice
+  const desktopBrowser = browserFrame && !mobileDevice
+  const availableW = Math.max(1, stage.w - 24)
+  const availableH = Math.max(1, stage.h - 24)
+  const contentW = isFit
+    ? Math.max(320, Math.round(availableW - (desktopBrowser ? browserFrameW() : 0)))
+    : landscape ? device.h : device.w
   const contentH = isFit
-    ? Math.max(420, Math.round(stage.h - 24))
+    ? Math.max(420, Math.round(availableH - (desktopBrowser ? browserFrameH() : 0)))
     : landscape
       ? device.w
       : device.h
-  const framedPhone = !isFit && !landscape && isMobileDevice(device.id)
   const phone = phoneModel(contentW, contentH)
-  const previewW = contentW + (framedPhone ? phoneFrameW(phone) : 0)
-  const previewH = contentH + (framedPhone ? phoneFrameH(phone) : 0)
-  const scale = Math.min(1, (stage.w - 24) / previewW || 1, (stage.h - 24) / previewH || 1)
+  const previewW = contentW + (framedPhone ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0)
+  const previewH = contentH + (framedPhone ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0)
+  const scale = Math.min(1, availableW / previewW || 1, availableH / previewH || 1)
 
   // ----- placement: splice the component's snippet into the document ---------
   const placeAt = useCallback((clientX, clientY) => {
@@ -1418,7 +1460,7 @@ function HtmlWorkspace({
   const srcDoc =
     mode === 'view'
       ? withViewExtras(withBuilderRuntimeHtml(withViewportMeta(viewHtml)), viewScrollIndex)
-      : editSeed
+      : withEditorViewportMeta(editSeed)
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
   // The preview iframe — rendered into either the CSS-filled responsive frame
@@ -1440,7 +1482,7 @@ function HtmlWorkspace({
         border: 'none',
         display: 'block',
         background: '#ffffff',
-        scrollbarGutter: 'stable',
+        scrollbarGutter: framedPhone ? 'auto' : 'stable',
       }}
     />
   )
@@ -1477,6 +1519,25 @@ function HtmlWorkspace({
             )}
           </div>
           {deviceControls}
+          {!mobileDevice && mode !== 'source' && mode !== 'live' && onBrowserFrameToggle && (
+            <button
+              type="button"
+              onClick={() => {
+                prepareForFrameChange()
+                onBrowserFrameToggle()
+              }}
+              aria-pressed={browserFrame}
+              title={t(browserFrame ? 'Hide browser frame' : 'Show browser frame')}
+              className={`studio-btn inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs ${
+                browserFrame
+                  ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                  : 'studio-btn-secondary'
+              }`}
+              >
+                <MonitorIcon size={14} />
+                <span className="hidden xl:inline">{t('Browser')}</span>
+            </button>
+          )}
           {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
               empty page: there's no document to act on, so the starter card is
               the single clear action instead of dead chips. */}
@@ -1690,7 +1751,7 @@ function HtmlWorkspace({
             ref={stageRef}
             className="relative flex flex-1 items-start justify-center overflow-hidden bg-[var(--studio-shell)] p-3"
           >
-            {isFit ? (
+            {isFit && !desktopBrowser ? (
               // Responsive ("area width") preview: the iframe simply FILLS the
               // stage via CSS, so its width tracks side-rail collapses and
               // window resizes with no JS measurement — a frozen ResizeObserver
@@ -1711,13 +1772,30 @@ function HtmlWorkspace({
                     transform: `scale(${scale})`,
                     transformOrigin: 'top left',
                     outline: placing ? '2px solid #2563eb' : 'none',
-                    outlineOffset: framedPhone ? 4 : 0,
+                    outlineOffset: framedPhone || desktopBrowser ? 4 : 0,
                   }}
                 >
                   {framedPhone ? (
                     <PhoneFrame screenWidth={contentW} screenHeight={contentH} model={phone}>
                       {stageIframe}
                     </PhoneFrame>
+                  ) : desktopBrowser ? (
+                    <BrowserFrame
+                      screenWidth={contentW}
+                      screenHeight={contentH}
+                      siteTitle={browserSiteTitle}
+                      favicon={browserFavicon}
+                      address={browserAddress}
+                      pages={browserPages}
+                      currentPageId={browserCurrentPageId}
+                      onSelectPage={onBrowserPageSelect}
+                      onEditPage={onBrowserPageEdit}
+                      onEditFavicon={onBrowserFaviconEdit}
+                      onAddressChange={onBrowserAddressChange}
+                      onBeforeReload={prepareForFrameChange}
+                    >
+                      {stageIframe}
+                    </BrowserFrame>
                   ) : (
                     <div
                       className="h-full w-full border border-[#d1d5db] bg-white shadow-sm"

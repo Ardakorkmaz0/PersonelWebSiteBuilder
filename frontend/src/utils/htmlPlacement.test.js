@@ -10,19 +10,20 @@ import {
   ensureEditHintChrome,
   ensurePlacementChrome,
   firstNewChildIndex,
+  serializeDocument,
   flashNode,
   hideDropLine,
   insertPositionForY,
   insertSnippet,
   parseHtmlDocument,
   relocateAppendedAfterAnchor,
-  serializeDocument,
   setHoverTarget,
   setThinElementHover,
   showDropLine,
   snippetToNode,
   thinSelectableAtPoint,
 } from './htmlPlacement.js'
+import { applyMobileElementPatch } from './htmlElementEdit.js'
 
 describe('closestPlaceableBlock', () => {
   let body
@@ -189,6 +190,16 @@ describe('placement chrome + serializeDocument', () => {
     expect(a.hasAttribute('data-pwb-hover')).toBe(true)
   })
 
+  it('strips a transient editor viewport but preserves an authored viewport', () => {
+    document.head.innerHTML = `
+      <meta data-pwb-injected name="viewport" content="width=device-width" />
+      <meta name="viewport-author" content="keep-me" />
+    `
+    const out = serializeDocument(document)
+    expect(out).not.toContain('data-pwb-injected')
+    expect(out).toContain('viewport-author')
+  })
+
   it('moves the hover hint between targets', () => {
     const a = document.getElementById('a')
     const b = document.getElementById('b')
@@ -337,5 +348,56 @@ describe('drop-position indicator', () => {
     expect(serializeDocument(document)).not.toContain('data-pwb-dropline')
     hideDropLine(document)
     expect(document.querySelector('[data-pwb-dropline]')).toBeNull()
+  })
+})
+
+// serializeDocument decides what is EDITOR CHROME (dropped) and what is the
+// user's document (kept). Two things the editor injects sit on opposite sides
+// of that line, and nothing pinned it: the preview-only viewport meta must go,
+// while the mobile-override stylesheet — the whole mechanism behind "style this
+// element on phones only" — must stay. Marking the latter as injected would
+// erase every mobile tweak on save, silently, with the editor still showing it.
+describe('serializeDocument keeps the document and drops the chrome', () => {
+  function editedDoc() {
+    const doc = new DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body><header style="font-size:28px">Hi</header></body></html>',
+      'text/html',
+    )
+    // What the editor injects while previewing at phone width.
+    const meta = doc.createElement('meta')
+    meta.setAttribute('data-pwb-injected', '')
+    meta.setAttribute('name', 'viewport')
+    meta.setAttribute('content', 'width=device-width, initial-scale=1.0')
+    doc.head.appendChild(meta)
+    // What the user created: a mobile-only font size on the header.
+    applyMobileElementPatch(doc.querySelector('header'), { fontSize: 13 })
+    return doc
+  }
+
+  it('drops the preview-only viewport meta', () => {
+    expect(serializeDocument(editedDoc())).not.toMatch(/data-pwb-injected/)
+  })
+
+  it('keeps the mobile-override stylesheet', () => {
+    const html = serializeDocument(editedDoc())
+    expect(html, 'the media rule').toMatch(/@media \(max-width: 767px\)/)
+    expect(html, 'the custom property it reads').toMatch(/--pwb-mobile-font-size/)
+  })
+
+  it('keeps the per-element marker and its value', () => {
+    const html = serializeDocument(editedDoc())
+    expect(html).toMatch(/data-pwb-mobile-font-size/)
+    expect(html).toMatch(/13px/)
+  })
+
+  it('leaves the desktop value untouched', () => {
+    expect(serializeDocument(editedDoc())).toMatch(/font-size:\s*28px/)
+  })
+
+  it('a second save does not accumulate stylesheets', () => {
+    const doc = editedDoc()
+    applyMobileElementPatch(doc.querySelector('header'), { color: '#fff' })
+    const html = serializeDocument(doc)
+    expect((html.match(/@media \(max-width: 767px\)/g) || []).length).toBe(1)
   })
 })

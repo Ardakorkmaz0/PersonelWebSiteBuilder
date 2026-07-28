@@ -6,6 +6,8 @@ import { useLanguage } from '../../i18n/useLanguage.js'
 import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
+import BrowserFrame from './BrowserFrame.jsx'
+import { browserFrameH, browserFrameW } from './browserFrameMetrics.js'
 
 const WORKSPACE_PADDING = 64
 
@@ -20,14 +22,25 @@ export default function CanvasPreview({
   background = '#ffffff',
   iframeHtml = '',
   title = 'Page preview',
+  browserFrame = false,
+  browserSiteTitle = 'My Site',
+  browserFavicon = '',
+  browserAddress = 'preview.sitebuilder.local',
+  browserPages = [],
+  browserCurrentPageId = '',
+  onBrowserPageSelect,
+  onBrowserPageEdit,
+  onBrowserFaviconEdit,
+  onBrowserAddressChange,
 }) {
   const { t } = useLanguage()
   const workspaceRef = useRef(null)
   const [workspace, setWorkspace] = useState({ w: 0, h: 0 })
   const mobile = viewport === 'mobile'
-  const phone = phoneModel(width)
-  const bezelW = mobile ? phoneFrameW(phone) : 0
-  const bezelH = mobile ? phoneFrameH(phone) : 0
+  const desktopBrowser = !mobile && browserFrame
+  const phone = phoneModel(width, fold)
+  const bezelW = mobile ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0
+  const bezelH = mobile ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0
   const components = page?.components || []
   const flowMode = !!page?.flowMode
   const contentHeight = flowMode
@@ -101,9 +114,25 @@ export default function CanvasPreview({
             }}
           >
             {mobile ? (
-              <PhoneFrame screenWidth={width} screenHeight={viewportH}>
+              <PhoneFrame screenWidth={width} screenHeight={viewportH} model={phone}>
                 {inner}
               </PhoneFrame>
+            ) : desktopBrowser ? (
+              <BrowserFrame
+                screenWidth={width}
+                screenHeight={viewportH}
+                siteTitle={browserSiteTitle}
+                favicon={browserFavicon}
+                address={browserAddress}
+                pages={browserPages}
+                currentPageId={browserCurrentPageId || page?.id}
+                onSelectPage={onBrowserPageSelect}
+                onEditPage={onBrowserPageEdit}
+                onEditFavicon={onBrowserFaviconEdit}
+                onAddressChange={onBrowserAddressChange}
+              >
+                {inner}
+              </BrowserFrame>
             ) : (
               <div className="bg-white" style={{ boxShadow: PAGE_SHEET_SHADOW }}>
                 {inner}
@@ -171,9 +200,25 @@ export default function CanvasPreview({
           }}
         >
           {mobile ? (
-            <PhoneFrame screenWidth={width} screenHeight={artboardHeight}>
+            <PhoneFrame screenWidth={width} screenHeight={artboardHeight} model={phone}>
               {pageContent}
             </PhoneFrame>
+          ) : desktopBrowser ? (
+            <BrowserFrame
+              screenWidth={width}
+              screenHeight={artboardHeight}
+              siteTitle={browserSiteTitle}
+              favicon={browserFavicon}
+              address={browserAddress}
+              pages={browserPages}
+              currentPageId={browserCurrentPageId || page?.id}
+              onSelectPage={onBrowserPageSelect}
+              onEditPage={onBrowserPageEdit}
+              onEditFavicon={onBrowserFaviconEdit}
+              onAddressChange={onBrowserAddressChange}
+            >
+              {pageContent}
+            </BrowserFrame>
           ) : pageContent}
         </div>
       </div>

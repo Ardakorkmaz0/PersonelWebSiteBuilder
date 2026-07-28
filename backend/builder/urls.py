@@ -16,6 +16,7 @@ from .views import (
     FavoriteToggleView,
     FavoritesView,
     GoogleLoginView,
+    GlobalSearchView,
     LocalAiProxyView,
     LocalAiStatusView,
     LoginView,
@@ -46,6 +47,7 @@ urlpatterns = [
     path('auth/me/', MeView.as_view(), name='me'),
     path('profile/', ProfileView.as_view(), name='profile'),
     path('explore/', ExploreView.as_view(), name='explore'),
+    path('search/', GlobalSearchView.as_view(), name='global-search'),
     path('favorites/', FavoritesView.as_view(), name='favorites'),
     # BEFORE the router so these aren't shadowed by the owner-scoped SiteViewSet.
     path('sites/<int:site_id>/favorite/', FavoriteToggleView.as_view(), name='site-favorite'),

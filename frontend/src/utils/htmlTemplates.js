@@ -8,7 +8,7 @@ const escTitle = (t) =>
 
 function templateVars(theme) {
   const t = normalizeTheme(theme)
-  return `--accent:${t.primaryColor}; --ink:${t.textColor}; --muted:${t.mutedColor}; --soft:${t.softColor}; --surface:${t.surfaceColor}; --radius:${t.radius}; --button-radius:${t.buttonRadius}; --shadow:${t.shadow}; --font:${t.fontFamily};`
+  return `--accent:${t.primaryColor}; --button-text:${t.buttonTextColor}; --ink:${t.textColor}; --muted:${t.mutedColor}; --border:${t.borderColor}; --soft:${t.softColor}; --surface:${t.surfaceColor}; --radius:${t.radius}; --button-radius:${t.buttonRadius}; --shadow:${t.shadow}; --font:${t.fontFamily}; --heading-font:${t.headingFontFamily};`
 }
 
 // Professional, genuinely responsive starter: sticky header with a CSS-only

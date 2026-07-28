@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   configureDomain,
   deleteSiteSubmission,
@@ -35,6 +35,7 @@ export default function SiteControlCenter({
   site,
   schema,
   pageHtmlMap,
+  focusField = '',
   onSitePatch,
   onHtmlContentChange,
   onSchemaContentChange,
@@ -49,6 +50,7 @@ export default function SiteControlCenter({
   const [domainSetup, setDomainSetup] = useState(null)
   const [domain, setDomain] = useState(site.custom_domain || '')
   const [copied, setCopied] = useState('')
+  const faviconInputRef = useRef(null)
   const [seo, setSeo] = useState({
     title: '', description: '', socialImage: '', favicon: '',
     ...(site.site_options?.seo || {}),
@@ -73,6 +75,16 @@ export default function SiteControlCenter({
     }).catch((err) => active && setError(apiError(err))).finally(() => active && setBusy(false))
     return () => { active = false }
   }, [open, site.id, tab])
+
+  useEffect(() => {
+    if (!open || focusField !== 'favicon') return undefined
+    const frame = requestAnimationFrame(() => {
+      faviconInputRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+      faviconInputRef.current?.focus()
+      faviconInputRef.current?.select()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [focusField, open])
 
   const readiness = useMemo(() => analyzeSiteReadiness({
     title: site.title,
@@ -142,9 +154,9 @@ export default function SiteControlCenter({
   }
 
   return (
-    <div className="studio-theme-surface fixed inset-0 z-[150] flex items-center justify-center bg-black/50 p-0 md:p-5" onClick={onClose}>
-      <section role="dialog" aria-modal="true" aria-label={t('Site control center')} className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden bg-[#f8fafc] shadow-2xl md:h-[90vh] md:rounded-3xl" onClick={(event) => event.stopPropagation()}>
-        <header className="flex items-center gap-3 border-b border-[#e5e7eb] bg-white px-4 py-3 md:px-6">
+    <div className="studio-theme-surface studio-overlay fixed inset-0 z-[150] flex items-center justify-center p-0 md:p-5" onClick={onClose}>
+      <section role="dialog" aria-modal="true" aria-label={t('Site control center')} className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden border border-[var(--studio-border)] bg-[var(--studio-shell)] text-[var(--studio-text)] shadow-2xl md:h-[90vh] md:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-center gap-3 border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-4 py-3 md:px-6">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-bold text-[#111827]">{t('Site control center')}</h2>
             <p className="truncate text-xs text-[#6b7280]">{site.title}</p>
@@ -153,7 +165,7 @@ export default function SiteControlCenter({
         </header>
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-2 md:px-6" aria-label={t('Site tools')}>
           {TABS.map(([id, label]) => (
-            <button key={id} type="button" onClick={() => { setBusy(['inbox', 'analytics', 'feedback', 'domain'].includes(id)); setError(''); setTab(id) }} aria-pressed={tab === id} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === id ? 'bg-[#4f46e5] text-white' : 'text-[#4b5563] hover:bg-[#f3f4f6]'}`}>{t(label)}</button>
+            <button key={id} type="button" onClick={() => { setBusy(['inbox', 'analytics', 'feedback', 'domain'].includes(id)); setError(''); setTab(id) }} aria-pressed={tab === id} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === id ? 'bg-[var(--studio-accent)] text-white' : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'}`}>{t(label)}</button>
           ))}
         </nav>
         {error && <div role="alert" className="border-b border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{error}</div>}
@@ -182,7 +194,7 @@ export default function SiteControlCenter({
                   <label className="text-sm font-medium text-[#374151]">{t('SEO title')}<input className="ms-input mt-1" value={seo.title} maxLength={60} onChange={(e) => setSeo({ ...seo, title: e.target.value })} /></label>
                   <label className="text-sm font-medium text-[#374151]">{t('Social image URL')}<input className="ms-input mt-1" value={seo.socialImage} onChange={(e) => setSeo({ ...seo, socialImage: e.target.value })} /></label>
                   <label className="text-sm font-medium text-[#374151] md:col-span-2">{t('SEO description')}<textarea className="ms-input mt-1 min-h-24" value={seo.description} maxLength={160} onChange={(e) => setSeo({ ...seo, description: e.target.value })} /></label>
-                  <label className="text-sm font-medium text-[#374151]">{t('Favicon URL')}<input className="ms-input mt-1" value={seo.favicon} onChange={(e) => setSeo({ ...seo, favicon: e.target.value })} /></label>
+                  <label className="text-sm font-medium text-[#374151]">{t('Favicon URL')}<input ref={faviconInputRef} className="ms-input mt-1" value={seo.favicon} onChange={(e) => setSeo({ ...seo, favicon: e.target.value })} /></label>
                 </div>
                 <button type="button" disabled={busy} onClick={saveSeo} className="ms-btn ms-btn-primary px-5 py-2.5">{t('Save SEO settings')}</button>
               </div>
@@ -202,7 +214,7 @@ export default function SiteControlCenter({
 
           {tab === 'analytics' && (
             analytics ? <div className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2"><div className="rounded-3xl bg-[#111827] p-6 text-white"><div className="text-sm text-white/60">{t('Total views')}</div><div className="mt-2 text-4xl font-black">{analytics.total_views}</div></div><div className="rounded-3xl bg-[#4f46e5] p-6 text-white"><div className="text-sm text-white/70">{t('Last 30 days')}</div><div className="mt-2 text-4xl font-black">{analytics.last_30_days}</div></div></div>
+              <div className="grid gap-4 sm:grid-cols-2"><div className="rounded-3xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-6 text-[var(--studio-text)]"><div className="text-sm text-[var(--studio-text-muted)]">{t('Total views')}</div><div className="mt-2 text-4xl font-black">{analytics.total_views}</div></div><div className="rounded-3xl border border-[color-mix(in_srgb,var(--studio-accent)_35%,var(--studio-border))] bg-[var(--studio-accent-soft)] p-6 text-[var(--studio-accent-hover)]"><div className="text-sm opacity-80">{t('Last 30 days')}</div><div className="mt-2 text-4xl font-black">{analytics.last_30_days}</div></div></div>
               <div className="rounded-3xl border border-[#e5e7eb] bg-white p-5"><h3 className="font-bold">{t('Daily visits')}</h3><div className="mt-4 flex h-44 items-end gap-1">{(analytics.daily || []).map((day) => { const max = Math.max(...analytics.daily.map((item) => item.views), 1); return <div key={day.day} title={`${day.day}: ${day.views}`} className="min-w-2 flex-1 rounded-t bg-[#818cf8]" style={{ height: `${Math.max(8, day.views / max * 100)}%` }} /> })}</div></div>
               <div className="grid gap-5 md:grid-cols-2"><div className="rounded-3xl border border-[#e5e7eb] bg-white p-5"><h3 className="font-bold">{t('Devices')}</h3><div className="mt-3 space-y-2">{(analytics.devices || []).map((item) => <div key={item.device} className="flex justify-between text-sm"><span>{t(item.device.charAt(0).toUpperCase() + item.device.slice(1))}</span><strong>{item.views}</strong></div>)}</div></div><div className="rounded-3xl border border-[#e5e7eb] bg-white p-5"><h3 className="font-bold">{t('Top referrers')}</h3><div className="mt-3 space-y-2">{(analytics.referrers || []).map((item) => <div key={item.referrer} className="flex justify-between gap-3 text-sm"><span className="truncate">{item.referrer}</span><strong>{item.views}</strong></div>)}</div></div></div>
             </div> : <EmptyState>{t('Analytics will appear after the first public visit.')}</EmptyState>
@@ -210,7 +222,7 @@ export default function SiteControlCenter({
 
           {tab === 'content' && (
             <div className="space-y-3">
-              <div className="rounded-2xl bg-[#eef2ff] p-4 text-sm text-[#3730a3]">{t('Edit text and image descriptions without opening the design canvas. Changes remain undoable and are saved with the site.')}</div>
+              <div className="rounded-2xl border border-[color-mix(in_srgb,var(--studio-info)_30%,var(--studio-border))] bg-[var(--studio-info-soft)] p-4 text-sm text-[var(--studio-info)]">{t('Edit text and image descriptions without opening the design canvas. Changes remain undoable and are saved with the site.')}</div>
               {!contentEntries.length ? <EmptyState>{t('No editable content found.')}</EmptyState> : contentEntries.map((entry) => (
                 <label key={entry.id} className="block rounded-2xl border border-[#e5e7eb] bg-white p-4"><span className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-[#6b7280]"><span>{entry.pageName}</span><span>{entry.label}</span></span>{entry.value.length > 90 ? <textarea className="ms-input min-h-24" defaultValue={entry.value} onBlur={(e) => editContent(entry, e.target.value)} /> : <input className="ms-input" defaultValue={entry.value} onBlur={(e) => editContent(entry, e.target.value)} />}</label>
               ))}

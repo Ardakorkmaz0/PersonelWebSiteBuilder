@@ -109,6 +109,7 @@ const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 // The viewport the editor reopens on: simply the last one the user switched to.
 const LAST_VIEWPORT_KEY = 'pwb_default_editor_viewport'
 const AI_PANEL_LAYOUT_KEY = 'pwb_ai_panel_layout'
+const BROWSER_FRAME_KEY = 'pwb_browser_frame'
 const HTML_DEVICE_KEYS = {
   pc: 'pwb_last_html_pc_device',
   mobile: 'pwb_last_html_mobile_device',
@@ -122,6 +123,11 @@ function readLastViewport() {
 function readAiPanelLayout() {
   try { return localStorage.getItem(AI_PANEL_LAYOUT_KEY) === 'compact' ? 'compact' : 'workspace' }
   catch { return 'workspace' }
+}
+
+function readBrowserFramePreference() {
+  try { return localStorage.getItem(BROWSER_FRAME_KEY) !== '0' }
+  catch { return true }
 }
 
 function readHtmlDevice(viewport) {
@@ -323,12 +329,13 @@ export default function EditorPage() {
   const markSaved = useEditorStore((s) => s.markSaved)
   const dirty = useEditorStore((s) => s.dirty)
   const authUser = useAuthStore((s) => s.user)
-  const goBack = useGoBack('/')
+  const goBack = useGoBack('/profile')
   const theme = useEditorStore((s) => s.schema.theme)
   const editorSchema = useEditorStore((s) => s.schema)
   const customCss = useEditorStore((s) => s.schema.customCss)
   const customJs = useEditorStore((s) => s.schema.customJs)
   const setPageMode = useEditorStore((s) => s.setPageMode)
+  const setPageSettings = useEditorStore((s) => s.setPageSettings)
   // Component-canvas link tool (Empty mode mirror of the HTML link tool).
   const linkMode = useEditorStore((s) => s.linkMode)
   const linkSourceId = useEditorStore((s) => s.linkSourceId)
@@ -380,7 +387,6 @@ export default function EditorPage() {
   const leaveActionRef = useRef(null)
   const leaveConfirmedRef = useRef(false)
   const discardLeaveRef = useRef(false)
-  const [rightTab, setRightTab] = useState('props') // 'props' | 'code'
   const [aiOpen, setAiOpen] = useState(false)
   const [aiPanelLayout, setAiPanelLayout] = useState(readAiPanelLayout)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -393,6 +399,7 @@ export default function EditorPage() {
   const [notesOpen, setNotesOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [controlCenterOpen, setControlCenterOpen] = useState(false)
+  const [controlCenterFocus, setControlCenterFocus] = useState('')
 
   useEffect(() => {
     try { localStorage.setItem(AI_PANEL_LAYOUT_KEY, aiPanelLayout) } catch { /* ignore */ }
@@ -424,6 +431,7 @@ export default function EditorPage() {
     } catch { return 'edit' }
   }) // 'view' | 'edit' | 'source'
   const [canvasToolsOpen, setCanvasToolsOpen] = useState(false)
+  const [browserFrameEnabled, setBrowserFrameEnabled] = useState(readBrowserFramePreference)
   const [brushMode, setBrushMode] = useState(false)
   const [brushColor, setBrushColor] = useState(() => {
     try { return normalizeBrushColor(localStorage.getItem('pwb_brushcolor_' + id)) || theme?.primaryColor || '#4f46e5' } catch { return '#4f46e5' }
@@ -455,6 +463,7 @@ export default function EditorPage() {
   const htmlInputRef = useRef(null)
   const folderInputRef = useRef(null)
   const workspaceRef = useRef(null)
+  const codePanelRef = useRef(null)
   // Latest html-mode undo handlers for the global Ctrl+Z listener (which is
   // bound once and must not re-bind on every html change).
   const htmlHistoryRef = useRef({})
@@ -579,6 +588,11 @@ export default function EditorPage() {
   }
   const switchCanvasMode = (nextMode) => {
     const next = typeof nextMode === 'function' ? nextMode(canvasMode) : nextMode
+    // Source drafts behave like the HTML workspace: leaving Source applies the
+    // edited document instead of silently throwing it away.
+    if (canvasMode === 'source' && next !== 'source') {
+      codePanelRef.current?.applyPendingHtml?.(next)
+    }
     setCanvasMode(next)
     if (next !== 'edit') setBrushMode(false)
     // Entering View replays the page from the top: bump a nonce that keys the
@@ -1116,6 +1130,22 @@ export default function EditorPage() {
     useEditorStore.getState().selectPage(pageId)
   }
 
+  function editBrowserPage(pageId) {
+    switchToPage(pageId)
+    switchCanvasMode('edit')
+  }
+
+  function editBrowserFavicon() {
+    setControlCenterFocus('favicon')
+    setControlCenterOpen(true)
+  }
+
+  function changeBrowserAddress(value) {
+    const raw = String(value || '').trim()
+    const canonicalUrl = !raw || /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+    setPageSettings(currentPageId, { canonicalUrl })
+  }
+
   // Load an HTML document into a specific page (Files panel ⬆ / empty-page
   // import). Undoable like every other HTML change.
   function importHtmlIntoPage(pageId, htmlText) {
@@ -1131,6 +1161,14 @@ export default function EditorPage() {
     setHtmlFuture([])
     setPageHtmlMap((m) => ({ ...m, [pageId]: htmlText }))
     markHtmlDirty()
+  }
+
+  function applyComponentSourceHtml({ pageId, html, nextMode = 'source' }) {
+    if (!pageId || typeof html !== 'string') return
+    // Applying raw HTML moves that page to the dedicated HTML editor. Its
+    // component design remains in the schema and "Remove HTML" can restore it.
+    try { localStorage.setItem(`pwb_htmlmode_${id}`, nextMode) } catch { /* ignore */ }
+    importHtmlIntoPage(pageId, html)
   }
 
   function applyManagedSchema(nextSchema) {
@@ -1579,6 +1617,14 @@ export default function EditorPage() {
   const curPresetId =
     sizePresets.find((p) => p.width === curW && p.fold === curFold)?.id || 'custom'
 
+  function toggleBrowserFrame() {
+    setBrowserFrameEnabled((enabled) => {
+      const next = !enabled
+      try { localStorage.setItem(BROWSER_FRAME_KEY, next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }
+
   function applyCustomCanvasResolution() {
     const widthInput = resolutionWidthRef.current
     const heightInput = resolutionHeightRef.current
@@ -1613,7 +1659,13 @@ export default function EditorPage() {
     <div className="studio-shell flex h-screen flex-col">
       {leaveDialog}
       <header className="studio-topbar relative z-30 flex h-[52px] shrink-0 items-center gap-2 border-b px-3">
-        <button type="button" onClick={guardedBack} title={t('Go back')} className="studio-icon-btn shrink-0">
+        <button
+          type="button"
+          onClick={guardedBack}
+          title={t('Back to previous page')}
+          aria-label={t('Back to previous page')}
+          className="studio-icon-btn shrink-0"
+        >
           <ArrowLeftIcon size={17} />
         </button>
         <Link
@@ -1796,7 +1848,7 @@ export default function EditorPage() {
             className="brand-mark"
             style={{ width: '1.6rem', height: '1.6rem', fontSize: '0.8rem' }}
           >S</Link>
-          <button type="button" onClick={guardedBack} title={t('Go back')} className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
+          <button type="button" onClick={guardedBack} title={t('Back to previous page')} aria-label={t('Back to previous page')} className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
         </div>
         <input
           className="min-w-[3rem] max-w-[110px] flex-shrink rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-[#111827] hover:border-[#d1d5db] focus:border-[#4f46e5] focus:outline-none md:max-w-[160px]"
@@ -2335,7 +2387,7 @@ export default function EditorPage() {
             </>
           ) : (
             <>
-              {!aiWorkspaceOpen && <RailSlot
+              {!aiWorkspaceOpen && canvasMode !== 'source' && <RailSlot
                 side="left"
                 label="Files"
                 open={leftOpen}
@@ -2429,6 +2481,22 @@ export default function EditorPage() {
                       <option value="custom">{t('Custom')} - {curW}px</option>
                     )}
                   </select>
+                  {viewport === 'pc' && canvasMode !== 'source' && (
+                    <button
+                      type="button"
+                      onClick={toggleBrowserFrame}
+                      aria-pressed={browserFrameEnabled}
+                      title={t(browserFrameEnabled ? 'Hide browser frame' : 'Show browser frame')}
+                      className={`studio-btn hidden shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs lg:inline-flex ${
+                        browserFrameEnabled
+                          ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                          : 'studio-btn-secondary'
+                      }`}
+                    >
+                      <MonitorIcon size={14} />
+                      {t('Browser')}
+                    </button>
+                  )}
                   {/* Selected element's actions, docked right after the screen
                       controls: one stable spot instead of floating over (and
                       covering) the design. */}
@@ -2571,6 +2639,16 @@ export default function EditorPage() {
                             <input ref={resolutionHeightRef} key={`tool-height-${viewport}-${curFold}`} type="number" min="0" max="20000" defaultValue={curFold || ''} placeholder="—" aria-label={t('Custom height (px)')} className="studio-input min-w-0 flex-1 px-2 py-1.5 text-xs" />
                             <button type="button" onClick={applyCustomCanvasResolution} className="studio-btn studio-btn-secondary px-2">{t('Apply')}</button>
                           </div>
+                          {viewport === 'pc' && canvasMode !== 'source' && (
+                            <button
+                              type="button"
+                              onClick={() => { toggleBrowserFrame(); setCanvasToolsOpen(false) }}
+                              className={`studio-menu-item mb-1 ${browserFrameEnabled ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
+                            >
+                              <MonitorIcon size={14} />
+                              {t(browserFrameEnabled ? 'Hide browser frame' : 'Show browser frame')}
+                            </button>
+                          )}
                           {canvasMode === 'edit' && (
                             <div className="space-y-1">
                               <button type="button" onClick={() => setGridStep(gridStep ? 0 : 10)} className={`studio-menu-item ${gridStep ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}># {t('Grid')}</button>
@@ -2644,6 +2722,16 @@ export default function EditorPage() {
                     onBrushUse={rememberBrushColor}
                     pendingPlace={pendingPlace}
                     onPlaceAt={placePendingAt}
+                    browserFrame={viewport === 'pc' && browserFrameEnabled}
+                    browserSiteTitle={title}
+                    browserFavicon={siteOptions?.seo?.favicon || siteOptions?.favicon || ''}
+                    browserAddress={currentPage.canonicalUrl || customDomain || `${slug || 'preview'}.sitebuilder.local`}
+                    browserPages={storePages}
+                    browserCurrentPageId={currentPageId}
+                    onBrowserPageSelect={switchToPage}
+                    onBrowserPageEdit={editBrowserPage}
+                    onBrowserFaviconEdit={editBrowserFavicon}
+                    onBrowserAddressChange={changeBrowserAddress}
                   />
                 ) : canvasMode === 'view' ? (
                   <CanvasPreview
@@ -2663,16 +2751,31 @@ export default function EditorPage() {
                     }
                     iframeHtml={componentViewHtml}
                     title={`${currentPage.name || 'Page'} preview`}
+                    browserFrame={viewport === 'pc' && browserFrameEnabled}
+                    browserSiteTitle={title}
+                    browserFavicon={siteOptions?.seo?.favicon || siteOptions?.favicon || ''}
+                    browserAddress={currentPage.canonicalUrl || customDomain || `${slug || 'preview'}.sitebuilder.local`}
+                    browserPages={storePages}
+                    browserCurrentPageId={currentPageId}
+                    onBrowserPageSelect={switchToPage}
+                    onBrowserPageEdit={editBrowserPage}
+                    onBrowserFaviconEdit={editBrowserFavicon}
+                    onBrowserAddressChange={changeBrowserAddress}
                   />
                 ) : (
                   <div className="studio-panel min-h-0 flex-1">
                     <Suspense fallback={<PanelFallback />}>
-                      <CodePanel />
+                      <CodePanel
+                        ref={codePanelRef}
+                        currentPageId={currentPageId}
+                        onApplyHtml={applyComponentSourceHtml}
+                        onDraftDirtyChange={setWorkspaceDirty}
+                      />
                     </Suspense>
                   </div>
                 )}
               </div>
-              {!aiWorkspaceOpen && <RailSlot
+              {!aiWorkspaceOpen && canvasMode !== 'source' && <RailSlot
                 side="right"
                 label={t('Properties')}
                 open={rightOpen}
@@ -2680,52 +2783,21 @@ export default function EditorPage() {
                 onOpen={() => setRail('right', true)}
                 onClose={() => setRail('right', false)}
               >
-              <div
-                className={`studio-panel flex min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l ${
-                  rightTab === 'code' ? 'w-[480px]' : 'w-72'
-                }`}
-              >
-                <div className="flex shrink-0 items-center border-b border-[var(--studio-border)] text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setRightTab('props')}
-                    className={`flex-1 py-2 font-medium ${
-                      rightTab === 'props'
-                        ? 'border-b-2 border-[#4f46e5] text-[#4f46e5]'
-                        : 'text-[#6b7280] hover:text-[#111827]'
-                    }`}
-                  >
+              <div className="studio-panel flex w-72 min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l">
+                <div className="flex shrink-0 items-center justify-between border-b border-[var(--studio-border)] px-3 py-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[var(--studio-text-muted)]">
                     {t('Properties')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRightTab('code')}
-                    className={`flex-1 py-2 font-mono ${
-                      rightTab === 'code'
-                        ? 'border-b-2 border-[#4f46e5] text-[#4f46e5]'
-                        : 'text-[#6b7280] hover:text-[#111827]'
-                    }`}
-                  >
-                    &lt;/&gt; {t('Code')}
-                  </button>
+                  </span>
                   <button
                     type="button"
                     onClick={() => setRail('right', false)}
                     title={t('Hide panel')}
-                    className="px-2 py-2 text-xs text-[#9ca3af] hover:text-[#374151]"
+                    className="rounded-md px-1.5 py-0.5 text-xs text-[var(--studio-text-faint)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
                   >
                     »
                   </button>
                 </div>
-                <div className="min-h-0 flex-1">
-                  {rightTab === 'code' ? (
-                    <Suspense fallback={<PanelFallback />}>
-                      <CodePanel />
-                    </Suspense>
-                  ) : (
-                    <PropertiesPanel />
-                  )}
-                </div>
+                <div className="min-h-0 flex-1"><PropertiesPanel /></div>
               </div>
               </RailSlot>}
             </>
@@ -2788,7 +2860,8 @@ export default function EditorPage() {
 
       {controlCenterOpen && <SiteControlCenter
         open={controlCenterOpen}
-        onClose={() => setControlCenterOpen(false)}
+        focusField={controlCenterFocus}
+        onClose={() => { setControlCenterOpen(false); setControlCenterFocus('') }}
         site={{
           id,
           title,

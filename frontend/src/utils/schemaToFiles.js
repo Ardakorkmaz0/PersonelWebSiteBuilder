@@ -1,5 +1,6 @@
-// Turns the design schema into a small read-only "project" of files: one
-// self-contained .html per page plus schema.json.
+// Turns the design schema into a readable project: one short HTML file per
+// page, a shared stylesheet/runtime and schema.json. The single-file exporter
+// below remains available when portability matters more than readability.
 //
 // This is for DISPLAY (the VS Code-style code panel) and export. It never runs
 // user input: text is HTML-escaped, URLs go through sanitizeUrl, style keys are
@@ -8,8 +9,19 @@
 import { sanitizeStyles, sanitizeUrl, sanitizeImageSrc } from './sanitize.js'
 import { iconSvg } from './icons.js'
 import { ALERT_VARIANTS } from '../components/renderer/constants.js'
-import { customCssBlock, customJsBlock, themeVariablesCss } from './theme.js'
-import { builderInteractiveTags, withBuilderInteractiveHtml } from './htmlRuntime.js'
+import {
+  customCssBlock,
+  customJsBlock,
+  safeCustomCss,
+  safeCustomJs,
+  themeVariablesCss,
+} from './theme.js'
+import {
+  builderInteractiveCss,
+  builderInteractiveJs,
+  builderInteractiveTags,
+  withBuilderInteractiveHtml,
+} from './htmlRuntime.js'
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
@@ -24,9 +36,15 @@ import {
 import { regionContentWidth, resolveRegionDock } from './regionLayout.js'
 import { autoLayoutChildCss, autoLayoutContainerCss } from './autoLayout.js'
 import { fixedRailInset } from './railInset.js'
-import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
+import {
+  navLinkLabel,
+  navbarBrandAlign,
+  navbarLinkGap,
+  navbarLinksAlign,
+  navbarPlacement,
+} from './navbarLayout.js'
 import { motionClassSuffix, motionCssVars, motionHeadTags, motionRevealAttr } from './motion.js'
-import { pageSeoTitle, seoHeadTags } from './seoTags.js'
+import { pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
 
 const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
@@ -429,7 +447,7 @@ function inlineNode(c, classedChildren = false) {
     // inside the user's snippet scrolls instead of navigating the sandboxed
     // iframe to `about:srcdoc#` (which whites it out without allow-same-origin).
     const safe = withBuilderInteractiveHtml(doc).replace(/"/g, '&quot;')
-    return `<iframe srcdoc="${safe}" scrolling="no" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" loading="lazy" style="display:block;width:100%;height:${h}px;border:0;background:transparent;${styleStr};overflow:hidden"></iframe>`
+    return `<iframe srcdoc="${safe}" scrolling="no" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" style="display:block;width:100%;height:${h}px;border:0;background:transparent;${styleStr};overflow:hidden"></iframe>`
   }
   const tag = tagFor(c.type)
   const base = baseRules(c.type)
@@ -469,7 +487,9 @@ function innerHtml(c) {
         .join('\n        ')
       const mobileMode = p.mobileNavMode === 'stack' ? 'stack' : 'menu'
       const menuBackground = cssValue(c.styles?.backgroundColor || '#1d1d1f')
-      return `<div class="nav-inner nav-${layout} nav-mobile-${mobileMode}" data-builder-mobile-nav style="--builder-nav-menu-bg:${menuBackground}">\n        <span class="brand">${multiline(p.brand)}</span>\n        <button type="button" class="mobile-nav-toggle" data-builder-mobile-nav-toggle aria-label="Open navigation menu" aria-expanded="false">☰</button>\n        <div class="links">\n          ${items}\n        </div>\n      </div>`
+      const brandAlign = navbarBrandAlign(p) === 'center' ? 'center' : navbarBrandAlign(p) === 'right' ? 'flex-end' : 'flex-start'
+      const linksAlign = navbarLinksAlign(p) === 'center' ? 'center' : navbarLinksAlign(p) === 'right' ? 'flex-end' : 'flex-start'
+      return `<div class="nav-inner nav-${layout} nav-mobile-${mobileMode}" data-builder-mobile-nav style="--builder-nav-menu-bg:${menuBackground};--builder-mobile-brand-align:${brandAlign};--builder-mobile-links-align:${linksAlign}">\n        <span class="brand">${multiline(p.brand)}</span>\n        <button type="button" class="mobile-nav-toggle" data-builder-mobile-nav-toggle aria-label="Open navigation menu" aria-expanded="false">☰</button>\n        <div class="links">\n          ${items}\n        </div>\n      </div>`
     }
     case 'heading': {
       const lvl = ['h1', 'h2', 'h3'].includes(p.level) ? p.level : 'h2'
@@ -540,24 +560,37 @@ function openTag(c, extraAttrs = '') {
   return `<${tag}${idAttr} class="${cls}">`
 }
 
-function pageHtml(page, fileTitle, cssHref = 'styles.css', customJs = '', theme = null) {
+function pageHtml(
+  page,
+  fileTitle,
+  cssHref = 'styles.css',
+  customJs = '',
+  theme = null,
+  { externalRuntime = false } = {},
+) {
+  const runtimeHead = externalRuntime
+    ? '<script src="runtime.js"></script>'
+    : motionHeadTags()
+  const customStyleLink = externalRuntime ? '\n    <link rel="stylesheet" href="custom.css" />' : ''
+  const runtimeBody = externalRuntime
+    ? '<script src="custom.js"></script>'
+    : `${builderInteractiveTags()}\n    ${customJsBlock(customJs)}`
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${pageLanguage(page)}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(pageSeoTitle(page, fileTitle))}</title>
     ${seoHeadTags(page, fileTitle)}
-    <link rel="stylesheet" href="${cssHref}" />
+    <link rel="stylesheet" href="${cssHref}" />${customStyleLink}
     ${googleFontLinkTag(theme)}
-    ${motionHeadTags()}
+    ${runtimeHead}
   </head>
   <body>
     <div class="page p-${page.id}">
 ${pageBody(page)}
     </div>
-    ${builderInteractiveTags()}
-    ${customJsBlock(customJs)}
+    ${runtimeBody}
   </body>
 </html>`
 }
@@ -734,7 +767,8 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
   css += `  .nav-inner:not(.nav-vertical):not(.nav-mobile-stack)[data-mobile-open="true"] .links { display:flex; }\n`
   css += `  .nav-inner:not(.nav-vertical):not(.nav-mobile-stack) .links a { display:block; width:100%; padding:10px 12px; border-radius:8px; }\n`
   css += `  .nav-mobile-stack { flex-direction:column; align-items:flex-start; justify-content:flex-start; gap:10px; }\n`
-  css += `  .nav-mobile-stack .links { gap:16px; row-gap:6px; }\n`
+  css += `  .nav-mobile-stack > .brand { position:static; left:auto; transform:none; order:0; margin-left:0; align-self:var(--builder-mobile-brand-align,flex-start); }\n`
+  css += `  .nav-mobile-stack .links { position:static; left:auto; transform:none; order:1; margin-left:0; width:100%; flex-direction:row; align-items:center; justify-content:var(--builder-mobile-links-align,flex-end); gap:16px; row-gap:6px; }\n`
   css += `}\n`
   if (options.includeCustomCss !== false) css += customCssBlock(schema?.customCss)
   return css
@@ -806,7 +840,7 @@ function schemaToScaledHtml(page, title = 'My Site', schema = {}, options = {}) 
   const fixedBody = pageBody(page, { fixed: 'only' })
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${pageLanguage(page)}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -886,11 +920,35 @@ export function schemaToFiles(schema) {
     files.push({
       name,
       lang: 'html',
-      content: schemaToSingleHtml(
-        { pages: [page], theme: schema?.theme, customCss: schema?.customCss },
+      content: pageHtml(
+        page,
         page.name || 'My Site',
+        'styles.css',
+        schema?.customJs,
+        schema?.theme,
+        { externalRuntime: true },
       ),
     })
+  })
+  files.push({
+    name: 'styles.css',
+    lang: 'css',
+    content: `${schemaToCss(schema, { includeCustomCss: false })}\n${builderInteractiveCss()}`,
+  })
+  files.push({
+    name: 'custom.css',
+    lang: 'css',
+    content: safeCustomCss(schema?.customCss),
+  })
+  files.push({
+    name: 'runtime.js',
+    lang: 'js',
+    content: builderInteractiveJs(),
+  })
+  files.push({
+    name: 'custom.js',
+    lang: 'js',
+    content: safeCustomJs(schema?.customJs),
   })
   files.push({
     name: 'schema.json',

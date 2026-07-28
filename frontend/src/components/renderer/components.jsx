@@ -10,7 +10,13 @@ import { withBuilderInteractiveHtml } from '../../utils/htmlRuntime.js'
 import { htmlEmbedDocument } from '../../utils/htmlEmbedDocument.js'
 import { htmlEmbedDocumentOptions } from '../../utils/htmlSnippetSizing.js'
 import { scaleCssValue, scaledPx } from './scale.js'
-import { navLinkLabel, navbarLinkGap, navbarPlacement } from '../../utils/navbarLayout.js'
+import {
+  navLinkLabel,
+  navbarBrandAlign,
+  navbarLinkGap,
+  navbarLinksAlign,
+  navbarPlacement,
+} from '../../utils/navbarLayout.js'
 import { LanguageContext } from '../../i18n/context.js'
 
 function linkAttrs(href) {
@@ -63,8 +69,9 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
   const centered = layout === 'centered'
   const twoRow = layout === 'twoRow'
   const mobileMenu = isMobile && !vertical && props.mobileNavMode !== 'stack'
+  const mobileVisibleLinks = isMobile && !vertical && !mobileMenu
   const stacked = vertical || centered || twoRow || (isMobile && !mobileMenu)
-  const linkColumn = vertical || (isMobile && !mobileMenu)
+  const linkColumn = vertical
   // Brand / links placement applies to a horizontal bar on a wide screen; the
   // stacked layouts and the phone hamburger arrange themselves.
   const placed = !stacked && !mobileMenu ? navbarPlacement(props) : null
@@ -102,7 +109,17 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
           position: 'relative',
         }}
       >
-        <span style={{ fontWeight: 'bold', fontSize: '1.125em', ...multilineTextStyle, ...(placed ? placed.brand : null) }}>{props.brand}</span>
+        <span style={{
+          fontWeight: 'bold',
+          fontSize: '1.125em',
+          ...multilineTextStyle,
+          ...(placed ? placed.brand : null),
+          ...(mobileVisibleLinks ? {
+            alignSelf: navbarBrandAlign(props) === 'center'
+              ? 'center'
+              : navbarBrandAlign(props) === 'right' ? 'flex-end' : 'flex-start',
+          } : null),
+        }}>{props.brand}</span>
         {mobileMenu && (
           <button
             type="button"
@@ -135,14 +152,20 @@ export function Navbar({ props, style, viewport = 'pc', contentWidth, boxScale =
             display: mobileMenu && !mobileOpen ? 'none' : 'flex',
             flexDirection: mobileMenu || linkColumn ? 'column' : 'row',
             alignItems: centered ? 'center' : linkColumn ? 'stretch' : 'center',
-            justifyContent: centered ? 'center' : undefined,
+            justifyContent: centered
+              ? 'center'
+              : mobileVisibleLinks
+                ? navbarLinksAlign(props) === 'center'
+                  ? 'center'
+                  : navbarLinksAlign(props) === 'right' ? 'flex-end' : 'flex-start'
+                : undefined,
             gap: scaledPx(
               mobileMenu || linkColumn ? 6 : isMobile ? 16 : navbarLinkGap(props),
               boxScale,
             ),
             rowGap: scaledPx(6, boxScale),
             flexWrap: 'wrap',
-            width: mobileMenu || linkColumn || twoRow ? '100%' : undefined,
+            width: mobileMenu || mobileVisibleLinks || linkColumn || twoRow ? '100%' : undefined,
             ...(placed ? placed.links : null),
             ...(mobileMenu ? {
               position: 'absolute',

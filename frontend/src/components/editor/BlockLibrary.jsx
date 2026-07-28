@@ -154,7 +154,7 @@ export default function BlockLibrary({ open, onClose, onPickComponent, onArmPlac
 
   return createPortal(
     <div
-      className="studio-theme-surface fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-3 sm:p-6"
+      className="studio-theme-surface studio-overlay fixed inset-0 z-[2147483000] flex items-center justify-center p-3 sm:p-6"
       onClick={onClose}
       data-block-library=""
     >
@@ -164,7 +164,7 @@ export default function BlockLibrary({ open, onClose, onPickComponent, onArmPlac
       >
         {/* Header: title + search + close */}
         <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--studio-border,#e5e7eb)] px-4 py-3 sm:px-5">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] text-white">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--studio-accent)] text-white">
             <LayersIcon size={15} />
           </span>
           <h2 className="text-sm font-bold text-[var(--studio-text,#111827)]">{t('Block library')}</h2>

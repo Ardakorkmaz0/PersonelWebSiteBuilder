@@ -718,11 +718,12 @@ export const PC_CANVAS_PRESETS = [
 ]
 
 export const MOBILE_CANVAS_PRESETS = [
-  { id: 'std', label: 'Standard · 390', width: 390, fold: 0 },
-  { id: 'se', label: 'iPhone SE · 375×667', width: 375, fold: 667 },
-  { id: 'ip', label: 'iPhone 15 · 393×852', width: 393, fold: 852 },
-  { id: 'max', label: 'iPhone Pro Max · 430×932', width: 430, fold: 932 },
-  { id: 'galaxy', label: 'Galaxy S · 360×780', width: 360, fold: 780 },
-  { id: 'ultra', label: 'Galaxy Ultra · 384×824', width: 384, fold: 824 },
-  { id: 'android', label: 'Android Large · 412×915', width: 412, fold: 915 },
+  { id: 'std', label: 'Standard mobile · 390', width: 390, fold: 0 },
+  { id: 'iphone14', label: 'iPhone 14 · 390×844', width: 390, fold: 844 },
+  { id: 'se', label: 'iPhone SE (3rd gen) · 375×667', width: 375, fold: 667 },
+  { id: 'iphone15pro', label: 'iPhone 15 Pro · 393×852', width: 393, fold: 852 },
+  { id: 'iphone15max', label: 'iPhone 15 Pro Max · 430×932', width: 430, fold: 932 },
+  { id: 'galaxys24', label: 'Galaxy S24 · 360×780', width: 360, fold: 780 },
+  { id: 'galaxys24ultra', label: 'Galaxy S24 Ultra · 384×824', width: 384, fold: 824 },
+  { id: 'pixel7', label: 'Pixel 7 · 412×915', width: 412, fold: 915 },
 ]

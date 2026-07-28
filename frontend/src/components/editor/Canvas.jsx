@@ -10,6 +10,8 @@ import CanvasMultiActions from './CanvasMultiActions.jsx'
 import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
+import BrowserFrame from './BrowserFrame.jsx'
+import { browserFrameH, browserFrameW } from './browserFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 
@@ -26,6 +28,16 @@ export default function Canvas({
   // A click/tap on the bare canvas calls onPlaceAt with canvas coordinates.
   pendingPlace = null,
   onPlaceAt = () => {},
+  browserFrame = false,
+  browserSiteTitle = 'My Site',
+  browserFavicon = '',
+  browserAddress = 'preview.sitebuilder.local',
+  browserPages = [],
+  browserCurrentPageId = '',
+  onBrowserPageSelect,
+  onBrowserPageEdit,
+  onBrowserFaviconEdit,
+  onBrowserAddressChange,
 }) {
   const { t } = useLanguage()
   const page = useEditorStore(selectCurrentPage)
@@ -70,8 +82,10 @@ export default function Canvas({
   const background = isMobile ? bgMobile : bg
   const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
   const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
-  const phone = phoneModel(canvasW)
-  const frameW = canvasW + (isMobile ? phoneFrameW(phone) : 0)
+  const phone = phoneModel(canvasW, fold)
+  const desktopBrowser = !isMobile && browserFrame
+  const frameW = canvasW + (isMobile ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0)
+  const frameH = minHeight + (isMobile ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0)
   useEffect(() => {
     const el = scrollElRef.current
     if (!el) return undefined
@@ -428,7 +442,7 @@ export default function Canvas({
               transformOrigin: 'top left',
             }}
           >
-            <PhoneFrame screenWidth={canvasW} screenHeight={minHeight}>
+            <PhoneFrame screenWidth={canvasW} screenHeight={minHeight} model={phone}>
               {canvas}
             </PhoneFrame>
           </div>
@@ -451,16 +465,32 @@ export default function Canvas({
     >
       <div
         className="mx-auto"
-        style={{ width: canvasW * canvasScale, height: minHeight * canvasScale }}
+        style={{ width: frameW * canvasScale, height: frameH * canvasScale }}
       >
         <div
           style={{
-            width: canvasW,
+            width: frameW,
             transform: canvasScale < 1 ? `scale(${canvasScale})` : undefined,
             transformOrigin: 'top left',
           }}
         >
-          {canvas}
+          {desktopBrowser ? (
+            <BrowserFrame
+              screenWidth={canvasW}
+              screenHeight={minHeight}
+              siteTitle={browserSiteTitle}
+              favicon={browserFavicon}
+              address={browserAddress}
+              pages={browserPages}
+              currentPageId={browserCurrentPageId || page.id}
+              onSelectPage={onBrowserPageSelect}
+              onEditPage={onBrowserPageEdit}
+              onEditFavicon={onBrowserFaviconEdit}
+              onAddressChange={onBrowserAddressChange}
+            >
+              {canvas}
+            </BrowserFrame>
+          ) : canvas}
         </div>
       </div>
     </main>

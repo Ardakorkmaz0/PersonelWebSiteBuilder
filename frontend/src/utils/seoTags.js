@@ -8,7 +8,7 @@
 // Values are escaped here and the image is passed through the same allowlist as
 // any user image. An EMPTY field emits no tag at all: an empty og:image or a
 // blank description is worse than none, because scrapers show the empty result.
-import { sanitizeImageSrc } from './sanitize.js'
+import { sanitizeImageSrc, sanitizeUrl } from './sanitize.js'
 
 function esc(s) {
   return String(s ?? '').replace(
@@ -24,17 +24,30 @@ export function pageSeoTitle(page, fallback) {
   return explicit || String(fallback || '')
 }
 
+export function pageLanguage(page) {
+  return page?.language === 'tr' ? 'tr' : 'en'
+}
+
 export function seoHeadTags(page, fallbackTitle) {
   const title = pageSeoTitle(page, fallbackTitle)
   const description = String(page?.seoDescription || '').trim()
   const image = sanitizeImageSrc(page?.seoImage)
+  const rawCanonical = sanitizeUrl(page?.canonicalUrl)
+  const canonical = /^(?:https?:\/\/|\/)/i.test(rawCanonical) ? rawCanonical : ''
   const tags = []
+  if (page?.noIndex) tags.push('<meta name="robots" content="noindex, nofollow" />')
+  if (canonical) {
+    tags.push(`<link rel="canonical" href="${esc(canonical)}" />`)
+    tags.push(`<meta property="og:url" content="${esc(canonical)}" />`)
+  }
   if (description) {
     tags.push(`<meta name="description" content="${esc(description)}" />`)
     tags.push(`<meta property="og:description" content="${esc(description)}" />`)
+    tags.push(`<meta name="twitter:description" content="${esc(description)}" />`)
   }
   if (title) {
     tags.push(`<meta property="og:title" content="${esc(title)}" />`)
+    tags.push(`<meta name="twitter:title" content="${esc(title)}" />`)
   }
   if (image) {
     tags.push(`<meta property="og:image" content="${esc(image)}" />`)

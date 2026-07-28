@@ -103,14 +103,17 @@ export function applyPaletteToHtml(html, colors) {
 // hand-written / AI-generated / exported sites.
 const THEME_VAR_MAP = {
   primaryColor: ['accent', 'accent-color', 'primary', 'primary-color', 'brand', 'brand-color', 'main-color', 'color-primary', 'theme-color', 'clr-primary', 'c-primary', 'p'],
+  buttonTextColor: ['button-text', 'button-color', 'on-primary'],
   textColor: ['ink', 'text', 'text-color', 'foreground', 'fg', 'body-color', 'color-text', 'clr-text', 'text-1'],
   mutedColor: ['muted', 'muted-color', 'text-muted', 'secondary-text', 'subtle', 'color-muted', 'gray', 'grey'],
+  borderColor: ['border', 'border-color', 'line', 'divider', 'outline'],
   backgroundColor: ['bg', 'background', 'background-color', 'page-bg', 'body-bg', 'color-bg', 'clr-bg'],
   softColor: ['soft', 'soft-bg', 'surface-2', 'muted-bg', 'subtle-bg', 'alt-bg', 'bg-soft'],
   surfaceColor: ['surface', 'card', 'card-bg', 'panel', 'panel-bg', 'bg-card'],
   headerColor: ['header', 'header-bg', 'nav-bg', 'navbar-bg'],
 }
 const FONT_VARS = ['font', 'font-family', 'body-font', 'font-body', 'ff', 'site-font', 'base-font']
+const HEADING_FONT_VARS = ['heading-font', 'font-heading', 'display-font', 'title-font']
 const FONT_MARK = 'data-pwb-theme-font'
 
 const swapVar = (html, name, value) =>
@@ -120,15 +123,17 @@ const swapVar = (html, name, value) =>
 // is a curated font + a body/:root font rule. Stripped-then-re-added so it
 // never piles up across re-applies. Display-time concern only — stored HTML
 // keeps whatever the user authored plus this one tidy block.
-export function injectThemeFont(html, fontFamily) {
+export function injectThemeFont(html, fontFamily, headingFontFamily = fontFamily) {
   let out = String(html || '')
   out = out
     .replace(new RegExp(`<style ${FONT_MARK}[^>]*>[\\s\\S]*?</style>`, 'gi'), '')
     .replace(new RegExp(`<link [^>]*${FONT_MARK}[^>]*>`, 'gi'), '')
   if (!fontFamily) return out
-  const link = googleFontLinkTag(fontFamily).replace(/<link /g, `<link ${FONT_MARK} `)
+  const link = googleFontLinkTag({ fontFamily, headingFontFamily })
+    .replace(/<link /g, `<link ${FONT_MARK} `)
   const safeFont = String(fontFamily).replace(/[<{}]/g, '')
-  const style = `<style ${FONT_MARK}>:root{--site-font:${safeFont}}body{font-family:${safeFont}}</style>`
+  const safeHeadingFont = String(headingFontFamily || fontFamily).replace(/[<{}]/g, '')
+  const style = `<style ${FONT_MARK}>:root{--site-font:${safeFont};--site-heading-font:${safeHeadingFont}}body{font-family:${safeFont}}h1,h2,h3,h4,h5,h6{font-family:${safeHeadingFont}}</style>`
   const inject = link + style
   if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
   if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + inject)
@@ -162,13 +167,16 @@ export function applyThemeToDocument(html, theme) {
   if (theme.fontFamily) {
     for (const n of FONT_VARS) out = swapVar(out, n, theme.fontFamily)
   }
+  if (theme.headingFontFamily) {
+    for (const n of HEADING_FONT_VARS) out = swapVar(out, n, theme.headingFontFamily)
+  }
   // No palette variables anywhere → recolor the dominant brand colors so the
   // theme still visibly lands on hand-written / exported pages.
   if (!colorTouched && theme.primaryColor) {
     const recolored = replaceDominantColors(out, [theme.primaryColor])
     if (recolored) out = recolored
   }
-  return injectThemeFont(out, theme.fontFamily)
+  return injectThemeFont(out, theme.fontFamily, theme.headingFontFamily)
 }
 
 // Curated swatches for the quick-action palette — first selection becomes the

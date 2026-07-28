@@ -346,7 +346,7 @@ export default function CodeProjectPage() {
 
   if (!rootHandle) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f3f4f6] p-6">
+      <div className="studio-theme-surface flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--studio-shell)] p-6 text-[var(--studio-text)]">
         <div className="ms-card w-full max-w-md p-8 text-center">
           <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#eef2ff] text-[#4f46e5]"><FolderOpenIcon size={24} /></div>
           <h1 className="text-lg font-bold text-[#111827]">{t('Open a local project')}</h1>
@@ -388,8 +388,8 @@ export default function CodeProjectPage() {
   const activeDirty = activePath ? dirty.has(activePath) : false
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
+    <div className="studio-theme-surface flex h-screen flex-col bg-[var(--studio-shell)] text-[var(--studio-text)]">
+      <header className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-1.5 shadow-sm">
         <div className="flex shrink-0 items-center gap-1">
           <Link
             to="/"
@@ -517,13 +517,13 @@ export default function CodeProjectPage() {
               <div className="flex items-center rounded-lg border border-[#d1d5db] p-0.5 text-xs font-medium">
                 <button
                   onClick={() => setHtmlDevice('fit')}
-                  className={!isMobileDevice(htmlDevice) ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}
+                  className={!isMobileDevice(htmlDevice) ? 'rounded-lg bg-[var(--studio-accent)] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[var(--studio-text)]'}
                 >
                   {t('PC')}
                 </button>
                 <button
-                  onClick={() => setHtmlDevice('iphone15')}
-                  className={isMobileDevice(htmlDevice) ? 'rounded-lg bg-[#4f46e5] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[#374151]'}
+                  onClick={() => setHtmlDevice('iphone15pro')}
+                  className={isMobileDevice(htmlDevice) ? 'rounded-lg bg-[var(--studio-accent)] px-2.5 py-1 text-white' : 'px-2.5 py-1 text-[var(--studio-text)]'}
                 >
                   {t('Mobile')}
                 </button>

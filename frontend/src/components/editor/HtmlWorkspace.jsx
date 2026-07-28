@@ -5,7 +5,9 @@ import {
   withBuilderRuntimeHtml,
   withViewportMeta,
 } from '../../utils/htmlRuntime.js'
-import { DEVICES } from '../../utils/htmlDevices.js'
+import { DEVICES, isMobileDevice } from '../../utils/htmlDevices.js'
+import PhoneFrame from './PhoneFrame.jsx'
+import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
 import {
   DRAG_MIME,
   closestPlaceableBlock,
@@ -978,7 +980,11 @@ function HtmlWorkspace({
     : landscape
       ? device.w
       : device.h
-  const scale = Math.min(1, (stage.w - 24) / contentW || 1, (stage.h - 24) / contentH || 1)
+  const framedPhone = !isFit && !landscape && isMobileDevice(device.id)
+  const phone = phoneModel(contentW, contentH)
+  const previewW = contentW + (framedPhone ? phoneFrameW(phone) : 0)
+  const previewH = contentH + (framedPhone ? phoneFrameH(phone) : 0)
+  const scale = Math.min(1, (stage.w - 24) / previewW || 1, (stage.h - 24) / previewH || 1)
 
   // ----- placement: splice the component's snippet into the document ---------
   const placeAt = useCallback((clientX, clientY) => {
@@ -1696,22 +1702,29 @@ function HtmlWorkspace({
                 {stageIframe}
               </div>
             ) : (
-              <div style={{ width: Math.round(contentW * scale), height: Math.round(contentH * scale) }}>
+              <div style={{ width: Math.round(previewW * scale), height: Math.round(previewH * scale) }}>
                 <div
-                  className="bg-white"
                   style={{
-                    width: contentW,
-                    height: contentH,
+                    width: previewW,
+                    height: previewH,
                     position: 'relative',
                     transform: `scale(${scale})`,
                     transformOrigin: 'top left',
-                    border: '1px solid #d1d5db',
-                    boxShadow: placing
-                      ? '0 1px 6px rgba(0,0,0,0.15), inset 0 0 0 2px #2563eb'
-                      : '0 1px 6px rgba(0,0,0,0.15)',
+                    outline: placing ? '2px solid #2563eb' : 'none',
+                    outlineOffset: framedPhone ? 4 : 0,
                   }}
                 >
-                  {stageIframe}
+                  {framedPhone ? (
+                    <PhoneFrame screenWidth={contentW} screenHeight={contentH} model={phone}>
+                      {stageIframe}
+                    </PhoneFrame>
+                  ) : (
+                    <div
+                      className="h-full w-full border border-[#d1d5db] bg-white shadow-sm"
+                    >
+                      {stageIframe}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

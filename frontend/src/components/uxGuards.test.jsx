@@ -127,16 +127,10 @@ describe('responsive and accessibility guards', () => {
     expect(screen.getByRole('link', { name: 'Continue editing: Latest portfolio' })).toHaveAttribute('href', '/editor/42')
   })
 
-  it('searches the full community feed by site or creator', async () => {
+  it('uses the persistent header for site and creator search', async () => {
     renderWithShell(<ExplorePage />)
-
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search community sites' }), {
-      target: { value: 'lighthouse' },
-    })
-
-    await waitFor(() => {
-      expect(listExplore).toHaveBeenCalledWith({ category: '', page: 1, search: 'lighthouse' })
-    })
+    expect(screen.getByRole('searchbox', { name: 'Search sites and creators' })).toBeInTheDocument()
+    expect(screen.queryByRole('searchbox', { name: 'Search community sites' })).not.toBeInTheDocument()
   })
 
   it('keeps the shared navbar on Favorites and filters saved sites', async () => {

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import LanguageSwitcher from '../LanguageSwitcher.jsx'
+import DashboardGlobalSearch from './DashboardGlobalSearch.jsx'
 import {
   ChevronDownIcon,
   FolderIcon,
@@ -79,7 +80,11 @@ export default function DashboardHeader({ current = '' }) {
           </span>
         </Link>
 
-        <nav aria-label={t('Navigation')} className="hidden items-center gap-1 md:flex">
+        <div className="hidden min-w-[14rem] flex-1 md:block">
+          <DashboardGlobalSearch />
+        </div>
+
+        <nav aria-label={t('Navigation')} className="hidden items-center gap-1 xl:flex">
           {NAV_ITEMS.map(({ id, label, to, icon: NavIcon }) => (
             <Link
               key={id}
@@ -140,7 +145,7 @@ export default function DashboardHeader({ current = '' }) {
             aria-label={t('Open menu')}
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((open) => !open)}
-            className="studio-icon-btn border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] md:hidden"
+            className="studio-icon-btn border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] xl:hidden"
           >
             <span aria-hidden className="text-base leading-none">☰</span>
           </button>
@@ -148,7 +153,10 @@ export default function DashboardHeader({ current = '' }) {
       </div>
 
       {mobileOpen && (
-        <div className="dashboard-mobile-menu md:hidden">
+        <div className="dashboard-mobile-menu xl:hidden">
+          <div className="mb-3 md:hidden">
+            <DashboardGlobalSearch mobile onNavigate={() => setMobileOpen(false)} />
+          </div>
           <nav aria-label={t('Mobile navigation')} className="grid gap-1">
             {NAV_ITEMS.map(({ id, label, to, icon: NavIcon }) => (
               <Link

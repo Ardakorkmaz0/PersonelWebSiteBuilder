@@ -101,6 +101,45 @@ class TestExplore:
 
 
 @pytest.mark.django_db
+class TestGlobalSearch:
+    def test_requires_authentication(self, client):
+        assert client.get('/api/search/', {'q': 'ada'}).status_code in (401, 403)
+
+    def test_combines_public_sites_and_active_creator_profiles(self, client, alice, bob):
+        a, atok = alice
+        b, _ = bob
+        a.profile.display_name = 'Ada Studio'
+        a.profile.headline = 'Portfolio designer'
+        a.profile.save(update_fields=['display_name', 'headline'])
+        _site(a, 'Ada Portfolio', published=True, views=12)
+        _site(a, 'Ada Private Draft', published=False)
+        _site(b, 'Coffee Journal', published=True)
+        _auth(client, atok)
+
+        response = client.get('/api/search/', {'q': 'ada'})
+
+        assert response.status_code == 200
+        assert [site['title'] for site in response.data['sites']] == ['Ada Portfolio']
+        assert [user['username'] for user in response.data['users']] == ['alice']
+        assert response.data['users'][0]['display_name'] == 'Ada Studio'
+        assert response.data['users'][0]['published_site_count'] == 1
+
+    def test_short_queries_return_no_results_and_suspended_users_stay_hidden(self, client, alice, bob):
+        _, atok = alice
+        suspended, _ = bob
+        suspended.username = 'hiddenmaker'
+        suspended.is_active = False
+        suspended.save(update_fields=['username', 'is_active'])
+        _site(suspended, 'Hiddenmaker Portfolio', published=True)
+        _auth(client, atok)
+
+        assert client.get('/api/search/', {'q': 'a'}).data == {'query': 'a', 'sites': [], 'users': []}
+        hidden_results = client.get('/api/search/', {'q': 'hidden'}).data
+        assert hidden_results['users'] == []
+        assert hidden_results['sites'] == []
+
+
+@pytest.mark.django_db
 class TestFavorites:
     def test_toggle_add_and_remove(self, client, alice, bob):
         a, _ = alice

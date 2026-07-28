@@ -24,15 +24,15 @@ export default function HtmlModal({ html, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+      className="studio-theme-surface studio-overlay fixed inset-0 z-50 flex items-center justify-center p-6"
       onClick={onClose}
     >
       <div
         className="ms-card flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#e1dfdd] px-4 py-3">
-          <h2 className="text-sm font-semibold text-[#201f1e]">{t('Generated HTML')}</h2>
+        <div className="flex items-center justify-between border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-4 py-3">
+          <h2 className="text-sm font-semibold text-[var(--studio-text)]">{t('Generated HTML')}</h2>
           <div className="flex items-center gap-2">
             <button onClick={copy} className="ms-btn ms-btn-primary">
               {copied ? t('Copied ✓') : t('Copy')}

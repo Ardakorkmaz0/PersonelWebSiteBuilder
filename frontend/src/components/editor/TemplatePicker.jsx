@@ -103,7 +103,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
   }
 
   return (
-    <div className="studio-theme-surface fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-2 sm:p-4" onClick={onClose}>
+    <div className="studio-theme-surface studio-overlay fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
       <section
         role="dialog"
         aria-modal="true"
@@ -116,7 +116,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
             <div className="min-w-0">
               <h2 id="template-gallery-title" className="text-base font-semibold text-[#111827]">
                 {t('Template gallery')}
-                <span className="ml-2 rounded-full bg-[#eef2ff] px-2 py-0.5 text-xs font-semibold text-[#4f46e5]">{t('{count} templates', { count: TEMPLATE_COUNT })}</span>
+                <span className="ml-2 rounded-full bg-[var(--studio-accent-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--studio-accent-hover)]">{t('{count} templates', { count: TEMPLATE_COUNT })}</span>
               </h2>
               <p className="hidden text-xs text-[#6b7280] sm:block">{t('Search, preview and save favorites before applying a template.')}</p>
             </div>
@@ -134,7 +134,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
                 ['favorites', 'Favorites'],
                 ['recent', 'Recent'],
               ].map(([id, label]) => (
-                <button key={id} type="button" onClick={() => setView(id)} aria-pressed={view === id} className={view === id ? 'rounded-md bg-[#4f46e5] px-2.5 py-1 text-white' : 'rounded-md px-2.5 py-1 text-[#374151] hover:bg-[#f3f4f6]'}>{t(label)}</button>
+                <button key={id} type="button" onClick={() => setView(id)} aria-pressed={view === id} className={view === id ? 'rounded-md bg-[var(--studio-accent)] px-2.5 py-1 text-white' : 'rounded-md px-2.5 py-1 text-[var(--studio-text)] hover:bg-[var(--studio-control-hover)]'}>{t(label)}</button>
               ))}
             </div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-[#374151]">
@@ -155,7 +155,7 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
                 type="button"
                 onClick={() => { setActiveId(category.id); setView('category'); setQuery('') }}
                 aria-pressed={view === 'category' && category.id === activeId}
-                className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition md:mb-1 md:w-full ${view === 'category' && category.id === activeId ? 'bg-[#4f46e5] text-white shadow-sm' : 'text-[#374151] hover:bg-[#f3f4f6]'}`}
+                className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition md:mb-1 md:w-full ${view === 'category' && category.id === activeId ? 'bg-[var(--studio-accent)] text-white shadow-sm' : 'text-[var(--studio-text)] hover:bg-[var(--studio-control-hover)]'}`}
               >
                 <span className="text-base">{category.icon}</span>
                 <span className="min-w-0 flex-1 whitespace-nowrap font-medium md:truncate">{t(category.name)}</span>
@@ -178,18 +178,18 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
                 {entries.map(({ category, template }) => {
                   const favorite = favorites.includes(template.id)
                   return (
-                    <article key={template.id} className="group flex flex-col overflow-hidden rounded-lg border border-[#e5e7eb] bg-white transition hover:border-[#4f46e5] hover:shadow-lg">
+                    <article key={template.id} className="group flex flex-col overflow-hidden rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] transition hover:border-[var(--studio-accent)] hover:shadow-lg">
                       <div className="relative">
                         <Thumb html={localizedHtml(template)} />
                         <button type="button" onClick={() => toggleFavorite(template.id)} aria-label={t(favorite ? 'Remove from favorites' : 'Add to favorites')} aria-pressed={favorite} className={`absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white/95 shadow ${favorite ? 'text-[#f59e0b]' : 'text-[#6b7280]'}`}><StarIcon size={16} filled={favorite} /></button>
                       </div>
                       <div className="flex flex-1 flex-col p-3">
-                        {(view !== 'category' || normalizedQuery) && <span className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#4f46e5]">{t(category.name)}</span>}
+                        {(view !== 'category' || normalizedQuery) && <span className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--studio-accent-hover)]">{t(category.name)}</span>}
                         <div className="text-sm font-semibold text-[#111827]">{t(template.name)}</div>
                         <p className="mt-0.5 flex-1 text-xs leading-relaxed text-[#6b7280]">{t(template.desc)}</p>
                         <div className="mt-3 flex gap-2">
                           <button type="button" onClick={() => setPreview({ category, template })} className="flex items-center justify-center gap-1.5 rounded-lg border border-[#d1d5db] px-3 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#f3f4f6]"><EyeIcon size={13} /> {t('Preview')}</button>
-                          <button type="button" onClick={() => choose(template)} className="flex-1 rounded-lg bg-[#4f46e5] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#4338ca]">{t('Use this template')}</button>
+                          <button type="button" onClick={() => choose(template)} className="flex-1 rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[var(--studio-accent-hover)]">{t('Use this template')}</button>
                         </div>
                       </div>
                     </article>
@@ -202,10 +202,10 @@ export default function TemplatePicker({ open, title, onPick, onClose }) {
       </section>
 
       {preview && (
-        <div className="fixed inset-0 z-[70] flex flex-col bg-[#111827]/95 p-2 sm:p-5" onClick={() => setPreview(null)}>
-          <div className="mx-auto flex w-full max-w-7xl items-center gap-3 rounded-t-xl bg-white px-4 py-3" onClick={(event) => event.stopPropagation()}>
-            <div className="min-w-0 flex-1"><strong className="block truncate text-sm text-[#111827]">{t(preview.template.name)}</strong><span className="text-xs text-[#6b7280]">{t(preview.category.name)} · {contentLanguage.toUpperCase()}</span></div>
-            <button type="button" onClick={() => choose(preview.template)} className="rounded-lg bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white">{t('Use this template')}</button>
+        <div className="studio-overlay fixed inset-0 z-[70] flex flex-col p-2 sm:p-5" onClick={() => setPreview(null)}>
+          <div className="mx-auto flex w-full max-w-7xl items-center gap-3 rounded-t-xl border border-b-0 border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-4 py-3" onClick={(event) => event.stopPropagation()}>
+            <div className="min-w-0 flex-1"><strong className="block truncate text-sm text-[var(--studio-text)]">{t(preview.template.name)}</strong><span className="text-xs text-[var(--studio-text-muted)]">{t(preview.category.name)} · {contentLanguage.toUpperCase()}</span></div>
+            <button type="button" onClick={() => choose(preview.template)} className="rounded-lg bg-[var(--studio-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--studio-accent-hover)]">{t('Use this template')}</button>
             <button type="button" aria-label={t('Close preview')} onClick={() => setPreview(null)} className="rounded-lg border border-[#d1d5db] px-3 py-2 text-sm text-[#374151]">✕</button>
           </div>
           <iframe title={t('Full-screen template preview')} srcDoc={localizedHtml(preview.template)} sandbox="" className="mx-auto min-h-0 w-full max-w-7xl flex-1 rounded-b-xl border-0 bg-white" onClick={(event) => event.stopPropagation()} />

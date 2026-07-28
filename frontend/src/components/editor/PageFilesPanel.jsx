@@ -251,11 +251,11 @@ export default function PageFilesPanel({
 
       {addPrompt && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 p-4"
+          className="studio-theme-surface studio-overlay fixed inset-0 z-[200] flex items-center justify-center p-4"
           onClick={() => setAddPrompt(null)}
         >
           <div
-            className="w-full max-w-sm rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-xl"
+            className="w-full max-w-sm rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] p-5 text-[var(--studio-text)] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-bold text-[#111827]">{t('How should this page start?')}</h3>

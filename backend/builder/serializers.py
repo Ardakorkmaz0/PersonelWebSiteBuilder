@@ -300,18 +300,123 @@ class ExploreSiteSerializer(serializers.ModelSerializer):
         return obj.id in self.context.get('favorited_ids', set())
 
 
+class SearchUserSerializer(serializers.ModelSerializer):
+    """Public identity fields used by the dashboard's combined search.
+
+    Email and account flags intentionally stay private; search only needs
+    enough information to identify the creator and open their public profile.
+    """
+
+    display_name = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
+    headline = serializers.SerializerMethodField()
+    published_site_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'display_name', 'avatar_url', 'headline', 'published_site_count')
+
+    def _profile(self, obj):
+        return getattr(obj, 'profile', None)
+
+    def get_display_name(self, obj):
+        profile = self._profile(obj)
+        return (profile.display_name if profile and profile.display_name else '') or obj.username
+
+    def get_avatar_url(self, obj):
+        profile = self._profile(obj)
+        return _absolute_image_url(profile.avatar if profile else None, self.context)
+
+    def get_headline(self, obj):
+        profile = self._profile(obj)
+        return (profile.headline if profile else '') or ''
+
+
 class SiteListSerializer(serializers.ModelSerializer):
     """Lightweight representation for the dashboard list (no schema). Carries the
     per-site stats (views + favorites) the profile shows; favorite_count is
     annotated by the viewset, defaulting to 0 for unannotated callers."""
 
     favorite_count = serializers.IntegerField(read_only=True, default=0)
+    project_health = serializers.SerializerMethodField()
 
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'published', 'category', 'view_count',
                   'favorite_count', 'custom_domain', 'domain_status',
-                  'created_at', 'updated_at')
+                  'project_health', 'created_at', 'updated_at')
+
+    @staticmethod
+    def _component_count(components):
+        count = 0
+        for component in components if isinstance(components, list) else []:
+            if not isinstance(component, dict):
+                continue
+            count += 1
+            count += SiteListSerializer._component_count(component.get('children'))
+        return count
+
+    def get_project_health(self, obj):
+        """Small, honest readiness summary for the owner dashboard.
+
+        This deliberately checks persisted project data instead of returning a
+        decorative score: content, page-level SEO and mobile layout all map to
+        settings the editor can actually improve.
+        """
+        schema = obj.schema if isinstance(obj.schema, dict) else {}
+        pages = [page for page in schema.get('pages', []) if isinstance(page, dict)]
+        raw_html = (obj.html or '').strip()
+
+        component_count = sum(self._component_count(page.get('components')) for page in pages)
+        has_content = bool(raw_html) or component_count > 0
+
+        site_seo = obj.site_options.get('seo', {}) if isinstance(obj.site_options, dict) else {}
+        has_site_seo = bool(
+            isinstance(site_seo, dict)
+            and str(site_seo.get('title', '')).strip()
+            and str(site_seo.get('description', '')).strip()
+        )
+        seo_pages = sum(
+            1 for page in pages
+            if str(page.get('seoTitle', '')).strip()
+            and str(page.get('seoDescription', '')).strip()
+        )
+        seo_total = max(len(pages), 1)
+        seo_ready = has_site_seo or (bool(pages) and seo_pages == len(pages))
+
+        if raw_html:
+            lowered_html = raw_html.lower()
+            mobile_ready = 'name="viewport"' in lowered_html or "name='viewport'" in lowered_html
+        else:
+            mobile_ready = bool(pages) and all(
+                page.get('flowMode')
+                or page.get('mobileManual')
+                or page.get('mobileWidth')
+                or any(
+                    isinstance(component, dict) and component.get('mobileLayout')
+                    for component in page.get('components', [])
+                )
+                for page in pages
+            )
+
+        score = 0
+        score += 30 if has_content else 0
+        score += 25 if mobile_ready else 0
+        score += 20 if seo_ready else round(20 * min(seo_pages, seo_total) / seo_total)
+        score += 10 if obj.category and obj.category != 'other' else 0
+        score += 15 if obj.published else 0
+
+        return {
+            'score': min(score, 100),
+            'page_count': max(len(pages), 1),
+            'component_count': component_count,
+            'has_content': has_content,
+            'mobile_ready': mobile_ready,
+            'seo_ready': seo_ready,
+            'seo_pages': seo_total if has_site_seo else seo_pages,
+            'seo_total': seo_total,
+            'domain_ready': obj.domain_status == 'connected',
+        }
 
 
 class SiteSerializer(serializers.ModelSerializer):

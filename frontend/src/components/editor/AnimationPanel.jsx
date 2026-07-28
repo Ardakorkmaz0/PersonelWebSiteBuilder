@@ -237,7 +237,7 @@ export default function AnimationPanel() {
             type="button"
             onClick={applyEntrance}
             disabled={!selectedId || pinned}
-            className="mt-2.5 w-full rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#4338ca] hover:to-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-2.5 w-full rounded-lg bg-[var(--studio-accent)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--studio-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {selected?.props?.animIn === picked ? t('In use') : t('Use this animation')}
           </button>

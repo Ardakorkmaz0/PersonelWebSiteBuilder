@@ -31,7 +31,7 @@ function Chip({ active, onClick, children, title }) {
       title={title}
       className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
         active
-          ? 'border-[#4f46e5] bg-[#eef2ff] font-semibold text-[#4f46e5]'
+          ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] font-semibold text-[var(--studio-accent-hover)]'
           : 'border-[#e5e7eb] bg-white text-[#374151] hover:border-[#c7d2fe]'
       }`}
     >
@@ -51,7 +51,7 @@ function Field({ label, children, hint }) {
 }
 
 const inputCls =
-  'w-full rounded-lg border border-[#d1d5db] px-3 py-2 text-sm text-[#111827] focus:border-[#4f46e5] focus:outline-none'
+  'w-full rounded-lg border border-[var(--studio-border-strong)] bg-[var(--studio-control)] px-3 py-2 text-sm text-[var(--studio-text)] focus:border-[var(--studio-accent)] focus:outline-none'
 
 // Guided "describe it → get a full site" onboarding. Collects a handful of
 // answers, builds ONE rich prompt (utils/aiWizard.js) and runs it through the
@@ -155,11 +155,11 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
     step !== 1 || answers.brand.trim() || answers.description.trim()
 
   return (
-    <div className="studio-theme-surface fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-3 sm:p-6">
-      <div className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+    <div className="studio-theme-surface studio-overlay fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-6">
+      <div className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] text-[var(--studio-text)] shadow-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-center gap-3 border-b border-[#e5e7eb] px-5 py-3">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] text-white">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--studio-accent)] text-white">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path d="M12 2l2.6 6.4L21 11l-6.4 2.6L12 20l-2.6-6.4L3 11l6.4-2.6L12 2z" fill="currentColor" />
             </svg>
@@ -177,7 +177,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                   key={s}
                   title={s}
                   className={`h-1.5 rounded-full transition-all ${
-                    i === step ? 'w-6 bg-[#4f46e5]' : i < step ? 'w-3 bg-[#a5b4fc]' : 'w-3 bg-[#e5e7eb]'
+                    i === step ? 'w-6 bg-[var(--studio-accent)]' : i < step ? 'w-3 bg-[var(--studio-accent-hover)]' : 'w-3 bg-[var(--studio-border)]'
                   }`}
                 />
               ))}
@@ -342,7 +342,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
 
           {phase === 'generating' && (
             <div className="flex min-h-[280px] flex-col items-center justify-center gap-4 text-center">
-              <span className="h-10 w-10 animate-spin rounded-full border-4 border-[#e5e7eb] border-t-[#4f46e5]" aria-hidden />
+              <span className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--studio-border)] border-t-[var(--studio-accent)]" aria-hidden />
               <p className="text-sm font-semibold text-[#111827]">{t(statusLine)}</p>
               <p className="max-w-sm text-xs text-[#6b7280]">
                 {t('Building a complete responsive site from your answers — usually 15-40 seconds.')}
@@ -364,7 +364,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
               )}
               <div className="flex gap-2">
                 {!noProvider && (
-                  <button type="button" onClick={generate} className="rounded-lg bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4338ca]">
+                  <button type="button" onClick={generate} className="rounded-lg bg-[var(--studio-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--studio-accent-hover)]">
                     {t('Try again')}
                   </button>
                 )}
@@ -405,7 +405,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                   type="button"
                   onClick={refine}
                   disabled={refining || !refineText.trim()}
-                  className="shrink-0 rounded-lg border border-[#4f46e5] px-3 py-2 text-sm font-semibold text-[#4f46e5] hover:bg-[#eef2ff] disabled:opacity-50"
+                  className="shrink-0 rounded-lg border border-[var(--studio-accent)] px-3 py-2 text-sm font-semibold text-[var(--studio-accent-hover)] hover:bg-[var(--studio-accent-soft)] disabled:opacity-50"
                 >
                   {refining ? t('Refining…') : t('Refine')}
                 </button>
@@ -430,7 +430,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                 onClick={() => setStep(step + 1)}
                 disabled={!canNext}
                 title={canNext ? '' : t('Add a name or a short description first')}
-                className="rounded-lg bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4338ca] disabled:opacity-50"
+                className="rounded-lg bg-[var(--studio-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--studio-accent-hover)] disabled:opacity-50"
               >
                 {t('Next →')}
               </button>
@@ -438,7 +438,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
               <button
                 type="button"
                 onClick={generate}
-                className="rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] px-5 py-2 text-sm font-bold text-white hover:from-[#4338ca] hover:to-[#1e4079]"
+                className="rounded-lg bg-[var(--studio-accent)] px-5 py-2 text-sm font-bold text-white hover:bg-[var(--studio-accent-hover)]"
               >
                 {t('✨ Generate my site')}
               </button>

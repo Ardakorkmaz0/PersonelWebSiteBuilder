@@ -69,18 +69,28 @@ export function googleFontHref(font) {
 // fonts is referenced. Lets the renderer auto-inject <link> tags without
 // requiring an explicit theme.googleFont field.
 export function googleFontHrefForTheme(themeOrFontFamily) {
-  const fontFamily = typeof themeOrFontFamily === 'string'
-    ? themeOrFontFamily
-    : themeOrFontFamily?.fontFamily
-  if (typeof fontFamily !== 'string' || !fontFamily) return ''
+  const fontFamilies = typeof themeOrFontFamily === 'string'
+    ? [themeOrFontFamily]
+    : [themeOrFontFamily?.fontFamily, themeOrFontFamily?.headingFontFamily]
+  const matched = []
   // Look for a quoted family name first (the picker always emits quoted),
   // then fall back to a loose match. Loose match makes sure existing themes
   // with unquoted `Inter, sans-serif` still trigger the load.
-  for (const font of GOOGLE_FONTS) {
-    const re = new RegExp(`["']?${font.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?`, 'i')
-    if (re.test(fontFamily)) return googleFontHref(font)
+  for (const fontFamily of fontFamilies) {
+    if (typeof fontFamily !== 'string' || !fontFamily) continue
+    for (const font of GOOGLE_FONTS) {
+      const re = new RegExp(`["']?${font.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?`, 'i')
+      if (re.test(fontFamily) && !matched.some((item) => item.name === font.name)) matched.push(font)
+    }
   }
-  return ''
+  if (!matched.length) return ''
+  if (matched.length === 1) return googleFontHref(matched[0])
+  const families = matched.map((font) => {
+    const family = encodeURIComponent(font.name).replace(/%20/g, '+')
+    const weights = (font.weights || '400').replace(/[^0-9;]/g, '')
+    return `family=${family}:wght@${weights}`
+  })
+  return `https://fonts.googleapis.com/css2?${families.join('&')}&display=swap`
 }
 
 // Look up a curated font by display name. Used by the picker to drive the

@@ -82,8 +82,8 @@ export default function SettingsPage() {
   const secretPlaceholder = (isSet) => (isSet ? t('•••••••• (configured — type to replace)') : t('Not set'))
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
-      <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
+    <div className="studio-theme-surface min-h-screen bg-[var(--studio-shell)] text-[var(--studio-text)]">
+      <header className="sticky top-0 z-10 border-b border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_92%,transparent)] backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">
             <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
@@ -93,7 +93,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
-            <span className="rounded-full bg-[#111827] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+            <span className="rounded-full border border-[color-mix(in_srgb,var(--studio-accent)_30%,var(--studio-border))] bg-[var(--studio-accent-soft)] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-[var(--studio-accent-hover)]">
               {t('Settings')}
             </span>
           </div>

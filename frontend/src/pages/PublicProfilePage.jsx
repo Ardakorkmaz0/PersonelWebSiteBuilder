@@ -76,8 +76,8 @@ export default function PublicProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
-      <header className="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
+    <div className="studio-theme-surface min-h-screen bg-[var(--studio-shell)] text-[var(--studio-text)]">
+      <header className="sticky top-0 z-10 border-b border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_92%,transparent)] backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-6 py-3">
           <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
           <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">

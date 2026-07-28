@@ -620,7 +620,7 @@ export default function AiChatPanel({
     >
       {/* Header */}
       <div className="flex min-h-[60px] items-center gap-2.5 border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-2.5 text-[var(--studio-text)]">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color-mix(in_srgb,var(--studio-accent)_24%,var(--studio-border))] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)]">
           <SparklesIcon size={16} />
         </span>
         <span className="min-w-0 flex-1">
@@ -643,7 +643,7 @@ export default function AiChatPanel({
           title={t('AI settings — provider, key and model')}
           aria-label={t('AI settings')}
           aria-pressed={showSettings}
-          className={`studio-icon-btn h-7 w-7 shrink-0 ${showSettings ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
+          className={`studio-icon-btn h-7 w-7 shrink-0 ${showSettings ? 'bg-[var(--studio-control-hover)] text-[var(--studio-text)]' : ''}`}
         >
           <CogIcon size={13} />
         </button>
@@ -703,7 +703,7 @@ export default function AiChatPanel({
           <button
             type="button"
             onClick={() => setShowSettings(false)}
-            className="mt-3 w-full rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-pressed)]"
+            className="mt-3 w-full rounded-lg bg-[var(--studio-text)] px-3 py-1.5 text-xs font-semibold text-[var(--studio-panel)] hover:opacity-90"
           >
             {t('Back to chat')}
           </button>
@@ -766,7 +766,7 @@ export default function AiChatPanel({
                     onClick={() => send(chip.prompt)}
                     disabled={!hasKey || busy}
                     title={t(chip.label)}
-                    className="rounded-full border border-[var(--studio-border)] bg-[var(--studio-accent-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--studio-accent-hover)] hover:bg-[var(--studio-accent-soft)] disabled:opacity-50"
+                    className="rounded-full border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-2.5 py-1 text-[11px] font-medium text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)] disabled:opacity-50"
                   >
                     {t(chip.label)}
                   </button>
@@ -795,9 +795,9 @@ export default function AiChatPanel({
           ),
         )}
         {pendingChange && (
-          <div className="overflow-hidden rounded-lg border border-[var(--studio-accent)] bg-[var(--studio-panel)] shadow-sm" role="status">
-            <div className="border-b border-[var(--studio-border)] bg-[var(--studio-accent-soft)] px-2.5 py-2">
-              <p className="text-xs font-bold text-[var(--studio-accent-hover)]">{t('Review AI change')}</p>
+          <div className="overflow-hidden rounded-lg border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] shadow-sm" role="status">
+            <div className="border-b border-[var(--studio-border)] bg-[var(--studio-control)] px-2.5 py-2">
+              <p className="text-xs font-bold text-[var(--studio-text)]">{t('Review AI change')}</p>
               <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--studio-text-muted)]">{pendingChange.summary}</p>
             </div>
             {pendingChange.kind === 'html' ? (
@@ -810,13 +810,13 @@ export default function AiChatPanel({
             )}
             <div className="flex gap-2 border-t border-[var(--studio-border)] p-2">
               <button type="button" onClick={rejectPendingChange} className="flex-1 rounded-lg border border-[var(--studio-border)] px-3 py-1.5 text-xs font-semibold text-[var(--studio-text)] hover:bg-[var(--studio-control)]">{t('Reject')}</button>
-              <button type="button" onClick={acceptPendingChange} className="flex-1 rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-pressed)]">{t('Accept')}</button>
+              <button type="button" onClick={acceptPendingChange} className="flex-1 rounded-lg bg-[var(--studio-success)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110">{t('Accept')}</button>
             </div>
           </div>
         )}
         {busy && (
           <div className="flex items-center gap-2 text-xs text-[var(--studio-text-muted)]">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--studio-accent-pressed)]" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--studio-text-muted)]" />
             <span>
               {messages[messages.length - 1]?.role === 'user'
                 ? t('Thinking with {model}…', { model: modelLabel })
@@ -867,8 +867,8 @@ export default function AiChatPanel({
                 onClick={() => setQuickPanel(quickPanel === id ? null : id)}
                 className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
                   quickPanel === id
-                    ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
-                    : 'border-[var(--studio-border)] bg-[var(--studio-panel)] text-[var(--studio-text-muted)] hover:border-[var(--studio-border)] hover:text-[var(--studio-text)]'
+                    ? 'border-[var(--studio-border-strong)] bg-[var(--studio-panel-raised)] text-[var(--studio-text)] shadow-sm'
+                    : 'border-[var(--studio-border)] bg-[var(--studio-panel)] text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
                 }`}
               >
                 {QuickIcon && <QuickIcon size={12} />} {t(label)}
@@ -900,12 +900,12 @@ export default function AiChatPanel({
                       className="relative h-7 w-7 rounded-full border border-black/10"
                       style={{
                         background: hex,
-                        outline: idx >= 0 ? '2px solid var(--studio-accent)' : 'none',
+                        outline: idx >= 0 ? '2px solid var(--studio-text)' : 'none',
                         outlineOffset: '1px',
                       }}
                     >
                       {idx >= 0 && (
-                        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--studio-accent)] text-[9px] font-bold text-white">
+                        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--studio-text)] text-[9px] font-bold text-[var(--studio-panel)]">
                           {idx + 1}
                         </span>
                       )}
@@ -925,7 +925,7 @@ export default function AiChatPanel({
                   type="button"
                   disabled={!pickedColors.length || busy}
                   onClick={applyQuickColors}
-                  className="rounded-lg bg-[var(--studio-accent)] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[var(--studio-accent-pressed)] disabled:bg-[var(--studio-text-faint)]"
+                  className="rounded-lg bg-[var(--studio-text)] px-3 py-1 text-[11px] font-semibold text-[var(--studio-panel)] hover:opacity-90 disabled:bg-[var(--studio-text-faint)]"
                 >
                   {t('Apply colors')}
                 </button>
@@ -942,7 +942,7 @@ export default function AiChatPanel({
                     type="button"
                     disabled={busy}
                     onClick={() => applyQuickFont(f)}
-                    className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2.5 py-1 text-[12px] text-[var(--studio-text)] hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] disabled:opacity-40"
+                    className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2.5 py-1 text-[12px] text-[var(--studio-text)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)] disabled:opacity-40"
                   >
                     {f}
                   </button>
@@ -963,7 +963,7 @@ export default function AiChatPanel({
                       setQuickPanel(null)
                       send(prompt)
                     }}
-                    className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2.5 py-1 text-[12px] text-[var(--studio-text)] hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] disabled:opacity-40"
+                    className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2.5 py-1 text-[12px] text-[var(--studio-text)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)] disabled:opacity-40"
                   >
                     {t(label)}
                   </button>
@@ -1002,7 +1002,7 @@ export default function AiChatPanel({
               ? t('Tell AI what to build (Enter to send, Shift+Enter for newline)…')
               : t('Set an API key first — the gear button above.')
           }
-          className="block w-full resize-none rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2 py-1.5 text-sm text-[var(--studio-text)] placeholder:text-[var(--studio-text-faint)] focus:border-[var(--studio-accent)] focus:outline-none disabled:bg-[var(--studio-control)] disabled:text-[var(--studio-text-faint)]"
+          className="block w-full resize-none rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2 py-1.5 text-sm text-[var(--studio-text)] placeholder:text-[var(--studio-text-faint)] focus:border-[var(--studio-border-strong)] focus:bg-[var(--studio-control)] focus:outline-none disabled:bg-[var(--studio-control)] disabled:text-[var(--studio-text-faint)]"
         />
         <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--studio-text-muted)]">
           <span>{t('Press Ctrl+Z to undo any change the AI made.')}</span>
@@ -1010,7 +1010,7 @@ export default function AiChatPanel({
             type="button"
             onClick={send}
             disabled={!hasKey || busy || !draft.trim()}
-            className="rounded-lg bg-[var(--studio-accent)] px-3 py-1 text-xs font-semibold text-white hover:bg-[var(--studio-accent-pressed)] disabled:cursor-not-allowed disabled:bg-[var(--studio-text-faint)]"
+            className="rounded-lg bg-[var(--studio-text)] px-3 py-1 text-xs font-semibold text-[var(--studio-panel)] hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[var(--studio-text-faint)]"
           >
             {busy ? '…' : t('Send')}
           </button>
@@ -1034,9 +1034,9 @@ function SuggestionCard({ suggestion, disabled, onPick }) {
       disabled={disabled}
       onClick={() => onPick(suggestion)}
       title={suggestion.prompt}
-      className="flex w-full items-start gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2 text-left transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex w-full items-start gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2 text-left transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)] disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <span className="mt-0.5 shrink-0 text-[var(--studio-accent)]">
+      <span className="mt-0.5 shrink-0 text-[var(--studio-text-muted)]">
         <SparklesIcon size={12} />
       </span>
       <span className="min-w-0 flex-1">
@@ -1085,7 +1085,7 @@ function buildFailureSummary(calls, translate) {
 function UserBubble({ text }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tr-[2px] bg-[var(--studio-accent-pressed)] px-3 py-2 text-sm leading-snug text-white shadow-sm">
+      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[12px] rounded-tr-[2px] bg-[var(--studio-text)] px-3 py-2 text-sm leading-snug text-[var(--studio-panel)] shadow-sm">
         {text}
       </div>
     </div>

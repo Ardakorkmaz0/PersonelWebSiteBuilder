@@ -1,6 +1,5 @@
-// The Page panel (nothing selected) groups its sections under four tabs. These
-// pin the structure and the two rules that are easy to break: Simple mode must
-// not leave an empty tab in the list, and no section may be orphaned.
+// The Page panel only owns visual page and theme settings. Project code lives
+// in Source and AI lives in its dedicated workspace.
 import { describe, expect, it, beforeEach } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import LanguageProvider from '../../i18n/LanguageProvider.jsx'
@@ -31,40 +30,34 @@ describe('Page panel tabs', () => {
     emptyPageNoSelection()
   })
 
-  it('offers Page, Theme, Code and AI', () => {
+  it('offers only Page and Theme', () => {
     renderPanel()
     expect(screen.getAllByRole('tab').map((el) => el.textContent.trim()))
-      .toEqual(['Page', 'Theme', 'Code', 'AI'])
+      .toEqual(['Page', 'Theme'])
   })
 
-  // Simple mode strips the Code and AI content entirely, so those tabs must not
-  // be drawn at all rather than opening onto nothing.
-  it('hides the tabs that Simple mode empties', () => {
+  it('keeps the same focused tabs in Simple mode', () => {
     renderPanel({ simpleMode: true })
     expect(screen.getAllByRole('tab').map((el) => el.textContent.trim()))
       .toEqual(['Page', 'Theme'])
   })
 
-  it('falls back to a visible tab when the remembered one is hidden', () => {
-    const { unmount } = renderPanel()
-    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
-    unmount()
-
-    // Re-open in Simple mode: "Code" is gone, so Page takes over.
-    renderPanel({ simpleMode: true })
+  it('falls back when an old session remembers the removed Code tab', () => {
+    localStorage.setItem('pwb_page_tab', 'code')
+    renderPanel()
     expect(screen.getByRole('tab', { name: 'Page' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('keeps every section reachable from one of the tabs', () => {
     const { container } = renderPanel()
     const seen = new Set()
-    for (const tab of ['Page', 'Theme', 'Code', 'AI']) {
+    for (const tab of ['Page', 'Theme']) {
       fireEvent.click(screen.getByRole('tab', { name: tab }))
       container.querySelectorAll('button[aria-expanded]').forEach((el) => {
         seen.add(el.textContent.trim().split('(')[0].trim())
       })
     }
-    for (const group of ['Page', 'SEO & sharing', 'Theme', 'Colors', 'Custom CSS', 'Custom JavaScript']) {
+    for (const group of ['Page', 'Browser & accessibility', 'SEO & sharing', 'Theme', 'Colors']) {
       expect(seen, `"${group}" is not reachable from any tab`).toContain(group)
     }
   })
@@ -73,5 +66,39 @@ describe('Page panel tabs', () => {
     renderPanel()
     fireEvent.change(screen.getByLabelText('Search title'), { target: { value: 'My page' } })
     expect(useEditorStore.getState().schema.pages[0].seoTitle).toBe('My page')
+  })
+
+  it('edits browser metadata for the current page', () => {
+    renderPanel()
+    fireEvent.change(screen.getByLabelText('Page language'), { target: { value: 'tr' } })
+    fireEvent.change(screen.getByLabelText('Canonical URL'), {
+      target: { value: 'https://example.com/work' },
+    })
+    fireEvent.click(screen.getByLabelText('Hide this page from search engines'))
+
+    const page = useEditorStore.getState().schema.pages[0]
+    expect(page.language).toBe('tr')
+    expect(page.canonicalUrl).toBe('https://example.com/work')
+    expect(page.noIndex).toBe(true)
+    expect(screen.getByLabelText('Search result preview')).toHaveTextContent('example.com/work')
+  })
+
+  it('offers richer typography, shape and shadow theme controls', () => {
+    renderPanel()
+    fireEvent.click(screen.getByRole('tab', { name: 'Theme' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Type & corners' }))
+
+    fireEvent.change(screen.getByLabelText('Heading font'), {
+      target: { value: 'Georgia, serif' },
+    })
+    fireEvent.change(screen.getByLabelText('Corner style'), { target: { value: 'soft' } })
+    fireEvent.change(screen.getByLabelText('Shadow preset'), { target: { value: 'strong' } })
+
+    const theme = useEditorStore.getState().schema.theme
+    expect(theme.headingFontFamily).toBe('Georgia, serif')
+    expect(theme.radius).toBe('8px')
+    expect(theme.buttonRadius).toBe('8px')
+    expect(theme.shadow).toContain('0 18px 45px')
+    expect(screen.getByLabelText('Theme preview')).toBeInTheDocument()
   })
 })

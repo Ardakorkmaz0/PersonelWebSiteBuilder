@@ -39,7 +39,13 @@ class TestClone:
     def test_clone_published_into_own_account_as_draft(self, client, alice, bob):
         a, _ = alice
         _, btok = bob
-        src = Site.objects.create(owner=a, title='Cool Site', published=True, category='blog')
+        src = Site.objects.create(
+            owner=a,
+            title='Cool Site',
+            published=True,
+            category='blog',
+            site_options={'seo': {'title': 'Cool Site', 'description': 'A cool demo.'}},
+        )
         src.tags = ['x']
         src.save()
         _auth(client, btok)
@@ -52,6 +58,7 @@ class TestClone:
         clone = Site.objects.get(pk=resp.data['id'])
         assert clone.owner == bob[0]
         assert clone.id != src.id
+        assert clone.site_options == src.site_options
 
     def test_cannot_clone_someone_elses_draft(self, client, alice, bob):
         a, _ = alice
@@ -174,3 +181,40 @@ class TestOwnerSiteStats:
         rows = client.get('/api/sites/').data
         row = next(r for r in rows if r['title'] == 'Mine')
         assert row['view_count'] == 7 and row['favorite_count'] == 1
+        assert row['project_health']['page_count'] == 1
+        assert row['project_health']['has_content'] is False
+        assert row['project_health']['seo_ready'] is False
+
+    def test_own_site_list_reports_real_project_readiness(self, client, alice):
+        user, token = alice
+        site = Site.objects.create(
+            owner=user,
+            title='Ready portfolio',
+            published=True,
+            category='portfolio',
+            schema={
+                'theme': {},
+                'pages': [{
+                    'id': 'home',
+                    'name': 'Home',
+                    'seoTitle': 'Ada portfolio',
+                    'seoDescription': 'Selected product design work.',
+                    'mobileWidth': 390,
+                    'components': [{'id': 'hero', 'type': 'text', 'props': {}}],
+                }],
+            },
+        )
+
+        _auth(client, token)
+        row = next(item for item in client.get('/api/sites/').data if item['id'] == site.id)
+        assert row['project_health'] == {
+            'score': 100,
+            'page_count': 1,
+            'component_count': 1,
+            'has_content': True,
+            'mobile_ready': True,
+            'seo_ready': True,
+            'seo_pages': 1,
+            'seo_total': 1,
+            'domain_ready': False,
+        }

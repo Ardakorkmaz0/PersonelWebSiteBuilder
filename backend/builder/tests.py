@@ -81,7 +81,32 @@ class SchemaValidatorTests(TestCase):
 
         self.assertEqual(clean['theme']['primaryColor'], '#ff0066')
         self.assertEqual(clean['theme']['fontFamily'], 'Inter, sans-serif')
+        self.assertEqual(clean['theme']['headingFontFamily'], 'Inter, sans-serif')
         self.assertIn('customCss', clean)
         self.assertNotIn('<script', clean['customCss'])
         self.assertNotIn('</style', clean['customCss'])
         self.assertNotIn('JavaScript:', clean['customCss'])
+
+    def test_preserves_page_browser_metadata_and_new_theme_tokens(self):
+        clean = validate_and_clean_schema({
+            'theme': {
+                'buttonTextColor': '#101010',
+                'borderColor': '#dedede',
+                'headingFontFamily': 'Georgia, serif',
+            },
+            'pages': [{
+                'id': 'home',
+                'name': 'Home',
+                'language': 'tr',
+                'canonicalUrl': 'https://example.com/anasayfa',
+                'noIndex': True,
+                'components': [],
+            }],
+        })
+
+        self.assertEqual(clean['theme']['buttonTextColor'], '#101010')
+        self.assertEqual(clean['theme']['borderColor'], '#dedede')
+        self.assertEqual(clean['theme']['headingFontFamily'], 'Georgia, serif')
+        self.assertEqual(clean['pages'][0]['language'], 'tr')
+        self.assertEqual(clean['pages'][0]['canonicalUrl'], 'https://example.com/anasayfa')
+        self.assertTrue(clean['pages'][0]['noIndex'])

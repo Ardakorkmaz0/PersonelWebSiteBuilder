@@ -48,7 +48,7 @@ export default function ShortcutsHelp({ onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      className="studio-theme-surface studio-overlay fixed inset-0 z-[60] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
@@ -56,11 +56,11 @@ export default function ShortcutsHelp({ onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold text-[#111827]">⌨ {t('Keyboard shortcuts')}</h2>
+          <h2 className="text-base font-bold text-[var(--studio-text)]">⌨ {t('Keyboard shortcuts')}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded px-2 py-1 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
+            className="rounded px-2 py-1 text-sm text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
           >
             ×
           </button>
@@ -68,18 +68,18 @@ export default function ShortcutsHelp({ onClose }) {
         <div className="space-y-4">
           {GROUPS.map(([title, rows]) => (
             <div key={title}>
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--studio-text-faint)]">
                 {t(title)}
               </div>
               <div className="space-y-1">
                 {rows.map(([label, keys]) => (
                   <div key={label} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-[#374151]">{t(label)}</span>
+                    <span className="text-[var(--studio-text)]">{t(label)}</span>
                     <span className="flex items-center gap-1">
                       {keys.map((k, i) => (
                         <kbd
                           key={i}
-                          className="rounded border border-[#d1d5db] bg-[#f9fafb] px-1.5 py-0.5 font-mono text-[11px] text-[#374151] shadow-sm"
+                          className="rounded border border-[var(--studio-border-strong)] bg-[var(--studio-control)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--studio-text)] shadow-sm"
                         >
                           {t(k)}
                         </kbd>
@@ -91,7 +91,7 @@ export default function ShortcutsHelp({ onClose }) {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs leading-relaxed text-[#9ca3af]">
+        <p className="mt-4 text-xs leading-relaxed text-[var(--studio-text-faint)]">
           {t('These apply on the component canvas. Shift-drag nudges in 10px steps; the snap guides and “# Grid” toggle help you line things up.')}
         </p>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listExplore, addFavorite, removeFavorite } from '../api/explore.js'
-import { listSites } from '../api/sites.js'
+import { cloneSite, listSites } from '../api/sites.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
@@ -9,7 +9,6 @@ import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 import CreateSiteWizard from '../components/dashboard/CreateSiteWizard.jsx'
 import DashboardHeader from '../components/dashboard/DashboardHeader.jsx'
-import DashboardSearch from '../components/dashboard/DashboardSearch.jsx'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
 import {
   ArrowRightIcon,
@@ -49,35 +48,29 @@ function formattedDate(value, language) {
 export default function ExplorePage() {
   const { language, t } = useLanguage()
   const [category, setCategory] = useState(feedCache?.category ?? '')
-  const [searchQuery, setSearchQuery] = useState(feedCache?.search ?? '')
-  const [debouncedSearch, setDebouncedSearch] = useState(feedCache?.search ?? '')
-  const [data, setData] = useState(feedCache ?? { category: null, search: null, items: [], page: 1, hasMore: false })
+  const [data, setData] = useState(feedCache ?? { category: null, items: [], page: 1, hasMore: false })
   const [ownSites, setOwnSites] = useState([])
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [remixingId, setRemixingId] = useState(null)
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
 
-  const items = data.category === category && data.search === debouncedSearch ? data.items : []
-  const loading = (data.category !== category || data.search !== debouncedSearch) && !error
+  const items = data.category === category ? data.items : []
+  const loading = data.category !== category && !error
   const latestSite = useMemo(() => orderSites(ownSites)[0] || null, [ownSites])
   const displayName = user?.display_name || user?.username || t('Creator')
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 250)
-    return () => window.clearTimeout(timer)
-  }, [searchQuery])
-
-  useEffect(() => {
-    if (data.category === category && data.search === debouncedSearch) return undefined
+    if (data.category === category) return undefined
     let alive = true
-    listExplore({ category, search: debouncedSearch, page: 1 })
-      .then((result) => alive && setData({ category, search: debouncedSearch, items: result.results, page: 1, hasMore: !!result.next }))
+    listExplore({ category, search: '', page: 1 })
+      .then((result) => alive && setData({ category, items: result.results, page: 1, hasMore: !!result.next }))
       .catch((requestError) => alive && setError(apiError(requestError)))
     return () => { alive = false }
-  }, [category, data.category, data.search, debouncedSearch])
+  }, [category, data.category])
 
   useEffect(() => {
     let alive = true
@@ -100,7 +93,7 @@ export default function ExplorePage() {
     if (loadingMore || !data.hasMore) return
     setLoadingMore(true)
     try {
-      const result = await listExplore({ category, search: debouncedSearch, page: data.page + 1 })
+      const result = await listExplore({ category, search: '', page: data.page + 1 })
       setData((previous) => ({
         ...previous,
         items: [...previous.items, ...result.results],
@@ -129,6 +122,19 @@ export default function ExplorePage() {
       else await removeFavorite(site.id)
     } catch (requestError) {
       setError(apiError(requestError))
+    }
+  }
+
+  async function onRemix(site) {
+    if (remixingId) return
+    setRemixingId(site.id)
+    setError('')
+    try {
+      const copy = await cloneSite(site.slug)
+      navigate(`/editor/${copy.id}`)
+    } catch (requestError) {
+      setError(apiError(requestError))
+      setRemixingId(null)
     }
   }
 
@@ -236,31 +242,22 @@ export default function ExplorePage() {
               <h2 id="discover-heading" className="mt-1 text-xl font-bold tracking-tight text-[var(--studio-text)] sm:text-2xl">{t('Discover ideas')}</h2>
               <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Explore published work from the community.')}</p>
             </div>
-            <div className="flex w-full min-w-0 flex-col gap-3 lg:w-auto lg:items-end">
-              <DashboardSearch
-                value={searchQuery}
-                onChange={(value) => { setError(''); setSearchQuery(value) }}
-                label={t('Search community sites')}
-                placeholder={t('Search by site or creator…')}
-                className="w-full lg:w-[22rem]"
-              />
-              <div className="flex max-w-full gap-2 overflow-x-auto pb-1" aria-label={t('Site categories')}>
-                {CATEGORIES.map(([id, label]) => (
-                  <button
-                    key={id || 'all'}
-                    type="button"
-                    onClick={() => selectCategory(id)}
-                    aria-pressed={category === id}
-                    className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-                      category === id
-                        ? 'border-[var(--studio-accent)] bg-[var(--studio-accent)] text-white'
-                        : 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
-                    }`}
-                  >
-                    {t(label)}
-                  </button>
-                ))}
-              </div>
+            <div className="flex max-w-full gap-2 overflow-x-auto pb-1" aria-label={t('Site categories')}>
+              {CATEGORIES.map(([id, label]) => (
+                <button
+                  key={id || 'all'}
+                  type="button"
+                  onClick={() => selectCategory(id)}
+                  aria-pressed={category === id}
+                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
+                    category === id
+                      ? 'border-[var(--studio-accent)] bg-[var(--studio-accent)] text-white'
+                      : 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
+                  }`}
+                >
+                  {t(label)}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -271,17 +268,17 @@ export default function ExplorePage() {
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]"><GlobeIcon size={24} /></div>
               <p className="font-medium text-[var(--studio-text)]">{t('Nothing here yet')}</p>
               <p className="mt-1 text-sm text-[var(--studio-text-muted)]">
-                {debouncedSearch
-                  ? t('No sites match your search.')
-                  : category
-                    ? t('No published sites in this category.')
-                    : t('Publish a site to share it here.')}
+                {category
+                  ? t('No published sites in this category.')
+                  : t('Publish a site to share it here.')}
               </p>
             </div>
           ) : (
             <>
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {items.map((site) => <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} />)}
+                {items.map((site) => (
+                  <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} />
+                ))}
               </div>
               {data.hasMore && (
                 <div className="mt-8 text-center">
@@ -293,6 +290,7 @@ export default function ExplorePage() {
             </>
           )}
         </section>
+
       </main>
 
       <CreateSiteWizard

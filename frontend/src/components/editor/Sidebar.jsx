@@ -393,7 +393,7 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
               type="button"
               onClick={() => placeCustom()}
               disabled={!hasHtml}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#4f46e5] px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--studio-accent)] px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--studio-accent-hover)] disabled:cursor-not-allowed disabled:opacity-45"
             >
               <PlusIcon size={13} /> {t('Place')}
             </button>
@@ -615,8 +615,14 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
                 palette for users who already know what they want. */}
             <button
               type="button"
-              onClick={() => setLibraryOpen(true)}
-              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-br from-[#4f46e5] to-[#2563eb] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#4338ca] hover:to-[#1d4ed8]"
+              onClick={() => {
+                // A palette detail may contain a fixed/pinned navbar preview.
+                // Clear it before opening the full-screen library so no stale
+                // preview remains mounted under the modal.
+                setPreview(null)
+                setLibraryOpen(true)
+              }}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--studio-accent)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--studio-accent-hover)]"
             >
               <LayersIcon size={15} /> {t('Browse all blocks')}
             </button>

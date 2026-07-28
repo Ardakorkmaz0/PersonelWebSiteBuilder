@@ -46,14 +46,17 @@ BLOCKED_URL_SCHEMES = ('javascript:', 'vbscript:', 'data:', 'file:')
 
 DEFAULT_THEME = {
     'primaryColor': '#0071e3',
+    'buttonTextColor': '#ffffff',
     'textColor': '#1d1d1f',
     'mutedColor': '#6e6e73',
+    'borderColor': '#d2d2d7',
     'backgroundColor': '#ffffff',
     'surfaceColor': '#ffffff',
     'softColor': '#f5f5f7',
     'headerColor': '#1d1d1f',
     'headerTextColor': '#f5f5f7',
     'fontFamily': "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    'headingFontFamily': "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     'radius': '18px',
     'buttonRadius': '980px',
     'shadow': '0 4px 20px rgba(0,0,0,0.08)',
@@ -498,7 +501,10 @@ def sanitize_theme(theme):
     if not isinstance(theme, dict):
         theme = {}
     return {
-        key: sanitize_theme_value(theme.get(key), default)
+        key: sanitize_theme_value(
+            theme.get('fontFamily') if key == 'headingFontFamily' and not theme.get(key) else theme.get(key),
+            default,
+        )
         for key, default in DEFAULT_THEME.items()
     }
 
@@ -561,6 +567,9 @@ def validate_and_clean_schema(schema):
             'seoTitle': _str(page.get('seoTitle'))[:70],
             'seoDescription': _str(page.get('seoDescription'))[:200],
             'seoImage': sanitize_image_src(page.get('seoImage')),
+            'language': 'tr' if page.get('language') == 'tr' else 'en',
+            'canonicalUrl': sanitize_url(page.get('canonicalUrl'))[:500],
+            'noIndex': bool(page.get('noIndex')),
             'background': sanitize_color(page.get('background')),
             'backgroundMobile': sanitize_color(page.get('backgroundMobile')),
             # Per-breakpoint artboard width + optional "fold" (visible-screen) guide.

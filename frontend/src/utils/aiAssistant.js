@@ -1424,8 +1424,9 @@ export function extractTextCalls(text) {
 // Theme-shape vs component-shape: theme keys live on the site-wide theme dict.
 // If patch contains any of these, the caller almost certainly meant updateTheme.
 const THEME_PATCH_KEYS = new Set([
-  'primaryColor', 'textColor', 'mutedColor', 'backgroundColor', 'surfaceColor',
-  'softColor', 'headerColor', 'headerTextColor', 'fontFamily', 'radius',
+  'primaryColor', 'buttonTextColor', 'textColor', 'mutedColor', 'borderColor',
+  'backgroundColor', 'surfaceColor', 'softColor', 'headerColor', 'headerTextColor',
+  'fontFamily', 'headingFontFamily', 'radius',
   'buttonRadius', 'shadow',
 ])
 

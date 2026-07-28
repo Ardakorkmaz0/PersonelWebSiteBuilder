@@ -33,6 +33,9 @@ function blankPage(name = 'New Page', folder = '', id, mode = 'empty') {
     components: [],
     background: '#ffffff',
     backgroundMobile: '#ffffff',
+    language: 'en',
+    canonicalUrl: '',
+    noIndex: false,
     canvasWidth: CANVAS_WIDTH,
     canvasFold: 0,
     mobileWidth: MOBILE_CANVAS_WIDTH,
@@ -478,13 +481,9 @@ function orderForFlow(components) {
 function withComponents(schema, id, components) {
   return mapPage(schema, id, (p) => {
     if (p.mobileManual) return { ...p, components }
-    const auto = autoMobileLayout(components, p.mobileWidth || MOBILE_CANVAS_WIDTH)
     return {
       ...p,
-      components: components.map((c) => ({
-        ...c,
-        mobileLayout: auto[c.id] || c.mobileLayout,
-      })),
+      components: applyAutoMobileLayouts(components, p.mobileWidth || MOBILE_CANVAS_WIDTH),
     }
   })
 }
@@ -518,7 +517,9 @@ function _padLR(p) {
 }
 function _wrapH(text, fs, lr, w) {
   const cpl = Math.max(6, Math.floor(w / (fs * 0.56)))
-  const lines = Math.max(1, Math.ceil(String(text || '').length / cpl))
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / cpl)), 0)
   return lines * fs * lr
 }
 const _FS = { heading: 30, text: 18, card: 17, button: 17, linkbutton: 17, navbar: 17, section: 24 }
@@ -544,6 +545,27 @@ function estMobileHeight(c, boxW) {
       const bd = p.text ? _wrapH(p.text, fs, lr, innerW) : 0
       return Math.round(Math.max(80, tt + bd + padTB + 28))
     }
+    case 'list': {
+      const lines = String(p.text || '').split(/\r?\n/).filter(Boolean)
+      const content = lines.reduce((total, line) => total + _wrapH(line, fs, lr, innerW - 28), 0)
+      return Math.round(Math.max(44, content + padTB + 12))
+    }
+    case 'quote': {
+      const quote = _wrapH(p.text, fs, lr, innerW - 24)
+      const author = p.author ? Math.max(20, fs * 1.2) : 0
+      return Math.round(Math.max(64, quote + author + padTB + 24))
+    }
+    case 'alert':
+      return Math.round(Math.max(52, _wrapH(p.text, fs, lr, innerW - 38) + padTB + 22))
+    case 'accordion':
+      return Math.round(Math.max(54, _wrapH(p.title, fs, 1.3, innerW - 34) + padTB + 24))
+    case 'input':
+    case 'select':
+      return Math.round(Math.max(64, _num(p.fieldHeight, 44) + fs * 1.25 + padTB + 10))
+    case 'badge':
+      return Math.round(Math.max(28, fs * 1.2 + padTB))
+    case 'icon':
+      return Math.round(Math.max(32, fs * 1.15))
     case 'button':
     case 'linkbutton':
       return Math.round(Math.max(40, fs * 1.25 + padTB + 16))
@@ -561,6 +583,14 @@ function estMobileHeight(c, boxW) {
     case 'section': {
       const head = p.heading ? _wrapH(p.heading, _num(s.fontSize, 24), 1.3, innerW) : 0
       return Math.round(Math.max(80, head + padTB + 48))
+    }
+    case 'region': {
+      const hasFlowingChildren = Array.isArray(c.children) && c.children.some((child) => (
+        !child.hiddenMobile && child.props?.scrollBehavior !== 'fixed'
+      ))
+      return Math.max(120, Math.round(
+        hasFlowingChildren ? c.mobileLayout?.h || c.layout?.h || 360 : c.layout?.h || 360,
+      ))
     }
     default:
       return Math.max(40, Math.round(c.layout?.h || 80))
@@ -580,6 +610,16 @@ function placeMobile(c, leftX, availW) {
   }
   if (c.type === 'button' || c.type === 'linkbutton') {
     const w = Math.min(availW, Math.max(120, (c.props?.text || '').length * 10 + 48))
+    return { x: Math.round(leftX + (availW - w) / 2), w, h: estMobileHeight(c, w) }
+  }
+  if (c.type === 'badge') {
+    const fs = _num({ ...(c.styles || {}), ...(c.stylesMobile || {}) }.fontSize, 13)
+    const w = Math.min(availW, Math.max(64, (c.props?.text || '').length * fs * 0.62 + 32))
+    return { x: Math.round(leftX + (availW - w) / 2), w: Math.round(w), h: estMobileHeight(c, w) }
+  }
+  if (c.type === 'icon') {
+    const designed = Math.max(32, Math.round(c.layout?.w || 48))
+    const w = Math.min(availW, designed)
     return { x: Math.round(leftX + (availW - w) / 2), w, h: estMobileHeight(c, w) }
   }
   // An embed's desktop box has already been fitted to its content, so that width
@@ -617,6 +657,11 @@ function placeMobile(c, leftX, availW) {
 // re-wrapped content so nothing is clipped. Returns id -> { x, y, w, h }.
 export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) {
   const contentW = mobileWidth - MOBILE_PAD * 2
+  // Hidden phone-only items and fixed overlays keep their existing coordinates;
+  // neither should reserve an empty slot in the generated document flow.
+  const participatesInFlow = (component) => (
+    !component.hiddenMobile && component.props?.scrollBehavior !== 'fixed'
+  )
   const idx = new Map(components.map((c, i) => [c.id, i]))
   const rectOf = (c) => {
     const l = c.layout || {}
@@ -629,10 +674,10 @@ export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) 
   const rects = new Map(components.map((c) => [c.id, rectOf(c)]))
 
   // Assign each non-section component to the smallest section that contains it.
-  const sections = components.filter((c) => c.type === 'section')
+  const sections = components.filter((c) => c.type === 'section' && participatesInFlow(c))
   const parentOf = new Map()
   for (const c of components) {
-    if (c.type === 'section') continue
+    if (c.type === 'section' || !participatesInFlow(c)) continue
     const cr = rects.get(c.id)
     let best = null
     let bestArea = Infinity
@@ -667,12 +712,12 @@ export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) 
     for (const id of sorted) {
       const r = rects.get(id)
       const row = rows[rows.length - 1]
-      // Same row if this element vertically overlaps the row's anchor element.
-      if (row && r.y < row.anchorBottom - 6) {
+      // Use the first element's top as an immutable row anchor. Chained vertical
+      // overlaps (A overlaps B, B overlaps C) must not merge unrelated rows.
+      if (row && Math.abs(r.y - row.anchorY) <= 24) {
         row.items.push(id)
-        row.anchorBottom = Math.max(row.anchorBottom, r.b)
       } else {
-        rows.push({ anchorBottom: r.b, items: [id] })
+        rows.push({ anchorY: r.y, items: [id] })
       }
     }
     const result = []
@@ -686,7 +731,7 @@ export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) 
   }
 
   const topLevel = components
-    .filter((c) => c.type === 'section' || !parentOf.has(c.id))
+    .filter((c) => participatesInFlow(c) && (c.type === 'section' || !parentOf.has(c.id)))
     .map((c) => c.id)
 
   const out = {}
@@ -728,6 +773,44 @@ export function autoMobileLayout(components, mobileWidth = MOBILE_CANVAS_WIDTH) 
     }
   }
   return out
+}
+
+// Apply auto-layout through responsive region trees as well as the page roots.
+// Regions are independent Wix-like content grids; their phone height must grow
+// to the newly stacked children or the region's overflow clips the last items.
+function applyAutoMobileLayouts(components, mobileWidth = MOBILE_CANVAS_WIDTH) {
+  const list = Array.isArray(components) ? components : []
+  // Arrange inner grids first. Their resulting heights are then available while
+  // laying out the page roots, so a taller first region pushes the next region
+  // down instead of overlapping it.
+  const prepared = list.map((component) => {
+    if (component.type !== 'region' || !Array.isArray(component.children)) return component
+
+    const safeWidth = Math.min(regionContentWidth(component), mobileWidth)
+    const children = applyAutoMobileLayouts(component.children, safeWidth)
+    const flowingChildren = children.filter((child) => (
+      !child.hiddenMobile && child.props?.scrollBehavior !== 'fixed'
+    ))
+    if (!flowingChildren.length) return { ...component, children }
+
+    const bottom = flowingChildren.reduce((max, child) => {
+      const layout = child.mobileLayout || child.layout || {}
+      return Math.max(max, (layout.y || 0) + (layout.h || 0))
+    }, 0)
+    return {
+      ...component,
+      children,
+      mobileLayout: {
+        ...component.mobileLayout,
+        h: Math.max(120, Math.round(bottom + MOBILE_PAD)),
+      },
+    }
+  })
+  const auto = autoMobileLayout(prepared, mobileWidth)
+  return prepared.map((component) => ({
+    ...component,
+    mobileLayout: auto[component.id] || component.mobileLayout,
+  }))
 }
 
 // Every component needs both a desktop layout and a mobile layout. Designs made
@@ -868,8 +951,7 @@ function normalizePage(page) {
   // Auto mode: re-derive the phone layout from the desktop design on load too, so
   // existing sites pick up reading-order fixes without a manual re-arrange.
   if (!mobileManual) {
-    const auto = autoMobileLayout(components, mobileWidth)
-    components = components.map((c) => ({ ...c, mobileLayout: auto[c.id] || c.mobileLayout }))
+    components = applyAutoMobileLayouts(components, mobileWidth)
   }
   // Per-page editor mode. Old/loaded data has no `mode`: a page that carries an
   // HTML document is 'html', everything else is the component canvas ('empty').
@@ -884,6 +966,9 @@ function normalizePage(page) {
     components,
     background: page.background || '#ffffff',
     backgroundMobile: page.backgroundMobile || page.background || '#ffffff',
+    language: page.language === 'tr' ? 'tr' : 'en',
+    canonicalUrl: typeof page.canonicalUrl === 'string' ? page.canonicalUrl : '',
+    noIndex: !!page.noIndex,
     canvasWidth,
     canvasFold: clampWidth(page.canvasFold, 0, 0, 20000),
     mobileWidth,
@@ -1100,6 +1185,19 @@ export const useEditorStore = create((set, get) => ({
     get().record('folder-page-' + id)
     set((state) => ({
       schema: mapPage(state.schema, id, (p) => ({ ...p, folder })),
+      dirty: true,
+    }))
+  },
+
+  setPageSettings: (id, patch) => {
+    const allowed = ['background', 'backgroundMobile', 'language', 'canonicalUrl', 'noIndex']
+    const next = Object.fromEntries(
+      Object.entries(patch || {}).filter(([key]) => allowed.includes(key)),
+    )
+    if (!Object.keys(next).length) return
+    get().record('settings-page-' + id + '-' + Object.keys(next).join('-'))
+    set((state) => ({
+      schema: mapPage(state.schema, id, (p) => ({ ...p, ...next })),
       dirty: true,
     }))
   },
@@ -2201,11 +2299,7 @@ export const useEditorStore = create((set, get) => ({
     set((state) => {
       const page = selectCurrentPage(state)
       const mobileWidth = page.mobileWidth || MOBILE_CANVAS_WIDTH
-      const auto = autoMobileLayout(page.components, mobileWidth)
-      const components = page.components.map((c) => ({
-        ...c,
-        mobileLayout: auto[c.id] || c.mobileLayout,
-      }))
+      const components = applyAutoMobileLayouts(page.components, mobileWidth)
       // Re-enable auto mode so mobile follows the PC design again going forward.
       return {
         schema: mapPage(state.schema, page.id, (p) => ({ ...p, components, mobileManual: false })),

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import SitePreview from './SitePreview.jsx'
-import { StarIcon, EyeIcon } from '../icons.jsx'
+import { ArrowRightIcon, CopyIcon, StarIcon, EyeIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
 function Avatar({ url, name, size = 20 }) {
@@ -10,7 +10,7 @@ function Avatar({ url, name, size = 20 }) {
   }
   return (
     <span
-      className="grid place-items-center rounded-full bg-[#eef2ff] font-semibold text-[#4f46e5]"
+      className="grid place-items-center rounded-full bg-[var(--studio-accent-soft)] font-semibold text-[var(--studio-accent-hover)]"
       style={{ width: size, height: size, fontSize: size * 0.45 }}
     >
       {letter}
@@ -20,7 +20,7 @@ function Avatar({ url, name, size = 20 }) {
 
 // One card on the Explore / Favorites grid: a live public thumbnail, owner
 // attribution, view + favorite counts, and a star toggle.
-export default function ExploreCard({ site, onToggleFav }) {
+export default function ExploreCard({ site, onToggleFav, onRemix, remixing = false }) {
   const { t } = useLanguage()
   return (
     <div className="ms-card group flex flex-col overflow-hidden p-0 transition hover:-translate-y-0.5 hover:shadow-md">
@@ -29,23 +29,23 @@ export default function ExploreCard({ site, onToggleFav }) {
       </Link>
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-2 flex items-start justify-between gap-2">
-          <h2 className="min-w-0 truncate font-semibold text-[#111827]">{site.title}</h2>
+          <h2 className="min-w-0 truncate font-semibold text-[var(--studio-text)]">{site.title}</h2>
           <button
-            onClick={() => onToggleFav(site)}
+            onClick={() => onToggleFav?.(site)}
             title={site.is_favorited ? t('Unfavorite') : t('Favorite')}
-            className={`shrink-0 rounded-lg p-1.5 leading-none transition hover:bg-[#f3f4f6] ${
-              site.is_favorited ? 'text-[#f59e0b]' : 'text-[#d1d5db] hover:text-[#9ca3af]'
+            className={`shrink-0 rounded-lg p-1.5 leading-none transition hover:bg-[var(--studio-control-hover)] ${
+              site.is_favorited ? 'text-[#f59e0b]' : 'text-[var(--studio-text-faint)] hover:text-[var(--studio-text-muted)]'
             }`}
           >
             <StarIcon size={17} filled={site.is_favorited} />
           </button>
         </div>
-        <div className="mb-3 flex items-center gap-2 text-xs text-[#6b7280]">
+        <div className="mb-3 flex items-center gap-2 text-xs text-[var(--studio-text-muted)]">
           {site.owner_id ? (
             <Link
               to={`/u/${site.owner_id}`}
               title={t('Profile')}
-              className="flex min-w-0 items-center gap-2 hover:text-[#4f46e5]"
+              className="flex min-w-0 items-center gap-2 hover:text-[var(--studio-accent-hover)]"
             >
               <Avatar url={site.owner_avatar_url} name={site.owner_display_name} />
               <span className="truncate hover:underline">{site.owner_display_name}</span>
@@ -57,16 +57,23 @@ export default function ExploreCard({ site, onToggleFav }) {
             </>
           )}
           {site.category && site.category !== 'other' && (
-            <span className="ml-auto rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-medium capitalize text-[#6b7280]">
+            <span className="ml-auto rounded-full bg-[var(--studio-control)] px-2 py-0.5 text-[10px] font-medium capitalize text-[var(--studio-text-muted)]">
               {t(site.category.charAt(0).toUpperCase() + site.category.slice(1))}
             </span>
           )}
         </div>
-        <div className="mt-auto flex items-center gap-4 text-xs text-[#9ca3af]">
+        <div className="mt-auto flex items-center gap-4 text-xs text-[var(--studio-text-faint)]">
           <span title={t('Views')} className="flex items-center gap-1"><EyeIcon size={14} /> {site.view_count}</span>
           <span title={t('Favorites')} className="flex items-center gap-1"><StarIcon size={14} /> {site.favorite_count}</span>
-          <Link to={`/site/${site.slug}`} className="ml-auto font-medium text-[#4f46e5] hover:underline">
-            {t('View →')}
+        </div>
+        <div className="mt-3 flex items-center gap-2 border-t border-[var(--studio-border)] pt-3">
+          {onRemix && (
+            <button type="button" disabled={remixing} onClick={() => onRemix(site)} className="studio-btn studio-btn-secondary min-h-8 flex-1 px-2.5 text-[11px]">
+              <CopyIcon size={13} /> {remixing ? t('Creating copy…') : t('Use as template')}
+            </button>
+          )}
+          <Link to={`/site/${site.slug}`} className="studio-btn studio-btn-accent min-h-8 flex-1 px-2.5 text-[11px]">
+            {t('View')} <ArrowRightIcon size={13} />
           </Link>
         </div>
       </div>

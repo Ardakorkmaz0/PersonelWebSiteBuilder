@@ -16,14 +16,17 @@ export const THEME_PRESETS = [
 
 export const DEFAULT_THEME = {
   primaryColor: '#0071e3',
+  buttonTextColor: '#ffffff',
   textColor: '#1d1d1f',
   mutedColor: '#6e6e73',
+  borderColor: '#d2d2d7',
   backgroundColor: '#ffffff',
   surfaceColor: '#ffffff',
   softColor: '#f5f5f7',
   headerColor: '#1d1d1f',
   headerTextColor: '#f5f5f7',
   fontFamily: "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  headingFontFamily: "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
   radius: '18px',
   buttonRadius: '980px',
   shadow: '0 4px 20px rgba(0,0,0,0.08)',
@@ -71,7 +74,8 @@ function cssValue(value, fallback = '') {
 export function normalizeTheme(theme) {
   const input = theme && typeof theme === 'object' ? theme : {}
   return THEME_KEYS.reduce((out, key) => {
-    out[key] = cleanThemeValue(input[key], DEFAULT_THEME[key])
+    const value = key === 'headingFontFamily' && !input[key] ? input.fontFamily : input[key]
+    out[key] = cleanThemeValue(value, DEFAULT_THEME[key])
     return out
   }, {})
 }
@@ -89,14 +93,17 @@ export function themeVariablesCss(theme) {
   const t = normalizeTheme(theme)
   return `:root {
   --site-primary: ${cssValue(t.primaryColor)};
+  --site-button-text: ${cssValue(t.buttonTextColor)};
   --site-text: ${cssValue(t.textColor)};
   --site-muted: ${cssValue(t.mutedColor)};
+  --site-border: ${cssValue(t.borderColor)};
   --site-bg: ${cssValue(t.backgroundColor)};
   --site-surface: ${cssValue(t.surfaceColor)};
   --site-soft: ${cssValue(t.softColor)};
   --site-header: ${cssValue(t.headerColor)};
   --site-header-text: ${cssValue(t.headerTextColor)};
   --site-font: ${cssValue(t.fontFamily)};
+  --site-heading-font: ${cssValue(t.headingFontFamily)};
   --site-radius: ${cssValue(t.radius)};
   --site-button-radius: ${cssValue(t.buttonRadius)};
   --site-shadow: ${cssValue(t.shadow)};
@@ -141,6 +148,11 @@ export function themedStyles(type, baseStyles = {}, theme = DEFAULT_THEME) {
         fontFamily: t.fontFamily,
       }
     case 'heading':
+      return {
+        ...styles,
+        color: t.textColor,
+        fontFamily: t.headingFontFamily,
+      }
     case 'text':
       return {
         ...styles,
@@ -151,7 +163,7 @@ export function themedStyles(type, baseStyles = {}, theme = DEFAULT_THEME) {
       return {
         ...styles,
         backgroundColor: t.primaryColor,
-        color: '#ffffff',
+        color: t.buttonTextColor,
         borderRadius: t.buttonRadius,
         fontFamily: t.fontFamily,
       }
@@ -179,6 +191,9 @@ export function themedStyles(type, baseStyles = {}, theme = DEFAULT_THEME) {
         ...styles,
         backgroundColor: t.surfaceColor,
         color: t.textColor,
+        borderColor: t.borderColor,
+        borderWidth: styles.borderWidth || '1px',
+        borderStyle: styles.borderStyle || 'solid',
         borderRadius: t.radius,
         boxShadow: t.shadow,
         fontFamily: t.fontFamily,
@@ -186,10 +201,32 @@ export function themedStyles(type, baseStyles = {}, theme = DEFAULT_THEME) {
     case 'divider':
       return {
         ...styles,
-        backgroundColor: t.mutedColor,
+        backgroundColor: t.borderColor,
+      }
+    case 'input':
+    case 'select':
+      return {
+        ...styles,
+        backgroundColor: t.surfaceColor,
+        color: t.textColor,
+        borderColor: t.borderColor,
+        borderWidth: styles.borderWidth || '1px',
+        borderStyle: styles.borderStyle || 'solid',
+        borderRadius: t.radius,
+        fontFamily: t.fontFamily,
       }
     default:
       return styles
+  }
+}
+
+function applyThemeToComponent(component, theme) {
+  return {
+    ...component,
+    styles: themedStyles(component.type, component.styles || {}, theme),
+    ...(Array.isArray(component.children)
+      ? { children: component.children.map((child) => applyThemeToComponent(child, theme)) }
+      : {}),
   }
 }
 
@@ -199,10 +236,7 @@ export function applyThemeToSchema(schema) {
     ...page,
     background: theme.backgroundColor,
     backgroundMobile: theme.backgroundColor,
-    components: (page.components || []).map((component) => ({
-      ...component,
-      styles: themedStyles(component.type, component.styles || {}, theme),
-    })),
+    components: (page.components || []).map((component) => applyThemeToComponent(component, theme)),
   }))
   return {
     ...schema,

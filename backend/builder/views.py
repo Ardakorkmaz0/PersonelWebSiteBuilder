@@ -59,6 +59,7 @@ from .serializers import (
     PublicSiteSerializer,
     RegisterSerializer,
     ReportSerializer,
+    SearchUserSerializer,
     SiteListSerializer,
     SiteSettingsSerializer,
     SiteSerializer,
@@ -965,6 +966,57 @@ class ExploreView(ListAPIView):
         return ctx
 
 
+class GlobalSearchView(APIView):
+    """Small combined search for the persistent dashboard header.
+
+    Results are deliberately capped because this is a quick navigation
+    surface, not another directory page. Drafts and suspended accounts never
+    leak through it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.GET.get('q', '').strip()[:80]
+        if len(query) < 2:
+            return Response({'query': query, 'sites': [], 'users': []})
+
+        sites = list(
+            Site.objects.filter(published=True, owner__is_active=True)
+            .filter(
+                Q(title__icontains=query)
+                | Q(owner__username__icontains=query)
+                | Q(owner__profile__display_name__icontains=query)
+            )
+            .select_related('owner', 'owner__profile')
+            .annotate(favorite_count=Count('favorited_by'))
+            .order_by('-hot_score', '-updated_at')[:6]
+        )
+        users = list(
+            User.objects.filter(is_active=True)
+            .filter(
+                Q(username__icontains=query)
+                | Q(profile__display_name__icontains=query)
+                | Q(profile__headline__icontains=query)
+            )
+            .select_related('profile')
+            .annotate(
+                published_site_count=Count(
+                    'sites',
+                    filter=Q(sites__published=True),
+                    distinct=True,
+                ),
+            )
+            .order_by('-published_site_count', 'username')[:5]
+        )
+        context = {'request': request, 'favorited_ids': _favorited_ids(request.user)}
+        return Response({
+            'query': query,
+            'sites': ExploreSiteSerializer(sites, many=True, context=context).data,
+            'users': SearchUserSerializer(users, many=True, context={'request': request}).data,
+        })
+
+
 class FavoritesView(APIView):
     """The current user's favorited sites (the Favorites tab), newest-favorited
     first, with the same card shape as Explore."""
@@ -1037,6 +1089,7 @@ class CloneSiteView(APIView):
             html=src.html,
             category=src.category,
             tags=src.tags,
+            site_options=src.site_options,
             published=False,
         )
         return Response(SiteSerializer(copy).data, status=status.HTTP_201_CREATED)

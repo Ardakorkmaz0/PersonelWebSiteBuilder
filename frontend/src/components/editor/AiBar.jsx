@@ -57,10 +57,8 @@ export default function AiBar({ open = false, onOpenChange }) {
         onClick={() => onOpenChange?.(!open)}
         aria-pressed={open}
         title={hasKey ? t('Open AI assistant') : t('Set an AI provider key first')}
-        className={`studio-btn h-8 shrink-0 ${
-          open
-            ? 'studio-btn-primary'
-            : 'studio-btn-accent'
+        className={`studio-btn studio-btn-secondary h-8 shrink-0 ${
+          open ? 'bg-[var(--studio-control-hover)] text-[var(--studio-text)]' : ''
         }`}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>

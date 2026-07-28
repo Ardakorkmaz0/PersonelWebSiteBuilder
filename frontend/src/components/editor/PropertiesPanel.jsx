@@ -4,13 +4,11 @@ import { registry } from '../registry.jsx'
 import PanelTabs from './PanelTabs.jsx'
 import PanelGroup from './PanelGroup.jsx'
 import AiComponentEdit from './AiComponentEdit.jsx'
-import AiSettings from './AiSettings.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
 import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS, normalizeTheme } from '../../utils/theme.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
 import {
   appendSnippet,
-  cssSnippets,
   groupSnippets,
   jsSnippets,
 } from '../../utils/snippets.js'
@@ -31,13 +29,12 @@ import {
   HtmlContentControl,
   TabsEditorControl,
 } from './controls.jsx'
-import { CodeIcon, FileIcon, MoveIcon, PaletteIcon, SparklesIcon } from '../icons.jsx'
+import { FileIcon, MoveIcon, PaletteIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
-const CSS_SNIPPET_GROUPS = groupSnippets(cssSnippets)
 
 // Optional snippet picker. Empty selection is the default — writing by hand
 // stays the primary workflow; this is just a shortcut.
@@ -211,14 +208,25 @@ const ADVANCED_STYLE_KEYS = [
 const PROPS_TAB_KEY = 'pwb_props_tab'
 const PAGE_TAB_KEY = 'pwb_page_tab'
 
-// The Page panel's sections. Code and AI are hidden in Simple mode, so the tab
-// list is built from what is actually available rather than showing tabs that
-// open onto nothing.
+// Project code lives in Source and AI lives in its own workspace. Keeping this
+// list visual-only prevents the same feature from appearing in three places.
 const PAGE_TABS = [
   ['page', 'Page', FileIcon],
   ['theme', 'Theme', PaletteIcon],
-  ['code', 'Code', CodeIcon],
-  ['ai', 'AI', SparklesIcon],
+]
+
+const THEME_SHAPES = [
+  ['sharp', 'Sharp', '0px', '0px'],
+  ['soft', 'Soft', '8px', '8px'],
+  ['rounded', 'Rounded', '16px', '12px'],
+  ['pill', 'Pill buttons', '18px', '999px'],
+]
+
+const THEME_SHADOWS = [
+  ['none', 'No shadow', 'none'],
+  ['subtle', 'Subtle shadow', '0 1px 3px rgba(15,23,42,0.08)'],
+  ['soft', 'Soft shadow', '0 8px 24px rgba(15,23,42,0.10)'],
+  ['strong', 'Strong shadow', '0 18px 45px rgba(15,23,42,0.18)'],
 ]
 
 // The four Properties sections. Short labels — the panel is 288px wide.
@@ -483,8 +491,6 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const clearMobileStyles = useEditorStore((s) => s.clearMobileStyles)
   const updateTheme = useEditorStore((s) => s.updateTheme)
   const applyTheme = useEditorStore((s) => s.applyTheme)
-  const setCustomCss = useEditorStore((s) => s.setCustomCss)
-  const setCustomJs = useEditorStore((s) => s.setCustomJs)
   const applyComponentPreset = useEditorStore((s) => s.applyComponentPreset)
   const setLayout = useEditorStore((s) => s.setLayout)
   const setLayoutMany = useEditorStore((s) => s.setLayoutMany)
@@ -492,9 +498,9 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   const alignSelection = useEditorStore((s) => s.alignSelection)
   const distributeSelection = useEditorStore((s) => s.distributeSelection)
   const selectedIds = useEditorStore((s) => s.selectedIds)
-  const setPageBackground = useEditorStore((s) => s.setPageBackground)
   const renamePage = useEditorStore((s) => s.renamePage)
   const setPageFolder = useEditorStore((s) => s.setPageFolder)
+  const setPageSettings = useEditorStore((s) => s.setPageSettings)
   const setPageMeta = useEditorStore((s) => s.setPageMeta)
   const setVisibility = useEditorStore((s) => s.setVisibility)
   const autoArrangeMobile = useEditorStore((s) => s.autoArrangeMobile)
@@ -520,9 +526,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     setPropsTabState(tab)
     try { localStorage.setItem(PROPS_TAB_KEY, tab) } catch { /* ignore */ }
   }
-  // Simple mode strips Code and AI entirely, so the visible tab list is derived
-  // rather than fixed — a tab that would open onto nothing is never drawn.
-  const pageTabs = PAGE_TABS.filter(([id]) => !simpleMode || (id !== 'code' && id !== 'ai'))
+  const pageTabs = PAGE_TABS
   const [pageTab, setPageTabState] = useState(() => {
     try {
       const saved = localStorage.getItem(PAGE_TAB_KEY)
@@ -533,8 +537,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     setPageTabState(tab)
     try { localStorage.setItem(PAGE_TAB_KEY, tab) } catch { /* ignore */ }
   }
-  // Switching into Simple mode can leave the remembered tab hidden; fall back to
-  // the first visible one instead of rendering an empty panel.
+  // Old sessions may remember a removed Code or AI tab; fall back cleanly.
   const activePageTab = pageTabs.some(([id]) => id === pageTab) ? pageTab : pageTabs[0][0]
 
   const isMobile = viewport === 'mobile'
@@ -592,9 +595,6 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     }
     if (Object.keys(updates).length) setLayoutMany(updates)
   }
-  const pageBackground = isMobile
-    ? page.backgroundMobile || page.background || '#ffffff'
-    : page.background || '#ffffff'
   const theme = schema.theme || DEFAULT_THEME
   // Extra hints and the X/Y fields used to hide behind a Basic/Extended switch
   // in this panel. That switch is gone — collapsible groups do that job — so
@@ -741,16 +741,22 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               />
             )}
             <LabeledColor
-              label={
-                isFlow
-                  ? t('Page background')
-                  : isMobile
-                    ? t('Page background (Mobile)')
-                    : t('Page background (PC)')
-              }
-              value={pageBackground}
-              onChange={setPageBackground}
+              label={t('Page background (PC)')}
+              value={page.background || '#ffffff'}
+              onChange={(v) => setPageSettings(page.id, { background: v })}
             />
+            <LabeledColor
+              label={t('Page background (Mobile)')}
+              value={page.backgroundMobile || page.background || '#ffffff'}
+              onChange={(v) => setPageSettings(page.id, { backgroundMobile: v })}
+            />
+            <button
+              type="button"
+              onClick={() => setPageSettings(page.id, { backgroundMobile: page.background || '#ffffff' })}
+              className="w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-control)] px-2 py-1.5 text-xs font-medium text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
+            >
+              {t('Use PC background on mobile')}
+            </button>
             {isMobile && !isFlow && (
               <button
                 type="button"
@@ -761,6 +767,28 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               </button>
             )}
         </PanelGroup>
+        <PanelGroup id="page-browser" title={t('Browser & accessibility')} defaultOpen>
+          <LabeledSelect
+            label={t('Page language')}
+            value={page.language || 'en'}
+            onChange={(v) => setPageSettings(page.id, { language: v })}
+            options={[["en", t('English')], ["tr", t('Turkish')]]}
+          />
+          <LabeledText
+            label={t('Canonical URL')}
+            value={page.canonicalUrl || ''}
+            onChange={(v) => setPageSettings(page.id, { canonicalUrl: v })}
+            placeholder="https://example.com/page"
+          />
+          <p className="text-[11px] leading-snug text-[var(--studio-text-faint)]">
+            {t('Use the preferred public URL when the same page can be reached from multiple addresses.')}
+          </p>
+          <LabeledCheckbox
+            label={t('Hide this page from search engines')}
+            checked={!!page.noIndex}
+            onChange={(v) => setPageSettings(page.id, { noIndex: v })}
+          />
+        </PanelGroup>
         <PanelGroup id="page-seo" title={t('SEO & sharing')} defaultOpen>
           <LabeledText
             label={t('Search title')}
@@ -768,6 +796,9 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             onChange={(v) => setPageMeta(page.id, { seoTitle: v })}
             placeholder={page.name}
           />
+          <p className="text-[11px] leading-snug text-[#9ca3af]">
+            {t('{count}/60 characters', { count: (page.seoTitle || page.name || '').length })}
+          </p>
           <LabeledTextarea
             label={t('Search description')}
             value={page.seoDescription || ''}
@@ -788,6 +819,20 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           <p className="text-[11px] leading-snug text-[#9ca3af]">
             {t('Shown when the page is shared on social apps. 1200x630 works best.')}
           </p>
+          <div
+            aria-label={t('Search result preview')}
+            className="rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-3"
+          >
+            <p className="truncate text-[10px] text-[var(--studio-success)]">
+              {page.canonicalUrl || `https://example.com/${String(page.name || 'page').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+            </p>
+            <p className="mt-1 line-clamp-1 text-sm font-medium text-[var(--studio-accent-hover)]">
+              {page.seoTitle || page.name || t('Untitled page')}
+            </p>
+            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--studio-text-muted)]">
+              {page.seoDescription || t('Add a description to preview how this page may appear in search results.')}
+            </p>
+          </div>
         </PanelGroup>
           <p className="text-xs leading-relaxed text-[#6b7280]">
             {isFlow
@@ -833,8 +878,14 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                   type="button"
                   title={t('Use the "{name}" theme and apply it to the whole site', { name: t(p.name) })}
                   onClick={() => {
-                    updateTheme(p.theme)
-                    if (htmlMode) onApplyThemeToHtml?.(normalizeTheme(p.theme))
+                    const presetTheme = {
+                      ...p.theme,
+                      headingFontFamily: p.theme.fontFamily,
+                      buttonTextColor: p.id === 'noir' ? '#121110' : '#ffffff',
+                      borderColor: p.theme.mutedColor,
+                    }
+                    updateTheme(presetTheme)
+                    if (htmlMode) onApplyThemeToHtml?.(normalizeTheme(presetTheme))
                     else applyTheme()
                   }}
                   className="flex min-w-0 items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-left text-[11px] font-medium text-[#374151] transition hover:border-[#4f46e5] hover:bg-[#eef2ff]"
@@ -857,6 +908,41 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               value={theme.primaryColor}
               onChange={(v) => updateTheme({ primaryColor: v })}
             />
+            <div
+              aria-label={t('Theme preview')}
+              className="overflow-hidden rounded-xl border"
+              style={{
+                background: theme.surfaceColor,
+                borderColor: theme.borderColor,
+                boxShadow: theme.shadow === 'none' ? 'none' : theme.shadow,
+              }}
+            >
+              <div className="p-3">
+                <p
+                  className="text-base font-bold"
+                  style={{ color: theme.textColor, fontFamily: theme.headingFontFamily }}
+                >
+                  {t('Your heading style')}
+                </p>
+                <p
+                  className="mt-1 text-[11px] leading-relaxed"
+                  style={{ color: theme.mutedColor, fontFamily: theme.fontFamily }}
+                >
+                  {t('Body text, surfaces, borders and buttons update together.')}
+                </p>
+                <span
+                  className="mt-3 inline-flex px-3 py-1.5 text-[11px] font-semibold"
+                  style={{
+                    background: theme.primaryColor,
+                    color: theme.buttonTextColor,
+                    borderRadius: theme.buttonRadius,
+                    fontFamily: theme.fontFamily,
+                  }}
+                >
+                  {t('Button preview')}
+                </span>
+              </div>
+            </div>
         </PanelGroup>
 
         {!simpleMode && (
@@ -871,6 +957,16 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               label={t('Muted color')}
               value={theme.mutedColor}
               onChange={(v) => updateTheme({ mutedColor: v })}
+            />
+            <LabeledColor
+              label={t('Border color')}
+              value={theme.borderColor}
+              onChange={(v) => updateTheme({ borderColor: v })}
+            />
+            <LabeledColor
+              label={t('Button text color')}
+              value={theme.buttonTextColor}
+              onChange={(v) => updateTheme({ buttonTextColor: v })}
             />
             <LabeledColor
               label={t('Site background')}
@@ -900,10 +996,30 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             </PanelGroup>
             <PanelGroup id="theme-type" title={t('Type & corners')}>
             <LabeledSelect
-              label={t('Font')}
+              label={t('Body font')}
               value={theme.fontFamily}
               onChange={(v) => updateTheme({ fontFamily: v })}
               options={FONT_OPTIONS.map(([value, label]) => [value, t(label)])}
+            />
+            <LabeledSelect
+              label={t('Heading font')}
+              value={theme.headingFontFamily}
+              onChange={(v) => updateTheme({ headingFontFamily: v })}
+              options={FONT_OPTIONS.map(([value, label]) => [value, t(label)])}
+            />
+            <LabeledSelect
+              label={t('Corner style')}
+              value={THEME_SHAPES.find(([, , radius, buttonRadius]) => (
+                radius === theme.radius && buttonRadius === theme.buttonRadius
+              ))?.[0] || 'custom'}
+              onChange={(value) => {
+                const preset = THEME_SHAPES.find(([id]) => id === value)
+                if (preset) updateTheme({ radius: preset[2], buttonRadius: preset[3] })
+              }}
+              options={[
+                ...THEME_SHAPES.map(([id, label]) => [id, t(label)]),
+                ['custom', t('Custom')],
+              ]}
             />
             <LabeledPx
               label={t('Corner radius')}
@@ -921,51 +1037,24 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
               onChange={(v) => updateTheme({ shadow: v })}
               placeholder={t('e.g. 0 8px 24px rgba(0,0,0,0.12)')}
             />
+            <LabeledSelect
+              label={t('Shadow preset')}
+              value={THEME_SHADOWS.find(([, , value]) => value === theme.shadow)?.[0] || 'custom'}
+              onChange={(value) => {
+                const preset = THEME_SHADOWS.find(([id]) => id === value)
+                if (preset) updateTheme({ shadow: preset[2] })
+              }}
+              options={[
+                ...THEME_SHADOWS.map(([id, label]) => [id, t(label)]),
+                ['custom', t('Custom')],
+              ]}
+            />
             </PanelGroup>
           </>
         )}
             </>
           )}
 
-          {activePageTab === 'code' && (
-            <>
-        <PanelGroup id="custom-css" title={t('Custom CSS')}>
-            <SnippetPicker
-              groups={CSS_SNIPPET_GROUPS}
-              list={cssSnippets}
-              onPick={(s) => setCustomCss(appendSnippet(schema.customCss, s, 'css'))}
-            />
-            <LabeledTextarea
-              label="CSS"
-              value={schema.customCss || ''}
-              onChange={setCustomCss}
-              rows={8}
-              mono
-              placeholder=".page { scroll-behavior: smooth; }"
-            />
-        </PanelGroup>
-        <PanelGroup id="custom-js" title={t('Custom JavaScript')}>
-            <p className="text-xs leading-relaxed text-[#6b7280]">
-              {t('Runs on the published site inside a sandboxed iframe — full DOM, fetch, setTimeout, third-party CDNs, etc. Cannot reach this app or the visitor session.')}
-            </p>
-            <SnippetPicker
-              groups={JS_SNIPPET_GROUPS}
-              list={jsSnippets}
-              onPick={(s) => setCustomJs(appendSnippet(schema.customJs, s, 'js'))}
-            />
-            <LabeledTextarea
-              label="JS"
-              value={schema.customJs || ''}
-              onChange={setCustomJs}
-              rows={10}
-              mono
-              placeholder={'document.addEventListener("DOMContentLoaded", () => {\n  // your code\n})'}
-            />
-        </PanelGroup>
-            </>
-          )}
-
-          {activePageTab === 'ai' && <AiSettings />}
         </div>
       </div>
     )

@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { schemaToSingleHtml } from './schemaToFiles.js'
+import { schemaToFiles, schemaToSingleHtml } from './schemaToFiles.js'
+
+describe('schemaToFiles custom code', () => {
+  it('keeps page markup, shared styles, runtime and custom code in separate files', () => {
+    const files = schemaToFiles({
+      theme: {},
+      customCss: '.custom { color: rebeccapurple; }',
+      customJs: 'document.body.dataset.source = "ready"',
+      pages: [{ id: 'p1', name: 'Home', components: [] }],
+    })
+    const html = files.find((file) => file.name === 'index.html')?.content
+    expect(html).toContain('href="styles.css"')
+    expect(html).toContain('href="custom.css"')
+    expect(html).toContain('src="runtime.js"')
+    expect(html).toContain('src="custom.js"')
+    expect(html).not.toContain('document.body.dataset.source = "ready"')
+    expect(files.find((file) => file.name === 'styles.css')?.content).toContain('.page')
+    expect(files.find((file) => file.name === 'custom.css')?.content)
+      .toContain('.custom { color: rebeccapurple; }')
+    expect(files.find((file) => file.name === 'runtime.js')?.content)
+      .toContain('data-builder-mobile-nav-toggle')
+    expect(files.find((file) => file.name === 'custom.js')?.content)
+      .toContain('document.body.dataset.source = "ready"')
+  })
+})
 
 describe('schemaToSingleHtml multiline copy', () => {
   it('preserves Enter as a safe line break', () => {
@@ -369,6 +393,36 @@ describe('schemaToSingleHtml navbar placement', () => {
     // in the shared stylesheet.
     expect(html).not.toMatch(/\.c-nav_1 > \.nav-inner > \.brand \{[^}]*order: 1px/)
   })
+
+  it('keeps visible mobile links in one row in both View and Edit exports', () => {
+    const html = bar({ mobileNavMode: 'stack', brandAlign: 'left', linksAlign: 'right' })
+    expect(html).toContain('--builder-mobile-brand-align:flex-start')
+    expect(html).toContain('--builder-mobile-links-align:flex-end')
+    expect(html).toMatch(/\.nav-mobile-stack \.links \{[^}]*flex-direction:row;/)
+    expect(html).toMatch(/\.nav-mobile-stack \.links \{[^}]*justify-content:var\(--builder-mobile-links-align,flex-end\);/)
+  })
+})
+
+describe('schemaToSingleHtml embedded HTML', () => {
+  it('loads small nested snippets immediately in an iframe preview', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', mode: 'empty', flowMode: false,
+        canvasWidth: 1000, mobileWidth: 390,
+        components: [{
+          id: 'read_more', type: 'html',
+          props: { code: '<a href="#more">Read more</a>' },
+          styles: {},
+          layout: { x: 40, y: 200, w: 160, h: 40 },
+          mobileLayout: { x: 40, y: 200, w: 160, h: 40 },
+        }],
+      }],
+    }, 'Embed test')
+
+    expect(html).toContain('Read more')
+    expect(html).not.toContain('loading="lazy"')
+  })
 })
 
 describe('schemaToSingleHtml motion', () => {
@@ -446,5 +500,19 @@ describe('schemaToSingleHtml page SEO', () => {
     expect(html).toContain('<meta property="og:title" content="A &quot;quoted&quot; &lt;tag&gt;" />')
     expect(html).not.toContain('javascript:alert')
     expect(html).not.toContain('og:image')
+  })
+
+  it('exports language, canonical URL and search visibility metadata', () => {
+    const html = build({
+      language: 'tr',
+      canonicalUrl: 'https://example.com/calisma',
+      noIndex: true,
+      seoDescription: 'Kısa açıklama',
+    })
+    expect(html).toContain('<html lang="tr">')
+    expect(html).toContain('<link rel="canonical" href="https://example.com/calisma" />')
+    expect(html).toContain('<meta property="og:url" content="https://example.com/calisma" />')
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow" />')
+    expect(html).toContain('<meta name="twitter:description" content="Kısa açıklama" />')
   })
 })

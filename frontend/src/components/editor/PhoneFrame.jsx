@@ -13,7 +13,16 @@
 
 import { phoneModel } from './phoneFrameMetrics.js'
 
-const BUTTON = '#0d111c'
+const BUTTON = '#080a0f'
+
+const BODY_FINISH = {
+  titanium: 'linear-gradient(145deg, #8b8c91 0%, #34353a 18%, #111217 48%, #55565b 78%, #191a1f 100%)',
+  midnight: 'linear-gradient(145deg, #354052 0%, #121824 28%, #070a10 62%, #263043 100%)',
+  aluminium: 'linear-gradient(145deg, #6b7079 0%, #20242c 28%, #0b0e14 68%, #454b55 100%)',
+  graphite: 'linear-gradient(145deg, #5d626c 0%, #1d2129 24%, #080a0f 64%, #3c424d 100%)',
+  'titanium-black': 'linear-gradient(145deg, #625f59 0%, #272622 22%, #090a0d 64%, #45433d 100%)',
+  obsidian: 'linear-gradient(145deg, #4c5057 0%, #202329 24%, #090b0f 64%, #353940 100%)',
+}
 
 // Side buttons sit just INSIDE the silhouette so a workspace that clips
 // horizontally can never shave them off.
@@ -31,29 +40,39 @@ function button(edge, top, height) {
 
 function Buttons({ kind }) {
   if (kind === 'galaxy') {
-    // Samsung puts the whole cluster on the right edge.
+    // Galaxy S24: volume rocker above the power key, both on the right rail.
     return (
       <>
-        <span style={button('right', 132, 58)} />
-        <span style={button('right', 206, 40)} />
+        <span style={button('right', 96, 54)} />
+        <span style={button('right', 166, 58)} />
+      </>
+    )
+  }
+  if (kind === 'pixel') {
+    return (
+      <>
+        <span style={button('right', 92, 48)} />
+        <span style={button('right', 154, 72)} />
       </>
     )
   }
   return (
     <>
-      <span style={button('left', 96, 26)} />
-      <span style={button('left', 140, 44)} />
-      <span style={button('left', 196, 44)} />
-      <span style={button('right', 150, 66)} />
+      <span style={button('left', 88, 24)} />
+      <span style={button('left', 130, 48)} />
+      <span style={button('left', 190, 48)} />
+      <span style={button('right', 148, 72)} />
     </>
   )
 }
 
-function Camera({ model }) {
+function Camera({ model, inScreen = false }) {
   const centered = {
     position: 'absolute',
     left: '50%',
     transform: 'translateX(-50%)',
+    zIndex: 30,
+    pointerEvents: 'none',
   }
   if (model.camera === 'island') {
     return (
@@ -61,17 +80,18 @@ function Camera({ model }) {
         aria-hidden="true"
         style={{
           ...centered,
-          top: (model.bezel.top - 24) / 2,
+          top: inScreen ? 10 : (model.bezel.top - 28) / 2,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-end',
           gap: 6,
-          width: 92,
-          height: 24,
-          paddingRight: 9,
-          borderRadius: 12,
-          background: '#05070c',
+          width: 104,
+          height: 28,
+          paddingRight: 10,
+          borderRadius: 16,
+          background: '#000105',
           boxSizing: 'border-box',
+          boxShadow: '0 1px 2px rgba(0,0,0,.9)',
         }}
       >
         <span
@@ -86,15 +106,34 @@ function Camera({ model }) {
       </div>
     )
   }
+  if (model.camera === 'notch') {
+    return (
+      <div
+        aria-hidden="true"
+        style={{
+          ...centered,
+          top: inScreen ? 0 : (model.bezel.top - 28) / 2,
+          width: 132,
+          height: 29,
+          borderRadius: '0 0 18px 18px',
+          background: '#000105',
+          boxShadow: '0 1px 2px rgba(0,0,0,.85)',
+        }}
+      >
+        <span style={{ position: 'absolute', right: 23, top: 8, width: 9, height: 9, borderRadius: '50%', background: '#101827', boxShadow: 'inset 0 0 0 1px rgba(104,130,186,.5)' }} />
+        <span style={{ position: 'absolute', left: '50%', top: 9, width: 38, height: 5, transform: 'translateX(-50%)', borderRadius: 3, background: '#171a20' }} />
+      </div>
+    )
+  }
   if (model.camera === 'punch') {
     return (
       <span
         aria-hidden="true"
         style={{
           ...centered,
-          top: (model.bezel.top - 11) / 2,
-          width: 11,
-          height: 11,
+          top: inScreen ? 10 : (model.bezel.top - 12) / 2,
+          width: 12,
+          height: 12,
           borderRadius: '50%',
           background: '#05070c',
           boxShadow: 'inset 0 0 0 1px rgba(129,150,201,0.45)',
@@ -128,12 +167,13 @@ function Camera({ model }) {
   )
 }
 
-export default function PhoneFrame({ screenWidth, screenHeight, children }) {
-  const model = phoneModel(screenWidth)
+export default function PhoneFrame({ screenWidth, screenHeight, model: suppliedModel, children }) {
+  const model = suppliedModel || phoneModel(screenWidth)
   const { bezel } = model
   return (
     <div
       data-builder-phone-frame={model.id}
+      aria-label={model.name}
       style={{
         position: 'relative',
         boxSizing: 'border-box',
@@ -143,13 +183,13 @@ export default function PhoneFrame({ screenWidth, screenHeight, children }) {
         paddingBottom: bezel.bottom,
         paddingLeft: bezel.side,
         borderRadius: model.radius,
-        background: 'linear-gradient(155deg, #39415a 0%, #10141f 38%, #0a0e17 62%, #2b3245 100%)',
+        background: BODY_FINISH[model.body] || BODY_FINISH.titanium,
         boxShadow:
-          'inset 0 0 0 1px rgba(148,163,184,0.35), inset 0 0 0 3px rgba(8,11,18,0.9), 0 26px 60px rgba(15,23,42,0.38)',
+          'inset 0 0 0 1px rgba(255,255,255,0.32), inset 0 0 0 3px rgba(0,0,0,0.88), 0 28px 66px rgba(0,0,0,0.42)',
       }}
     >
       <Buttons kind={model.buttons} />
-      <Camera model={model} />
+      {model.camera === 'earpiece' && <Camera model={model} />}
 
       <div
         style={{
@@ -159,9 +199,11 @@ export default function PhoneFrame({ screenWidth, screenHeight, children }) {
           overflow: 'hidden',
           borderRadius: model.screenRadius,
           background: '#fff',
+          boxShadow: '0 0 0 1px rgba(0,0,0,.95), inset 0 0 0 1px rgba(255,255,255,.08)',
         }}
       >
         {children}
+        {model.camera !== 'earpiece' && <Camera model={model} inScreen />}
       </div>
 
       {model.home && (
@@ -177,21 +219,6 @@ export default function PhoneFrame({ screenWidth, screenHeight, children }) {
             borderRadius: '50%',
             background: '#11151f',
             boxShadow: 'inset 0 0 0 1.5px rgba(148,163,184,0.4)',
-          }}
-        />
-      )}
-      {model.indicator && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            bottom: Math.max(4, (bezel.bottom - 5) / 2),
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 112,
-            height: 5,
-            borderRadius: 3,
-            background: 'rgba(148,163,184,0.45)',
           }}
         />
       )}

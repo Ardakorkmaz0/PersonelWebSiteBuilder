@@ -32,21 +32,31 @@ def default_schema():
     return {
         'theme': {
             'primaryColor': '#0071e3',
+            'buttonTextColor': '#ffffff',
             'textColor': '#1d1d1f',
             'mutedColor': '#6e6e73',
+            'borderColor': '#d2d2d7',
             'backgroundColor': '#ffffff',
             'surfaceColor': '#ffffff',
             'softColor': '#f5f5f7',
             'headerColor': '#1d1d1f',
             'headerTextColor': '#f5f5f7',
             'fontFamily': "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+            'headingFontFamily': "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
             'radius': '18px',
             'buttonRadius': '980px',
             'shadow': '0 4px 20px rgba(0,0,0,0.08)',
         },
         'customCss': '',
         'pages': [
-            {'id': 'page_home', 'name': 'Home', 'components': []},
+            {
+                'id': 'page_home',
+                'name': 'Home',
+                'language': 'en',
+                'canonicalUrl': '',
+                'noIndex': False,
+                'components': [],
+            },
         ],
     }
 

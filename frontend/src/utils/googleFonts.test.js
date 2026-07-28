@@ -91,6 +91,15 @@ describe('googleFontHrefForTheme', () => {
     const theme = { fontFamily: 'sans-serif' }
     expect(googleFontHrefForTheme(theme)).toBe('')
   })
+
+  it('loads separate body and heading Google fonts in one stylesheet request', () => {
+    const href = googleFontHrefForTheme({
+      fontFamily: '"Inter", sans-serif',
+      headingFontFamily: '"Playfair Display", serif',
+    })
+    expect(href).toContain('family=Inter:wght@')
+    expect(href).toContain('family=Playfair+Display:wght@')
+  })
 })
 
 describe('googleFontLinkTag', () => {

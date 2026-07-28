@@ -25,9 +25,9 @@ import {
 } from '../../utils/aiAssistant.js'
 
 const FIELD =
-  'w-full rounded-lg border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] px-2 py-1 text-sm text-[var(--studio-text)] focus:border-[var(--studio-accent)] focus:outline-none'
+  'w-full rounded-lg border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] px-2 py-1 text-sm text-[var(--studio-text)] focus:bg-[var(--studio-control)] focus:outline-none'
 const FIELD_MONO =
-  'w-full rounded-lg border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] px-2 py-1 font-mono text-xs text-[var(--studio-text)] focus:border-[var(--studio-accent)] focus:outline-none'
+  'w-full rounded-lg border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] px-2 py-1 font-mono text-xs text-[var(--studio-text)] focus:bg-[var(--studio-control)] focus:outline-none'
 const FIELD_LABEL = 'mb-1 block text-xs font-semibold text-[var(--studio-text-muted)]'
 const HINT = 'mt-1 block text-[11px] text-[var(--studio-text-muted)]'
 
@@ -232,7 +232,7 @@ export default function AiSettings({ showHeading = true }) {
               href={providerInfo?.keyUrl || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[var(--studio-accent-hover)] underline"
+              className="font-medium text-[var(--studio-text)] underline decoration-[var(--studio-border-strong)] underline-offset-2"
             >
               {(providerInfo?.keyUrl || '').replace(/^https?:\/\//, '').replace(/\/.*/, '')}
             </a>

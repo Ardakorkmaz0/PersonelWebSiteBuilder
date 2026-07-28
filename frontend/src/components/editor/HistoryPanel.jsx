@@ -111,7 +111,7 @@ export default function HistoryPanel({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="flex min-h-[60px] items-center gap-2.5 border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-2.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)]">
           <ClockIcon size={17} />
         </span>
         <span className="min-w-0 flex-1">
@@ -148,7 +148,7 @@ export default function HistoryPanel({
               aria-hidden
               className={`relative h-5 w-9 shrink-0 rounded-full border transition ${
                 autoSaveEnabled
-                  ? 'border-[var(--studio-accent)] bg-[var(--studio-accent)]'
+                  ? 'border-[var(--studio-success)] bg-[var(--studio-success)]'
                   : 'border-[var(--studio-border-strong)] bg-[var(--studio-panel-raised)]'
               }`}
             >
@@ -159,7 +159,7 @@ export default function HistoryPanel({
           type="button"
           disabled={busy}
           onClick={newCheckpoint}
-          className="studio-btn studio-btn-primary shrink-0 justify-center px-3 disabled:opacity-50"
+          className="studio-btn studio-btn-secondary shrink-0 justify-center px-3 disabled:opacity-50"
         >
           <PlusIcon size={14} /> {t('New named save')}
         </button>
@@ -178,10 +178,10 @@ export default function HistoryPanel({
             type="button"
             onClick={() => setFilter(value)}
             aria-label={`${t(label)} ${count}`}
-            className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[10px] font-semibold transition ${
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-1.5 py-1.5 text-[10px] font-semibold transition ${
               filter === value
-                ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
-                : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
+                ? 'border-[var(--studio-border-strong)] bg-[var(--studio-panel-raised)] text-[var(--studio-text)] shadow-sm'
+                : 'border-transparent text-[var(--studio-text-muted)] hover:border-[var(--studio-border)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
             }`}
           >
             <span className="truncate">{t(label)}</span>
@@ -321,9 +321,9 @@ function SlotBtn({ children, onClick, disabled, danger }) {
 function SourceBadge({ source, pinned = false }) {
   const { t } = useLanguage()
   const style =
-    source === 'restore'
+    source === 'restore' || pinned
       ? 'border-[var(--studio-warning)] bg-[var(--studio-warning-soft)] text-[var(--studio-warning)]'
-      : 'border-[var(--studio-border)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+      : 'border-[var(--studio-border)] bg-[var(--studio-control)] text-[var(--studio-text-muted)]'
   return (
     <span
       title={t('Snapshot source: {source}', { source: t(source) })}

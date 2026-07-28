@@ -66,44 +66,44 @@ export default function NotesPanel({ open, onClose }) {
 
   return (
     <div
-      className="studio-theme-surface fixed right-4 top-16 z-[120] flex max-h-[78vh] w-[340px] flex-col overflow-hidden rounded-xl border border-[#d1d5db] bg-white shadow-2xl"
+      className="studio-theme-surface fixed right-4 top-16 z-[120] flex max-h-[78vh] w-[340px] flex-col overflow-hidden rounded-xl border border-[var(--studio-border-strong)] bg-[var(--studio-panel)] text-[var(--studio-text)] shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between border-b border-[#e5e7eb] px-3 py-2">
-        <span className="flex items-center gap-1.5 text-sm font-bold text-[#111827]"><NoteIcon size={15} /> {t('Notes')}</span>
+      <div className="flex items-center justify-between border-b border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-2">
+        <span className="flex items-center gap-1.5 text-sm font-bold text-[var(--studio-text)]"><NoteIcon size={15} /> {t('Notes')}</span>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg px-2 py-0.5 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
+          className="rounded-lg px-2 py-0.5 text-sm text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
         >
           ✕
         </button>
       </div>
 
       {/* Month calendar */}
-      <div className="border-b border-[#e5e7eb] p-3">
+      <div className="border-b border-[var(--studio-border)] p-3">
         <div className="mb-2 flex items-center justify-between">
           <button
             type="button"
             onClick={() => setCursor(new Date(year, month - 1, 1))}
-            className="rounded-lg px-2 py-0.5 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
+            className="rounded-lg px-2 py-0.5 text-sm text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
           >
             ‹
           </button>
-          <span className="text-sm font-semibold text-[#111827]">
+          <span className="text-sm font-semibold text-[var(--studio-text)]">
             {t(MONTHS[month])} {year}
           </span>
           <button
             type="button"
             onClick={() => setCursor(new Date(year, month + 1, 1))}
-            className="rounded-lg px-2 py-0.5 text-sm text-[#6b7280] hover:bg-[#f3f4f6]"
+            className="rounded-lg px-2 py-0.5 text-sm text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
           >
             ›
           </button>
         </div>
         <div className="grid grid-cols-7 gap-0.5 text-center">
           {DOWS.map((d) => (
-            <span key={d} className="py-0.5 text-[10px] font-semibold uppercase text-[#9ca3af]">
+            <span key={d} className="py-0.5 text-[10px] font-semibold uppercase text-[var(--studio-text-faint)]">
               {t(d)}
             </span>
           ))}
@@ -122,17 +122,17 @@ export default function NotesPanel({ open, onClose }) {
                 onClick={() => setSelected(key)}
                 className={`relative rounded-lg py-1 text-xs transition ${
                   isSelected
-                    ? 'bg-[#4f46e5] font-bold text-white'
+                    ? 'bg-[var(--studio-accent)] font-bold text-white'
                     : isToday
-                      ? 'bg-[#eef2ff] font-semibold text-[#4f46e5]'
-                      : 'text-[#374151] hover:bg-[#f3f4f6]'
+                      ? 'bg-[var(--studio-accent-soft)] font-semibold text-[var(--studio-accent-hover)]'
+                      : 'text-[var(--studio-text)] hover:bg-[var(--studio-control-hover)]'
                 }`}
               >
                 {i + 1}
                 {hasNotes && (
                   <span
                     className={`absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${
-                      isSelected ? 'bg-white' : 'bg-[#4f46e5]'
+                      isSelected ? 'bg-white' : 'bg-[var(--studio-accent)]'
                     }`}
                   />
                 )}
@@ -144,26 +144,26 @@ export default function NotesPanel({ open, onClose }) {
 
       {/* Notes for the selected day */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--studio-text-muted)]">
           {selected === todayKey() ? t('Today') : selected}
         </div>
         {dayNotes.length === 0 ? (
-          <p className="text-xs text-[#9ca3af]">
+          <p className="text-xs text-[var(--studio-text-faint)]">
             {t('No notes for this day yet. Write what you did below.')}
           </p>
         ) : (
           dayNotes.map((n) => (
             <div
               key={n.id}
-              className="group mb-1.5 flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-2.5 py-1.5"
+              className="group mb-1.5 flex items-start gap-2 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-control)] px-2.5 py-1.5"
             >
-              <span className="pt-0.5 text-[10px] font-semibold text-[#9ca3af]">{n.time}</span>
-              <span className="min-w-0 flex-1 whitespace-pre-wrap text-sm text-[#374151]">{n.text}</span>
+              <span className="pt-0.5 text-[10px] font-semibold text-[var(--studio-text-faint)]">{n.time}</span>
+              <span className="min-w-0 flex-1 whitespace-pre-wrap text-sm text-[var(--studio-text)]">{n.text}</span>
               <button
                 type="button"
                 onClick={() => removeNote(n.id)}
                 title={t('Delete note')}
-                className="hidden rounded px-1 text-xs text-[#9ca3af] hover:text-red-600 group-hover:block"
+                className="hidden rounded px-1 text-xs text-[var(--studio-text-faint)] hover:text-[var(--studio-danger)] group-hover:block"
               >
                 ✕
               </button>
@@ -173,7 +173,7 @@ export default function NotesPanel({ open, onClose }) {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-[#e5e7eb] p-2">
+      <div className="border-t border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-2">
         <div className="flex gap-2">
           <input
             value={draft}

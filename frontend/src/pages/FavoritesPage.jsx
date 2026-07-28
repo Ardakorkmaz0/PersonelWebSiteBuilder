@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { listFavorites, addFavorite, removeFavorite } from '../api/explore.js'
+import { cloneSite } from '../api/sites.js'
 import { apiError } from '../utils/errors.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
 import DashboardHeader from '../components/dashboard/DashboardHeader.jsx'
@@ -13,6 +15,8 @@ export default function FavoritesPage() {
   const [items, setItems] = useState(null) // null = loading
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [remixingId, setRemixingId] = useState(null)
+  const navigate = useNavigate()
   useScrollRestore(items !== null)
 
   const filteredItems = useMemo(() => {
@@ -51,6 +55,19 @@ export default function FavoritesPage() {
       else await removeFavorite(site.id)
     } catch (e) {
       setError(apiError(e))
+    }
+  }
+
+  async function onRemix(site) {
+    if (remixingId) return
+    setRemixingId(site.id)
+    setError('')
+    try {
+      const copy = await cloneSite(site.slug)
+      navigate(`/editor/${copy.id}`)
+    } catch (e) {
+      setError(apiError(e))
+      setRemixingId(null)
     }
   }
 
@@ -106,7 +123,7 @@ export default function FavoritesPage() {
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((site) => (
-              <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} />
+              <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} />
             ))}
           </div>
         )}

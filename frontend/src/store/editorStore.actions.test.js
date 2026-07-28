@@ -2,7 +2,7 @@
 // theme re-apply and cross-page copy. Both are invoked from the Properties
 // panel, where a silent no-op would read as "Properties doesn't work".
 import { describe, expect, it } from 'vitest'
-import { useEditorStore, selectCurrentPage } from './editorStore.js'
+import { autoMobileLayout, useEditorStore, selectCurrentPage } from './editorStore.js'
 
 const s = () => useEditorStore.getState()
 
@@ -858,5 +858,55 @@ describe('embed box manual flag', () => {
     const id = oneEmbed()
     s().setLayout(id, { x: 80, y: 90 })
     expect(embed().props._boxManual).toBeFalsy()
+  })
+})
+
+describe('mobile auto arrange', () => {
+  it('does not reserve flow gaps for hidden or fixed mobile elements', () => {
+    const layout = autoMobileLayout([
+      { id: 'first', type: 'text', props: { text: 'First' }, layout: { x: 0, y: 0, w: 300, h: 40 } },
+      { id: 'hidden', type: 'text', hiddenMobile: true, props: { text: 'Hidden' }, layout: { x: 0, y: 50, w: 300, h: 200 } },
+      { id: 'fixed', type: 'button', props: { text: 'Fixed', scrollBehavior: 'fixed' }, layout: { x: 0, y: 60, w: 160, h: 48 } },
+      { id: 'last', type: 'text', props: { text: 'Last' }, layout: { x: 0, y: 300, w: 300, h: 40 } },
+    ], 390)
+
+    expect(layout.hidden).toBeUndefined()
+    expect(layout.fixed).toBeUndefined()
+    expect(layout.last.y).toBe(layout.first.y + layout.first.h + 16)
+  })
+
+  it('stacks region children, grows the region, and moves the following region down', () => {
+    s().loadSchema({
+      theme: {},
+      pages: [{
+        id: 'p1', name: 'Home', mobileWidth: 390, mobileManual: true,
+        components: [
+          {
+            id: 'region-one', type: 'region', props: { contentWidth: 980 },
+            layout: { x: 0, y: 0, w: 1000, h: 180 },
+            mobileLayout: { x: 0, y: 0, w: 390, h: 180 },
+            children: [
+              { id: 'heading', type: 'heading', props: { text: 'A heading that wraps on a phone' }, layout: { x: 20, y: 20, w: 440, h: 60 } },
+              { id: 'copy', type: 'text', props: { text: 'A paragraph below the heading.' }, layout: { x: 520, y: 20, w: 420, h: 60 } },
+            ],
+          },
+          {
+            id: 'region-two', type: 'region', props: { contentWidth: 980 }, children: [],
+            layout: { x: 0, y: 180, w: 1000, h: 220 },
+            mobileLayout: { x: 0, y: 180, w: 390, h: 220 },
+          },
+        ],
+      }],
+    })
+    s().selectPage('p1')
+    s().autoArrangeMobile()
+
+    const [first, second] = selectCurrentPage(useEditorStore.getState()).components
+    expect(first.children[0].mobileLayout).toMatchObject({ x: 16, y: 16, w: 358 })
+    expect(first.children[1].mobileLayout.y).toBeGreaterThan(first.children[0].mobileLayout.y)
+    const childBottom = first.children[1].mobileLayout.y + first.children[1].mobileLayout.h
+    expect(first.mobileLayout.h).toBeGreaterThan(childBottom)
+    expect(second.mobileLayout.y).toBe(first.mobileLayout.h)
+    expect(selectCurrentPage(useEditorStore.getState()).mobileManual).toBe(false)
   })
 })

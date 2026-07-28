@@ -2,16 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getProfile, updateProfile, uploadAvatar } from '../api/profile.js'
 import { fetchMe } from '../api/auth.js'
-import { listSites, createSite, deleteSite } from '../api/sites.js'
+import { listSites, createSite, deleteSite, cloneSite, getSite } from '../api/sites.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
-import { orderSites } from '../utils/siteSort.js'
+import { formatRelativeActivity, orderSites } from '../utils/siteSort.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
-import SitePreview from '../components/dashboard/SitePreview.jsx'
+import OwnerSiteCard from '../components/dashboard/OwnerSiteCard.jsx'
 import DashboardHeader, { DashboardAvatar } from '../components/dashboard/DashboardHeader.jsx'
 import {
-  ArrowRightIcon,
   CheckIcon,
+  ClockIcon,
   EyeIcon,
   FileIcon,
   GithubIcon,
@@ -22,16 +22,25 @@ import {
   PlusIcon,
   SearchIcon,
   StarIcon,
-  TrashIcon,
   XSocialIcon,
 } from '../components/icons.jsx'
 import { profileLinks } from '../utils/profileLinks.js'
 import { useLanguage } from '../i18n/useLanguage.js'
 
 const LINK_ICONS = { website: LinkIcon, github: GithubIcon, twitter: XSocialIcon, instagram: InstagramIcon }
+const PINNED_PROJECTS_KEY = 'pwb_pinned_projects'
+
+function initialPinnedProjects() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PINNED_PROJECTS_KEY) || '[]')
+    return new Set(Array.isArray(stored) ? stored : [])
+  } catch {
+    return new Set()
+  }
+}
 
 export default function ProfilePage() {
-  const { t } = useLanguage()
+  const { language, t } = useLanguage()
   const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
   const navigate = useNavigate()
@@ -51,6 +60,10 @@ export default function ProfilePage() {
   const [sites, setSites] = useState([])
   const [sitesLoading, setSitesLoading] = useState(true)
   const [query, setQuery] = useState('')
+  const [siteFilter, setSiteFilter] = useState('all')
+  const [siteSort, setSiteSort] = useState('updated')
+  const [pinnedIds, setPinnedIds] = useState(initialPinnedProjects)
+  const [busyAction, setBusyAction] = useState('')
   const [newTitle, setNewTitle] = useState('')
   const [creating, setCreating] = useState(false)
 
@@ -77,13 +90,18 @@ export default function ProfilePage() {
       .finally(() => setSitesLoading(false))
   }, [])
 
-  const visibleSites = useMemo(() => orderSites(sites, query), [sites, query])
+  const visibleSites = useMemo(() => orderSites(sites, query, {
+    filter: siteFilter,
+    sort: siteSort,
+    pinnedIds,
+  }), [pinnedIds, query, siteFilter, siteSort, sites])
   const stats = useMemo(() => ({
     total: sites.length,
     published: sites.filter((site) => site.published).length,
     views: sites.reduce((total, site) => total + (site.view_count || 0), 0),
     favorites: sites.reduce((total, site) => total + (site.favorite_count || 0), 0),
   }), [sites])
+  const recentActivity = useMemo(() => orderSites(sites).slice(0, 4), [sites])
 
   useScrollRestore(!loading && !sitesLoading)
 
@@ -153,6 +171,54 @@ export default function ProfilePage() {
     }
   }
 
+  function onTogglePin(site) {
+    setPinnedIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(site.id)) next.delete(site.id)
+      else next.add(site.id)
+      localStorage.setItem(PINNED_PROJECTS_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  async function onDuplicate(site) {
+    setBusyAction(`duplicate-${site.id}`)
+    setError('')
+    try {
+      const copy = await cloneSite(site.slug)
+      setSites((previous) => [{
+        ...copy,
+        favorite_count: 0,
+        project_health: { score: 20, page_count: 1, seo_pages: 0, seo_total: 1 },
+      }, ...previous])
+    } catch (requestError) {
+      setError(apiError(requestError))
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  async function onExport(site) {
+    setBusyAction(`export-${site.id}`)
+    setError('')
+    try {
+      const project = await getSite(site.id)
+      const blob = new Blob([
+        JSON.stringify({ format: 'sitebuilder-project', version: 1, site: project }, null, 2),
+      ], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${site.slug || 'site'}.sitebuilder.json`
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (requestError) {
+      setError(apiError(requestError))
+    } finally {
+      setBusyAction('')
+    }
+  }
+
   const profileUser = {
     ...user,
     avatar_url: profile?.avatar_url || user?.avatar_url,
@@ -160,6 +226,13 @@ export default function ProfilePage() {
     username: profile?.username || user?.username,
   }
   const profileName = profileUser.display_name || profileUser.username || t('Creator')
+  const launchSteps = [
+    { done: Boolean(profile?.display_name && profile?.bio), label: t('Complete your public profile') },
+    { done: sites.length > 0, label: t('Create your first project') },
+    { done: stats.published > 0, label: t('Publish a site') },
+    { done: stats.views > 0, label: t('Get your first visitor') },
+  ]
+  const completedLaunchSteps = launchSteps.filter((step) => step.done).length
 
   return (
     <div className="dashboard-page">
@@ -267,6 +340,7 @@ export default function ProfilePage() {
         )}
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.55fr)]">
+          <div className="space-y-6">
           <section className="dashboard-section-card p-5 sm:p-6" aria-labelledby="profile-details-heading">
             <p className="dashboard-kicker">{t('Account')}</p>
             <h2 id="profile-details-heading" className="mt-1 text-lg font-bold text-[var(--studio-text)]">{t('Profile details')}</h2>
@@ -362,6 +436,48 @@ export default function ProfilePage() {
             )}
           </section>
 
+          <section className="dashboard-section-card p-5" aria-labelledby="launch-checklist-heading">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="dashboard-kicker">{t('Launch checklist')}</p>
+                <h2 id="launch-checklist-heading" className="mt-1 font-bold text-[var(--studio-text)]">{t('Make your workspace ready')}</h2>
+              </div>
+              <span className="text-xs font-bold text-[var(--studio-accent-hover)]">{completedLaunchSteps}/{launchSteps.length}</span>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--studio-control)]">
+              <span className="block h-full rounded-full bg-[var(--studio-accent)]" style={{ width: `${completedLaunchSteps / launchSteps.length * 100}%` }} />
+            </div>
+            <div className="mt-4 space-y-2.5">
+              {launchSteps.map((step) => (
+                <div key={step.label} className="flex items-center gap-2 text-xs">
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${step.done ? 'border-[var(--studio-success)] bg-[var(--studio-success)] text-white' : 'border-[var(--studio-border)] text-[var(--studio-text-faint)]'}`}>
+                    {step.done && <CheckIcon size={12} />}
+                  </span>
+                  <span className={step.done ? 'text-[var(--studio-text-muted)] line-through' : 'font-medium text-[var(--studio-text)]'}>{step.label}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {recentActivity.length > 0 && (
+            <section className="dashboard-section-card p-5" aria-labelledby="activity-heading">
+              <p className="dashboard-kicker">{t('Activity')}</p>
+              <h2 id="activity-heading" className="mt-1 font-bold text-[var(--studio-text)]">{t('Recent changes')}</h2>
+              <div className="mt-4 space-y-3">
+                {recentActivity.map((site) => (
+                  <Link key={site.id} to={`/editor/${site.id}`} className="flex items-start gap-3 rounded-lg p-1.5 hover:bg-[var(--studio-control-hover)]">
+                    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--studio-control)] text-[var(--studio-text-muted)]"><ClockIcon size={13} /></span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-semibold text-[var(--studio-text)]">{site.title}</span>
+                      <span className="mt-0.5 block text-[10px] text-[var(--studio-text-faint)]">{t('Edited {time}', { time: formatRelativeActivity(site.updated_at, language) })}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+          </div>
+
           <section id="projects" className="dashboard-section-card min-w-0 p-5 sm:p-6" aria-labelledby="projects-heading">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -383,14 +499,28 @@ export default function ProfilePage() {
             </div>
 
             {sites.length > 0 && (
-              <div className="relative mt-5 max-w-sm">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--studio-text-faint)]"><SearchIcon size={15} /></span>
-                <input
-                  className="studio-input w-full py-2 pl-9 pr-3 text-sm"
-                  placeholder={t('Search your sites…')}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
+              <div className="mt-5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--studio-text-faint)]"><SearchIcon size={15} /></span>
+                  <input
+                    className="studio-input w-full py-2 pl-9 pr-3 text-sm"
+                    placeholder={t('Search your sites…')}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </div>
+                <select aria-label={t('Filter projects')} value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="studio-input min-h-9 px-3 text-xs font-semibold">
+                  <option value="all">{t('All projects')}</option>
+                  <option value="published">{t('Published')}</option>
+                  <option value="draft">{t('Drafts')}</option>
+                  <option value="pinned">{t('Pinned')}</option>
+                </select>
+                <select aria-label={t('Sort projects')} value={siteSort} onChange={(event) => setSiteSort(event.target.value)} className="studio-input min-h-9 px-3 text-xs font-semibold">
+                  <option value="updated">{t('Recently updated')}</option>
+                  <option value="name">{t('Name')}</option>
+                  <option value="views">{t('Most viewed')}</option>
+                  <option value="favorites">{t('Most favorited')}</option>
+                </select>
               </div>
             )}
 
@@ -406,45 +536,16 @@ export default function ProfilePage() {
             ) : (
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 {visibleSites.map((site) => (
-                  <article key={site.id} className="group overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] transition hover:-translate-y-0.5 hover:shadow-[var(--studio-shadow)]">
-                    <Link to={`/editor/${site.id}`} className="block bg-[var(--studio-control)] p-2">
-                      <SitePreview site={site} source="owner" height={145} />
-                    </Link>
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h3 className="truncate font-semibold text-[var(--studio-text)]">{site.title}</h3>
-                          <p className="mt-0.5 truncate text-[11px] text-[var(--studio-text-faint)]">/site/{site.slug}</p>
-                        </div>
-                        <span className={`dashboard-status ${site.published ? 'dashboard-status-live' : ''}`}>
-                          {site.published ? t('Published') : t('Draft')}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex items-center gap-4 text-[11px] text-[var(--studio-text-faint)]">
-                        <span className="flex items-center gap-1"><EyeIcon size={13} /> {(site.view_count || 0).toLocaleString()}</span>
-                        <span className="flex items-center gap-1"><StarIcon size={13} /> {(site.favorite_count || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2">
-                        <Link to={`/editor/${site.id}`} className="studio-btn studio-btn-accent min-h-8 px-3">
-                          {t('Continue editing')} <ArrowRightIcon size={14} />
-                        </Link>
-                        {site.published && (
-                          <Link to={`/site/${site.slug}`} title={t('View live site')} className="studio-icon-btn">
-                            <GlobeIcon size={15} />
-                          </Link>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => onDelete(site.id)}
-                          className="studio-icon-btn ml-auto hover:text-[var(--studio-danger)]"
-                          title={t('Delete site')}
-                          aria-label={`${t('Delete site')}: ${site.title}`}
-                        >
-                          <TrashIcon size={15} />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
+                  <OwnerSiteCard
+                    key={site.id}
+                    site={site}
+                    isPinned={pinnedIds.has(site.id)}
+                    onTogglePin={onTogglePin}
+                    onDelete={({ id }) => onDelete(id)}
+                    onDuplicate={onDuplicate}
+                    onExport={onExport}
+                    busyAction={busyAction}
+                  />
                 ))}
               </div>
             )}

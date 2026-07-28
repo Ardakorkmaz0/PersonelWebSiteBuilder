@@ -213,7 +213,7 @@ export default function PublicToolbar({ site, pages = [], activePageId, onNaviga
 
       {showCode && (
         <div
-          className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4"
+          className="studio-theme-surface studio-overlay fixed inset-0 z-[140] flex items-center justify-center p-4"
           onClick={() => setShowCode(false)}
         >
           <div
@@ -254,7 +254,7 @@ export default function PublicToolbar({ site, pages = [], activePageId, onNaviga
 
       {showReport && (
         <div
-          className="studio-theme-surface fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4"
+          className="studio-theme-surface studio-overlay fixed inset-0 z-[140] flex items-center justify-center p-4"
           onClick={() => setShowReport(false)}
         >
           <div

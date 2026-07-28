@@ -29,6 +29,8 @@ describe('BlockLibrary', () => {
     localStorage.setItem('pwb_language', 'en')
     renderLibrary()
     expect(screen.getByText('Block library')).toBeInTheDocument()
+    // Fixed canvas navbars use z-index 100+; app chrome must stay above them.
+    expect(document.querySelector('[data-block-library]')).toHaveClass('z-[2147483000]')
     // Category rail: All blocks + Sections + one per palette type (desktop nav
     // + mobile chip row render each label twice; assert via the desktop nav).
     expect(screen.getAllByText('All blocks').length).toBeGreaterThan(0)

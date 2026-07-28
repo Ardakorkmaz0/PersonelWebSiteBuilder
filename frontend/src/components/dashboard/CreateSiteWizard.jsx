@@ -148,12 +148,12 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
         : importName || t('Pasted code')
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3" onClick={close}>
+    <div className="studio-theme-surface studio-overlay fixed inset-0 z-[80] flex items-center justify-center p-3" onClick={close}>
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-site-title"
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] text-[var(--studio-text)] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center gap-3 border-b border-[#e5e7eb] px-5 py-4">
@@ -162,7 +162,7 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
             <p className="text-xs text-[#6b7280]">{t('Step {current} of 3', { current: step + 1 })}</p>
           </div>
           <div className="flex gap-1" aria-hidden="true">
-            {[0, 1, 2].map((index) => <span key={index} className={`h-1.5 w-8 rounded-full ${index <= step ? 'bg-[#4f46e5]' : 'bg-[#e5e7eb]'}`} />)}
+            {[0, 1, 2].map((index) => <span key={index} className={`h-1.5 w-8 rounded-full ${index <= step ? 'bg-[var(--studio-accent)]' : 'bg-[var(--studio-border)]'}`} />)}
           </div>
           <button type="button" aria-label={t('Close')} onClick={close} className="rounded-lg px-2 py-1 text-[#6b7280] hover:bg-[#f3f4f6]">✕</button>
         </header>
@@ -187,7 +187,7 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
                         if (!item.variants.length && startMode === 'template') setStartMode('blank')
                       }}
                       aria-pressed={categoryId === item.id}
-                      className={`flex items-center gap-3 rounded-xl border p-3 text-left ${categoryId === item.id ? 'border-[#4f46e5] bg-[#eef2ff]' : 'border-[#e5e7eb] hover:bg-[#f9fafb]'}`}
+                      className={`flex items-center gap-3 rounded-xl border p-3 text-left ${categoryId === item.id ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]' : 'border-[var(--studio-border)] hover:bg-[var(--studio-control-hover)]'}`}
                     >
                       <span className="text-xl">{item.icon}</span>
                       <span className="min-w-0"><strong className="block text-sm text-[#111827]">{t(item.name)}</strong><span className="line-clamp-2 text-xs text-[#6b7280]">{t(item.desc)}</span></span>
@@ -209,7 +209,7 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
                       type="button"
                       onClick={() => setStartMode(mode.id)}
                       aria-pressed={effectiveMode === mode.id}
-                      className={`flex items-start gap-2.5 rounded-xl border p-3 text-left ${effectiveMode === mode.id ? 'border-[#4f46e5] bg-[#eef2ff]' : 'border-[#e5e7eb] hover:bg-[#f9fafb]'}`}
+                      className={`flex items-start gap-2.5 rounded-xl border p-3 text-left ${effectiveMode === mode.id ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]' : 'border-[var(--studio-border)] hover:bg-[var(--studio-control-hover)]'}`}
                     >
                       <span className="text-lg" aria-hidden>{mode.icon}</span>
                       <span className="min-w-0"><strong className="block text-sm text-[#111827]">{t(mode.name)}</strong><span className="text-xs text-[#6b7280]">{t(mode.desc)}</span></span>
@@ -224,7 +224,7 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
                     <legend className="mb-2 text-sm font-semibold text-[#374151]">{t('Content language')}</legend>
                     <div className="flex gap-2">
                       {[['tr', 'Türkçe'], ['en', 'English']].map(([value, label]) => (
-                        <button key={value} type="button" onClick={() => setContentLanguage(value)} aria-pressed={contentLanguage === value} className={`rounded-lg border px-4 py-2 text-sm font-semibold ${contentLanguage === value ? 'border-[#4f46e5] bg-[#eef2ff] text-[#4f46e5]' : 'border-[#d1d5db] text-[#374151]'}`}>{label}</button>
+                        <button key={value} type="button" onClick={() => setContentLanguage(value)} aria-pressed={contentLanguage === value} className={`rounded-lg border px-4 py-2 text-sm font-semibold ${contentLanguage === value ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : 'border-[var(--studio-border-strong)] text-[var(--studio-text)]'}`}>{label}</button>
                       ))}
                     </div>
                   </fieldset>

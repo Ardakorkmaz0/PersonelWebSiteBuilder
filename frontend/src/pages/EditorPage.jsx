@@ -1894,7 +1894,7 @@ export default function EditorPage() {
           className={`hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide 2xl:inline-block ${
             currentPageIsHtml
               ? 'bg-[#eef2ff] text-[#4f46e5]'
-              : 'bg-[#f1f5f9] text-[#475569]'
+              : 'bg-[var(--studio-control)] text-[var(--studio-text-muted)]'
           }`}
         >
           {currentPageIsHtml ? t('HTML Upload Mode') : t('Canvas Mode')}
@@ -2084,7 +2084,7 @@ export default function EditorPage() {
               onClick={() => {
                 if (window.confirm(t('Stop updating {name} on Save?', { name: localFile.name }))) unlinkLocalFile()
               }}
-              className="hidden shrink-0 cursor-pointer items-center gap-1 rounded-full border border-[#c7e0c7] bg-[#f1faf1] px-2 py-0.5 text-xs text-[#15803d] hover:bg-[#e3f3e3] xl:flex"
+              className="studio-status-success hidden shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:brightness-110 xl:flex"
             >
               <SaveIcon size={13} /> {localFile.name}
             </span>

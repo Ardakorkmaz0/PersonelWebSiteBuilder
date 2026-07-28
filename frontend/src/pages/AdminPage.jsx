@@ -313,7 +313,7 @@ function UsersTab() {
                               <button
                                 onClick={() => onModerate(u, s, 'unpublish')}
                                 disabled={busy === s.id}
-                                className="font-medium text-[#b45309] hover:underline disabled:opacity-50"
+                                className="font-medium text-[var(--studio-warning)] hover:underline disabled:opacity-50"
                               >
                                 {t('Unpublish')}
                               </button>
@@ -505,7 +505,7 @@ export default function AdminPage() {
   useScrollRestore()
 
   return (
-    <div className="studio-theme-surface min-h-screen bg-[var(--studio-shell)] text-[var(--studio-text)]">
+    <div className="studio-theme-surface studio-brand-backdrop min-h-screen bg-[var(--studio-shell)] text-[var(--studio-text)]">
       <header className="sticky top-0 z-10 border-b border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_92%,transparent)] backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">

@@ -848,6 +848,10 @@ export const TURKISH_TRANSLATIONS = {
   '{model} was not trained for tool calling. Switch to qwen2.5 or llama3.1 via Settings → Model.': '{model}, araç çağırma için eğitilmemiştir. Ayarlar → Model üzerinden qwen2.5 veya llama3.1’e geçin.',
   'Try a starter:': 'Başlangıç önerilerinden birini deneyin:',
   'Or start from a look:': 'Ya da hazır bir görünümle başlayın:',
+  // Error boundary
+  'This screen ran into a problem': 'Bu ekranda bir sorun oluştu',
+  'Your design is still in memory — trying again reloads this screen without losing it. Reloading the page keeps only what was last saved.': 'Tasarımınız hâlâ bellekte — yeniden denemek bu ekranı kaybetmeden yeniler. Sayfayı yenilemek yalnızca en son kaydedileni korur.',
+  'Reload the page': 'Sayfayı yenile',
   'Theme colors': 'Tema renkleri',
   // AI panel — settings sheet and suggestions
   'AI settings': 'AI ayarları',

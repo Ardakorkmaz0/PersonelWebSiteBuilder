@@ -403,7 +403,7 @@ export default function CodeProjectPage() {
           <button type="button" onClick={guardedGoBack} title={t('Go back')} className="px-1 text-sm font-medium text-[#6b7280] hover:text-[#111827]">&larr;</button>
         </div>
         <span className="flex shrink-0 items-center gap-1.5 truncate text-sm font-semibold text-[#111827]"><FolderOpenIcon size={15} className="text-[#6b7280]" /> {rootName}</span>
-        <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-[#475569]">
+        <span className="shrink-0 rounded-full bg-[var(--studio-control)] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-[var(--studio-text-muted)]">
           {t('Code Project')}
         </span>
         {dirty.size > 0 && (

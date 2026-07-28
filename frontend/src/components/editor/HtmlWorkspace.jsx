@@ -1449,7 +1449,7 @@ function HtmlWorkspace({
     `studio-segment-btn ${active ? 'studio-segment-btn-active' : ''}`
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
+    <div className="studio-theme-surface flex min-h-0 min-w-0 flex-1">
       {/* The page/file list lives in the editor's left rail (Files tab) —
           the workspace itself is just the toolbar + stage. */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -1626,7 +1626,7 @@ function HtmlWorkspace({
         {mode === 'live' ? (
           liveUrl ? (
             <main className="relative flex min-h-0 flex-1 flex-col bg-[#0b0b0b]">
-              <div className="flex items-center gap-2 border-b border-[#e5e7eb] bg-[#fffbe6] px-4 py-1.5 text-xs text-[#7a5d00]">
+              <div className="studio-status-warning flex items-center gap-2 border-b px-4 py-1.5 text-xs">
                 <LightbulbIcon size={14} aria-hidden className="shrink-0" />
                 <span className="truncate">
                   {t('Embedded preview of')} <span className="font-mono">{liveUrl}</span>. {t('Blank? Many servers (Django) block embedding — click')} <strong>{t('Open live window')}</strong>; {t('it stays in sync and auto-reloads every time you Save.')}

@@ -9,6 +9,7 @@ import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import LanguageProvider from './i18n/LanguageProvider.jsx'
 import { useLanguage } from './i18n/useLanguage.js'
 import UiThemeProvider from './ui/UiThemeProvider.jsx'
+import AppErrorBoundary from './components/AppErrorBoundary.jsx'
 
 // The editor and the public preview are the heaviest screens — together they
 // pull in the entire renderer, all eight AI templates, the schema validators,
@@ -45,8 +46,11 @@ export default function App() {
     <UiThemeProvider>
       <LanguageProvider>
         <BrowserRouter>
-          <Suspense fallback={<FullScreenLoading />}>
-            <Routes>
+          {/* Inside the router so it can key itself on the path, and around
+              Suspense so a chunk that fails to load is caught too. */}
+          <AppErrorBoundary>
+            <Suspense fallback={<FullScreenLoading />}>
+              <Routes>
           <Route path="/login" element={<ThemedPage><LoginPage /></ThemedPage>} />
           <Route path="/register" element={<ThemedPage><RegisterPage /></ThemedPage>} />
           <Route path="/forgot-password" element={<ThemedPage><ForgotPasswordPage /></ThemedPage>} />
@@ -108,11 +112,12 @@ export default function App() {
             }
           />
           <Route path="/site/:slug" element={<PreviewPage />} />
-          <Route path="/review/:token" element={<ReviewPage />} />
+          <Route path="/review/:token" element={<ThemedPage><ReviewPage /></ThemedPage>} />
           <Route path="/u/:id" element={<ThemedPage><PublicProfilePage /></ThemedPage>} />
           <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+              </Routes>
+            </Suspense>
+          </AppErrorBoundary>
         </BrowserRouter>
       </LanguageProvider>
     </UiThemeProvider>

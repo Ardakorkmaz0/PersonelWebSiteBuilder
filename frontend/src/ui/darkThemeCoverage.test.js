@@ -51,17 +51,14 @@ const ALLOWED = new Map([
   ['#166534', 'inline success text'],
   ['#fafaff', 'palette swatch background'],
   ['#111827', 'wizard preview frame border'],
-  // Known gaps from the dark-theme audit. Fixing one removes its entry.
-  ['#f1faf1', 'AUDIT: linked-file chip background, unreadable in dark mode'],
-  ['#c7e0c7', 'AUDIT: linked-file chip border, pairs with #f1faf1'],
-  ['#e3f3e3', 'AUDIT: linked-file chip hover, pairs with #f1faf1'],
-  ['#f1f5f9', 'AUDIT: light pill background in a dark UI'],
-  ['#475569', 'AUDIT: pairs with #f1f5f9'],
-  ['#eae7e0', 'AUDIT: segmented-toggle track, inverts the selected state'],
-  ['#76736b', 'AUDIT: segmented-toggle inactive label'],
-  ['#fffbe6', 'AUDIT: HtmlWorkspace warning bar background'],
-  ['#7a5d00', 'AUDIT: pairs with #fffbe6'],
-  ['#b45309', 'AUDIT: admin amber label, 3.9:1 on a dark panel'],
+  // The dark-theme audit's findings were fixed rather than accepted: the
+  // linked-file chip, the two light pills, the warning bar and the admin label
+  // now use tokens or the shared .studio-status-* treatment. The segmented
+  // control is the one that keeps its literals: its warm paper look is
+  // deliberate in light mode, so dark mode redefines the RELATIONSHIP (recessed
+  // track, raised active pill) in index.css instead of flattening the colours.
+  ['#eae7e0', 'segmented-toggle track — warm in light, remapped in index.css'],
+  ['#76736b', 'segmented-toggle inactive label — remapped in index.css'],
 ])
 
 function walk(dir, out = []) {

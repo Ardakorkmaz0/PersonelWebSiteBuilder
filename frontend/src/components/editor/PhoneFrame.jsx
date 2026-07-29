@@ -195,6 +195,14 @@ export default function PhoneFrame({ screenWidth, screenHeight, model: suppliedM
         style={{
           position: 'relative',
           width: screenWidth,
+          // A DEFINITE height, not just a minimum. A phone screen is a fixed
+          // viewport, and children fill it with `height: 100%` — which only
+          // resolves against a definite parent height. With min-height alone
+          // the percentage was indefinite, so the HTML preview's iframe fell
+          // back to a replaced element's default 150px: the page showed its
+          // first ~150px and the rest of the screen was this div's white
+          // background. Both View and Edit, every device, every document.
+          height: screenHeight,
           minHeight: screenHeight,
           overflow: 'hidden',
           borderRadius: model.screenRadius,

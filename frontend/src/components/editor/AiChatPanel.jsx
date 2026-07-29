@@ -135,6 +135,8 @@ export default function AiChatPanel({
   // What the assistant is saying and doing WHILE it works, so a multi-round
   // turn is legible as it happens instead of arriving all at once at the end.
   const [progress, setProgress] = useState([])
+  // The model's own checklist for a multi-part request, ticked as it goes.
+  const [planSteps, setPlanSteps] = useState([])
   const [error, setError] = useState('')
   const scrollerRef = useRef(null)
   const textareaRef = useRef(null)
@@ -422,6 +424,7 @@ export default function AiChatPanel({
     setMessages((m) => [...m, userMsg])
     setDraft('')
     setProgress([])
+    setPlanSteps([])
     setBusy(true)
     try {
       // ----- HTML mode: ask the model for a full HTML document --------------
@@ -518,6 +521,10 @@ export default function AiChatPanel({
             if (event?.type === 'calls' && event.calls?.length) {
               setProgress((items) => [...items, { kind: 'calls', calls: event.calls }])
             }
+            // The plan is one live checklist, not one entry per update.
+            if (event?.type === 'plan' && event.steps?.length) {
+              setPlanSteps(event.steps)
+            }
           },
         })
       } catch (requestError) {
@@ -603,6 +610,7 @@ export default function AiChatPanel({
     } finally {
       setBusy(false)
       setProgress([])
+      setPlanSteps([])
     }
   }
 
@@ -878,6 +886,29 @@ export default function AiChatPanel({
         )}
         {busy && (
           <div className="space-y-1.5">
+            {/* The model's checklist for a multi-part request, ticked live. It
+                is also the gate: the turn cannot sign off while a step is
+                open, so this list is a promise rather than decoration. */}
+            {planSteps.length > 0 && (
+              <ul className="space-y-1 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-2.5 py-2">
+                {planSteps.map((step, i) => (
+                  <li key={`${step.text}-${i}`} className="flex items-start gap-2 text-[11px] leading-snug">
+                    <span
+                      className={`mt-px grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full text-[8px] font-bold ${
+                        step.done
+                          ? 'bg-[var(--studio-success)] text-white'
+                          : 'border border-[var(--studio-border-strong)] text-[var(--studio-text-faint)]'
+                      }`}
+                    >
+                      {step.done ? '✓' : i + 1}
+                    </span>
+                    <span className={step.done ? 'text-[var(--studio-text-faint)] line-through' : 'text-[var(--studio-text)]'}>
+                      {step.text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {/* What it said it would do, and what has landed so far. Both were
                 invisible before: the model's plan was discarded by the runtime
                 and the actions only appeared once the whole turn finished. */}

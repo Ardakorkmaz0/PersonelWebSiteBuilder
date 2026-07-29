@@ -217,6 +217,90 @@ function checkId(id, label = 'Component') {
 // Each declaration maps 1:1 onto a store action. We expose enough surface for
 // layout-level edits + content + styles + custom code, but stop short of
 // destructive bulk ops the model might abuse.
+// ---------------------------------------------------------------------------
+// Multi-step work: the plan, and the check that the work actually finished
+// ---------------------------------------------------------------------------
+//
+// A one-line request ("make the button red") never needed either of these. A
+// site build does: "build me a portfolio" is eight or nine pieces of work, and
+// the model would do three of them, write a confident sign-off and stop. The
+// loop believed it, because a turn ended whenever no tool call came back.
+//
+// Two independent guards, because they fail in different ways:
+//   the plan   the model's own checklist, so it can see what it has left —
+//              and so the user can see what was promised
+//   the sweep  a check the model cannot talk its way out of: template copy
+//              still sitting on the page means the page is not finished,
+//              whatever the sign-off says
+
+// Reset per turn by runAiPromptOnce.
+let activePlan = null
+
+export function getActivePlan() {
+  return activePlan ? { steps: activePlan.steps.map((s) => ({ ...s })) } : null
+}
+
+export function resetPlan() {
+  activePlan = null
+}
+
+function planRemaining() {
+  return (activePlan?.steps || []).filter((s) => !s.done)
+}
+
+// Props whose value is copy a visitor reads — the ones that must not stay at
+// their template default after the user asked for a site about something.
+const COPY_PROPS = ['text', 'title', 'heading', 'subheading', 'brand', 'label', 'quote', 'author', 'caption']
+
+let placeholderCache = null
+
+// Every string the templates and the component registry ship as filler.
+function placeholderStrings() {
+  if (placeholderCache) return placeholderCache
+  const out = new Set()
+  const add = (v) => {
+    if (typeof v === 'string' && v.trim().length > 2) out.add(v.trim())
+  }
+  for (const def of Object.values(registry)) {
+    for (const [k, v] of Object.entries(def?.defaultProps || {})) {
+      if (COPY_PROPS.includes(k)) add(v)
+    }
+  }
+  for (const tpl of Object.values(TEMPLATES)) {
+    for (const step of tpl?.steps || []) {
+      for (const [k, v] of Object.entries(step?.props || {})) {
+        if (COPY_PROPS.includes(k)) add(v)
+        if (k === 'links' && Array.isArray(v)) v.forEach((l) => add(l?.label))
+      }
+    }
+  }
+  placeholderCache = out
+  return out
+}
+
+// Components on the current page still carrying template/registry filler.
+// Exact matches only: the moment the model writes its own copy this goes quiet,
+// and a user who genuinely wants "Contact Me" on a button only ever sees this
+// as a nudge to the model, never as an error.
+export function unfinishedPlaceholders(limit = 12) {
+  const fillers = placeholderStrings()
+  const out = []
+  const walk = (comps) => {
+    for (const c of comps || []) {
+      for (const k of COPY_PROPS) {
+        const v = c.props?.[k]
+        if (typeof v === 'string' && fillers.has(v.trim())) {
+          out.push({ id: c.id, type: c.type, field: k, value: v.trim() })
+          break
+        }
+      }
+      if (Array.isArray(c.children)) walk(c.children)
+    }
+  }
+  walk(selectCurrentPage(useEditorStore.getState())?.components)
+  return out.slice(0, limit)
+}
+
 function toolDeclarations() {
   const types = Object.keys(registry)
   return [
@@ -233,6 +317,33 @@ function toolDeclarations() {
           y: { type: 'number', description: 'Optional initial y in design pixels.' },
         },
         required: ['type'],
+      },
+    },
+    {
+      name: 'setPlan',
+      description:
+        'Declare the steps for a request that has more than one part (build a site, restyle a page, add a section AND its contents). Call this FIRST, before any edit. The steps are shown to the user and you must not finish the turn with any of them left undone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          steps: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '2 to 10 short steps, in the order you will do them.',
+          },
+        },
+        required: ['steps'],
+      },
+    },
+    {
+      name: 'completePlanStep',
+      description: 'Mark one step of your plan as finished, as soon as it is. Use the 1-based number from setPlan.',
+      parameters: {
+        type: 'object',
+        properties: {
+          step: { type: 'number', description: '1-based index of the step you just finished.' },
+        },
+        required: ['step'],
       },
     },
     {
@@ -639,6 +750,35 @@ export function executeTool(rawName, args) {
       store.addComponent(a.type, Math.round(a.x || 24), Math.round(a.y || 24), a.parentId || null)
       const newId = firstNewId(collectIds(useEditorStore.getState().schema), before)
       return { ok: true, id: newId }
+    }
+    case 'setPlan': {
+      const steps = (Array.isArray(a.steps) ? a.steps : [])
+        .map((s) => String(s || '').trim())
+        .filter(Boolean)
+        .slice(0, 10)
+      if (steps.length < 2) {
+        return { ok: false, error: 'A plan needs at least 2 steps. For a single change, skip setPlan and just make it.' }
+      }
+      activePlan = { steps: steps.map((text) => ({ text, done: false })) }
+      return {
+        ok: true,
+        steps: steps.map((text, i) => `${i + 1}. ${text}`),
+        note: 'Mark each one with completePlanStep as you finish it. Do not sign off with steps left.',
+      }
+    }
+    case 'completePlanStep': {
+      if (!activePlan) return { ok: false, error: 'No plan yet — call setPlan first.' }
+      const index = Number(a.step)
+      if (!Number.isInteger(index) || index < 1 || index > activePlan.steps.length) {
+        return { ok: false, error: `step must be between 1 and ${activePlan.steps.length}.` }
+      }
+      activePlan.steps[index - 1].done = true
+      const left = planRemaining()
+      return {
+        ok: true,
+        remaining: left.map((s) => s.text),
+        note: left.length ? `${left.length} step(s) still to do.` : 'Plan complete.',
+      }
     }
     case 'updateProps':
       return checkId(a.id) || (store.updateProps(a.id, a.patch || {}), { ok: true })
@@ -1127,6 +1267,14 @@ function pickTextField(type, hint) {
     case 'input':
     case 'select':
       return 'label'
+    // Both of these carry visible copy that templates ship a default for, and
+    // both used to answer "no editable text field" — so the one tool the prompt
+    // pushes for rewriting copy could not touch a site's brand or its section
+    // titles, and the model was left arguing with a refusal.
+    case 'navbar':
+      return 'brand'
+    case 'section':
+      return 'heading'
     default:
       return null
   }
@@ -2050,12 +2198,29 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [], onProgress
   // Everything the model said along the way, in order — its plan, not just its
   // sign-off.
   const say = []
+  // One plan per turn.
+  resetPlan()
+  // Identical calls already applied this turn. A model that loses track of its
+  // own work re-sends the same edit round after round; replaying it wastes a
+  // round and, for anything that appends, quietly doubles the page.
+  const appliedOnce = new Map()
   // Each self-correction fires at most once per turn — a model that keeps
   // making the same mistake would otherwise burn every remaining round on it.
   let repairedIds = false
   let repairedArgs = false
   let nudgedEmpty = false
-  for (let round = 0; round < maxRounds; round += 1) {
+  let nudgedPlan = false
+  let sweptPlaceholders = false
+  // Set once applyTemplate lands: only then is leftover filler copy evidence
+  // of unfinished work rather than a design the user chose.
+  let builtFromTemplate = false
+  // A one-line edit is done in a round or two; a site build is not. Rather
+  // than paying for a high ceiling on every turn, the budget grows only while
+  // the model is still landing changes against an unfinished plan — so a stuck
+  // model stops early and a working one is not cut off mid-build.
+  const HARD_MAX_ROUNDS = 9
+  let limit = maxRounds
+  for (let round = 0; round < limit; round += 1) {
     const isFirst = round === 0
     const parts = await callProvider(
       apiKey,
@@ -2071,11 +2236,50 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [], onProgress
 
     if (functionCalls.length === 0) {
       finalText = textParts.map((p) => p.text).join('\n').trim() || 'Done.'
+      // The sign-off is a claim, and a multi-step request is exactly where it
+      // used to be false: three of nine things done, then a confident summary.
+      // Check the claim against the model's own plan and against the page
+      // before accepting it. Each challenge fires once — a model that cannot
+      // finish should not burn every remaining round being asked again.
+      const left = planRemaining()
+      if (!nudgedPlan && left.length > 0 && round < limit - 1) {
+        nudgedPlan = true
+        turns.push({ role: 'model', text: finalText })
+        turns.push({
+          role: 'user',
+          text:
+            `You signed off with ${left.length} of your own plan steps unfinished:\n`
+            + left.map((s, i) => `${i + 1}. ${s.text}`).join('\n')
+            + '\n\nDo them now with real tool calls, then mark each with completePlanStep. '
+            + 'If a step turned out to be unnecessary, mark it complete and say why in your final message.\n\n'
+            + 'Current schema:\n'
+            + JSON.stringify(schemaSnapshot(), null, 2),
+        })
+        continue
+      }
+      // A template lays down filler copy on purpose, and the whole point of
+      // "build me a site about X" is that none of it should survive. This is
+      // the check the model cannot talk its way out of: the strings are still
+      // on the page or they are not.
+      const leftovers = builtFromTemplate ? unfinishedPlaceholders() : []
+      if (!sweptPlaceholders && leftovers.length > 0 && round < limit - 1) {
+        sweptPlaceholders = true
+        turns.push({ role: 'model', text: finalText })
+        turns.push({
+          role: 'user',
+          text:
+            `${leftovers.length} component(s) still carry the template's default copy, so the page is not about the user's topic yet:\n`
+            + leftovers.map((p) => `- ${p.id} (${p.type}) ${p.field}: "${p.value}"`).join('\n')
+            + '\n\nRewrite every one of them with replaceComponentText / updateProps so it fits what the user asked for. '
+            + 'Do not stop while any default string is left.',
+        })
+        continue
+      }
       // Self-check: the model signed off without ever changing anything, yet
       // the user asked for a change. That reply is a lie the user only finds
       // out about by looking at the canvas — so challenge it once, with the
       // live schema, before accepting it.
-      if (!nudgedEmpty && calls.length === 0 && looksLikeChangeRequest(prompt) && round < maxRounds - 1) {
+      if (!nudgedEmpty && calls.length === 0 && looksLikeChangeRequest(prompt) && round < limit - 1) {
         nudgedEmpty = true
         turns.push({ role: 'model', text: finalText })
         turns.push({
@@ -2115,10 +2319,20 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [], onProgress
     const toolResults = functionCalls.map(({ functionCall }) => {
       const args = functionCall.args || {}
       let result
-      try {
-        result = executeTool(functionCall.name, args)
-      } catch (e) {
-        result = { ok: false, error: String(e?.message || e) }
+      const fingerprint = `${normaliseToolName(functionCall.name)}:${JSON.stringify(args)}`
+      if (appliedOnce.has(fingerprint)) {
+        result = {
+          ok: true,
+          skipped: true,
+          note: 'You already made this exact call this turn — it was not run again. Move on to the next step.',
+        }
+      } else {
+        try {
+          result = executeTool(functionCall.name, args)
+        } catch (e) {
+          result = { ok: false, error: String(e?.message || e) }
+        }
+        if (result?.ok) appliedOnce.set(fingerprint, true)
       }
       const entry = { name: functionCall.name, args, result }
       calls.push(entry)
@@ -2130,6 +2344,14 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [], onProgress
     // spinner, so a long turn is legible while it runs rather than a surprise
     // at the end.
     report({ type: 'calls', calls: calls.slice(-toolResults.length), round })
+    if (activePlan) report({ type: 'plan', steps: getActivePlan().steps })
+
+    // Buy another round only while the model is both PROGRESSING and not done:
+    // real changes landed this round and its own plan still has steps left.
+    const landed = toolResults.some((r) => r.response?.ok && !r.response?.skipped)
+    if (landed && planRemaining().length > 0 && limit < HARD_MAX_ROUNDS && round === limit - 1) {
+      limit += 1
+    }
 
     // Two failure modes after applyTemplate, both fixed by force-feeding a
     // fresh snapshot into the next round:
@@ -2148,6 +2370,7 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [], onProgress
     // costs at most one extra round (still within maxRounds=3) but fixes
     // both classes of failure in one shot.
     const appliedTemplate = toolResults.find((r) => r.name === 'applyTemplate' && r.response?.ok)
+    if (appliedTemplate) builtFromTemplate = true
     const staleCalls = toolResults.filter(
       (r) => r.name !== 'applyTemplate' && r.response && r.response.ok === false && /not found/i.test(r.response.error || ''),
     )

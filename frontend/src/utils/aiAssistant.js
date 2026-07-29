@@ -1879,7 +1879,73 @@ ${s}
   return { html, coerced: true, grafted: false }
 }
 
-export async function runAiPrompt(prompt, { maxRounds = 5, history = [] } = {}) {
+// ---------------------------------------------------------------------------
+// Conversation memory: what the assistant actually DID.
+//
+// The chat used to hand the model text turns only, so its own actions were
+// erased between messages. It would finish a turn saying "Done.", and next
+// message that single word was the entire record of what happened — which is
+// why "now make it bigger" so often landed on the wrong thing, and why it would
+// redo work it had already done. The tool calls are replayed as real tool turns
+// now, which is the shape every provider already understands.
+//
+// Bounded on purpose: the last few calls are what "it"/"that" refer to, and
+// replaying a whole session would cost more tokens than the snapshot itself.
+const JOURNAL_CALLS = 14
+
+function compactResult(result) {
+  if (!result || typeof result !== 'object') return { ok: false }
+  const out = { ok: result.ok !== false }
+  if (result.id) out.id = result.id
+  if (result.error) out.error = String(result.error).slice(0, 140)
+  return out
+}
+
+// Chat messages → provider-neutral turns. Anything with `calls` becomes the
+// model's tool turn plus its results; `note` entries are facts the model must
+// know but the user never said out loud (a rejected preview, most of all).
+export function historyToTurns(history, limit = JOURNAL_CALLS) {
+  const out = []
+  let budget = limit
+  const messages = history || []
+  // Count backwards so the calls that survive the budget are the RECENT ones.
+  const keepCalls = new Map()
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i]
+    if (!m || m.role !== 'tools' || !Array.isArray(m.calls)) continue
+    if (budget <= 0) { keepCalls.set(i, []); continue }
+    const kept = m.calls.slice(-budget)
+    budget -= kept.length
+    keepCalls.set(i, kept)
+  }
+  messages.forEach((m, i) => {
+    if (!m) return
+    if (m.role === 'tools') {
+      const calls = keepCalls.get(i) || []
+      if (!calls.length) return
+      out.push({
+        role: 'model',
+        functionCalls: calls.map((c) => ({ name: c.name, args: c.args || {} })),
+      })
+      out.push({
+        role: 'tool',
+        toolResults: calls.map((c) => ({ name: c.name, response: compactResult(c.result) })),
+      })
+      return
+    }
+    if (m.role === 'note' && m.text) {
+      out.push({ role: 'user', text: `[system note] ${m.text}` })
+      return
+    }
+    if (m.text) out.push({ role: m.role === 'model' ? 'model' : 'user', text: m.text })
+    // A note can also ride along on a normal message — that is how the chat
+    // records "the user rejected this" next to the line it showed them.
+    if (m.note) out.push({ role: 'user', text: `[system note] ${m.note}` })
+  })
+  return out
+}
+
+export async function runAiPrompt(prompt, { maxRounds = 5, history = [], onProgress } = {}) {
   const candidates = readyProviders()
   if (!candidates.length) {
     throw new Error('No AI provider is set up yet. Open Settings (Properties → AI Assistant) and paste any free key, or pick Local AI if you have Ollama running.')
@@ -1898,7 +1964,7 @@ export async function runAiPrompt(prompt, { maxRounds = 5, history = [] } = {}) 
       try { window.dispatchEvent(new Event('storage')) } catch { /* ignore */ }
     }
     try {
-      const result = await runAiPromptOnce(prompt, { maxRounds, history })
+      const result = await runAiPromptOnce(prompt, { maxRounds, history, onProgress })
       if (switchedFrom && switchedFrom !== p.id) {
         const fromLabel = AI_PROVIDERS.find((x) => x.id === switchedFrom)?.label || switchedFrom
         const toLabel = p.label
@@ -1946,7 +2012,10 @@ export async function runAiPrompt(prompt, { maxRounds = 5, history = [] } = {}) 
   throw lastErr
 }
 
-async function runAiPromptOnce(prompt, { maxRounds = 5, history = [] } = {}) {
+async function runAiPromptOnce(prompt, { maxRounds = 5, history = [], onProgress } = {}) {
+  const report = (event) => {
+    try { onProgress?.(event) } catch { /* a broken listener must not kill the turn */ }
+  }
   const provider = getProvider()
   const providerInfo = AI_PROVIDERS.find((p) => p.id === provider)
   const apiKey = getApiKey(provider)
@@ -1968,10 +2037,8 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [] } = {}) {
   //   { role: 'model', text }                          (assistant text)
   //   { role: 'model', functionCalls: [{name, args}] } (assistant tool call)
   //   { role: 'tool', toolResults: [{name, response}] }
-  const turns = (history || [])
-    .filter((m) => m && m.text)
-    .slice(-HISTORY_TURNS)
-    .map((m) => ({ role: m.role === 'model' ? 'model' : 'user', text: m.text }))
+  // Text turns AND the assistant's own past actions — see historyToTurns.
+  const turns = historyToTurns((history || []).slice(-HISTORY_TURNS))
 
   // We ship the snapshot in turn 1 only. Subsequent rounds reuse the model's
   // memory of it — the function-call tool results we feed back already tell
@@ -1980,6 +2047,9 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [] } = {}) {
 
   let finalText = ''
   const calls = []
+  // Everything the model said along the way, in order — its plan, not just its
+  // sign-off.
+  const say = []
   // Each self-correction fires at most once per turn — a model that keeps
   // making the same mistake would otherwise burn every remaining round on it.
   let repairedIds = false
@@ -2023,6 +2093,16 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [] } = {}) {
       break
     }
 
+    // Models narrate what they are ABOUT to do in the same response as the
+    // tool calls ("I'll add a hero band, then a footer"). That sentence used to
+    // be dropped on the floor — the one round where the assistant says what it
+    // intends, thrown away, leaving the user watching a spinner. Surface it.
+    const narration = textParts.map((p) => p.text).join('\n').trim()
+    if (narration) {
+      say.push(narration)
+      report({ type: 'say', text: narration, round })
+    }
+
     // Record the model's tool-calling turn.
     turns.push({
       role: 'model',
@@ -2046,6 +2126,10 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [] } = {}) {
       return { name: functionCall.name, response: result }
     })
     turns.push({ role: 'tool', toolResults })
+    // Each round's work, as it lands — the panel shows this instead of a
+    // spinner, so a long turn is legible while it runs rather than a surprise
+    // at the end.
+    report({ type: 'calls', calls: calls.slice(-toolResults.length), round })
 
     // Two failure modes after applyTemplate, both fixed by force-feeding a
     // fresh snapshot into the next round:
@@ -2116,7 +2200,7 @@ async function runAiPromptOnce(prompt, { maxRounds = 5, history = [] } = {}) {
     }
   }
 
-  return { text: finalText || 'Done.', toolCallCount: calls.length, calls }
+  return { text: finalText || 'Done.', toolCallCount: calls.length, calls, say }
 }
 
 // ---- Scoped, single-component AI edit -------------------------------------

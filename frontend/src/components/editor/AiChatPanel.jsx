@@ -132,6 +132,9 @@ export default function AiChatPanel({
   const THROTTLE_MS = 2500
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  // What the assistant is saying and doing WHILE it works, so a multi-round
+  // turn is legible as it happens instead of arriving all at once at the end.
+  const [progress, setProgress] = useState([])
   const [error, setError] = useState('')
   const scrollerRef = useRef(null)
   const textareaRef = useRef(null)
@@ -418,6 +421,7 @@ export default function AiChatPanel({
     const userMsg = { id: rand(), role: 'user', text: trimmed }
     setMessages((m) => [...m, userMsg])
     setDraft('')
+    setProgress([])
     setBusy(true)
     try {
       // ----- HTML mode: ask the model for a full HTML document --------------
@@ -486,16 +490,36 @@ export default function AiChatPanel({
       // can't bleed into the current request.
       const lastDivider = messages.findLastIndex((m) => m.role === 'divider')
       const since = lastDivider >= 0 ? messages.slice(lastDivider + 1) : messages
+      // The assistant's OWN actions go back with the history, not just its
+      // prose. Without them "now make it bigger" had nothing to point at: the
+      // model's entire record of the last turn was the word "Done."
       const history = [...since, userMsg]
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', text: m.text || '' }))
+        .flatMap((m) => {
+          if (m.role === 'tools') return m.calls?.length ? [{ role: 'tools', calls: m.calls }] : []
+          if (m.role !== 'user' && m.role !== 'assistant') return []
+          // `note` rides along for facts the user never says out loud — a
+          // rejected preview, above all. historyToTurns turns it into a turn.
+          return [{ role: m.role === 'assistant' ? 'model' : 'user', text: m.text || '', note: m.note }]
+        })
         // Drop the just-added user turn since runAiPrompt re-adds it with the
         // schema snapshot.
         .slice(0, -1)
       const previewBase = captureEditorPreviewState()
       let aiResult
       try {
-        aiResult = await runAiPrompt(trimmed, { history })
+        aiResult = await runAiPrompt(trimmed, {
+          history,
+          // Narrate the turn as it happens: what the model says it is about to
+          // do, then each action as it lands.
+          onProgress: (event) => {
+            if (event?.type === 'say' && event.text) {
+              setProgress((items) => [...items, { kind: 'say', text: event.text }])
+            }
+            if (event?.type === 'calls' && event.calls?.length) {
+              setProgress((items) => [...items, { kind: 'calls', calls: event.calls }])
+            }
+          },
+        })
       } catch (requestError) {
         restoreEditorPreviewState(previewBase)
         throw requestError
@@ -541,12 +565,17 @@ export default function AiChatPanel({
         })
         return
       }
+      // What the model said on its way through, minus a line identical to its
+      // sign-off. Kept in the transcript so "what was it going to do?" is
+      // answerable after the fact, not only while the spinner is up.
+      const plan = (aiResult.say || []).filter((line) => line && line !== text)
       if (callsArr.length > 0 && !rescued) {
         const summary = allFailed ? buildFailureSummary(callsArr, t) : text
         setMessages((m) => [
           ...m,
+          ...(plan.length ? [{ id: rand(), role: 'assistant', text: plan.join('\n\n'), plan: true }] : []),
           { id: rand(), role: 'tools', calls: callsArr },
-          { id: rand(), role: 'assistant', text: summary, allFailed },
+          { id: rand(), role: 'assistant', text: summary, allFailed, calls: callsArr },
         ])
       } else if (rescued) {
         // Rescue won — show the recovered call + a friendly note explaining
@@ -573,6 +602,7 @@ export default function AiChatPanel({
       setError(e?.message || String(e))
     } finally {
       setBusy(false)
+      setProgress([])
     }
   }
 
@@ -604,7 +634,12 @@ export default function AiChatPanel({
     setMessages((items) => [
       ...items,
       ...(pendingChange.calls?.length ? [{ id: rand(), role: 'tools', calls: pendingChange.calls }] : []),
-      { id: rand(), role: 'assistant', text: `${pendingChange.summary} ${t('Accepted and applied.')}` },
+      {
+        id: rand(),
+        role: 'assistant',
+        text: `${pendingChange.summary} ${t('Accepted and applied.')}`,
+        calls: pendingChange.calls || [],
+      },
     ])
     setPendingChange(null)
     setError('')
@@ -614,7 +649,15 @@ export default function AiChatPanel({
     if (!pendingChange) return
     setMessages((items) => [
       ...items,
-      { id: rand(), role: 'assistant', text: t('Change rejected — your site was left untouched.') },
+      {
+        id: rand(),
+        role: 'assistant',
+        text: t('Change rejected — your site was left untouched.'),
+        // Machine-facing, and in English whatever the UI language: the model
+        // reads this next turn and must not carry on as if it had landed.
+        note: 'The user REJECTED the change you proposed. NOTHING was applied — '
+          + 'the page is exactly as it was before those tool calls. Do not build on them.',
+      },
     ])
     setPendingChange(null)
     setError('')
@@ -808,6 +851,8 @@ export default function AiChatPanel({
               text={m.text}
               toolCallCount={m.toolCallCount}
               allFailed={m.allFailed}
+              calls={m.calls}
+              plan={m.plan}
             />
           ),
         )}
@@ -832,13 +877,30 @@ export default function AiChatPanel({
           </div>
         )}
         {busy && (
-          <div className="flex items-center gap-2 text-xs text-[var(--studio-text-muted)]">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--studio-text-muted)]" />
-            <span>
-              {messages[messages.length - 1]?.role === 'user'
-                ? t('Thinking with {model}…', { model: modelLabel })
-                : t('Applying changes to the canvas…')}
-            </span>
+          <div className="space-y-1.5">
+            {/* What it said it would do, and what has landed so far. Both were
+                invisible before: the model's plan was discarded by the runtime
+                and the actions only appeared once the whole turn finished. */}
+            {progress.map((step, i) => (
+              step.kind === 'say' ? (
+                <p
+                  key={`say-${i}`}
+                  className="rounded-[12px] rounded-tl-[2px] border border-dashed border-[var(--studio-border)] px-3 py-2 text-xs leading-snug text-[var(--studio-text-muted)]"
+                >
+                  {step.text}
+                </p>
+              ) : (
+                <ToolsStrip key={`calls-${i}`} calls={step.calls} />
+              )
+            ))}
+            <div className="flex items-center gap-2 text-xs text-[var(--studio-text-muted)]">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--studio-text-muted)]" />
+              <span>
+                {progress.length > 0
+                  ? t('Applying changes to the canvas…')
+                  : t('Thinking with {model}…', { model: modelLabel })}
+              </span>
+            </div>
           </div>
         )}
         {/* Follow-ups — "what next?" answered from the page as it stands after
@@ -1109,8 +1171,19 @@ function UserBubble({ text }) {
   )
 }
 
-function AssistantBubble({ text, toolCallCount, allFailed }) {
+function AssistantBubble({ text, toolCallCount, allFailed, calls, plan }) {
   const { t } = useLanguage()
+  // The model's sign-off is prose it wrote before knowing the outcome, and a
+  // cheerful "Done." over three rejected calls is exactly the lie the user
+  // walks away with. This caption is counted from the results themselves.
+  const tally = (calls || []).reduce(
+    (acc, c) => {
+      if (c?.result?.ok === false) acc.failed += 1
+      else acc.applied += 1
+      return acc
+    },
+    { applied: 0, failed: 0 },
+  )
   // Failure-aware tinting: red border + light pink background so a wall of
   // ✗ pills above this bubble can't be mistaken for a successful change.
   const base =
@@ -1126,9 +1199,23 @@ function AssistantBubble({ text, toolCallCount, allFailed }) {
     : undefined
   return (
     <div className="flex flex-col items-start gap-1">
-      <div className={bubbleCls} style={failedStyle}>
+      <div
+        className={plan ? `${base} border-dashed border-[var(--studio-border)] text-[var(--studio-text-muted)]` : bubbleCls}
+        style={plan ? undefined : failedStyle}
+      >
         {text || t('Done.')}
       </div>
+      {tally.applied + tally.failed > 0 && (
+        <span className="text-[10px] text-[var(--studio-text-faint)]">
+          {t('{count} changes applied', { count: tally.applied })}
+          {tally.failed > 0 && (
+            <span className="text-[var(--studio-danger)]">
+              {' · '}
+              {t('{count} could not be applied', { count: tally.failed })}
+            </span>
+          )}
+        </span>
+      )}
       {toolCallCount === 0 && (
         <span className="text-[10px] italic text-[var(--studio-danger)]">
           {t('No tools called — the canvas was not changed.')}

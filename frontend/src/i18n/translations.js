@@ -913,6 +913,8 @@ export const TURKISH_TRANSLATIONS = {
   'Errors:': 'Hatalar:',
   'Try rephrasing the request, or use /undo if anything did slip through.': 'İsteği yeniden yazmayı deneyin veya istenmeyen bir değişiklik olduysa /undo kullanın.',
   'No tools called — the canvas was not changed.': 'Hiçbir araç çağrılmadı; tuval değiştirilmedi.',
+  '{count} changes applied': '{count} değişiklik uygulandı',
+  '{count} could not be applied': '{count} tanesi uygulanamadı',
   'Failed': 'Başarısız',
   'unknown': 'bilinmiyor',
   'Args': 'Parametreler',

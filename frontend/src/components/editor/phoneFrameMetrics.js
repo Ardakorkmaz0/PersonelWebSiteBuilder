@@ -106,6 +106,28 @@ const MODEL_BY_WIDTH = {
   430: 'iphone-island',
 }
 
+// The screen height that goes with a phone width, for the canvases that have no
+// device to ask. Every mobile preset in the toolbar carries its device height as
+// the "fold", so that value wins when it is set; this is the fallback for the
+// preset that has none (Standard mobile) and for custom widths.
+const SCREEN_HEIGHT_BY_WIDTH = {
+  360: 780,
+  375: 667,
+  384: 824,
+  390: 844,
+  393: 852,
+  412: 915,
+  430: 932,
+}
+
+export function phoneScreenHeight(width) {
+  const w = Math.round(Number(width) || 0)
+  if (SCREEN_HEIGHT_BY_WIDTH[w]) return SCREEN_HEIGHT_BY_WIDTH[w]
+  // Contemporary phones sit around 2.16:1; clamp so an odd custom width still
+  // produces a screen someone could hold.
+  return Math.min(1400, Math.max(480, Math.round((w || 390) * 2.16)))
+}
+
 export function phoneModel(width, fold) {
   if (Math.round(Number(width) || 0) === 390 && Number(fold) === 0) return PHONE_MODELS.generic
   return PHONE_MODELS[MODEL_BY_WIDTH[Math.round(Number(width) || 0)]] || PHONE_MODELS['iphone-island']

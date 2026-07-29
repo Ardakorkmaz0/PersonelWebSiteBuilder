@@ -5,7 +5,7 @@ import { HTML_ALLOW, PUBLIC_HTML_SANDBOX } from '../../utils/htmlRuntime.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import PhoneFrame from './PhoneFrame.jsx'
-import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
+import { phoneFrameH, phoneFrameW, phoneModel, phoneScreenHeight } from './phoneFrameMetrics.js'
 import BrowserFrame from './BrowserFrame.jsx'
 import MobileBrowserChrome from './MobileBrowserChrome.jsx'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
@@ -170,10 +170,14 @@ export default function CanvasPreview({
   // Plain component pages (no pinned/JS content) render the React tree directly,
   // scaled to fit the panel width; the workspace scrolls vertically through the
   // full (scaled) page — the lighter path, identical output to the edit canvas.
+  //
+  // On mobile that means a real device: the screen is the size of the screen the
+  // user picked and the design scrolls inside it, matching both the edit canvas
+  // and the iframe path above. Desktop keeps the tall artboard.
+  const deviceH = mobile ? (fold > 0 ? fold : phoneScreenHeight(width)) : 0
+  const devicePageH = Math.max(200, deviceH - mobileChromeH)
   const frameWidth = width + bezelW
-  // Content-height artboard: the chrome is ADDED so the design stays whole (see
-  // the same split in Canvas.jsx — device viewports subtract, artboards grow).
-  const frameHeight = artboardHeight + mobileChromeH + bezelH
+  const frameHeight = (mobile ? deviceH : artboardHeight) + bezelH
   const scale = workspace.w ? Math.min(1, workspace.w / frameWidth) : 1
   const pageContent = (
     <div
@@ -182,7 +186,7 @@ export default function CanvasPreview({
       style={{
         position: 'relative',
         width,
-        minHeight: artboardHeight,
+        minHeight: mobile ? Math.max(artboardHeight, devicePageH) : artboardHeight,
         overflowX: 'clip',
         ...(mobile ? {} : { boxShadow: PAGE_SHEET_SHADOW }),
       }}
@@ -195,7 +199,9 @@ export default function CanvasPreview({
         designWidth={width}
         flowMode={flowMode}
       />
-      {fold > 0 && (
+      {/* Same as the edit canvas: on the phone the screen's bottom edge already
+          IS the fold, so a dashed rule across the design says nothing. */}
+      {fold > 0 && !mobile && (
         <div className="pointer-events-none absolute inset-x-0" style={{ top: fold, zIndex: 40 }}>
           <div className="border-t-2 border-dashed border-amber-500" />
           <span className="absolute right-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
@@ -203,6 +209,23 @@ export default function CanvasPreview({
           </span>
         </div>
       )}
+    </div>
+  )
+
+  // The phone's screen: a fixed viewport the design scrolls inside, so View
+  // shows the same thing the visitor's thumb will.
+  const deviceScreen = (
+    <div
+      data-builder-device-viewport={deviceH}
+      className="overflow-x-hidden overflow-y-auto"
+      style={{
+        width,
+        height: devicePageH,
+        scrollbarWidth: 'thin',
+        scrollbarColor: 'rgba(15,23,42,.28) transparent',
+      }}
+    >
+      {pageContent}
     </div>
   )
 
@@ -225,11 +248,11 @@ export default function CanvasPreview({
           }}
         >
           {mobile ? (
-            <PhoneFrame screenWidth={width} screenHeight={artboardHeight + mobileChromeH} model={phone}>
+            <PhoneFrame screenWidth={width} screenHeight={deviceH} model={phone}>
               {mobileBrowser ? (
                 <MobileBrowserChrome
                   screenWidth={width}
-                  screenHeight={artboardHeight}
+                  screenHeight={devicePageH}
                   model={phone}
                   siteTitle={browserSiteTitle}
                   favicon={browserFavicon}
@@ -241,9 +264,9 @@ export default function CanvasPreview({
                   onEditFavicon={onBrowserFaviconEdit}
                   onAddressChange={onBrowserAddressChange}
                 >
-                  {pageContent}
+                  {deviceScreen}
                 </MobileBrowserChrome>
-              ) : pageContent}
+              ) : deviceScreen}
             </PhoneFrame>
           ) : desktopBrowser ? (
             <BrowserFrame

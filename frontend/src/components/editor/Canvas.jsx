@@ -9,17 +9,26 @@ import FlowCanvasItem from './FlowCanvasItem.jsx'
 import CanvasMultiActions from './CanvasMultiActions.jsx'
 import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import PhoneFrame from './PhoneFrame.jsx'
-import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
+import { phoneFrameH, phoneFrameW, phoneModel, phoneScreenHeight } from './phoneFrameMetrics.js'
 import BrowserFrame from './BrowserFrame.jsx'
 import MobileBrowserChrome from './MobileBrowserChrome.jsx'
+import { CANVAS_SCROLLER_ID } from '../../utils/dragAutoScroll.js'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 
 // One editable free canvas, rendered at the active breakpoint's chosen artboard
 // width. PC edits each component's `layout`; Mobile edits its `mobileLayout` on a
-// true device-width phone canvas (1:1, no scaling) — independent designs. The
-// "fold" guide (if set) marks the visible screen height for the chosen device.
+// true device-width phone canvas — independent designs. The "fold" guide (if
+// set) marks the visible screen height for the chosen device.
+//
+// The two breakpoints frame the page differently, because the things they
+// represent are different: the desktop artboard is as tall as the page and
+// scrolls in the workspace, while the phone is a DEVICE with a fixed screen
+// that the design scrolls inside — the same shape View and HTML mode use.
+
+// Vertical room kept clear for the caption under the phone when fitting it.
+const CAPTION_ROOM = 44
 export default function Canvas({
   brushMode = false,
   brushColor = '#4f46e5',
@@ -64,6 +73,7 @@ export default function Canvas({
   const marqueeRef = useRef(null)
   const [marquee, setMarquee] = useState(null)
   const [editorWidth, setEditorWidth] = useState(0)
+  const [editorHeight, setEditorHeight] = useState(0)
   const setCanvasRef = (el) => { canvasElRef.current = el; setNodeRef(el) }
   // The theme's font is what the published page paints in; reflect it on the
   // canvas root so brand-new components inherit it immediately AND the empty
@@ -82,28 +92,49 @@ export default function Canvas({
   const fold = isMobile ? mobileFold : pcFold
   const background = isMobile ? bgMobile : bg
   const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
-  const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
   const phone = phoneModel(canvasW, fold)
   const desktopBrowser = !isMobile && browserFrame
   const mobileBrowser = isMobile && browserFrame
-  // Here the screen is sized to the DESIGN, not to a device viewport: the whole
-  // page has to stay visible while you edit it. So the browser chrome is added
-  // to the frame rather than taken out of it — the opposite of the fixed-device
-  // preview in HtmlWorkspace, and for the same reason (never clip the artboard).
+  // The phone is a DEVICE, not a strip of paper: its screen is the size of the
+  // screen you picked and the design scrolls inside it, exactly as it does in
+  // View and in HTML mode. Growing the body to the height of the page made the
+  // frame meaningless — a 4000px iPhone tells you nothing about what fits.
+  const deviceH = fold > 0 ? fold : phoneScreenHeight(canvasW)
   const mobileChromeH = mobileBrowser ? mobileBrowserChromeH(phone) : 0
+  // What the page gets after the browser has taken its share, as on the device.
+  const pageH = Math.max(200, deviceH - mobileChromeH)
+  // The artboard fills the screen at minimum — a short design should paint its
+  // background edge to edge — and grows past it with the content, which is what
+  // there is to scroll.
+  const minHeight = isMobile
+    ? Math.max(contentH, pageH)
+    : fold > 0 ? Math.max(contentH, fold + 40) : contentH
   const frameW = canvasW + (isMobile ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0)
-  const frameH = minHeight + mobileChromeH
-    + (isMobile ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0)
+  const frameH = isMobile
+    ? deviceH + phoneFrameH(phone)
+    : minHeight + (desktopBrowser ? browserFrameH() : 0)
   useEffect(() => {
     const el = scrollElRef.current
     if (!el) return undefined
-    const update = () => setEditorWidth(Math.max(1, el.clientWidth - 64))
+    const update = () => {
+      setEditorWidth(Math.max(1, el.clientWidth - 64))
+      // Room for the padding and the caption under the phone.
+      setEditorHeight(Math.max(1, el.clientHeight - 64 - CAPTION_ROOM))
+    }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
   }, [isMobile])
-  const canvasScale = !editorWidth ? 1 : Math.min(1, editorWidth / frameW)
+  // A phone also has to fit the workspace VERTICALLY — it is a fixed object
+  // now, so a short editor window scales the whole device down instead of
+  // letting it run off the bottom. The desktop artboard still fits on width
+  // alone: it is as tall as the page and scrolls in the workspace.
+  const canvasScale = Math.min(
+    1,
+    editorWidth ? editorWidth / frameW : 1,
+    isMobile && editorHeight ? editorHeight / frameH : 1,
+  )
 
   // Bounding box of a MULTI selection (top-level free-canvas items), so a group
   // toolbar (align / distribute / delete) can float above it.
@@ -328,7 +359,11 @@ export default function Canvas({
         />
       )}
 
-      {fold > 0 && (
+      {/* The fold guide only has something to say where the artboard is taller
+          than the screen it will be seen on. On the phone the screen IS the
+          fold now — its bottom edge is the line — so drawing it again just puts
+          a dashed rule across the design. */}
+      {fold > 0 && !isMobile && (
         <div
           className="pointer-events-none absolute inset-x-0"
           style={{ top: fold, zIndex: 40 }}
@@ -432,11 +467,32 @@ export default function Canvas({
   }
 
   if (isMobile) {
+    // The screen is the viewport; the design scrolls inside it. This element
+    // carries the canvas-scroller id, so everything that reasons about "the
+    // visible band" — pinned bars, the full-height rail, drag auto-scroll —
+    // now reads the phone's screen instead of the editor window.
+    const screen = (
+      <div
+        id={CANVAS_SCROLLER_ID}
+        data-builder-device-viewport={deviceH}
+        className="overflow-x-hidden overflow-y-auto"
+        style={{
+          width: canvasW,
+          height: pageH,
+          // A phone has a hairline overlay scrollbar, not a desktop gutter —
+          // a chunky grey bar down the side of the mockup reads as part of the
+          // design being previewed.
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(15,23,42,.28) transparent',
+        }}
+      >
+        {canvas}
+      </div>
+    )
     return (
       <main
-        id="canvas-scroll"
         ref={scrollElRef}
-        className="flex-1 overflow-x-hidden overflow-y-auto bg-[var(--studio-shell)] p-8"
+        className="flex-1 overflow-hidden bg-[var(--studio-shell)] p-8"
         onClickCapture={preventCanvasAnchorClicks}
       >
         <div
@@ -450,11 +506,11 @@ export default function Canvas({
               transformOrigin: 'top left',
             }}
           >
-            <PhoneFrame screenWidth={canvasW} screenHeight={minHeight + mobileChromeH} model={phone}>
+            <PhoneFrame screenWidth={canvasW} screenHeight={deviceH} model={phone}>
               {mobileBrowser ? (
                 <MobileBrowserChrome
                   screenWidth={canvasW}
-                  screenHeight={minHeight}
+                  screenHeight={pageH}
                   model={phone}
                   siteTitle={browserSiteTitle}
                   favicon={browserFavicon}
@@ -466,9 +522,9 @@ export default function Canvas({
                   onEditFavicon={onBrowserFaviconEdit}
                   onAddressChange={onBrowserAddressChange}
                 >
-                  {canvas}
+                  {screen}
                 </MobileBrowserChrome>
-              ) : canvas}
+              ) : screen}
             </PhoneFrame>
           </div>
         </div>
@@ -483,7 +539,7 @@ export default function Canvas({
 
   return (
     <main
-      id="canvas-scroll"
+      id={CANVAS_SCROLLER_ID}
       ref={scrollElRef}
       className="flex-1 overflow-x-hidden overflow-y-auto bg-[var(--studio-shell)] p-8"
       onClickCapture={preventCanvasAnchorClicks}

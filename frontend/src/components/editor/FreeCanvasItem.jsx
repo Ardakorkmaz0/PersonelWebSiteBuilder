@@ -3,6 +3,7 @@ import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
 import { snapDraggedRect } from '../../utils/snapping.js'
+import { beginDragScroll } from '../../utils/dragAutoScroll.js'
 import { embedAspectLock } from '../../utils/htmlSnippetSizing.js'
 import { fixedRailInset } from '../../utils/railInset.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
@@ -292,6 +293,8 @@ export default function FreeCanvasItem({
     if (pinMode === 'fixed' && !alreadyMulti) {
       const baseOffX = pinOffsetX
       const baseOffY = pinOffsetY
+      // A pinned bar is glued to the visible band, so its offsets are measured
+      // against the viewport, not the page: scrolling must NOT feed into them.
       const onMovePin = (ev) => {
         const dx = (ev.clientX - sx) / canvasScale
         const dy = (ev.clientY - sy) / canvasScale
@@ -329,10 +332,18 @@ export default function FreeCanvasItem({
       w: isMobile ? page.mobileWidth || 390 : page.canvasWidth || 1000,
       h: 0, // unbounded → vertical guides off the centre/bottom of the page
     }
-    function onMove(ev) {
+    // Holding the pointer near the top or bottom edge scrolls the canvas, so a
+    // long page can be reached in one drag. The scrolled distance is added to
+    // the pointer delta below — without it the item would slide out from under
+    // the finger by exactly however far the canvas moved.
+    const drag = beginDragScroll((p) => moveTo(p.x, p.y))
+
+    function moveTo(clientX, clientY) {
       const base = origins[component.id]
-      const rawX = viewportStretch ? 0 : base.x + (ev.clientX - sx) / canvasScale
-      const rawY = base.y + (ev.clientY - sy) / canvasScale
+      // The pointer delta is in SCREEN pixels (÷ zoom); the scroll distance
+      // already comes back in design pixels.
+      const rawX = viewportStretch ? 0 : base.x + (clientX - sx) / canvasScale
+      const rawY = base.y + (clientY - sy) / canvasScale + drag.scrolled()
       const snap = snapDraggedRect(
         { id: component.id, x: rawX, y: rawY, w, h },
         siblings,
@@ -355,9 +366,14 @@ export default function FreeCanvasItem({
       }
       setDragGuides(snap.guides)
     }
+    function onMove(ev) {
+      drag.track(ev)
+      moveTo(ev.clientX, ev.clientY)
+    }
     function onUp() {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      drag.stop()
       clearDragGuides()
     }
     window.addEventListener('pointermove', onMove)
@@ -374,9 +390,13 @@ export default function FreeCanvasItem({
     // Shape-locked embeds (profile photos, icons) keep a fixed box ratio so a
     // circular avatar can't be squashed into an oval.
     const aspect = embedAspectLock(component)
-    function onMove(ev) {
-      const dx = (ev.clientX - sx) / canvasScale
-      const dy = (ev.clientY - sy) / canvasScale
+    // Same deal as dragging: pulling the bottom handle past the visible band
+    // scrolls the canvas, and that distance counts as part of the pull.
+    const drag = beginDragScroll((p) => resizeTo(p.x, p.y))
+
+    function resizeTo(clientX, clientY) {
+      const dx = (clientX - sx) / canvasScale
+      const dy = (clientY - sy) / canvasScale + drag.scrolled()
       let { x: nx, y: ny, w: nw, h: nh } = orig
       if (dir.includes('e')) nw = Math.max(MIN, orig.w + dx)
       if (dir.includes('s')) nh = Math.max(MIN, orig.h + dy)
@@ -399,9 +419,14 @@ export default function FreeCanvasItem({
       }
       setLayout(component.id, { x: nx, y: ny, w: nw, h: nh })
     }
+    function onMove(ev) {
+      drag.track(ev)
+      resizeTo(ev.clientX, ev.clientY)
+    }
     function onUp() {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      drag.stop()
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)

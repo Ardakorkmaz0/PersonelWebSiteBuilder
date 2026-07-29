@@ -2521,7 +2521,7 @@ export default function EditorPage() {
                       <option value="custom">{t('Custom')} - {curW}px</option>
                     )}
                   </select>
-                  {viewport === 'pc' && canvasMode !== 'source' && (
+                  {canvasMode !== 'source' && (
                     <button
                       type="button"
                       onClick={toggleBrowserFrame}
@@ -2679,7 +2679,7 @@ export default function EditorPage() {
                             <input ref={resolutionHeightRef} key={`tool-height-${viewport}-${curFold}`} type="number" min="0" max="20000" defaultValue={curFold || ''} placeholder="—" aria-label={t('Custom height (px)')} className="studio-input min-w-0 flex-1 px-2 py-1.5 text-xs" />
                             <button type="button" onClick={applyCustomCanvasResolution} className="studio-btn studio-btn-secondary px-2">{t('Apply')}</button>
                           </div>
-                          {viewport === 'pc' && canvasMode !== 'source' && (
+                          {canvasMode !== 'source' && (
                             <button
                               type="button"
                               onClick={() => { toggleBrowserFrame(); setCanvasToolsOpen(false) }}
@@ -2762,7 +2762,7 @@ export default function EditorPage() {
                     onBrushUse={rememberBrushColor}
                     pendingPlace={pendingPlace}
                     onPlaceAt={placePendingAt}
-                    browserFrame={viewport === 'pc' && browserFrameEnabled}
+                    browserFrame={browserFrameEnabled}
                     browserSiteTitle={title}
                     browserFavicon={siteOptions?.seo?.favicon || siteOptions?.favicon || ''}
                     browserAddress={currentPage.canonicalUrl || customDomain || `${slug || 'preview'}.sitebuilder.local`}
@@ -2791,7 +2791,7 @@ export default function EditorPage() {
                     }
                     iframeHtml={componentViewHtml}
                     title={`${currentPage.name || 'Page'} preview`}
-                    browserFrame={viewport === 'pc' && browserFrameEnabled}
+                    browserFrame={browserFrameEnabled}
                     browserSiteTitle={title}
                     browserFavicon={siteOptions?.seo?.favicon || siteOptions?.favicon || ''}
                     browserAddress={currentPage.canonicalUrl || customDomain || `${slug || 'preview'}.sitebuilder.local`}

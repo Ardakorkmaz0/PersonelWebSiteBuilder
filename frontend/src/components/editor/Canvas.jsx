@@ -11,7 +11,8 @@ import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
 import BrowserFrame from './BrowserFrame.jsx'
-import { browserFrameH, browserFrameW } from './browserFrameMetrics.js'
+import MobileBrowserChrome from './MobileBrowserChrome.jsx'
+import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 
@@ -84,8 +85,15 @@ export default function Canvas({
   const minHeight = fold > 0 ? Math.max(contentH, fold + 40) : contentH
   const phone = phoneModel(canvasW, fold)
   const desktopBrowser = !isMobile && browserFrame
+  const mobileBrowser = isMobile && browserFrame
+  // Here the screen is sized to the DESIGN, not to a device viewport: the whole
+  // page has to stay visible while you edit it. So the browser chrome is added
+  // to the frame rather than taken out of it — the opposite of the fixed-device
+  // preview in HtmlWorkspace, and for the same reason (never clip the artboard).
+  const mobileChromeH = mobileBrowser ? mobileBrowserChromeH(phone) : 0
   const frameW = canvasW + (isMobile ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0)
-  const frameH = minHeight + (isMobile ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0)
+  const frameH = minHeight + mobileChromeH
+    + (isMobile ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0)
   useEffect(() => {
     const el = scrollElRef.current
     if (!el) return undefined
@@ -433,7 +441,7 @@ export default function Canvas({
       >
         <div
           className="mx-auto"
-          style={{ width: frameW * canvasScale, height: (minHeight + phoneFrameH(phone)) * canvasScale }}
+          style={{ width: frameW * canvasScale, height: frameH * canvasScale }}
         >
           <div
             style={{
@@ -442,8 +450,25 @@ export default function Canvas({
               transformOrigin: 'top left',
             }}
           >
-            <PhoneFrame screenWidth={canvasW} screenHeight={minHeight} model={phone}>
-              {canvas}
+            <PhoneFrame screenWidth={canvasW} screenHeight={minHeight + mobileChromeH} model={phone}>
+              {mobileBrowser ? (
+                <MobileBrowserChrome
+                  screenWidth={canvasW}
+                  screenHeight={minHeight}
+                  model={phone}
+                  siteTitle={browserSiteTitle}
+                  favicon={browserFavicon}
+                  address={browserAddress}
+                  pages={browserPages}
+                  currentPageId={browserCurrentPageId || page.id}
+                  onSelectPage={onBrowserPageSelect}
+                  onEditPage={onBrowserPageEdit}
+                  onEditFavicon={onBrowserFaviconEdit}
+                  onAddressChange={onBrowserAddressChange}
+                >
+                  {canvas}
+                </MobileBrowserChrome>
+              ) : canvas}
             </PhoneFrame>
           </div>
         </div>

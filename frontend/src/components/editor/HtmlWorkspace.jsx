@@ -10,7 +10,8 @@ import { DEVICES, isMobileDevice } from '../../utils/htmlDevices.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
 import BrowserFrame from './BrowserFrame.jsx'
-import { browserFrameH, browserFrameW } from './browserFrameMetrics.js'
+import MobileBrowserChrome from './MobileBrowserChrome.jsx'
+import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 import {
   DRAG_MIME,
   closestPlaceableBlock,
@@ -1013,6 +1014,7 @@ function HtmlWorkspace({
   const mobileDevice = isMobileDevice(device.id)
   const framedPhone = !isFit && !landscape && mobileDevice
   const desktopBrowser = browserFrame && !mobileDevice
+  const mobileBrowser = browserFrame && framedPhone
   const availableW = Math.max(1, stage.w - 24)
   const availableH = Math.max(1, stage.h - 24)
   const contentW = isFit
@@ -1024,6 +1026,11 @@ function HtmlWorkspace({
       ? device.w
       : device.h
   const phone = phoneModel(contentW, contentH)
+  // A phone screen is a FIXED viewport, so the browser chrome takes its pixels
+  // from the page, exactly as Safari and Chrome do on the device — the phone
+  // does not grow because a browser is running on it. This is what makes the
+  // frame worth having: what is left is the real above-the-fold area.
+  const pageH = mobileBrowser ? Math.max(200, contentH - mobileBrowserChromeH(phone)) : contentH
   const previewW = contentW + (framedPhone ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0)
   const previewH = contentH + (framedPhone ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0)
   const scale = Math.min(1, availableW / previewW || 1, availableH / previewH || 1)
@@ -1519,7 +1526,10 @@ function HtmlWorkspace({
             )}
           </div>
           {deviceControls}
-          {!mobileDevice && mode !== 'source' && mode !== 'live' && onBrowserFrameToggle && (
+          {/* Phones get the frame too — a browser runs there as well, and its
+              chrome is exactly what decides how much page fits on screen. Only
+              a landscape phone is left out: there is no bezel to put it in. */}
+          {(!mobileDevice || framedPhone) && mode !== 'source' && mode !== 'live' && onBrowserFrameToggle && (
             <button
               type="button"
               onClick={() => {
@@ -1777,7 +1787,25 @@ function HtmlWorkspace({
                 >
                   {framedPhone ? (
                     <PhoneFrame screenWidth={contentW} screenHeight={contentH} model={phone}>
-                      {stageIframe}
+                      {mobileBrowser ? (
+                        <MobileBrowserChrome
+                          screenWidth={contentW}
+                          screenHeight={pageH}
+                          model={phone}
+                          siteTitle={browserSiteTitle}
+                          favicon={browserFavicon}
+                          address={browserAddress}
+                          pages={browserPages}
+                          currentPageId={browserCurrentPageId}
+                          onSelectPage={onBrowserPageSelect}
+                          onEditPage={onBrowserPageEdit}
+                          onEditFavicon={onBrowserFaviconEdit}
+                          onAddressChange={onBrowserAddressChange}
+                          onBeforeReload={prepareForFrameChange}
+                        >
+                          {stageIframe}
+                        </MobileBrowserChrome>
+                      ) : stageIframe}
                     </PhoneFrame>
                   ) : desktopBrowser ? (
                     <BrowserFrame

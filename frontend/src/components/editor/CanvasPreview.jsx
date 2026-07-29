@@ -7,7 +7,8 @@ import { PAGE_SHEET_SHADOW } from './pageSheet.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
 import BrowserFrame from './BrowserFrame.jsx'
-import { browserFrameH, browserFrameW } from './browserFrameMetrics.js'
+import MobileBrowserChrome from './MobileBrowserChrome.jsx'
+import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 
 const WORKSPACE_PADDING = 64
 
@@ -38,7 +39,9 @@ export default function CanvasPreview({
   const [workspace, setWorkspace] = useState({ w: 0, h: 0 })
   const mobile = viewport === 'mobile'
   const desktopBrowser = !mobile && browserFrame
+  const mobileBrowser = mobile && browserFrame
   const phone = phoneModel(width, fold)
+  const mobileChromeH = mobileBrowser ? mobileBrowserChromeH(phone) : 0
   const bezelW = mobile ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0
   const bezelH = mobile ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0
   const components = page?.components || []
@@ -83,6 +86,9 @@ export default function CanvasPreview({
       Math.round((workspace.h || 560) / scale) - bezelH,
     )
     const frameH = viewportH + bezelH
+    // This one IS a device viewport — the page scrolls inside it — so the
+    // browser chrome takes its room from the page, the way it does on a phone.
+    const pageH = Math.max(200, viewportH - mobileChromeH)
     const inner = (
       <iframe
         title={title}
@@ -91,7 +97,7 @@ export default function CanvasPreview({
         allow={HTML_ALLOW}
         allowFullScreen
         className="block border-0 bg-white"
-        style={{ width, height: viewportH }}
+        style={{ width, height: pageH }}
       />
     )
     return (
@@ -115,7 +121,24 @@ export default function CanvasPreview({
           >
             {mobile ? (
               <PhoneFrame screenWidth={width} screenHeight={viewportH} model={phone}>
-                {inner}
+                {mobileBrowser ? (
+                  <MobileBrowserChrome
+                    screenWidth={width}
+                    screenHeight={pageH}
+                    model={phone}
+                    siteTitle={browserSiteTitle}
+                    favicon={browserFavicon}
+                    address={browserAddress}
+                    pages={browserPages}
+                    currentPageId={browserCurrentPageId || page?.id}
+                    onSelectPage={onBrowserPageSelect}
+                    onEditPage={onBrowserPageEdit}
+                    onEditFavicon={onBrowserFaviconEdit}
+                    onAddressChange={onBrowserAddressChange}
+                  >
+                    {inner}
+                  </MobileBrowserChrome>
+                ) : inner}
               </PhoneFrame>
             ) : desktopBrowser ? (
               <BrowserFrame
@@ -148,7 +171,9 @@ export default function CanvasPreview({
   // scaled to fit the panel width; the workspace scrolls vertically through the
   // full (scaled) page — the lighter path, identical output to the edit canvas.
   const frameWidth = width + bezelW
-  const frameHeight = artboardHeight + bezelH
+  // Content-height artboard: the chrome is ADDED so the design stays whole (see
+  // the same split in Canvas.jsx — device viewports subtract, artboards grow).
+  const frameHeight = artboardHeight + mobileChromeH + bezelH
   const scale = workspace.w ? Math.min(1, workspace.w / frameWidth) : 1
   const pageContent = (
     <div
@@ -200,8 +225,25 @@ export default function CanvasPreview({
           }}
         >
           {mobile ? (
-            <PhoneFrame screenWidth={width} screenHeight={artboardHeight} model={phone}>
-              {pageContent}
+            <PhoneFrame screenWidth={width} screenHeight={artboardHeight + mobileChromeH} model={phone}>
+              {mobileBrowser ? (
+                <MobileBrowserChrome
+                  screenWidth={width}
+                  screenHeight={artboardHeight}
+                  model={phone}
+                  siteTitle={browserSiteTitle}
+                  favicon={browserFavicon}
+                  address={browserAddress}
+                  pages={browserPages}
+                  currentPageId={browserCurrentPageId || page?.id}
+                  onSelectPage={onBrowserPageSelect}
+                  onEditPage={onBrowserPageEdit}
+                  onEditFavicon={onBrowserFaviconEdit}
+                  onAddressChange={onBrowserAddressChange}
+                >
+                  {pageContent}
+                </MobileBrowserChrome>
+              ) : pageContent}
             </PhoneFrame>
           ) : desktopBrowser ? (
             <BrowserFrame

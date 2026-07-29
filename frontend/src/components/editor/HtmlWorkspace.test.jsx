@@ -39,7 +39,7 @@ describe('HTML workspace device chrome', () => {
     expect(source).toContain('data-pwb-injected')
   })
 
-  it('shows BrowserFrame on desktop but keeps the real phone frame on mobile', () => {
+  it('frames the page as a window on desktop and as a phone browser on mobile', () => {
     const { unmount } = render(
       <LanguageProvider>
         <HtmlWorkspace
@@ -52,8 +52,11 @@ describe('HTML workspace device chrome', () => {
       </LanguageProvider>,
     )
     expect(document.querySelector('[data-builder-browser-frame]')).not.toBeNull()
+    expect(document.querySelector('[data-builder-mobile-browser]')).toBeNull()
     unmount()
 
+    // A phone runs a browser too: the bezel stays and the chrome goes INSIDE
+    // it, taking the same screen the real browser takes.
     render(
       <LanguageProvider>
         <HtmlWorkspace
@@ -65,8 +68,26 @@ describe('HTML workspace device chrome', () => {
         />
       </LanguageProvider>,
     )
-    expect(document.querySelector('[data-builder-browser-frame]')).toBeNull()
     expect(document.querySelector('[data-builder-phone-frame]')).not.toBeNull()
+    expect(document.querySelector('[data-builder-mobile-browser]')).toHaveAttribute(
+      'data-builder-mobile-browser',
+      'ios',
+    )
+  })
+
+  it('leaves the phone bare when the browser frame is off', () => {
+    render(
+      <LanguageProvider>
+        <HtmlWorkspace
+          persistKey="browser-mobile-off"
+          html="<html><body><main>Mobile</main></body></html>"
+          deviceId="iphone15pro"
+          onBrowserFrameToggle={vi.fn()}
+        />
+      </LanguageProvider>,
+    )
+    expect(document.querySelector('[data-builder-phone-frame]')).not.toBeNull()
+    expect(document.querySelector('[data-builder-browser-frame]')).toBeNull()
   })
 
   it('snapshots the live edit document before a device frame remount', () => {

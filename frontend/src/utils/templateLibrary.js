@@ -14,7 +14,7 @@
 // No external images: visuals are CSS gradients/patterns + emoji, so every
 // template renders fully offline and never shows a broken-image icon.
 
-import { VERTICAL_CATEGORY_SEEDS, templateText } from './templateCatalogData.js'
+import { FAMILY_DESCRIPTIONS, VERTICAL_CATEGORY_SEEDS, templateText } from './templateCatalogData.js'
 
 const esc = (t) =>
   String(t || 'My Site').replace(/[<&>]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;' }[c]))
@@ -276,14 +276,16 @@ const gallery = (p, n, label) => {
   return `<div style="columns:3 240px; column-gap:18px;">${tiles.replaceAll('<div class="visual"', '<div style="break-inside:avoid; margin-bottom:18px;"><div class="visual"').replaceAll('></div>', '></div></div>')}</div>`
 }
 
-const doc = (p, t, title, body) => `<!DOCTYPE html>
+// `extraCss` lets one family ship its own layout without putting that weight on
+// the other 199 templates.
+const doc = (p, t, title, body, extraCss = '') => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${title}</title>
 ${fontLinks(p)}
-<style>${baseCss(p)}</style>
+<style>${baseCss(p)}${extraCss}</style>
 </head>
 <body>
 ${body}
@@ -951,7 +953,11 @@ const verticalSteps = (content) => `
   ${content.steps.map((step, index) => `<li><span class="when">0${index + 1}</span><h3>${step}</h3><p>${content.sectionLead}</p></li>`).join('')}
 </ul>`
 
-const verticalFooter = (t, content) => footerCols(t, verticalNav(content), content.footer)
+// The footer repeats the page's own navigation, so a family with different
+// sections has to pass its own links — a footer advertising a section that does
+// not exist is the first dead link a visitor finds.
+const verticalFooter = (t, content, links = verticalNav(content)) =>
+  footerCols(t, links, content.footer)
 
 function verticalCatalog(p, name, profile) {
   const t = esc(name)
@@ -1003,12 +1009,300 @@ ${ctaBand(content.ctaTitle, content.ctaCopy, ['#contact', content.cta])}
 ${verticalFooter(t, content)}`)
 }
 
+// ---------------------------------------------------------------------------
+// Structurally different vertical families.
+//
+// The four above are siblings: sticky top bar, hero, three cards, split story,
+// CTA band, footer — in a different order. Reskinning them in twelve palettes
+// makes twelve of the same page, which is what made a 200-template gallery feel
+// like ten. These five change the ARCHITECTURE instead: where navigation lives,
+// whether there is a hero at all, cards versus rows, one column versus two.
+// Each carries its own layout CSS so the other templates don't pay for it.
+// ---------------------------------------------------------------------------
+
+// Navigation as a full-height left rail — the silhouette no top-bar page has.
+function verticalSidebar(p, name, profile) {
+  const t = esc(name)
+  const c = verticalContent(profile)
+  const css = `
+  .rail-page { display:grid; grid-template-columns:286px 1fr; min-height:100vh; }
+  .rail { position:sticky; top:0; align-self:start; height:100vh; padding:38px 30px;
+    background:var(--soft); border-right:1px solid var(--border); display:flex; flex-direction:column; }
+  .rail .brand { font-size:22px; margin-bottom:10px; }
+  .rail p { color:var(--muted); font-size:14.5px; }
+  .rail nav { display:flex; flex-direction:column; gap:2px; margin:30px 0 auto; }
+  .rail nav a { padding:11px 14px; border-radius:calc(var(--radius)/1.4 + 2px); color:var(--muted); font-weight:600; font-size:15px; }
+  .rail nav a:hover { background:var(--card); color:var(--ink); }
+  .rail nav a.on { background:var(--accent-soft); color:var(--accent); }
+  .rail-main { min-width:0; }
+  .rail-main section { padding:74px 0; }
+  .rail-main .container { max-width:860px; margin:0; padding:0 56px; }
+  .rail-hero { padding-top:96px !important; }
+  .rail-hero h1 { font-size:clamp(38px,5vw,60px); }
+  @media (max-width: 900px) {
+    .rail-page { grid-template-columns:1fr; }
+    .rail { position:static; height:auto; padding:26px 24px; border-right:0; border-bottom:1px solid var(--border); }
+    .rail nav { flex-direction:row; flex-wrap:wrap; gap:6px; margin:20px 0 0; }
+    .rail-main .container { padding:0 24px; max-width:none; }
+    .rail-main section, .rail-hero { padding:52px 0 !important; }
+  }`
+  return doc(p, t, `${t} | ${c.sectionTitle}`, `
+<div class="rail-page">
+  <aside class="rail">
+    <span class="brand">${t}<b>.</b></span>
+    <p>${c.badge}</p>
+    <nav>
+      <a class="on" href="#top">${c.nav[0]}</a>
+      <a href="#story">${c.nav[1]}</a>
+      <a href="#steps">${c.sectionTitle}</a>
+      <a href="#contact">${c.nav[2]}</a>
+    </nav>
+    <a class="btn" href="#contact" style="text-align:center;">${c.cta}</a>
+  </aside>
+  <main class="rail-main">
+    <section id="top" class="rail-hero"><div class="container">
+      <span class="chip">${c.badge}</span>
+      <h1 style="margin-top:22px;">${c.title}</h1>
+      <p class="lead">${c.lead}</p>
+      <a class="btn" href="#steps">${c.nav[0]}</a>
+    </div></section>
+    <section id="steps" class="soft"><div class="container">
+      ${sectionHead(c.nav[0], c.sectionTitle, c.sectionLead)}${cardGrid(2, c.items)}
+    </div></section>
+    <section id="story"><div class="container">
+      ${sectionHead(c.nav[1], c.storyTitle, c.story)}${verticalSteps(c)}
+    </div></section>
+    <section id="contact" class="soft"><div class="container">
+      <h2>${c.ctaTitle}</h2><p class="lead">${c.ctaCopy}</p><a class="btn" href="#contact">${c.cta}</a>
+    </div></section>
+  </main>
+</div>`, css)
+}
+
+// A newspaper: masthead instead of a hero, a lead story, then a column river.
+function verticalMagazine(p, name, profile) {
+  const t = esc(name)
+  const c = verticalContent(profile)
+  const css = `
+  .masthead { border-bottom:3px double var(--ink); padding:26px 0 16px; }
+  .masthead .title { font-family:${p.head.fam}; font-size:clamp(30px,6vw,54px); font-weight:800;
+    letter-spacing:-0.02em; text-align:center; }
+  .masthead .meta { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;
+    color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:0.1em; margin-top:14px; }
+  .lead-story { padding:46px 0 34px; border-bottom:1px solid var(--border); }
+  .lead-story h1 { font-size:clamp(34px,5.4vw,58px); max-width:15ch; }
+  .lead-story .standfirst { font-size:19px; color:var(--muted); max-width:60ch; margin:0 0 26px; }
+  .lead-visual { height:340px; border-radius:2px; }
+  .river { display:grid; grid-template-columns:repeat(3,1fr); gap:0; }
+  .river .col { padding:34px 26px; border-right:1px solid var(--border); }
+  .river .col:last-child { border-right:0; }
+  .river h3 { font-size:21px; margin-bottom:10px; }
+  .river p { color:var(--muted); font-size:15px; margin:0; }
+  .river .num { font-family:${p.head.fam}; font-size:13px; letter-spacing:0.14em; color:var(--accent); }
+  .pull { font-family:${p.head.fam}; font-size:clamp(24px,3.4vw,36px); line-height:1.25;
+    border-left:4px solid var(--accent); padding-left:26px; margin:0; max-width:26ch; }
+  @media (max-width: 820px) {
+    .river { grid-template-columns:1fr; }
+    .river .col { border-right:0; border-bottom:1px solid var(--border); padding:26px 0; }
+    .lead-visual { height:220px; }
+  }`
+  return doc(p, t, `${t} | ${c.storyTitle}`, `
+<div class="container">
+  <header class="masthead">
+    <div class="title">${t}</div>
+    <div class="meta"><span>${c.badge}</span><span>${c.nav.join(' · ')}</span></div>
+  </header>
+  <section class="lead-story">
+    <p class="eyebrow">${c.nav[1]}</p>
+    <h1>${c.title}</h1>
+    <p class="standfirst">${c.lead}</p>
+    <div class="visual lead-visual" role="img" aria-label="${c.storyTitle}"></div>
+  </section>
+  <section id="collection" class="river" style="padding:0;">
+    ${c.items.slice(0, 3).map((item, i) => `<div class="col"><span class="num">0${i + 1}</span><h3>${item.h}</h3><p>${item.p}</p></div>`).join('')}
+  </section>
+</div>
+<section id="story" class="soft"><div class="container grid-2" style="align-items:center;">
+  <blockquote class="pull">${c.story}</blockquote>
+  <div>${sectionHead(c.nav[0], c.sectionTitle, c.sectionLead)}<a class="btn" href="#contact">${c.cta}</a></div>
+</div></section>
+<section id="contact"><div class="container narrow" style="text-align:center;">
+  <h2>${c.ctaTitle}</h2><p class="lead" style="margin:0 auto 30px;">${c.ctaCopy}</p>
+  <a class="btn" href="#contact">${c.cta}</a>
+</div></section>
+${verticalFooter(t, c)}`, css)
+}
+
+// Full-bleed alternating bands. No cards anywhere — the visuals carry the page.
+function verticalShowcase(p, name, profile) {
+  const t = esc(name)
+  const c = verticalContent(profile)
+  const css = `
+  .show-hero { position:relative; min-height:78vh; display:grid; place-items:center; text-align:center;
+    background:linear-gradient(160deg, ${p.accent}33, ${p.accent}c4), ${heroPattern(p)}; padding:120px 24px; }
+  .show-hero h1 { font-size:clamp(40px,8vw,86px); max-width:14ch; margin:0 auto 18px; color:${p.dark ? '#fff' : p.ink}; }
+  .show-hero p { font-size:19px; max-width:52ch; margin:0 auto 30px; color:${p.dark ? 'rgba(255,255,255,.86)' : p.muted}; }
+  .zig { display:grid; grid-template-columns:1fr 1fr; align-items:stretch; }
+  .zig > .pane { padding:88px 64px; display:flex; flex-direction:column; justify-content:center; }
+  .zig > .art { min-height:460px; }
+  .zig.flip > .art { order:-1; }
+  .zig h2 { font-size:clamp(26px,3.4vw,42px); }
+  .zig p { color:var(--muted); font-size:17px; margin:0; }
+  .zig .num { font-family:${p.head.fam}; font-size:60px; line-height:1; color:var(--accent); opacity:.28; margin-bottom:14px; }
+  @media (max-width: 900px) {
+    .zig { grid-template-columns:1fr; }
+    .zig > .pane { padding:52px 24px; }
+    .zig > .art { min-height:240px; order:-1 !important; }
+    .show-hero { min-height:auto; padding:88px 24px; }
+  }`
+  const bands = c.items.slice(0, 3).map((item, i) => `
+<section class="zig${i % 2 ? ' flip' : ''}" style="padding:0;${i % 2 ? ' background:var(--soft);' : ''}">
+  <div class="pane"><span class="num">0${i + 1}</span><h2>${item.h}</h2><p>${item.p}</p></div>
+  <div class="art visual" style="border-radius:0;" role="img" aria-label="${item.h}"></div>
+</section>`).join('')
+  return doc(p, t, `${t} | ${c.sectionTitle}`, `
+${navbar(t, verticalNav(c), ['#contact', c.cta])}
+<section class="show-hero" style="padding-top:120px;">
+  <div><span class="chip">${c.badge}</span>
+  <h1 style="margin-top:20px;">${c.title}</h1>
+  <p>${c.lead}</p>
+  <a class="btn" href="#collection">${c.cta}</a></div>
+</section>
+<div id="collection">${bands}</div>
+<section id="story"><div class="container narrow" style="text-align:center;">
+  ${sectionHead(c.nav[1], c.storyTitle, c.story)}
+  ${statRow(c.steps.map((step, i) => [`0${i + 1}`, step]))}
+</div></section>
+${ctaBand(c.ctaTitle, c.ctaCopy, ['#contact', c.cta])}
+${verticalFooter(t, c)}`, css)
+}
+
+// A searchable index: filter chips and list rows instead of a grid of cards.
+function verticalDirectory(p, name, profile) {
+  const t = esc(name)
+  const c = verticalContent(profile)
+  const css = `
+  .dir-top { padding:56px 0 34px; }
+  .dir-top h1 { font-size:clamp(32px,4.6vw,52px); }
+  .dir-search { display:flex; gap:10px; flex-wrap:wrap; margin:26px 0 18px; }
+  .dir-search input { flex:1 1 260px; min-width:0; padding:14px 18px; font:inherit; font-size:15px;
+    color:var(--ink); background:var(--card); border:1px solid var(--border);
+    border-radius:calc(var(--radius)/1.2 + 4px); }
+  .dir-search input::placeholder { color:var(--muted); }
+  .filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .rows { border-top:1px solid var(--border); }
+  .row { display:grid; grid-template-columns:64px 1fr auto; align-items:center; gap:18px;
+    padding:22px 4px; border-bottom:1px solid var(--border); transition:background .15s; }
+  .row:hover { background:var(--soft); }
+  .row .idx { font-family:${p.head.fam}; color:var(--accent); font-size:15px; letter-spacing:0.08em; }
+  .row h3 { margin:0 0 4px; font-size:19px; }
+  .row p { margin:0; color:var(--muted); font-size:14.5px; }
+  .row .go { color:var(--accent); font-weight:700; font-size:22px; }
+  @media (max-width: 700px) {
+    .row { grid-template-columns:44px 1fr; gap:12px; }
+    .row .go { display:none; }
+  }`
+  const rows = c.items.map((item, i) => `
+  <a class="row" href="#contact">
+    <span class="idx">${String(i + 1).padStart(2, '0')}</span>
+    <span><h3>${item.h}</h3><p>${item.p}</p></span>
+    <span class="go" aria-hidden="true">→</span>
+  </a>`).join('')
+  return doc(p, t, `${t} | ${c.sectionTitle}`, `
+${navbar(t, verticalNav(c), ['#contact', c.cta])}
+<section class="dir-top"><div class="container">
+  <span class="chip">${c.badge}</span>
+  <h1 style="margin-top:18px;">${c.title}</h1>
+  <p class="lead" style="margin-bottom:0;">${c.lead}</p>
+  <div class="dir-search">
+    <input type="search" placeholder="${c.sectionTitle}…" aria-label="${c.sectionTitle}" />
+    <a class="btn" href="#collection">${c.cta}</a>
+  </div>
+  <div class="filters">${c.steps.map((s, i) => `<span class="chip"${i ? ' style="background:transparent;color:var(--muted);border-color:var(--border);"' : ''}>${s}</span>`).join('')}</div>
+</div></section>
+<section id="collection" style="padding-top:0;"><div class="container">
+  <div class="rows">${rows}</div>
+</div></section>
+${verticalStory(p, c)}
+${ctaBand(c.ctaTitle, c.ctaCopy, ['#contact', c.cta])}
+${verticalFooter(t, c)}`, css)
+}
+
+// The long conversion scroll: section dots, pricing tiers, FAQ, closing CTA.
+function verticalOnepage(p, name, profile) {
+  const t = esc(name)
+  const c = verticalContent(profile)
+  const css = `
+  .dots { position:fixed; right:20px; top:50%; transform:translateY(-50%); display:flex;
+    flex-direction:column; gap:12px; z-index:30; }
+  .dots a { width:9px; height:9px; border-radius:50%; background:var(--border); display:block; }
+  .dots a:hover, .dots a.on { background:var(--accent); transform:scale(1.25); }
+  .numbered h2 { display:flex; align-items:baseline; gap:14px; }
+  .numbered h2 span { font-size:15px; color:var(--accent); font-family:${p.head.fam}; letter-spacing:0.12em; }
+  .tiers { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; align-items:stretch; }
+  .tier { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:30px 26px; }
+  .tier.pop { border-color:var(--accent); box-shadow:0 18px 46px ${p.dark ? 'rgba(0,0,0,.5)' : 'rgba(20,20,43,.10)'}; }
+  .tier .price { font-family:${p.head.fam}; font-size:38px; margin:8px 0 6px; }
+  .tier ul { list-style:none; margin:18px 0 24px; padding:0; }
+  .tier li { color:var(--muted); font-size:15px; padding:7px 0 7px 24px; position:relative; }
+  .tier li::before { content:'✓'; position:absolute; left:0; color:var(--accent); font-weight:700; }
+  @media (max-width: 900px) { .dots { display:none; } }`
+  const tiers = c.items.slice(0, 3).map((item, i) => `
+  <div class="tier${i === 1 ? ' pop' : ''}">
+    ${i === 1 ? `<span class="chip">${c.badge}</span>` : ''}
+    <h3 style="margin-top:${i === 1 ? '14px' : '0'};">${item.h}</h3>
+    <div class="price">${['€', '€€', '€€€'][i]}</div>
+    <p style="color:var(--muted); margin:0;">${item.p}</p>
+    <ul>${c.steps.slice(0, 3).map((s) => `<li>${s}</li>`).join('')}</ul>
+    <a class="btn${i === 1 ? '' : ' btn-ghost'}" href="#contact" style="width:100%; text-align:center;">${c.cta}</a>
+  </div>`).join('')
+  return doc(p, t, `${t} | ${c.cta}`, `
+${navbar(t, [['#collection', c.nav[0]], ['#pricing', c.sectionTitle], ['#faq', c.nav[1]]], ['#contact', c.cta])}
+<nav class="dots" aria-label="${c.nav[0]}">
+  <a class="on" href="#collection" aria-label="${c.nav[0]}"></a>
+  <a href="#pricing" aria-label="${c.sectionTitle}"></a>
+  <a href="#faq" aria-label="${c.nav[1]}"></a>
+  <a href="#contact" aria-label="${c.nav[2]}"></a>
+</nav>
+${heroCentered(t, { pattern: heroPattern(p), badge: c.badge, title: c.title, sub: c.lead, cta: ['#pricing', c.cta], cta2: ['#collection', c.nav[0]] })}
+<section id="collection" class="numbered"><div class="container">
+  <h2><span>01</span>${c.sectionTitle}</h2>
+  <p class="lead">${c.sectionLead}</p>
+  ${cardGrid(3, c.items)}
+</div></section>
+<section id="pricing" class="soft numbered"><div class="container">
+  <h2><span>02</span>${c.storyTitle}</h2>
+  <p class="lead">${c.story}</p>
+  <div class="tiers">${tiers}</div>
+</div></section>
+<section id="faq" class="numbered"><div class="container narrow">
+  <h2><span>03</span>${c.nav[1]}</h2>
+  <div class="faq" style="margin-top:26px;">
+    ${c.items.slice(0, 4).map((item) => `<details><summary>${item.h}</summary><p>${item.p}</p></details>`).join('')}
+  </div>
+</div></section>
+${ctaBand(c.ctaTitle, c.ctaCopy, ['#contact', c.cta])}
+${verticalFooter(t, c, [['#collection', c.nav[0]], ['#pricing', c.sectionTitle], ['#faq', c.nav[1]], ['#contact', c.nav[2]]])}`, css)
+}
+
 const VERTICAL_BUILDERS = {
   catalog: verticalCatalog,
   service: verticalService,
   editorial: verticalEditorial,
   booking: verticalBooking,
+  sidebar: verticalSidebar,
+  magazine: verticalMagazine,
+  showcase: verticalShowcase,
+  directory: verticalDirectory,
+  onepage: verticalOnepage,
 }
+
+// The page architectures a vertical can be built from, and the one-liner that
+// turns (category, variant) into a document — exported so the gallery's
+// diversity can be asserted directly rather than inferred from ids.
+export const VERTICAL_FAMILY_IDS = Object.keys(VERTICAL_BUILDERS)
+export const buildVerticalVariant = (seed, variant, title) =>
+  VERTICAL_BUILDERS[variant.family](PACKS[variant.pack], title, seed.profile)
 
 const v = (id, name, desc, build) => ({ id, name, desc, build })
 const withPacks = (baseId, builder, rows) =>
@@ -1023,7 +1317,10 @@ const VERTICAL_CATEGORIES = VERTICAL_CATEGORY_SEEDS.map((seed) => ({
   variants: seed.variants.map((variant) => v(
     `${seed.id}-${variant.id}`,
     templateText(variant.name),
-    templateText(seed.profile.familyDescriptions[variant.family]),
+    // A seed may describe a family in its own words; otherwise the family's
+    // own description stands in, so adding a layout never has to be paired
+    // with 21 new lines of copy before it can ship.
+    templateText(seed.profile.familyDescriptions[variant.family] || FAMILY_DESCRIPTIONS[variant.family]),
     (title) => VERTICAL_BUILDERS[variant.family](PACKS[variant.pack], title, seed.profile),
   )),
 }))

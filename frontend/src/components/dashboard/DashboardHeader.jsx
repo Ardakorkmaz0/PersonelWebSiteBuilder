@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   FolderIcon,
   GlobeIcon,
+  MoreHorizontalIcon,
   LogOutIcon,
   ShieldIcon,
   StarIcon,
@@ -84,7 +85,7 @@ export default function DashboardHeader({ current = '' }) {
           <DashboardGlobalSearch />
         </div>
 
-        <nav aria-label={t('Navigation')} className="hidden items-center gap-1 xl:flex">
+        <nav aria-label={t('Navigation')} className="dashboard-primary-nav hidden items-center gap-1 xl:flex">
           {NAV_ITEMS.map(({ id, label, to, icon: NavIcon }) => (
             <Link
               key={id}
@@ -147,7 +148,7 @@ export default function DashboardHeader({ current = '' }) {
             onClick={() => setMobileOpen((open) => !open)}
             className="studio-icon-btn border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] xl:hidden"
           >
-            <span aria-hidden className="text-base leading-none">☰</span>
+            <MoreHorizontalIcon size={18} aria-hidden />
           </button>
         </div>
       </div>

@@ -15,25 +15,26 @@ export default function LanguageSwitcher({ className = '' }) {
     setPreference(preference === 'light' ? 'dark' : preference === 'dark' ? 'system' : 'light')
   }
   return (
-    <div className={`flex shrink-0 items-center gap-1.5 ${className}`}>
+    <div className={`studio-utility-switcher ${className}`}>
       <button
         type="button"
         onClick={cycleTheme}
         aria-label={`${t('Appearance')}: ${t(themeLabel)}`}
         title={`${t('Appearance')}: ${t(themeLabel)}`}
-        className="studio-icon-btn border border-[var(--studio-border)] bg-[var(--studio-panel-raised)]"
+        className="studio-utility-button"
       >
         <ThemeIcon size={14} />
       </button>
-      <label className="flex shrink-0 items-center gap-1.5">
+      <span className="studio-utility-divider" aria-hidden />
+      <label className="studio-language-control">
         <span className="sr-only">{t('Language')}</span>
-        <GlobeIcon size={14} className="text-[var(--studio-text-muted)]" />
+        <GlobeIcon size={13} className="text-[var(--studio-text-faint)]" />
         <select
           value={language}
           onChange={(event) => setLanguage(event.target.value)}
           aria-label={t('Language')}
           title={t('Language')}
-          className="studio-input px-2 py-1 text-xs font-semibold shadow-sm"
+          className="studio-language-select"
         >
           <option value="tr">TR</option>
           <option value="en">EN</option>

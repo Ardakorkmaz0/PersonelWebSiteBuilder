@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { DRAG_MIME } from '../../utils/htmlPlacement.js'
 import { useEditorStore } from '../../store/editorStore.js'
-import { ChevronDownIcon, CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon, SparklesIcon } from '../icons.jsx'
+import { CodeIcon, FolderIcon, LayersIcon, PlusIcon, SaveIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import BlockLibrary from './BlockLibrary.jsx'
 import AnimationPanel from './AnimationPanel.jsx'
@@ -393,7 +393,7 @@ function CustomBlockPanel({ onPick, onArm, onInspect, theme }) {
               type="button"
               onClick={() => placeCustom()}
               disabled={!hasHtml}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--studio-accent)] px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--studio-accent-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--studio-accent)] px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--studio-accent-fill-hover)] disabled:cursor-not-allowed disabled:opacity-45"
             >
               <PlusIcon size={13} /> {t('Place')}
             </button>
@@ -497,51 +497,42 @@ const TABS = [
 
 const RAIL_TAB_KEY = 'pwb_rail_tab'
 
-// The rail is ONE control, not a row of tabs: it shows the current section and,
-// on click, drops down to let you pick Files / Components / Animation.
-function RailTabMenu({ tab, setTab }) {
+// Keep all three editor destinations visible. The previous dropdown made every
+// switch a two-step action (open menu, then choose); these compact tabs restore
+// direct one-click movement without widening the rail.
+function RailTabs({ tab, setTab }) {
   const { t } = useLanguage()
-  const [open, setOpen] = useState(false)
-  const [, curLabel, CurIcon] = TABS.find(([id]) => id === tab) || TABS[0]
   return (
-    <div className="relative flex-1">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--studio-text)] hover:bg-[var(--studio-panel-raised,#f8fafc)]"
-      >
-        <CurIcon size={15} />
-        <span className="flex-1 text-left">{t(curLabel)}</span>
-        <ChevronDownIcon size={14} />
-      </button>
-      {open && (
-        <>
-          {/* Click-away layer closes the menu. */}
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div
-            role="menu"
-            className="absolute left-2 right-2 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[var(--studio-border,#e5e7eb)] bg-[var(--studio-panel,#fff)] shadow-lg"
+    <div
+      role="tablist"
+      aria-label={`${t('Files')} / ${t('Components')} / ${t('Animation')}`}
+      className="grid min-w-0 flex-1 grid-cols-3 gap-1 p-1.5"
+    >
+      {TABS.map(([id, label, Icon]) => {
+        const active = tab === id
+        return (
+          <button
+            key={id}
+            id={`editor-rail-tab-${id}`}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls="editor-rail-panel"
+            title={t(label)}
+            style={{ fontSize: '0.625rem', letterSpacing: '-0.012em' }}
+            onClick={() => setTab(id)}
+            className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 font-semibold leading-none transition ${
+              active
+                ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-text)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--studio-accent)_18%,transparent)]'
+                : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
+            }`}
           >
-            {TABS.map(([id, label, Icon]) => (
-              <button
-                key={id}
-                type="button"
-                role="menuitem"
-                onClick={() => { setTab(id); setOpen(false) }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold ${
-                  tab === id
-                    ? 'bg-[#eef2ff] text-[var(--studio-accent-hover)]'
-                    : 'text-[var(--studio-text)] hover:bg-[var(--studio-panel-raised,#f8fafc)]'
-                }`}
-              >
-                <Icon size={15} /> {t(label)}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+            <Icon size={14} />
+            <span className="w-full truncate text-center">{t(label)}</span>
+            {active && <span aria-hidden="true" className="absolute inset-x-2 -bottom-1.5 h-0.5 rounded-full bg-[var(--studio-accent)]" />}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -585,7 +576,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
     <aside className="studio-panel flex w-60 shrink-0 flex-col overflow-hidden border-r">
       <div className="studio-panel flex shrink-0 items-center border-b">
         {filesPanel ? (
-          <RailTabMenu tab={tab} setTab={setTab} />
+          <RailTabs tab={tab} setTab={setTab} />
         ) : (
           <span className="flex-1 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
             {t('Components')}
@@ -603,7 +594,12 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div
+        id={filesPanel ? 'editor-rail-panel' : undefined}
+        role={filesPanel ? 'tabpanel' : undefined}
+        aria-labelledby={filesPanel ? `editor-rail-tab-${tab}` : undefined}
+        className="min-h-0 flex-1 overflow-y-auto p-3"
+      >
         {filesPanel && tab === 'files' ? (
           filesPanel
         ) : filesPanel && tab === 'animation' ? (
@@ -622,7 +618,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
                 setPreview(null)
                 setLibraryOpen(true)
               }}
-              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--studio-accent)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--studio-accent-hover)]"
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--studio-accent)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--studio-accent-fill-hover)]"
             >
               <LayersIcon size={15} /> {t('Browse all blocks')}
             </button>

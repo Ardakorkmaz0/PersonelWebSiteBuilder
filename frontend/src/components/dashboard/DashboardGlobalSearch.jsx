@@ -25,6 +25,7 @@ export default function DashboardGlobalSearch({ mobile = false, onNavigate }) {
   const [failed, setFailed] = useState(false)
   const [focused, setFocused] = useState(false)
   const rootRef = useRef(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     const normalized = query.trim()
@@ -66,6 +67,26 @@ export default function DashboardGlobalSearch({ mobile = false, onNavigate }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (mobile) return undefined
+    const focusSearch = (event) => {
+      const target = event.target
+      const isTyping = target instanceof HTMLElement && (
+        target.matches('input, textarea, select') || target.isContentEditable
+      )
+      const input = inputRef.current
+      const searchIsVisible = Boolean(input?.getClientRects().length)
+      const modalIsOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'))
+      if (event.key === '/' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !isTyping && searchIsVisible && !modalIsOpen) {
+        event.preventDefault()
+        input.focus()
+        setFocused(true)
+      }
+    }
+    document.addEventListener('keydown', focusSearch)
+    return () => document.removeEventListener('keydown', focusSearch)
+  }, [mobile])
+
   const normalized = query.trim()
   const open = focused && normalized.length > 0
   const hasResults = results.sites.length > 0 || results.users.length > 0
@@ -80,6 +101,7 @@ export default function DashboardGlobalSearch({ mobile = false, onNavigate }) {
         <SearchIcon size={16} className="dashboard-search-icon" />
         <span className="sr-only">{t('Search sites and creators')}</span>
         <input
+          ref={inputRef}
           type="search"
           autoComplete="off"
           value={query}
@@ -103,6 +125,9 @@ export default function DashboardGlobalSearch({ mobile = false, onNavigate }) {
           <button type="button" onClick={() => { setQuery(''); setResults(EMPTY_RESULTS); setLoading(false); setFailed(false) }} aria-label={t('Clear search')} className="absolute right-2 grid h-7 w-7 place-items-center rounded-lg text-sm text-[var(--studio-text-faint)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]">
             ×
           </button>
+        )}
+        {!query && !mobile && (
+          <kbd className="dashboard-search-shortcut" aria-hidden>/</kbd>
         )}
       </label>
 

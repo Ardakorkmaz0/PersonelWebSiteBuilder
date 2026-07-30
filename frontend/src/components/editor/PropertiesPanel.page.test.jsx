@@ -68,18 +68,21 @@ describe('Page panel tabs', () => {
     expect(useEditorStore.getState().schema.pages[0].seoTitle).toBe('My page')
   })
 
-  it('edits browser metadata for the current page', () => {
+  it('keeps the scroll indicator setting in the Page panel with browser metadata', () => {
     renderPanel()
+    expect(screen.getByLabelText('Show scroll indicator in mobile preview')).toBeChecked()
     fireEvent.change(screen.getByLabelText('Page language'), { target: { value: 'tr' } })
     fireEvent.change(screen.getByLabelText('Canonical URL'), {
       target: { value: 'https://example.com/work' },
     })
     fireEvent.click(screen.getByLabelText('Hide this page from search engines'))
+    fireEvent.click(screen.getByLabelText('Show scroll indicator in mobile preview'))
 
     const page = useEditorStore.getState().schema.pages[0]
     expect(page.language).toBe('tr')
     expect(page.canonicalUrl).toBe('https://example.com/work')
     expect(page.noIndex).toBe(true)
+    expect(page.showScrollIndicator).toBe(false)
     expect(screen.getByLabelText('Search result preview')).toHaveTextContent('example.com/work')
   })
 

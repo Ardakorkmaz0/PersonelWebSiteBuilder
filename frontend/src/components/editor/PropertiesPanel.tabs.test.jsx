@@ -53,6 +53,17 @@ describe('Properties panel tabs', () => {
     expect(screen.getByRole('tab', { name: 'Content' })).toHaveAttribute('aria-selected', 'false')
   })
 
+  it('moves through inspector sections with the keyboard', () => {
+    renderPanel()
+    const content = screen.getByRole('tab', { name: 'Content' })
+    content.focus()
+
+    fireEvent.keyDown(content, { key: 'ArrowRight' })
+
+    expect(screen.getByRole('tab', { name: 'Design' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Design' })).toHaveFocus()
+  })
+
   // The regrouping moved every section by hand; this is the guard that none was
   // dropped on the floor. Each group must be reachable from SOME tab.
   it('keeps every section reachable from one of the tabs', () => {
@@ -60,6 +71,7 @@ describe('Properties panel tabs', () => {
     const seen = new Set()
     for (const tab of TABS) {
       fireEvent.click(screen.getByRole('tab', { name: tab }))
+      if (container.querySelector('section[aria-label="Content"]')) seen.add('Content')
       // Group headers are the only buttons that carry aria-expanded.
       container.querySelectorAll('button[aria-expanded]').forEach((el) => {
         seen.add(el.textContent.trim().split('(')[0].trim())
@@ -83,13 +95,45 @@ describe('Properties panel tabs', () => {
 
   it('collapses and expands a group, and remembers that too', () => {
     const { unmount } = renderPanel()
-    const content = screen.getByRole('button', { name: /^Content/ })
-    expect(content).toHaveAttribute('aria-expanded', 'true')
-    fireEvent.click(content)
-    expect(content).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(screen.getByRole('tab', { name: 'Design' }))
+    const typography = screen.getByRole('button', { name: /^Typography/ })
+    expect(typography).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(typography)
+    expect(typography).toHaveAttribute('aria-expanded', 'false')
     unmount()
 
     renderPanel()
-    expect(screen.getByRole('button', { name: /^Content/ })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: /^Typography/ })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('keeps common actions fixed and tucks secondary layer actions away', () => {
+    renderPanel()
+    const actions = screen.getByRole('region', { name: 'Arrange' })
+
+    expect(actions).toHaveClass('shrink-0')
+    expect(actions.previousElementSibling).toHaveClass('overflow-y-auto')
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete component' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Front' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(screen.getByRole('button', { name: 'More actions' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'Front' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete component' }))
+    expect(useEditorStore.getState().schema.pages[0].components).toHaveLength(0)
+  })
+
+  it('keeps the selected-component AI editor collapsed until requested', () => {
+    renderPanel()
+    const toggle = screen.getByRole('button', { name: 'Ask AI to edit this' })
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByPlaceholderText('e.g. make it a rounded red CTA')).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByPlaceholderText('e.g. make it a rounded red CTA')).toBeInTheDocument()
   })
 })

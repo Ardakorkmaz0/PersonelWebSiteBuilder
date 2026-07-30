@@ -7,11 +7,11 @@ import Sidebar from './Sidebar.jsx'
 import { paletteItems } from '../registry.jsx'
 import { HTML_VARIANTS } from '../../utils/htmlVariants.js'
 
-function renderSidebar() {
+function renderSidebar(props = {}) {
   return render(
     <LanguageProvider>
       <DndContext>
-        <Sidebar />
+        <Sidebar {...props} />
       </DndContext>
     </LanguageProvider>,
   )
@@ -78,6 +78,32 @@ describe('Sidebar component recommendations', () => {
     expect(paletteItems.some((item) => item.type === 'region')).toBe(true)
     expect(screen.getAllByText('Section').length).toBeGreaterThan(0)
     expect(screen.queryByText('Region')).not.toBeInTheDocument()
+  })
+
+  it('switches Files, Components, and Animation directly with one click', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderSidebar({ filesPanel: <div>Explorer ready</div> })
+    const filesTab = screen.getByRole('tab', { name: 'Files' })
+    const componentsTab = screen.getByRole('tab', { name: 'Components' })
+    const animationTab = screen.getByRole('tab', { name: 'Animation' })
+
+    expect(filesTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('Explorer ready')).toBeInTheDocument()
+
+    await user.click(componentsTab)
+    expect(componentsTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByText('Explorer ready')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Browse all blocks/ })).toBeInTheDocument()
+    expect(localStorage.getItem('pwb_rail_tab')).toBe('components')
+
+    await user.click(animationTab)
+    expect(animationTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: 'Entrance (on scroll)' })).toBeInTheDocument()
+    expect(localStorage.getItem('pwb_rail_tab')).toBe('animation')
+
+    unmount()
+    renderSidebar({ filesPanel: <div>Explorer ready</div> })
+    expect(screen.getByRole('tab', { name: 'Animation' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('deletes a saved custom block accessibly and can undo the deletion', async () => {

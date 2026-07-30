@@ -32,6 +32,10 @@ import {
   mobileBrowserSkin,
 } from './browserFrameMetrics.js'
 
+// A long site can have dozens of pages. Give its picker enough room to be
+// useful, but never let it grow beyond the phone screen it belongs to.
+const PAGE_MENU_MAX_HEIGHT = 384
+
 // The status-bar clock, showing the real time in the editor's language: 24-hour
 // in Turkish, 12-hour in English, exactly like the phone would.
 //
@@ -134,6 +138,10 @@ export default function MobileBrowserChrome({
   const activeIndex = Math.max(0, tabs.findIndex((page) => page.id === currentPageId))
   const activePage = tabs[activeIndex] || tabs[0]
   const visibleAddress = visiblePageAddress(address, activePage, activeIndex)
+  const pageMenuRoom = android
+    ? screenHeight + MOBILE_BROWSER_GESTURE - 8
+    : screenHeight + MOBILE_BROWSER_STATUS + MOBILE_BROWSER_BAR - 8
+  const pageMenuMaxHeight = Math.max(0, Math.min(PAGE_MENU_MAX_HEIGHT, pageMenuRoom))
 
   useEffect(() => {
     if (!editingAddress) return undefined
@@ -167,7 +175,9 @@ export default function MobileBrowserChrome({
     setReloadNonce((value) => value + 1)
   }
 
-  const menuSurface = 'overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] py-1 shadow-2xl'
+  const menuSurface = 'rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel)] py-1 shadow-2xl'
+  const clippedMenuSurface = `overflow-hidden ${menuSurface}`
+  const scrollableMenuSurface = `overflow-x-hidden overflow-y-auto overscroll-contain ${menuSurface}`
   const menuItem = 'flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--studio-text)] hover:bg-[var(--studio-control-hover)]'
   // Menus drop from the row that owns the buttons: down from the top bar on
   // Android, up from the toolbar on iOS.
@@ -179,8 +189,15 @@ export default function MobileBrowserChrome({
     <div
       role="menu"
       aria-label={t('Open site pages')}
-      style={menuAnchor}
-      className={`absolute right-3 z-[120] max-h-56 w-[calc(100%-24px)] overflow-auto ${menuSurface}`}
+      data-browser-page-menu="mobile"
+      style={{
+        ...menuAnchor,
+        maxHeight: pageMenuMaxHeight,
+        overscrollBehavior: 'contain',
+        touchAction: 'pan-y',
+        WebkitOverflowScrolling: 'touch',
+      }}
+      className={`absolute right-3 z-[120] w-[calc(100%-24px)] ${scrollableMenuSurface}`}
     >
       {tabs.map((page) => {
         const label = pageTitle(page, siteTitle)
@@ -206,7 +223,7 @@ export default function MobileBrowserChrome({
     <div
       role="menu"
       style={menuAnchor}
-      className={`absolute right-3 z-[120] w-56 ${menuSurface}`}
+      className={`absolute right-3 z-[120] w-56 ${clippedMenuSurface}`}
     >
       <button type="button" role="menuitem" onClick={() => { setBrowserMenuOpen(false); onEditFavicon?.() }} className={menuItem}>
         <Favicon src={favicon} title={siteTitle} />

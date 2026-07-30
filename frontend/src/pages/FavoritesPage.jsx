@@ -79,34 +79,49 @@ export default function FavoritesPage() {
       <DashboardHeader current="favorites" />
 
       <main id="favorites-main" className="mx-auto max-w-[1400px] px-3 py-5 sm:px-6 sm:py-8">
-        <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between" aria-labelledby="favorites-heading">
-          <div>
-            <p className="dashboard-kicker">{t('Library')}</p>
-            <h1 id="favorites-heading" className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight text-[var(--studio-text)]">
-              <StarIcon size={22} className="text-[#f59e0b]" filled /> {t('Favorites')}
-            </h1>
-            <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Sites you starred on Explore.')}</p>
+        <section className="dashboard-welcome mb-7 p-5 sm:p-7" aria-labelledby="favorites-heading">
+          <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--studio-warning)_28%,var(--studio-border))] bg-[var(--studio-warning-soft)] text-[var(--studio-warning)] shadow-sm">
+                <StarIcon size={22} filled />
+              </span>
+              <div className="min-w-0">
+                <p className="dashboard-kicker">{t('Library')}</p>
+                <h1 id="favorites-heading" className="mt-1 text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)] sm:text-3xl">
+                  {t('Favorites')}
+                </h1>
+                <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Sites you starred on Explore.')}</p>
+              </div>
+            </div>
+            <DashboardSearch
+              value={searchQuery}
+              onChange={setSearchQuery}
+              label={t('Search favorites')}
+              placeholder={t('Search your favorites…')}
+              className="w-full lg:w-[24rem]"
+            />
           </div>
-          <DashboardSearch
-            value={searchQuery}
-            onChange={setSearchQuery}
-            label={t('Search favorites')}
-            placeholder={t('Search your favorites…')}
-            className="w-full sm:w-[22rem]"
-          />
         </section>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div role="alert" className="studio-status-danger mb-5 rounded-xl border px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
         {items === null ? (
-          <p role="status" className="text-sm text-[var(--studio-text-muted)]">{t('Loading…')}</p>
+          <div role="status" className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label={t('Loading…')}>
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="h-72 animate-pulse rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-2">
+                <div className="h-36 rounded-xl bg-[var(--studio-control)]" />
+                <div className="mx-3 mt-4 h-4 w-2/3 rounded bg-[var(--studio-control)]" />
+                <div className="mx-3 mt-3 h-3 w-1/2 rounded bg-[var(--studio-control)]" />
+              </div>
+            ))}
+          </div>
         ) : items.length === 0 ? (
           <div className="dashboard-section-card border-dashed py-16 text-center">
-            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#fef3c7] text-[#f59e0b]"><StarIcon size={24} filled /></div>
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[var(--studio-warning-soft)] text-[var(--studio-warning)]"><StarIcon size={24} filled /></div>
             <p className="font-medium text-[var(--studio-text)]">{t('No favorites yet')}</p>
             <p className="mt-1 text-sm text-[var(--studio-text-muted)]">
               {t('Star sites on Explore to keep them here.')}

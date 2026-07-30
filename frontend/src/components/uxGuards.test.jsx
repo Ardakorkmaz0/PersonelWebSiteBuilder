@@ -170,6 +170,16 @@ describe('responsive and accessibility guards', () => {
     expect(screen.getByRole('combobox', { name: 'Content language' })).toBeInTheDocument()
   })
 
+  it('keeps the all-template gallery responsive by paging live previews', () => {
+    renderWithShell(<TemplatePicker open title="Test" onPick={vi.fn()} onClose={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'All templates' }))
+    expect(screen.getAllByRole('button', { name: 'Preview' })).toHaveLength(18)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more templates' }))
+    expect(screen.getAllByRole('button', { name: 'Preview' })).toHaveLength(36)
+  })
+
   it('keeps preview navigation and secondary actions in one accessible toolbar', () => {
     const onNavigate = vi.fn()
     renderWithShell(

@@ -36,14 +36,20 @@ export default function PanelGroup({ id, title, defaultOpen = false, aside = nul
     writeOpen(id, next)
   }
   return (
-    <section className="border-b border-[var(--studio-border,#e5e7eb)] pb-3 last:border-b-0">
+    <section
+      className={`overflow-hidden rounded-xl border transition-colors ${
+        open
+          ? 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)] shadow-[var(--studio-shadow-sm)]'
+          : 'border-transparent bg-transparent hover:border-[var(--studio-border)] hover:bg-[var(--studio-panel-raised)]'
+      }`}
+    >
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 py-2 text-left"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
       >
-        <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-[var(--studio-text-muted,#6b7280)]">
+        <span className="flex-1 text-xs font-semibold text-[var(--studio-text)]">
           {title}
           {aside}
         </span>
@@ -52,7 +58,7 @@ export default function PanelGroup({ id, title, defaultOpen = false, aside = nul
           className={`shrink-0 text-[var(--studio-text-faint,#9ca3af)] transition-transform ${open ? '' : '-rotate-90'}`}
         />
       </button>
-      {open && <div className="space-y-3 pt-1">{children}</div>}
+      {open && <div className="space-y-3 border-t border-[var(--studio-border)] px-3 pb-3 pt-3">{children}</div>}
     </section>
   )
 }

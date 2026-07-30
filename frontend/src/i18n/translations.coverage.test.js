@@ -11,6 +11,7 @@ import { HTML_BLOCKS, HTML_VARIANTS } from '../utils/htmlVariants.js'
 import { ICON_OPTIONS } from '../utils/icons.js'
 import { PRESET_IMAGES } from '../utils/presetImages.js'
 import { cssSnippets, jsSnippets } from '../utils/snippets.js'
+import { VERTICAL_TEMPLATE_TRANSLATIONS } from '../utils/templateCatalogData.js'
 import { TEMPLATE_LIBRARY } from '../utils/templateLibrary.js'
 import { TURKISH_TRANSLATIONS } from './translations.js'
 
@@ -43,6 +44,11 @@ function staticTranslationKeys() {
 function visibleCatalogStrings() {
   const values = []
   const add = (...items) => values.push(...items.filter((item) => typeof item === 'string' && item))
+
+  // Vertical template text is kept as bilingual data rather than inline UI
+  // strings. Coverage must still guarantee every English catalog value has a
+  // Turkish counterpart in the app-level dictionary.
+  add(...Object.keys(VERTICAL_TEMPLATE_TRANSLATIONS))
 
   for (const category of TEMPLATE_LIBRARY) {
     add(category.name, category.desc)

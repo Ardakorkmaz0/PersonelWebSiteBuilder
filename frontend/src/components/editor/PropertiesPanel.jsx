@@ -29,7 +29,15 @@ import {
   HtmlContentControl,
   TabsEditorControl,
 } from './controls.jsx'
-import { FileIcon, MoveIcon, PaletteIcon, SparklesIcon } from '../icons.jsx'
+import {
+  CopyIcon,
+  FileIcon,
+  MoreHorizontalIcon,
+  MoveIcon,
+  PaletteIcon,
+  SparklesIcon,
+  TrashIcon,
+} from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
@@ -526,6 +534,8 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     setPropsTabState(tab)
     try { localStorage.setItem(PROPS_TAB_KEY, tab) } catch { /* ignore */ }
   }
+  const [aiEditOpen, setAiEditOpen] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
   const pageTabs = PAGE_TABS
   const [pageTab, setPageTabState] = useState(() => {
     try {
@@ -768,6 +778,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             )}
         </PanelGroup>
         <PanelGroup id="page-browser" title={t('Browser & accessibility')} defaultOpen>
+          <LabeledCheckbox
+            label={t('Show scroll indicator in mobile preview')}
+            checked={page.showScrollIndicator !== false}
+            onChange={(v) => setPageSettings(page.id, { showScrollIndicator: v })}
+          />
           <LabeledSelect
             label={t('Page language')}
             value={page.language || 'en'}
@@ -1094,7 +1109,10 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
     })
   }
   const contentSection = (def.editableProps || []).length > 0 ? (
-    <PanelGroup id="content" title={t('Content')} defaultOpen>
+    <section
+      aria-label={t('Content')}
+      className="space-y-3 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-3 shadow-[var(--studio-shadow-sm)]"
+    >
       {/* Navbars lead with pinning, Bootstrap-style — "is this bar fixed?" is
           the first question a nav asks. Exactly two states, and toggling MUST
           NOT change the design: a full-width bar stays edge-to-edge where it
@@ -1191,7 +1209,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           }
         />
       ))}
-    </PanelGroup>
+    </section>
   ) : null
   const linkSection = LINKABLE_TYPES.has(component.type) ? (
     <PanelGroup id="link" title={t('Link')} defaultOpen>
@@ -1287,11 +1305,46 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
 
   return (
     <div className="studio-properties-panel flex h-full min-w-0 flex-col overflow-hidden">
-      <div className="border-b border-[#e5e7eb] px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-[#111827]">{t(def.label)}</h2>
-          <p className="truncate text-xs text-[#6b7280]">{component.id}</p>
+      <div className="border-b border-[var(--studio-border)] px-3 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color-mix(in_srgb,var(--studio-accent)_18%,var(--studio-border))] bg-[var(--studio-accent-soft)] text-sm font-bold text-[var(--studio-accent-text)]"
+            aria-hidden="true"
+          >
+            {def.icon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-semibold text-[var(--studio-text)]">{t(def.label)}</h2>
+            <span className="mt-0.5 inline-flex items-center rounded-full bg-[var(--studio-control)] px-2 py-0.5 text-[10px] font-semibold text-[var(--studio-text-muted)]">
+              {isFlow ? t('all screens') : t(isMobile ? 'Mobile' : 'PC')}
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-expanded={aiEditOpen}
+            aria-label={t('Ask AI to edit this')}
+            title={t('Ask AI to edit this')}
+            onClick={() => setAiEditOpen((open) => !open)}
+            className={`studio-icon-btn h-9 w-9 shrink-0 border ${
+              aiEditOpen
+                ? 'border-[color-mix(in_srgb,var(--studio-accent)_34%,var(--studio-border))] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-text)]'
+                : 'border-[var(--studio-border)] bg-[var(--studio-control)]'
+            }`}
+          >
+            <SparklesIcon size={15} />
+          </button>
         </div>
+        {aiEditOpen && (
+          <div className="mt-3">
+            <AiComponentEdit
+              component={component}
+              onApply={(styles, props) => {
+                if (styles && Object.keys(styles).length) updateStyles(component.id, styles)
+                if (props && Object.keys(props).length) updateProps(component.id, props)
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <PanelTabs
@@ -1300,22 +1353,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
         tabs={PROPS_TABS.map(([id, label, Icon]) => [id, t(label), Icon])}
       />
 
-      <div className="flex-1 space-y-1 overflow-y-auto px-4 pb-4">
-        <div className="mt-4 flex items-center justify-between gap-2 rounded-lg bg-[#eef2ff] px-3 py-2">
-          <span className="text-xs font-semibold text-[#4f46e5]">
-            {isFlow ? t('Editing HTML flow layout') : t('Editing {viewport} layout', { viewport: t(isMobile ? 'Mobile' : 'PC') })}
-          </span>
-          {isMobile && !isFlow && (
-            <button
-              type="button"
-              onClick={autoArrangeMobile}
-              className="rounded-lg border border-[#4f46e5] bg-white px-2 py-0.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
-            >
-              {t('Auto-arrange')}
-            </button>
-          )}
-        </div>
-
+      <div
+        role="tabpanel"
+        aria-label={t(PROPS_TABS.find(([id]) => id === propsTab)?.[1] || 'Content')}
+        className="flex-1 space-y-2 overflow-y-auto bg-[var(--studio-panel-muted)] p-3"
+      >
         {propsTab === 'content' && (
           <>
             {contentTabEmpty && emptyTabHint}
@@ -1333,13 +1375,6 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             />
           </PanelGroup>
         )}
-        <AiComponentEdit
-          component={component}
-          onApply={(styles, props) => {
-            if (styles && Object.keys(styles).length) updateStyles(component.id, styles)
-            if (props && Object.keys(props).length) updateProps(component.id, props)
-          }}
-        />
           </>
         )}
 
@@ -1408,6 +1443,16 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
 
         {propsTab === 'layout' && (
           <>
+        {isMobile && !isFlow && (
+          <button
+            type="button"
+            onClick={autoArrangeMobile}
+            className="studio-btn studio-btn-secondary w-full justify-between px-3 text-xs"
+          >
+            <span>{t('Auto-arrange mobile layout')}</span>
+            <span aria-hidden="true" className="text-[var(--studio-accent-text)]">&#10022;</span>
+          </button>
+        )}
         <PanelGroup
           id="size"
           defaultOpen
@@ -1736,92 +1781,114 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
         )}
       </div>
 
-      <div className="space-y-2 border-t border-[#e5e7eb] p-4">
-        <div className={`grid gap-2 ${component.type === 'region' ? 'grid-cols-1' : 'grid-cols-3'}`}>
+      <div
+        role="region"
+        aria-label={t('Arrange')}
+        className="shrink-0 border-t border-[var(--studio-border)] bg-[var(--studio-panel)] p-3 shadow-[0_-10px_28px_color-mix(in_srgb,var(--studio-shell)_72%,transparent)]"
+      >
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2">
           <button
             type="button"
             onClick={() => duplicateComponent(component.id)}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+            className="studio-btn studio-btn-secondary min-w-0 px-2 text-xs"
           >
-            {t('Duplicate')}
-          </button>
-          {component.type !== 'region' && (
-            <>
-              <button
-                type="button"
-                onClick={() => bringToFront(component.id)}
-                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-              >
-                {t(isFlow ? 'Move end' : 'Front')}
-              </button>
-              <button
-                type="button"
-                onClick={() => sendToBack(component.id)}
-                className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-              >
-                {t(isFlow ? 'Move start' : 'Back')}
-              </button>
-            </>
-          )}
-        </div>
-        {component.type !== 'region' && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => moveBackward(component.id)}
-            title={t(isFlow ? 'Move one step earlier in the order' : 'Bring one step backward')}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
-          >
-            {t(isFlow ? 'Before' : 'Backward')}
+            <CopyIcon size={14} className="shrink-0" />
+            <span className="truncate">{t('Duplicate')}</span>
           </button>
           <button
             type="button"
-            onClick={() => moveForward(component.id)}
-            title={t(isFlow ? 'Move one step later in the order' : 'Bring one step forward')}
-            className="rounded-lg bg-[#f3f4f6] py-1.5 text-xs font-medium text-[#374151] hover:bg-[#e5e7eb]"
+            aria-label={t('Delete component')}
+            onClick={() => removeComponent(component.id)}
+            className="studio-btn min-w-0 border border-[color-mix(in_srgb,var(--studio-danger)_34%,var(--studio-border))] bg-[var(--studio-danger-soft)] px-2 text-xs text-[var(--studio-danger)] hover:bg-[color-mix(in_srgb,var(--studio-danger)_16%,var(--studio-panel-raised))]"
           >
-            {t(isFlow ? 'Next' : 'Forward')}
+            <TrashIcon size={14} className="shrink-0" />
+            <span className="truncate">{t('Delete')}</span>
+          </button>
+          <button
+            type="button"
+            aria-label={t('More actions')}
+            title={t('More actions')}
+            aria-expanded={actionsOpen}
+            onClick={() => setActionsOpen((open) => !open)}
+            className={`studio-icon-btn h-9 w-9 border ${
+              actionsOpen
+                ? 'border-[color-mix(in_srgb,var(--studio-accent)_34%,var(--studio-border))] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-text)]'
+                : 'border-[var(--studio-border)] bg-[var(--studio-control)]'
+            }`}
+          >
+            <MoreHorizontalIcon size={16} />
           </button>
         </div>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => applyThemeToComponent(component.id)}
-            title={t('Restyle this component with the active theme')}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-[#4f46e5] bg-white py-1.5 text-xs font-semibold text-[#4f46e5] hover:bg-[#eef2ff]"
-          >
-            <PaletteIcon size={14} /> {t('Theme')}
-          </button>
-          <select
-            value=""
-            onChange={(e) => {
-              if (e.target.value) copyComponentToPage(component.id, e.target.value)
-              e.target.value = ''
-            }}
-            disabled={schema.pages.length < 2}
-            title={t('Copy this component onto another page')}
-            className="rounded-lg border border-[#d1d5db] bg-white px-1.5 py-1.5 text-xs font-medium text-[#374151] focus:border-[#4f46e5] focus:outline-none disabled:opacity-40"
-          >
-            <option value="" disabled>
-              {t('Copy page...')}
-            </option>
-            {schema.pages
-              .filter((p) => p.id !== page.id)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+
+        {actionsOpen && (
+          <div className="mt-2 space-y-2 rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-2 shadow-[var(--studio-shadow-sm)]">
+            {component.type !== 'region' && (
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => bringToFront(component.id)}
+                  className="studio-btn bg-[var(--studio-control)] px-2 py-1.5 text-xs"
+                >
+                  {t(isFlow ? 'Move end' : 'Front')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sendToBack(component.id)}
+                  className="studio-btn bg-[var(--studio-control)] px-2 py-1.5 text-xs"
+                >
+                  {t(isFlow ? 'Move start' : 'Back')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveBackward(component.id)}
+                  title={t(isFlow ? 'Move one step earlier in the order' : 'Bring one step backward')}
+                  className="studio-btn bg-[var(--studio-control)] px-2 py-1.5 text-xs"
+                >
+                  {t(isFlow ? 'Before' : 'Backward')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveForward(component.id)}
+                  title={t(isFlow ? 'Move one step later in the order' : 'Bring one step forward')}
+                  className="studio-btn bg-[var(--studio-control)] px-2 py-1.5 text-xs"
+                >
+                  {t(isFlow ? 'Next' : 'Forward')}
+                </button>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => applyThemeToComponent(component.id)}
+                title={t('Restyle this component with the active theme')}
+                className="studio-btn studio-btn-accent px-2 py-1.5 text-xs"
+              >
+                <PaletteIcon size={14} /> {t('Theme')}
+              </button>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) copyComponentToPage(component.id, e.target.value)
+                  e.target.value = ''
+                }}
+                disabled={schema.pages.length < 2}
+                title={t('Copy this component onto another page')}
+                className="studio-input min-w-0 px-2 py-1.5 text-xs font-medium disabled:opacity-40"
+              >
+                <option value="" disabled>
+                  {t('Copy page...')}
                 </option>
-              ))}
-          </select>
-        </div>
-        <button
-          type="button"
-          onClick={() => removeComponent(component.id)}
-          className="w-full rounded-lg border border-[#d69ca5] bg-[#fde7e9] py-2 text-sm font-medium text-[#a4262c] hover:bg-[#f6d5d9]"
-        >
-          {t('Delete component')}
-        </button>
+                {schema.pages
+                  .filter((p) => p.id !== page.id)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

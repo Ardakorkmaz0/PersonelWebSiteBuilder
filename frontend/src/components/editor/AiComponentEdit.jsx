@@ -72,7 +72,7 @@ export default function AiComponentEdit({ component, onApply }) {
           type="button"
           onClick={() => ask()}
           disabled={busy || !prompt.trim()}
-          className="shrink-0 rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-hover)] disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)] disabled:opacity-50"
         >
           {busy ? '…' : t('Go')}
         </button>
@@ -102,7 +102,7 @@ export default function AiComponentEdit({ component, onApply }) {
             <button type="button" onClick={() => setPending(null)} className="flex-1 rounded-lg border border-[#d1d5db] px-2 py-1 text-[11px] font-semibold text-[#374151] hover:bg-[#f3f4f6]">
               {t('Reject')}
             </button>
-            <button type="button" onClick={accept} className="flex-1 rounded-lg bg-[var(--studio-accent)] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[var(--studio-accent-hover)]">
+            <button type="button" onClick={accept} className="flex-1 rounded-lg bg-[var(--studio-accent)] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)]">
               {t('Accept')}
             </button>
           </div>

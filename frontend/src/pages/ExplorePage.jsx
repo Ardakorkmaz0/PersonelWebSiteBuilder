@@ -14,6 +14,7 @@ import {
   ArrowRightIcon,
   ClockIcon,
   EyeIcon,
+  FolderIcon,
   FolderOpenIcon,
   GlobeIcon,
   PlusIcon,
@@ -61,6 +62,12 @@ export default function ExplorePage() {
   const items = data.category === category ? data.items : []
   const loading = data.category !== category && !error
   const latestSite = useMemo(() => orderSites(ownSites)[0] || null, [ownSites])
+  const workspaceStats = useMemo(() => ({
+    total: ownSites.length,
+    published: ownSites.filter((site) => site.published).length,
+    views: ownSites.reduce((sum, site) => sum + (site.view_count || 0), 0),
+    favorites: ownSites.reduce((sum, site) => sum + (site.favorite_count || 0), 0),
+  }), [ownSites])
   const displayName = user?.display_name || user?.username || t('Creator')
 
   useEffect(() => {
@@ -152,111 +159,122 @@ export default function ExplorePage() {
       </a>
       <DashboardHeader current="explore" />
 
-      <main id="explore-main" className="mx-auto max-w-[1400px] px-3 py-5 sm:px-6 sm:py-8">
-        <section className="dashboard-welcome mb-5 px-5 py-6 sm:px-7 sm:py-7">
-          <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-2xl">
+      <main id="explore-main" className="dashboard-container">
+        <section className="dashboard-workspace-grid" aria-labelledby="workspace-heading">
+          <div className="dashboard-workspace-primary">
+            <div className="relative z-10 max-w-2xl">
               <p className="dashboard-kicker">{t('Workspace')}</p>
-              <h1 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)] sm:text-3xl">
+              <h1 id="workspace-heading" className="mt-3 text-3xl font-bold tracking-[-0.045em] text-[var(--studio-text)] sm:text-4xl">
                 {t('Welcome back, {name}', { name: displayName })}
               </h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--studio-text-muted)]">
+              <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--studio-text-muted)]">
                 {t('Continue your latest project or start with a fresh idea.')}
               </p>
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+                <button type="button" onClick={() => setCreateOpen(true)} className="studio-btn studio-btn-primary relative z-10 min-h-11 px-4">
+                  <PlusIcon size={16} /> {t('Create new site')}
+                </button>
+                <Link to="/code" className="studio-btn studio-btn-secondary relative z-10 min-h-11 px-4">
+                  <FolderOpenIcon size={16} /> {t('Open local project')}
+                </Link>
+              </div>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <button type="button" onClick={() => setCreateOpen(true)} className="studio-btn studio-btn-primary min-h-10 px-4">
-                <PlusIcon size={16} /> {t('Create new site')}
-              </button>
-              <Link to="/code" className="studio-btn studio-btn-secondary min-h-10 px-4">
-                <FolderOpenIcon size={16} /> {t('Open local project')}
-              </Link>
+
+            <div className="dashboard-stat-strip relative z-10 mt-8" aria-label={t('Workspace')} aria-busy={projectsLoading}>
+              {[
+                [FolderIcon, workspaceStats.total, t('Sites')],
+                [GlobeIcon, workspaceStats.published, t('Published')],
+                [EyeIcon, workspaceStats.views.toLocaleString(), t('Total views')],
+                [StarIcon, workspaceStats.favorites.toLocaleString(), t('Favorites')],
+              ].map(([StatIcon, value, label]) => (
+                <div key={label} className="dashboard-stat">
+                  <span className="dashboard-stat-icon"><StatIcon size={15} /></span>
+                  <span className="min-w-0">
+                    <strong className="block truncate text-sm text-[var(--studio-text)]">{projectsLoading ? '—' : value}</strong>
+                    <span className="block truncate text-[10px] font-semibold text-[var(--studio-text-faint)]">{label}</span>
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
+
+          {projectsLoading ? (
+            <div className="dashboard-workspace-project animate-pulse p-3" aria-label={t('Loading…')}>
+              <div className="min-h-44 flex-1 rounded-xl bg-[var(--studio-control)]" />
+              <div className="mt-3 h-14 rounded-xl bg-[var(--studio-control)]" />
+            </div>
+          ) : latestSite ? (
+            <article className="dashboard-workspace-project" aria-labelledby="recent-project-title">
+              <Link
+                to={`/editor/${latestSite.id}`}
+                className="dashboard-workspace-preview block"
+                aria-label={`${t('Continue editing')}: ${latestSite.title}`}
+              >
+                <div className="absolute left-4 top-4 z-10">
+                  <span className={`dashboard-status shadow-sm ${latestSite.published ? 'dashboard-status-live' : ''}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {latestSite.published ? t('Published') : t('Draft')}
+                  </span>
+                </div>
+                <SitePreview site={latestSite} source="owner" height={188} />
+              </Link>
+              <div className="dashboard-workspace-meta">
+                <div className="min-w-0 flex-1">
+                  <p className="dashboard-kicker">{t('Recent project')}</p>
+                  <h2 className="mt-1 text-[11px] font-semibold text-[var(--studio-text-muted)]">{t('Continue where you left off')}</h2>
+                  <h3 id="recent-project-title" className="mt-0.5 truncate text-base font-bold text-[var(--studio-text)]">{latestSite.title}</h3>
+                  <p className="mt-1 flex items-center gap-1.5 truncate text-[10px] text-[var(--studio-text-faint)]">
+                    <ClockIcon size={12} /> {t('Last edited {date}', { date: formattedDate(latestSite.updated_at, language) })}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {latestSite.published && (
+                    <Link to={`/site/${latestSite.slug}`} className="studio-icon-btn studio-btn-secondary" aria-label={t('View live site')}>
+                      <GlobeIcon size={14} />
+                    </Link>
+                  )}
+                  <Link to={`/editor/${latestSite.id}`} className="studio-icon-btn studio-btn-accent" aria-label={t('Continue editing')}>
+                    <ArrowRightIcon size={15} />
+                  </Link>
+                </div>
+              </div>
+            </article>
+          ) : (
+            <div className="dashboard-workspace-project items-center justify-center p-7 text-center">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
+                <FolderIcon size={22} />
+              </span>
+              <p className="dashboard-kicker mt-5">{t('Start something new')}</p>
+              <h2 className="mt-1 text-xl font-bold text-[var(--studio-text)]">{t('Create your first project')}</h2>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--studio-text-muted)]">{t('Choose a template, use AI, or bring your own HTML.')}</p>
+              <button type="button" onClick={() => setCreateOpen(true)} className="studio-btn studio-btn-accent mt-5 min-h-10 px-4">
+                <PlusIcon size={15} /> {t('Create new site')}
+              </button>
+            </div>
+          )}
         </section>
 
         {error && (
-          <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="studio-status-danger mb-5 rounded-xl border px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
-        {projectsLoading ? (
-          <section className="dashboard-section-card mb-7 animate-pulse p-5" aria-label={t('Loading…')}>
-            <div className="h-5 w-48 rounded bg-[var(--studio-control)]" />
-            <div className="mt-4 h-40 rounded-xl bg-[var(--studio-control)]" />
-          </section>
-        ) : latestSite ? (
-          <section className="mb-8" aria-labelledby="continue-heading">
-            <div className="mb-3 flex items-end justify-between gap-4">
-              <div>
-                <p className="dashboard-kicker">{t('Recent project')}</p>
-                <h2 id="continue-heading" className="mt-1 text-lg font-bold tracking-tight text-[var(--studio-text)] sm:text-xl">
-                  {t('Continue where you left off')}
-                </h2>
-              </div>
-              <Link to="/profile#projects" className="hidden items-center gap-1 text-xs font-semibold text-[var(--studio-text-muted)] hover:text-[var(--studio-text)] sm:flex">
-                {t('View all projects')} <ArrowRightIcon size={14} />
-              </Link>
-            </div>
-            <div className="dashboard-resume-card">
-              <Link to={`/editor/${latestSite.id}`} className="min-w-0 bg-[var(--studio-control)] p-3 sm:p-4" aria-label={`${t('Continue editing')}: ${latestSite.title}`}>
-                <SitePreview site={latestSite} source="owner" height={230} />
-              </Link>
-              <div className="flex min-w-0 flex-col justify-center p-5 sm:p-7">
-                <span className={`dashboard-status ${latestSite.published ? 'dashboard-status-live' : ''}`}>
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                  {latestSite.published ? t('Published') : t('Draft')}
-                </span>
-                <h3 className="mt-4 truncate text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)]">{latestSite.title}</h3>
-                <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--studio-text-muted)]">
-                  <ClockIcon size={14} /> {t('Last edited {date}', { date: formattedDate(latestSite.updated_at, language) })}
-                </p>
-                <div className="mt-4 flex items-center gap-4 text-xs text-[var(--studio-text-faint)]">
-                  <span className="flex items-center gap-1"><EyeIcon size={14} /> {(latestSite.view_count || 0).toLocaleString()}</span>
-                  <span className="flex items-center gap-1"><StarIcon size={14} /> {(latestSite.favorite_count || 0).toLocaleString()}</span>
-                </div>
-                <div className="mt-6 flex flex-wrap items-center gap-2">
-                  <Link to={`/editor/${latestSite.id}`} className="studio-btn studio-btn-primary min-h-10 px-4">
-                    {t('Continue editing')} <ArrowRightIcon size={15} />
-                  </Link>
-                  {latestSite.published && (
-                    <Link to={`/site/${latestSite.slug}`} className="studio-btn studio-btn-secondary min-h-10 px-4">
-                      <GlobeIcon size={15} /> {t('View live site')}
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section className="dashboard-section-card mb-8 flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="dashboard-kicker">{t('Start something new')}</p>
-              <h2 className="mt-1 text-xl font-bold text-[var(--studio-text)]">{t('Create your first project')}</h2>
-              <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Choose a template, use AI, or bring your own HTML.')}</p>
-            </div>
-            <button type="button" onClick={() => setCreateOpen(true)} className="studio-btn studio-btn-primary min-h-10 px-4">
-              <PlusIcon size={16} /> {t('Create new site')}
-            </button>
-          </section>
-        )}
-
         <section aria-labelledby="discover-heading">
-          <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="dashboard-section-heading">
             <div>
               <p className="dashboard-kicker">{t('Community')}</p>
               <h2 id="discover-heading" className="mt-1 text-xl font-bold tracking-tight text-[var(--studio-text)] sm:text-2xl">{t('Discover ideas')}</h2>
               <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Explore published work from the community.')}</p>
             </div>
-            <div className="flex max-w-full gap-2 overflow-x-auto pb-1" aria-label={t('Site categories')}>
+            <div className="dashboard-filter-rail flex max-w-full gap-1.5 overflow-x-auto" aria-label={t('Site categories')}>
               {CATEGORIES.map(([id, label]) => (
                 <button
                   key={id || 'all'}
                   type="button"
                   onClick={() => selectCategory(id)}
                   aria-pressed={category === id}
-                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
+                  className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                     category === id
                       ? 'border-[var(--studio-accent)] bg-[var(--studio-accent)] text-white'
                       : 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
@@ -282,7 +300,7 @@ export default function ExplorePage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {items.map((site) => (
                   <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} />
                 ))}

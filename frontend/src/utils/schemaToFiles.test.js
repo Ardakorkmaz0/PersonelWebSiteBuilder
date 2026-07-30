@@ -278,7 +278,40 @@ describe('schemaToSingleHtml embed breakpoints', () => {
     // or padding and borders would be applied twice.
     expect(html).not.toMatch(/\.c-html_1 \{[^}]*padding: 12px/)
     // The embed's own iframe follows the phone box instead of keeping its PC height.
-    expect(html).toContain('.c-html_1 > iframe { height:90px; }')
+    expect(html).toContain('height:var(--pwb-embed-height,70px)')
+    expect(html).toContain('.c-html_1 > iframe { --pwb-embed-height:90px; }')
+  })
+
+  it('lets a 360px mobile embed height override the desktop iframe fallback', () => {
+    const html = schemaToSingleHtml({
+      theme: {},
+      pages: [{
+        id: 'phone', name: 'Phone', mode: 'empty', flowMode: false,
+        canvasWidth: 1000, mobileWidth: 360,
+        components: [{
+          id: 'html_mobile', type: 'html',
+          props: {
+            code: '<button style="font-size:1rem">Primary</button>',
+            _paletteType: 'button',
+          },
+          styles: {},
+          layout: { x: 600, y: 200, w: 180, h: 90 },
+          mobileLayout: { x: 236, y: 265, w: 86, h: 43 },
+        }],
+      }],
+    }, 'Mobile embed height')
+
+    const mobileStart = html.indexOf('@media (max-width: 768px)')
+    const desktop = html.slice(0, mobileStart)
+    const mobile = html.slice(mobileStart)
+
+    expect(mobileStart).toBeGreaterThan(-1)
+    expect(html).toContain('height:var(--pwb-embed-height,90px)')
+    expect(desktop).not.toContain('--pwb-embed-height:43px')
+    expect(mobile).toMatch(/\.p-phone \{[^}]*width: 360px;/)
+    expect(mobile).toMatch(/\.c-html_mobile \{[^}]*width: 86px;[^}]*height: 43px;/)
+    expect(mobile).toContain('.c-html_mobile > iframe { --pwb-embed-height:43px; }')
+    expect(mobile).not.toContain('.c-html_mobile > iframe { height:90px; }')
   })
 })
 

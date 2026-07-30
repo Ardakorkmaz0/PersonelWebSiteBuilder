@@ -55,6 +55,7 @@ def default_schema():
                 'language': 'en',
                 'canonicalUrl': '',
                 'noIndex': False,
+                'showScrollIndicator': True,
                 'components': [],
             },
         ],

@@ -21,13 +21,14 @@ import { CANVAS_SCROLLER_ID } from '../../utils/dragAutoScroll.js'
 // how a real page gets tall too.
 const BLOCKS = 40
 
-function loadPage({ mobileWidth = 393, mobileFold = 852, blocks = BLOCKS } = {}) {
+function loadPage({ mobileWidth = 393, mobileFold = 852, blocks = BLOCKS, showScrollIndicator = true } = {}) {
   useEditorStore.getState().loadSchema({
     theme: {},
     pages: [{
       id: 'page_home',
       name: 'Home',
       background: '#ffffff',
+      showScrollIndicator,
       mobileWidth,
       mobileFold,
       components: Array.from({ length: blocks }, (_, i) => ({
@@ -89,6 +90,22 @@ describe('mobile edit canvas', () => {
     expect(screen).toBe(852)
     expect(design).toBeGreaterThan(screen)
     expect(deviceViewport(container).className).toContain('overflow-y-auto')
+  })
+
+  it('uses the same optional overlay scroll cue while editing', () => {
+    loadPage()
+    const { container, rerender } = renderCanvas()
+    expect(container.querySelector('[data-builder-scroll-indicator]')).not.toBeNull()
+
+    loadPage({ showScrollIndicator: false })
+    rerender(
+      <LanguageProvider>
+        <DndContext>
+          <Canvas />
+        </DndContext>
+      </LanguageProvider>,
+    )
+    expect(container.querySelector('[data-builder-scroll-indicator]')).toBeNull()
   })
 
   it('is the element the pin and auto-scroll helpers look up', () => {

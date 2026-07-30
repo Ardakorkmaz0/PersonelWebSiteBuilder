@@ -100,6 +100,7 @@ class SchemaValidatorTests(TestCase):
                 'language': 'tr',
                 'canonicalUrl': 'https://example.com/anasayfa',
                 'noIndex': True,
+                'showScrollIndicator': False,
                 'components': [],
             }],
         })
@@ -110,3 +111,4 @@ class SchemaValidatorTests(TestCase):
         self.assertEqual(clean['pages'][0]['language'], 'tr')
         self.assertEqual(clean['pages'][0]['canonicalUrl'], 'https://example.com/anasayfa')
         self.assertTrue(clean['pages'][0]['noIndex'])
+        self.assertFalse(clean['pages'][0]['showScrollIndicator'])

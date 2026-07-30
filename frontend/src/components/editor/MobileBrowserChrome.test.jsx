@@ -109,6 +109,25 @@ describe('MobileBrowserChrome controls', () => {
     expect(onEditPage).toHaveBeenCalledWith('home')
   })
 
+  it('keeps a long page list inside the phone and scrolls the list itself', async () => {
+    const user = userEvent.setup()
+    const onEditPage = vi.fn()
+    const manyPages = Array.from({ length: 24 }, (_, index) => ({
+      id: `page-${index + 1}`,
+      name: `Page ${index + 1}`,
+    }))
+    renderChrome({ pages: manyPages, currentPageId: 'page-1', onEditPage })
+
+    await user.click(screen.getByRole('button', { name: 'Open site pages' }))
+    const menu = screen.getByRole('menu', { name: 'Open site pages' })
+    expect(menu).toHaveAttribute('data-browser-page-menu', 'mobile')
+    expect(menu).toHaveClass('overflow-y-auto', 'overscroll-contain')
+    expect(menu).toHaveStyle({ maxHeight: '384px', overscrollBehavior: 'contain' })
+
+    await user.click(screen.getByRole('menuitem', { name: 'Page 24' }))
+    expect(onEditPage).toHaveBeenCalledWith('page-24')
+  })
+
   it('reaches the site icon from the address bar and from the menu', async () => {
     const user = userEvent.setup()
     const onEditFavicon = vi.fn()

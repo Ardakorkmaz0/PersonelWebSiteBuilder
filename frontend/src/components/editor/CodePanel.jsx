@@ -515,7 +515,7 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
                   type="button"
                   onClick={applyCurrentHtml}
                   disabled={!onApplyHtml || file.content === file.generatedContent}
-                  className="rounded-lg bg-[var(--studio-accent)] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-[var(--studio-accent)] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {t('Apply HTML')}
                 </button>

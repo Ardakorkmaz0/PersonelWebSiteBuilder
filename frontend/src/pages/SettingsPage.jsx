@@ -82,7 +82,7 @@ export default function SettingsPage() {
   const secretPlaceholder = (isSet) => (isSet ? t('•••••••• (configured — type to replace)') : t('Not set'))
 
   return (
-    <div className="studio-theme-surface min-h-screen bg-[var(--studio-shell)] text-[var(--studio-text)]">
+    <div className="studio-theme-surface studio-brand-backdrop min-h-screen bg-[var(--studio-shell)] text-[var(--studio-text)]">
       <header className="sticky top-0 z-10 border-b border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_92%,transparent)] backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">

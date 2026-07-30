@@ -75,7 +75,7 @@ export default function SitePreview({ site, height = 150, source = 'owner' }) {
   return (
     <div
       ref={boxRef}
-      className="relative w-full overflow-hidden rounded-xl border border-[#eef0f3] bg-[#f7f8fa]"
+      className="relative w-full overflow-hidden rounded-xl border border-[var(--studio-border)] bg-[var(--studio-control)]"
       style={{ height }}
     >
       {doc ? (
@@ -96,8 +96,9 @@ export default function SitePreview({ site, height = 150, source = 'owner' }) {
           }}
         />
       ) : (
-        <div className="flex h-full items-center justify-center text-xs text-[#c4c8cf]">
-          {failed ? 'No preview' : 'Loading preview…'}
+        <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-[var(--studio-text-faint)]">
+          {!failed && <span className="h-5 w-5 animate-pulse rounded-full border border-[var(--studio-border-strong)] bg-[var(--studio-panel-raised)]" />}
+          <span>{failed ? 'No preview' : 'Loading preview…'}</span>
         </div>
       )}
     </div>

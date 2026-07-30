@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLanguage } from '../../i18n/useLanguage.js'
-import { sanitizeImageSrc } from '../../utils/sanitize.js'
+import Favicon from './BrowserFavicon.jsx'
+import { pageTitle, visiblePageAddress } from './browserPageAddress.js'
 import {
   BROWSER_FRAME_BOTTOM,
   BROWSER_FRAME_SIDE,
@@ -11,6 +12,7 @@ import {
 
 const BROWSER_ZOOM_KEY = 'pwb_browser_preview_zoom'
 const ZOOM_STEPS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200]
+const PAGE_MENU_MAX_HEIGHT = 384
 
 function readBrowserZoom() {
   try {
@@ -21,45 +23,6 @@ function readBrowserZoom() {
   } catch {
     return 'fit'
   }
-}
-
-function pageTitle(page, fallback) {
-  return String(page?.seoTitle || page?.name || fallback || 'Untitled page').trim()
-}
-
-function pagePath(page, index) {
-  if (index === 0) return '/'
-  const source = String(page?.slug || page?.name || `page-${index + 1}`)
-    .trim()
-    .toLocaleLowerCase('en-US')
-    .replace(/[^a-z0-9\u00c0-\u024f]+/gi, '-')
-    .replace(/^-+|-+$/g, '')
-  return `/${source || `page-${index + 1}`}`
-}
-
-function visiblePageAddress(address, page, index) {
-  const raw = String(address || 'preview.sitebuilder.local')
-    .trim()
-    .replace(/^https?:\/\//i, '')
-    .replace(/\/+$/g, '')
-  // A canonical URL already has a path. A bare domain receives the path of the
-  // selected design page so the address bar behaves like a real browser.
-  return raw.includes('/') ? raw : `${raw}${pagePath(page, index)}`
-}
-
-function Favicon({ src, title }) {
-  const safeSrc = sanitizeImageSrc(src)
-  if (safeSrc) {
-    return <img src={safeSrc} alt="" className="h-4 w-4 shrink-0 rounded-[4px] object-cover" />
-  }
-  return (
-    <span
-      aria-hidden="true"
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-[var(--studio-accent)] text-[9px] font-bold text-white"
-    >
-      {(String(title || 'S').trim()[0] || 'S').toLocaleUpperCase()}
-    </span>
-  )
 }
 
 export default function BrowserFrame({
@@ -74,6 +37,7 @@ export default function BrowserFrame({
   onEditPage,
   onEditFavicon,
   onAddressChange,
+  onBeforeReload,
   children,
 }) {
   const { t } = useLanguage()
@@ -227,7 +191,7 @@ export default function BrowserFrame({
                   aria-selected={active}
                   className={`flex h-8 min-w-0 max-w-[220px] flex-1 items-center rounded-t-[10px] border px-2 text-[11px] transition-colors ${
                     active
-                      ? 'border-[var(--studio-border)] bg-[var(--studio-surface)] text-[var(--studio-text)]'
+                      ? 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text)]'
                       : 'border-transparent bg-transparent text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
                   }`}
                 >
@@ -263,36 +227,58 @@ export default function BrowserFrame({
                 >
                   &#8230;
                 </button>
-                {pageMenuOpen && (
-                  <div role="menu" className="absolute right-0 top-full z-[120] mt-1 w-56 overflow-hidden rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] py-1 shadow-2xl">
-                    {hiddenTabs.map((page) => {
-                      const label = pageTitle(page, siteTitle)
-                      return (
-                        <button key={page.id} type="button" role="menuitem" onClick={() => openPage(page.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--studio-text)] hover:bg-[var(--studio-control-hover)]">
-                          <Favicon src={favicon} title={siteTitle} />
-                          <span className="min-w-0 flex-1 truncate">{label}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
               </div>
             )}
           </div>
         </div>
       </div>
 
+      {pageMenuOpen && hiddenTabs.length > 0 && (
+        <div
+          role="menu"
+          data-browser-page-menu="desktop"
+          style={{
+            // This is anchored to the browser frame itself, rather than the
+            // small ellipsis button. The percentage therefore measures the
+            // real available browser height in both compact and fullscreen
+            // previews.
+            // Keep both the tab strip and address bar usable while the list
+            // is open; only the page viewport sits behind this picker.
+            top: BROWSER_FRAME_TOP + 4,
+            right: BROWSER_FRAME_SIDE,
+            maxHeight: `min(${PAGE_MENU_MAX_HEIGHT}px, calc(100% - ${BROWSER_FRAME_TOP + 8}px))`,
+            overscrollBehavior: 'contain',
+            touchAction: 'pan-y',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          className="absolute z-[120] w-56 overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] py-1 shadow-2xl"
+        >
+          {hiddenTabs.map((page) => {
+            const label = pageTitle(page, siteTitle)
+            return (
+              <button key={page.id} type="button" role="menuitem" onClick={() => openPage(page.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--studio-text)] hover:bg-[var(--studio-control-hover)]">
+                <Favicon src={favicon} title={siteTitle} />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div className="absolute inset-x-2 top-[39px] flex h-[39px] items-center gap-1.5 border-t border-[var(--studio-border)]">
         <button
           type="button"
-          onClick={() => setReloadNonce((value) => value + 1)}
+          onClick={() => {
+            onBeforeReload?.()
+            setReloadNonce((value) => value + 1)
+          }}
           title={t('Reload preview')}
           aria-label={t('Reload preview')}
           className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-sm text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
         >
           &#8635;
         </button>
-        <div className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-full border border-[var(--studio-border)] bg-[var(--studio-surface)] px-1.5 text-[11px] text-[var(--studio-text-muted)] focus-within:border-[var(--studio-accent)]">
+        <div className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-full border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-1.5 text-[11px] text-[var(--studio-text-muted)] focus-within:border-[var(--studio-accent)]">
           <button type="button" onClick={onEditFavicon} title={t('Edit site icon')} aria-label={t('Edit site icon')} className="grid h-6 w-6 shrink-0 place-items-center rounded-full hover:bg-[var(--studio-control-hover)]">
             <Favicon src={favicon} title={siteTitle} />
           </button>

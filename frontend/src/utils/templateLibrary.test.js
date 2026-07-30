@@ -2,14 +2,14 @@
 // self-contained document with no template-literal accidents. A broken
 // variant would show up as a blank/garbled thumbnail in the gallery.
 import { describe, expect, it } from 'vitest'
-import { TEMPLATE_COUNT, TEMPLATE_LIBRARY } from './templateLibrary.js'
+import { TEMPLATE_COUNT, TEMPLATE_LIBRARY, TEMPLATE_SITE_CATEGORY_MAP } from './templateLibrary.js'
 import { SITE_TEMPLATES } from './htmlTemplates.js'
 
 const ALL = TEMPLATE_LIBRARY.flatMap((c) => c.variants.map((v) => ({ cat: c.id, ...v })))
 
 describe('TEMPLATE_LIBRARY', () => {
-  it('ships a large gallery (90+ variants) with unique ids', () => {
-    expect(TEMPLATE_COUNT).toBeGreaterThanOrEqual(90)
+  it('ships a 200-template gallery with unique ids', () => {
+    expect(TEMPLATE_COUNT).toBe(200)
     expect(ALL.length).toBe(TEMPLATE_COUNT)
     const ids = new Set(ALL.map((v) => v.id))
     expect(ids.size).toBe(ALL.length)
@@ -43,6 +43,34 @@ describe('TEMPLATE_LIBRARY', () => {
       expect(cat.variants.length, cat.id).toBeGreaterThanOrEqual(8)
     }
   })
+
+  it('includes a complete Fitness & Wellness collection with ten distinct starters', () => {
+    const wellness = TEMPLATE_LIBRARY.find((category) => category.id === 'wellness')
+    expect(wellness).toBeTruthy()
+    expect(wellness.variants).toHaveLength(10)
+    expect(new Set(wellness.variants.map((template) => template.id)).size).toBe(10)
+  })
+
+  it('adds ten vertical collections with ten distinct starters each', () => {
+    const verticalIds = [
+      'property', 'clinic', 'education', 'travel', 'beauty', 'legal-finance',
+      'home-services', 'community', 'entertainment', 'mobility',
+    ]
+
+    for (const id of verticalIds) {
+      const collection = TEMPLATE_LIBRARY.find((category) => category.id === id)
+      expect(collection, id).toBeTruthy()
+      expect(collection.variants, id).toHaveLength(10)
+      expect(new Set(collection.variants.map((template) => template.id)).size, id).toBe(10)
+    }
+  })
+
+  it('maps every gallery collection to a public site category', () => {
+    expect(Object.keys(TEMPLATE_SITE_CATEGORY_MAP)).toHaveLength(TEMPLATE_LIBRARY.length)
+    for (const category of TEMPLATE_LIBRARY) {
+      expect(TEMPLATE_SITE_CATEGORY_MAP[category.id], category.id).toBeTruthy()
+    }
+  })
 })
 
 describe('shipped templates keep their promises', () => {
@@ -61,7 +89,7 @@ describe('shipped templates keep their promises', () => {
     return bad
   }
 
-  // Builds and parses every one of the 90+ variants, so it needs more than the
+  // Builds and parses every one of the 200 variants, so it needs more than the
   // 5s default when the machine is busy.
   it('every component template variant', () => {
     expect(ALL.flatMap((tpl) => dead(tpl.build('Smoke Test'), tpl.id))).toEqual([])

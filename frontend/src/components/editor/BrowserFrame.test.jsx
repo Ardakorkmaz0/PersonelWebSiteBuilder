@@ -57,7 +57,8 @@ describe('BrowserFrame', () => {
   it('turns the address into an editor and remounts the page on reload', async () => {
     const user = userEvent.setup()
     const onAddressChange = vi.fn()
-    const { container } = renderFrame({ address: 'acme.test', onAddressChange })
+    const onBeforeReload = vi.fn()
+    const { container } = renderFrame({ address: 'acme.test', onAddressChange, onBeforeReload })
 
     await user.click(screen.getByTitle('Edit page link'))
     const input = screen.getByRole('textbox', { name: 'Page link' })
@@ -67,6 +68,7 @@ describe('BrowserFrame', () => {
 
     expect(container.querySelector('[data-browser-reload]')).toHaveAttribute('data-browser-reload', '0')
     await user.click(screen.getByRole('button', { name: 'Reload preview' }))
+    expect(onBeforeReload).toHaveBeenCalledTimes(1)
     expect(container.querySelector('[data-browser-reload]')).toHaveAttribute('data-browser-reload', '1')
   })
 
@@ -83,6 +85,29 @@ describe('BrowserFrame', () => {
     await user.click(screen.getByRole('button', { name: 'More pages' }))
     await user.click(screen.getByRole('menuitem', { name: 'Page 8' }))
     expect(onEditPage).toHaveBeenCalledWith('p8')
+  })
+
+  it('keeps a long overflow picker within the browser frame and scrollable', async () => {
+    const user = userEvent.setup()
+    const manyPages = Array.from({ length: 30 }, (_, index) => ({
+      id: `p${index + 1}`,
+      name: `Page ${index + 1}`,
+    }))
+    const onEditPage = vi.fn()
+    const { container } = renderFrame({ pages: manyPages, currentPageId: 'p1', onEditPage })
+
+    await user.click(screen.getByRole('button', { name: 'More pages' }))
+    const menu = screen.getByRole('menu')
+    expect(menu).toHaveAttribute('data-browser-page-menu', 'desktop')
+    expect(menu.parentElement).toBe(container.querySelector('[data-builder-browser-frame]'))
+    expect(menu).toHaveClass('overflow-y-auto', 'overscroll-contain')
+    expect(menu).toHaveStyle({
+      maxHeight: 'min(384px, calc(100% - 86px))',
+      overscrollBehavior: 'contain',
+    })
+
+    await user.click(screen.getByRole('menuitem', { name: 'Page 30' }))
+    expect(onEditPage).toHaveBeenCalledWith('p30')
   })
 
   it('offers real fullscreen from the browser menu', async () => {

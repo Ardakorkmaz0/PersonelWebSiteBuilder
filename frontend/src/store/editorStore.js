@@ -42,6 +42,9 @@ function blankPage(name = 'New Page', folder = '', id, mode = 'empty') {
     language: 'en',
     canonicalUrl: '',
     noIndex: false,
+    // Preview chrome only: keeps a slim non-layout scroll cue on phone View.
+    // Old pages normalize to this useful default as well.
+    showScrollIndicator: true,
     canvasWidth: CANVAS_WIDTH,
     canvasFold: 0,
     mobileWidth: MOBILE_CANVAS_WIDTH,
@@ -999,6 +1002,7 @@ function normalizePage(page) {
     language: page.language === 'tr' ? 'tr' : 'en',
     canonicalUrl: typeof page.canonicalUrl === 'string' ? page.canonicalUrl : '',
     noIndex: !!page.noIndex,
+    showScrollIndicator: page.showScrollIndicator !== false,
     canvasWidth,
     canvasFold: clampWidth(page.canvasFold, 0, 0, 20000),
     mobileWidth,
@@ -1228,7 +1232,7 @@ export const useEditorStore = create((set, get) => ({
   },
 
   setPageSettings: (id, patch) => {
-    const allowed = ['background', 'backgroundMobile', 'language', 'canonicalUrl', 'noIndex']
+    const allowed = ['background', 'backgroundMobile', 'language', 'canonicalUrl', 'noIndex', 'showScrollIndicator']
     const next = Object.fromEntries(
       Object.entries(patch || {}).filter(([key]) => allowed.includes(key)),
     )

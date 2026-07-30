@@ -197,6 +197,7 @@ export default function FlowCanvasItem({
   if (hidden) {
     return (
       <div
+        data-cid={component.id}
         onPointerDown={(e) => {
           e.stopPropagation()
           if (brushMode) {
@@ -239,6 +240,7 @@ export default function FlowCanvasItem({
   return (
     <div
       ref={pinRef}
+      data-cid={component.id}
       onPointerDown={(e) => {
         e.stopPropagation()
         if (brushMode) {
@@ -759,6 +761,7 @@ function TabsCanvasItem({
 
   return (
     <div
+      data-cid={component.id}
       onPointerDown={startMove}
       style={{
         position: 'absolute',

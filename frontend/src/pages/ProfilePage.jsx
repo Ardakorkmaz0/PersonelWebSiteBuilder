@@ -238,24 +238,24 @@ export default function ProfilePage() {
     <div className="dashboard-page">
       <DashboardHeader current="projects" />
 
-      <main className="mx-auto max-w-[1280px] px-3 py-6 sm:px-6 sm:py-9">
-        <div className="mb-6">
-          <p className="dashboard-kicker">{t('Workspace')}</p>
-          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+      <main className="dashboard-container">
+        <div className="dashboard-page-heading">
+          <div>
+            <p className="dashboard-kicker">{t('Workspace')}</p>
+            <div className="mt-1">
               <h1 className="text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)] sm:text-3xl">{t('Profile and projects')}</h1>
               <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Manage your public identity and every site in one place.')}</p>
             </div>
-            {user?.id && (
-              <Link to={`/u/${user.id}`} className="studio-btn studio-btn-secondary min-h-9 px-3">
-                <GlobeIcon size={15} /> {t('View public profile')}
-              </Link>
-            )}
           </div>
+          {user?.id && (
+            <Link to={`/u/${user.id}`} className="studio-btn studio-btn-secondary min-h-10 px-3.5">
+              <GlobeIcon size={15} /> {t('View public profile')}
+            </Link>
+          )}
         </div>
 
         {error && (
-          <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="studio-status-danger mb-5 rounded-xl border px-4 py-3 text-sm">
             {error}
           </div>
         )}
@@ -321,17 +321,19 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[28rem]">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[30rem]">
                 {[
                   ['Sites', stats.total, FileIcon],
                   ['Published', stats.published, GlobeIcon],
                   ['Total views', stats.views, EyeIcon],
                   ['Favorites', stats.favorites, StarIcon],
                 ].map(([label, value, StatIcon]) => (
-                  <div key={label} className="rounded-xl border border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_76%,transparent)] p-3">
-                    <StatIcon size={15} className="text-[var(--studio-accent-hover)]" />
-                    <div className="mt-2 text-lg font-bold text-[var(--studio-text)]">{Number(value).toLocaleString()}</div>
-                    <div className="truncate text-[11px] font-medium text-[var(--studio-text-muted)]">{t(label)}</div>
+                  <div key={label} className="dashboard-stat">
+                    <span className="dashboard-stat-icon"><StatIcon size={15} /></span>
+                    <span className="min-w-0">
+                      <strong className="block truncate text-sm text-[var(--studio-text)]">{Number(value).toLocaleString()}</strong>
+                      <span className="block truncate text-[10px] font-semibold text-[var(--studio-text-faint)]">{t(label)}</span>
+                    </span>
                   </div>
                 ))}
               </div>

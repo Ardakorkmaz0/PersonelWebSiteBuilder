@@ -1,7 +1,7 @@
 import { MOTION_ARM_JS, MOTION_CSS, MOTION_OBSERVER_JS } from './motion.js'
 
 const RUNTIME_STYLE = `
-  html { scrollbar-gutter: stable; }
+  @media (min-width: 768px) { html { scrollbar-gutter: stable; } }
   body { min-height: 100%; }
   [contenteditable] {
     caret-color: transparent !important;
@@ -408,6 +408,19 @@ export function withViewportMeta(html) {
   const out = String(html || '')
   if (/<meta[^>]+name=["']?viewport/i.test(out)) return out
   const tag = '<meta name="viewport" content="width=device-width, initial-scale=1.0" />'
+  if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + tag)
+  if (/<html[^>]*>/i.test(out)) return out.replace(/<html[^>]*>/i, (m) => m + '<head>' + tag + '</head>')
+  return tag + out
+}
+
+// Edit mode needs the same real mobile viewport as View, but the editor must
+// not silently rewrite an imported document just because it was opened. Mark
+// the generated tag as preview-only: serializeDocument already removes every
+// `data-pwb-injected` node while preserving an author-provided viewport tag.
+export function withEditorViewportMeta(html) {
+  const out = String(html || '')
+  if (/<meta[^>]+name=["']?viewport/i.test(out)) return out
+  const tag = '<meta data-pwb-injected name="viewport" content="width=device-width, initial-scale=1.0" />'
   if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + tag)
   if (/<html[^>]*>/i.test(out)) return out.replace(/<html[^>]*>/i, (m) => m + '<head>' + tag + '</head>')
   return tag + out

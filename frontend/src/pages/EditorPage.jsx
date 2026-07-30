@@ -43,7 +43,6 @@ import {
 } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import CanvasPreview from '../components/editor/CanvasPreview.jsx'
-import CanvasSelectionActions from '../components/editor/CanvasSelectionActions.jsx'
 import BrushControls from '../components/editor/BrushControls.jsx'
 import {
   BRUSH_TARGETS,
@@ -303,7 +302,7 @@ export default function EditorPage() {
   const setCanvasPreset = useEditorStore((s) => s.setCanvasPreset)
   const gridStep = useEditorStore((s) => s.gridStep)
   const setGridStep = useEditorStore((s) => s.setGridStep)
-  // Exactly-one selection drives the element action bar docked in the toolbar.
+  // Exactly-one selection drives the selected HTML embed's content-fit refresh.
   const selectedComponentId = useEditorStore((s) =>
     s.selectedIds.length <= 1 ? s.selectedId : null,
   )
@@ -336,6 +335,10 @@ export default function EditorPage() {
   const customJs = useEditorStore((s) => s.schema.customJs)
   const setPageMode = useEditorStore((s) => s.setPageMode)
   const setPageSettings = useEditorStore((s) => s.setPageSettings)
+  const activePageId = useEditorStore((s) => selectCurrentPage(s).id)
+  const showMobileScrollIndicator = useEditorStore(
+    (s) => selectCurrentPage(s).showScrollIndicator !== false,
+  )
   // Component-canvas link tool (Empty mode mirror of the HTML link tool).
   const linkMode = useEditorStore((s) => s.linkMode)
   const linkSourceId = useEditorStore((s) => s.linkSourceId)
@@ -2600,12 +2603,6 @@ export default function EditorPage() {
                       ↔
                     </button>
                   </div>
-                  {/* Selected element's actions, docked at the end of the canvas
-                      controls: one stable spot instead of floating over (and
-                      covering) the design. */}
-                  {canvasMode === 'edit' && selectedComponentId && (
-                    <CanvasSelectionActions inline componentId={selectedComponentId} />
-                  )}
                   {canvasMode === 'legacy' && (
                     <button
                       type="button"
@@ -2679,14 +2676,17 @@ export default function EditorPage() {
                             <input ref={resolutionHeightRef} key={`tool-height-${viewport}-${curFold}`} type="number" min="0" max="20000" defaultValue={curFold || ''} placeholder="—" aria-label={t('Custom height (px)')} className="studio-input min-w-0 flex-1 px-2 py-1.5 text-xs" />
                             <button type="button" onClick={applyCustomCanvasResolution} className="studio-btn studio-btn-secondary px-2">{t('Apply')}</button>
                           </div>
-                          {canvasMode !== 'source' && (
+                          {canvasMode !== 'source' && viewport === 'mobile' && (
                             <button
                               type="button"
-                              onClick={() => { toggleBrowserFrame(); setCanvasToolsOpen(false) }}
-                              className={`studio-menu-item mb-1 ${browserFrameEnabled ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
+                              onClick={() => {
+                                setPageSettings(activePageId, { showScrollIndicator: !showMobileScrollIndicator })
+                                setCanvasToolsOpen(false)
+                              }}
+                              className={`studio-menu-item mb-1 ${showMobileScrollIndicator ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
                             >
-                              <MonitorIcon size={14} />
-                              {t(browserFrameEnabled ? 'Hide browser frame' : 'Show browser frame')}
+                              <EyeIcon size={14} />
+                              {t(showMobileScrollIndicator ? 'Hide scroll indicator' : 'Show scroll indicator')}
                             </button>
                           )}
                           {canvasMode === 'edit' && (

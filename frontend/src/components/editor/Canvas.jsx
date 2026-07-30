@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
@@ -16,6 +16,9 @@ import { CANVAS_SCROLLER_ID } from '../../utils/dragAutoScroll.js'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
+import PreviewScrollIndicator from './PreviewScrollIndicator.jsx'
+import CanvasSelectionActions from './CanvasSelectionActions.jsx'
+import { selectionActionsPosition } from './canvasSelectionActionsLayout.js'
 
 // One editable free canvas, rendered at the active breakpoint's chosen artboard
 // width. PC edits each component's `layout`; Mobile edits its `mobileLayout` on a
@@ -29,6 +32,22 @@ import { BRUSH_CURSOR } from './brushCursor.js'
 
 // Vertical room kept clear for the caption under the phone when fitting it.
 const CAPTION_ROOM = 44
+
+function findComponentById(components, id) {
+  for (const component of components || []) {
+    if (component.id === id) return component
+    const nested = findComponentById(component.children, id)
+    if (nested) return nested
+  }
+  return null
+}
+
+function selectedCanvasNode(canvas, id) {
+  return Array.from(canvas?.querySelectorAll?.('[data-cid]') || []).find(
+    (node) => node.getAttribute('data-cid') === id,
+  ) || null
+}
+
 export default function Canvas({
   brushMode = false,
   brushColor = '#4f46e5',
@@ -61,6 +80,7 @@ export default function Canvas({
   const mobileFold = page.mobileFold || 0
   const select = useEditorStore((s) => s.selectComponent)
   const selectMany = useEditorStore((s) => s.selectMany)
+  const selectedId = useEditorStore((s) => s.selectedId)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const linkMode = useEditorStore((s) => s.linkMode)
   const setPageBackground = useEditorStore((s) => s.setPageBackground)
@@ -70,10 +90,12 @@ export default function Canvas({
   // and Mobile breakpoints (it reads the active viewport's layout).
   const canvasElRef = useRef(null)
   const scrollElRef = useRef(null)
+  const mobileScreenRef = useRef(null)
   const marqueeRef = useRef(null)
   const [marquee, setMarquee] = useState(null)
   const [editorWidth, setEditorWidth] = useState(0)
   const [editorHeight, setEditorHeight] = useState(0)
+  const [selectionActionPosition, setSelectionActionPosition] = useState(null)
   const setCanvasRef = (el) => { canvasElRef.current = el; setNodeRef(el) }
   // The theme's font is what the published page paints in; reflect it on the
   // canvas root so brand-new components inherit it immediately AND the empty
@@ -91,6 +113,7 @@ export default function Canvas({
   const sidePad = flowSidePad(viewport)
   const fold = isMobile ? mobileFold : pcFold
   const background = isMobile ? bgMobile : bg
+  const showScrollIndicator = page.showScrollIndicator !== false
   const contentH = flowMode ? flowCanvasHeight(components, viewport, canvasW) : canvasHeight(components, viewport)
   const phone = phoneModel(canvasW, fold)
   const desktopBrowser = !isMobile && browserFrame
@@ -113,6 +136,23 @@ export default function Canvas({
   const frameH = isMobile
     ? deviceH + phoneFrameH(phone)
     : minHeight + (desktopBrowser ? browserFrameH() : 0)
+
+  const selectedComponent = useMemo(
+    () => findComponentById(components, selectedId),
+    [components, selectedId],
+  )
+  const showSelectionActions =
+    !brushMode &&
+    !linkMode &&
+    selectedIds.length === 1 &&
+    !!selectedId &&
+    !!selectedComponent
+  // HTML embeds expose one extra "fit to content" action in the desktop
+  // toolbar, so include it when calculating the exact physical toolbar width.
+  const selectionActionCount = 7 + (
+    !isMobile && selectedComponent?.type === 'html' ? 1 : 0
+  )
+
   useEffect(() => {
     const el = scrollElRef.current
     if (!el) return undefined
@@ -135,6 +175,69 @@ export default function Canvas({
     editorWidth ? editorWidth / frameW : 1,
     isMobile && editorHeight ? editorHeight / frameH : 1,
   )
+
+  // The action bar is a sibling of the selected DOM node, not a child of the
+  // page/header. Measuring the node's real screen rectangle means this stays
+  // attached to free, flow and nested blocks alike, including scaled mini
+  // canvases. Coordinates are converted back into artboard design pixels
+  // before the counter-scaled toolbar is placed.
+  useLayoutEffect(() => {
+    if (!showSelectionActions) return undefined
+    const canvasElement = canvasElRef.current
+    const target = selectedCanvasNode(canvasElement, selectedId)
+    if (!canvasElement || !target) return undefined
+
+    const update = () => {
+      const canvasRect = canvasElement.getBoundingClientRect()
+      const targetRect = target.getBoundingClientRect()
+      const renderedScale = canvasRect.width / Math.max(1, canvasW)
+      if (!Number.isFinite(renderedScale) || renderedScale <= 0 || !targetRect.width || !targetRect.height) {
+        return
+      }
+      const next = {
+        ...selectionActionsPosition({
+        canvasWidth: canvasW,
+        canvasHeight: minHeight,
+        targetX: (targetRect.left - canvasRect.left) / renderedScale,
+        targetY: (targetRect.top - canvasRect.top) / renderedScale,
+        targetWidth: targetRect.width / renderedScale,
+        targetHeight: targetRect.height / renderedScale,
+        canvasScale,
+        actionCount: selectionActionCount,
+        }),
+        componentId: selectedId,
+      }
+      setSelectionActionPosition((previous) => (
+        previous?.left === next.left &&
+        previous?.top === next.top &&
+        previous?.placement === next.placement &&
+        previous?.componentId === next.componentId
+          ? previous
+          : next
+      ))
+    }
+
+    update()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(canvasElement)
+    observer?.observe(target)
+    const scrollHost = document.getElementById(CANVAS_SCROLLER_ID)
+    scrollHost?.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      observer?.disconnect()
+      scrollHost?.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [
+    canvasW,
+    canvasScale,
+    minHeight,
+    selectedId,
+    selectedComponent,
+    selectionActionCount,
+    showSelectionActions,
+  ])
 
   // Bounding box of a MULTI selection (top-level free-canvas items), so a group
   // toolbar (align / distribute / delete) can float above it.
@@ -328,6 +431,21 @@ export default function Canvas({
         ),
       )}
 
+      {showSelectionActions && selectionActionPosition?.componentId === selectedId && !marquee && (
+        <CanvasSelectionActions
+          componentId={selectedId}
+          canvasScale={canvasScale}
+          style={{
+            left: selectionActionPosition.left,
+            top: selectionActionPosition.top,
+            // Free-canvas selections lift their wrapper to z-index 1000. Keep
+            // the shared overlay above that wrapper so it stays clickable when
+            // the safe top-edge fallback places it below the selected item.
+            zIndex: 1100,
+          }}
+        />
+      )}
+
       {/* Rubber-band selection box. */}
       {marquee && (
         <div
@@ -472,21 +590,28 @@ export default function Canvas({
     // visible band" — pinned bars, the full-height rail, drag auto-scroll —
     // now reads the phone's screen instead of the editor window.
     const screen = (
-      <div
-        id={CANVAS_SCROLLER_ID}
-        data-builder-device-viewport={deviceH}
-        className="overflow-x-hidden overflow-y-auto"
-        style={{
-          width: canvasW,
-          height: pageH,
-          // A phone has a hairline overlay scrollbar, not a desktop gutter —
-          // a chunky grey bar down the side of the mockup reads as part of the
-          // design being previewed.
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(15,23,42,.28) transparent',
-        }}
-      >
-        {canvas}
+      <div className="relative" style={{ width: canvasW, height: pageH }}>
+        <div
+          id={CANVAS_SCROLLER_ID}
+          ref={mobileScreenRef}
+          data-builder-scroll-host
+          data-builder-device-viewport={deviceH}
+          className="h-full overflow-x-hidden overflow-y-auto"
+          style={{
+            width: canvasW,
+            height: pageH,
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
+          {canvas}
+        </div>
+        <PreviewScrollIndicator
+          enabled={showScrollIndicator}
+          scrollRef={mobileScreenRef}
+          contentHeight={minHeight}
+          viewportHeight={pageH}
+        />
       </div>
     )
     return (

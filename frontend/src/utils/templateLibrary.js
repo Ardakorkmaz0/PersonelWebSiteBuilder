@@ -1,5 +1,5 @@
 // Parametric template library: CATEGORY (structure) × PACK (design tokens)
-// = 100+ genuinely different, polished, responsive starter sites.
+// = 200 genuinely different, polished, responsive starter sites.
 //
 // Architecture
 //  - PACKS: curated design-token sets (palette + Google-font pairing + radius).
@@ -13,6 +13,8 @@
 //
 // No external images: visuals are CSS gradients/patterns + emoji, so every
 // template renders fully offline and never shows a broken-image icon.
+
+import { VERTICAL_CATEGORY_SEEDS, templateText } from './templateCatalogData.js'
 
 const esc = (t) =>
   String(t || 'My Site').replace(/[<&>]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;' }[c]))
@@ -746,10 +748,285 @@ function linkBio(p, name) {
 // ---------------------------------------------------------------------------
 // Category × variants assembly
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// FITNESS / WELLNESS builders
+// ---------------------------------------------------------------------------
+// These deliberately use three different information architectures instead of
+// being one layout recoloured ten times: training clubs sell programmes and
+// coaches, studios lead with a timetable, and care practices lead with services
+// and a gentler appointment journey.
+function wellnessTraining(p, name, profile) {
+  const t = esc(name)
+  const links = [['#programs', 'Programs'], ['#coaches', 'Coaches'], ['#join', 'Join']]
+  const body = `
+${navbar(t, links, ['#join', profile.cta])}
+${heroSplit(t, { pattern: heroPattern(p), badge: profile.badge, title: profile.title, sub: profile.sub, cta: ['#join', profile.cta], cta2: ['#programs', 'Explore programs'] })}
+${statRow(profile.stats)}
+<section id="programs" class="soft"><div class="container">
+  ${sectionHead('Training', profile.programTitle, profile.programLead)}
+  ${cardGrid(3, profile.programs)}
+</div></section>
+<section id="coaches"><div class="container wellness-training-grid" style="display:grid; grid-template-columns:0.95fr 1.05fr; gap:56px; align-items:center;">
+  <div class="visual" style="aspect-ratio:4/3; background:linear-gradient(145deg, ${p.accent}22, ${p.accent}a6), ${heroPattern(p)};"></div>
+  <div>
+    ${sectionHead('People first', profile.coachTitle, '')}
+    <p class="lead" style="margin-bottom:24px;">${profile.coachCopy}</p>
+    <div class="card" style="padding:20px 22px;"><strong>${profile.noteTitle}</strong><p style="margin-top:6px;">${profile.note}</p></div>
+  </div>
+</div></section>
+${ctaBand(profile.joinTitle, profile.joinCopy, ['mailto:hello@example.com', profile.cta]).replace('id="contact"', 'id="join"')}
+${footerCols(t, links, profile.footer)}
+<style>@media (max-width:768px){ .wellness-training-grid { grid-template-columns:1fr !important; gap:32px !important; } }</style>`
+  return doc(p, t, `${t} — ${profile.documentTitle}`, body)
+}
+
+function wellnessStudio(p, name, profile) {
+  const t = esc(name)
+  const links = [['#schedule', 'Schedule'], ['#practice', 'Practice'], ['#book', 'Book']]
+  const body = `
+${navbar(t, links, ['#book', profile.cta])}
+${heroCentered(t, { pattern: heroPattern(p), badge: profile.badge, title: profile.title, sub: profile.sub, cta: ['#book', profile.cta], cta2: ['#schedule', 'See the schedule'] })}
+<section id="schedule" class="soft"><div class="container narrow">
+  ${sectionHead('This week', profile.scheduleTitle, profile.scheduleLead)}
+  <div class="card" style="padding:8px 28px;">
+    ${profile.schedule.map(([time, session, detail]) => `<div style="display:grid; grid-template-columns:100px 1fr auto; gap:16px; align-items:center; padding:18px 0; border-bottom:1px solid var(--border);"><strong style="color:var(--accent);">${time}</strong><span><strong>${session}</strong><small style="display:block; color:var(--muted);">${detail}</small></span><span class="chip">${profile.duration}</span></div>`).join('')}
+  </div>
+</div></section>
+<section id="practice"><div class="container wellness-studio-grid" style="display:grid; grid-template-columns:1fr 0.95fr; gap:56px; align-items:center;">
+  <div>
+    ${sectionHead('Our approach', profile.practiceTitle, '')}
+    <p class="lead" style="margin-bottom:24px;">${profile.practiceCopy}</p>
+    <div class="grid-2">
+      ${profile.promises.map(([heading, copy]) => `<div class="card" style="padding:20px;"><h3 style="font-size:17px;">${heading}</h3><p>${copy}</p></div>`).join('')}
+    </div>
+  </div>
+  <div class="visual" style="aspect-ratio:4/5; background:linear-gradient(155deg, ${p.accent}20, ${p.accent}a8), ${heroPattern(p)};"></div>
+</div></section>
+${ctaBand(profile.bookTitle, profile.bookCopy, ['mailto:hello@example.com', profile.cta]).replace('id="contact"', 'id="book"')}
+${footerCols(t, links, profile.footer)}
+<style>@media (max-width:768px){ .wellness-studio-grid { grid-template-columns:1fr !important; gap:32px !important; } #schedule .card > div { grid-template-columns:78px 1fr !important; } #schedule .chip { display:none; } }</style>`
+  return doc(p, t, `${t} — ${profile.documentTitle}`, body)
+}
+
+function wellnessCare(p, name, profile) {
+  const t = esc(name)
+  const links = [['#services', 'Services'], ['#approach', 'Approach'], ['#book', 'Book']]
+  const body = `
+${navbar(t, links, ['#book', profile.cta])}
+${heroSplit(t, { pattern: heroPattern(p), badge: profile.badge, title: profile.title, sub: profile.sub, cta: ['#book', profile.cta], cta2: ['#services', 'See services'] })}
+<section id="services" class="soft"><div class="container">
+  ${sectionHead('Ways to work together', profile.servicesTitle, profile.servicesLead)}
+  ${cardGrid(3, profile.services)}
+</div></section>
+<section id="approach"><div class="container narrow" style="text-align:center;">
+  ${sectionHead('Thoughtful care', profile.approachTitle, '')}
+  <p class="lead" style="margin:0 auto 30px;">${profile.approachCopy}</p>
+  <div class="stats" style="justify-content:center; text-align:left;">${profile.steps.map(([number, label]) => `<div><b style="color:var(--accent);">${number}</b><span>${label}</span></div>`).join('')}</div>
+</div></section>
+${ctaBand(profile.bookTitle, profile.bookCopy, ['mailto:hello@example.com', profile.cta]).replace('id="contact"', 'id="book"')}
+${footerCols(t, links, profile.footer)}`
+  return doc(p, t, `${t} — ${profile.documentTitle}`, body)
+}
+
+const WELLNESS_TEMPLATES = [
+  {
+    id: 'wellness-iron-club', pack: 'noir', name: 'Iron Club', desc: 'Strength studio with programmes, coaches, and a bold dark membership flow.', build: wellnessTraining,
+    badge: 'Strength · Conditioning · Community', title: 'Train with<br/>a plan.', sub: 'Small-group strength coaching for people who want steady progress without gym-floor guesswork.', cta: 'Start training',
+    stats: [['6', 'coaches'], ['18', 'weekly sessions'], ['4.9/5', 'member rating']], programTitle: 'Choose your starting line', programLead: 'A clear programme for the first week, the next milestone, and the long run.',
+    programs: [{ icon: '01', h: 'Foundations', p: 'Learn the lifts, build confidence, and move well.' }, { icon: '02', h: 'Build', p: 'Structured strength blocks with progressive coaching.' }, { icon: '03', h: 'Performance', p: 'Conditioning and power for your next personal best.' }],
+    coachTitle: 'Coaching that meets you where you are', coachCopy: 'Every session has a plan, a coach who knows your name, and room to work at your own pace.', noteTitle: 'First session', note: 'Meet your coach, set a simple baseline, and leave with a plan for week one.', joinTitle: 'Ready for a stronger routine?', joinCopy: 'Book a first session. No contract and no pressure to decide on the day.', footer: 'A strength club for consistent, supported progress.', documentTitle: 'Strength training',
+  },
+  {
+    id: 'wellness-yoga-bloom', pack: 'ivory', name: 'Yoga Bloom', desc: 'A warm class timetable and calm practice page for a neighbourhood yoga studio.', build: wellnessStudio,
+    badge: 'A quiet hour for your whole week', title: 'Make space<br/>to breathe.', sub: 'Slow, grounded yoga classes in a sunlit neighbourhood studio. Come exactly as you are.', cta: 'Book a class', scheduleTitle: 'A rhythm for every week', scheduleLead: 'Choose a class that feels right today; all levels are welcome.', duration: '60 min',
+    schedule: [['Mon · 08:00', 'Morning flow', 'Wake up gently and move with your breath.'], ['Wed · 18:30', 'Slow vinyasa', 'An unhurried strength and mobility practice.'], ['Sat · 10:00', 'Reset class', 'A generous weekend class for every level.']],
+    practiceTitle: 'Less performance. More presence.', practiceCopy: 'We keep classes small, give clear options, and make room for quiet. Your practice can change from one week to the next.', promises: [['Small groups', 'Space to ask questions and make the practice yours.'], ['Kind guidance', 'Clear cues without pressure to get every shape right.']], bookTitle: 'Your mat is waiting', bookCopy: 'Reserve a class or ask about a first-visit pass by email.', footer: 'A neighbourhood yoga studio for slower, steadier days.', documentTitle: 'Yoga studio',
+  },
+  {
+    id: 'wellness-pilates-house', pack: 'plum', name: 'Pilates House', desc: 'Refined pilates studio with a structured schedule and membership-ready journey.', build: wellnessStudio,
+    badge: 'Reformer · mat · private sessions', title: 'Precision that<br/>feels good.', sub: 'A considered Pilates practice for strength, alignment, and more ease in everyday movement.', cta: 'Find a class', scheduleTitle: 'Plan your practice', scheduleLead: 'Choose reformer, mat, or a private session with a teacher who learns your body.', duration: '50 min',
+    schedule: [['Tue · 07:30', 'Reformer foundations', 'A supportive introduction to equipment and form.'], ['Thu · 17:30', 'Mat strength', 'Deep core work with intelligent pacing.'], ['Sun · 11:00', 'Private focus', 'One-to-one attention for your specific goals.']],
+    practiceTitle: 'Built around how you move', practiceCopy: 'Good technique should feel clear, not intimidating. We use small, consistent cues to help you build strength you can trust.', promises: [['Thoughtful progressions', 'A clear next step whether you are new or experienced.'], ['Teacher attention', 'Detailed, personal guidance in every class.']], bookTitle: 'Start with a first session', bookCopy: 'Tell us what you want from your practice and we will suggest the right class.', footer: 'Pilates for stronger, more confident everyday movement.', documentTitle: 'Pilates studio',
+  },
+  {
+    id: 'wellness-personal-coach', pack: 'indigo', name: 'Personal Coach', desc: 'Results-led personal training page with proof, plans, and a direct first-session CTA.', build: wellnessTraining,
+    badge: 'Personal training · online accountability', title: 'A plan built<br/>around your life.', sub: 'Coaching for busy people who want simple training, useful feedback, and results that last.', cta: 'Meet your coach',
+    stats: [['1:1', 'coaching'], ['12 wk', 'first cycle'], ['92%', 'renewal rate']], programTitle: 'No generic programmes', programLead: 'Start with your schedule, your history, and one goal worth working toward.',
+    programs: [{ icon: 'A', h: 'Start strong', p: 'Build the habits and movement basics that make training stick.' }, { icon: 'B', h: 'Build momentum', p: 'A progressive plan with weekly coaching feedback.' }, { icon: 'C', h: 'Stay ready', p: 'Flexible programming for travel, work, and real life.' }],
+    coachTitle: 'A coach in your corner', coachCopy: 'You get a clear training plan, honest feedback, and a practical way to stay consistent on busy weeks.', noteTitle: 'Your first call', note: 'We talk through your routine, training history, and a goal you can measure.', joinTitle: 'Make your next twelve weeks count', joinCopy: 'Send a short note about where you are now and what you want to change.', footer: 'Personal training with a plan that fits real life.', documentTitle: 'Personal training',
+  },
+  {
+    id: 'wellness-run-collective', pack: 'sky', name: 'Run Collective', desc: 'Community run club with routes, training groups, and a social event structure.', build: wellnessTraining,
+    badge: 'City runs · trails · coffee after', title: 'Find your<br/>running people.', sub: 'A friendly run club for steady miles, new routes, and the kind of accountability that feels social.', cta: 'Join a run',
+    stats: [['4', 'weekly runs'], ['12 km', 'longest route'], ['280+', 'club members']], programTitle: 'A pace for every runner', programLead: 'Choose a group, meet at the start line, and let the route do the rest.',
+    programs: [{ icon: '5K', h: 'First 5K', p: 'A gentle group for building a running habit.' }, { icon: '10K', h: 'City miles', p: 'Midweek routes through the streets we love.' }, { icon: 'TR', h: 'Trail days', p: 'Longer weekends outside the city and off the road.' }],
+    coachTitle: 'The route is better together', coachCopy: 'Our run leaders set the pace, keep the group connected, and always make time for the coffee afterwards.', noteTitle: 'New to the club?', note: 'Come to any first-5K or city-miles run. We will help you find your group.', joinTitle: 'See you at the start line', joinCopy: 'Join the next run and get the weekly route note in your inbox.', footer: 'A run club for good miles and better company.', documentTitle: 'Running club',
+  },
+  {
+    id: 'wellness-retreat', pack: 'coral', name: 'Wellness Retreat', desc: 'A restorative retreat page with an itinerary, calm editorial pacing, and booking CTA.', build: wellnessStudio,
+    badge: 'Four days by the sea · limited to 16 guests', title: 'Come back<br/>to yourself.', sub: 'A long weekend of movement, good food, and unstructured time in a place made for exhaling.', cta: 'Request a place', scheduleTitle: 'A gentle four-day rhythm', scheduleLead: 'Everything is optional except arriving as you are.', duration: 'Included',
+    schedule: [['Day 1 · 16:00', 'Arrive and settle', 'Tea on the terrace, a soft evening practice.'], ['Day 2 · 08:00', 'Move and explore', 'Morning movement, a long lunch, coastal walk.'], ['Day 3 · 09:00', 'Rest and restore', 'Breathwork, quiet hours, candlelit dinner.']],
+    practiceTitle: 'More room in the day', practiceCopy: 'The retreat is deliberately spacious: enough structure to feel held, enough free time to notice what you need.', promises: [['Slow mornings', 'No early alarms, only a nourishing start.'], ['Small table', 'Shared meals with seasonal food and unhurried conversation.']], bookTitle: 'Take your place at the table', bookCopy: 'Email us for dates, room options, and accessibility details.', footer: 'Small retreats for rest, movement, and renewed attention.', documentTitle: 'Wellness retreat',
+  },
+  {
+    id: 'wellness-nutrition-studio', pack: 'forest', name: 'Nutrition Studio', desc: 'A practical nutrition practice with service paths, a clear approach, and consultation CTA.', build: wellnessCare,
+    badge: 'Evidence-led nutrition · everyday habits', title: 'Food support<br/>for real life.', sub: 'Simple, non-judgemental nutrition support that fits your culture, budget, schedule, and goals.', cta: 'Book a consultation', servicesTitle: 'Choose the support you need', servicesLead: 'Start where you are and leave with actions that make sense next week.',
+    services: [{ icon: '1:1', h: 'Private consultation', p: 'A focused session around your habits, questions, and priorities.' }, { icon: '4W', h: 'Four-week reset', p: 'Structured support for building one sustainable routine at a time.' }, { icon: 'GP', h: 'Group workshop', p: 'Practical food education for teams, friends, and communities.' }],
+    approachTitle: 'Useful information, not food rules', approachCopy: 'We look at patterns before prescriptions. The goal is more confidence around food, not a perfect plan.', steps: [['01', 'Tell us what a normal week looks like'], ['02', 'Choose one or two changes worth testing'], ['03', 'Adjust with support as life happens']], bookTitle: 'Start with one conversation', bookCopy: 'Share a little about what you need and we will suggest the best first session.', footer: 'Practical nutrition support for everyday life.', documentTitle: 'Nutrition practice',
+  },
+  {
+    id: 'wellness-calm-practice', pack: 'ocean', name: 'Calm Practice', desc: 'Mindful movement and breathing studio with a gentle class rhythm and clear first visit.', build: wellnessStudio,
+    badge: 'Mindful movement · breath · rest', title: 'A quieter way<br/>to feel better.', sub: 'Small classes for slowing down, moving kindly, and making space for a steadier nervous system.', cta: 'Plan a visit', scheduleTitle: 'Choose your pace', scheduleLead: 'Each class is designed to meet the energy you arrive with.', duration: '45 min',
+    schedule: [['Mon · 12:30', 'Midday reset', 'A short, grounding pause in the middle of the week.'], ['Thu · 19:00', 'Move slowly', 'Gentle mobility with more room to breathe.'], ['Sun · 17:00', 'Rest practice', 'A soft end to the week with supported rest.']],
+    practiceTitle: 'No need to push through', practiceCopy: 'We offer options, permission to rest, and a practice that makes room for your actual day—not the ideal one.', promises: [['Accessible entry', 'No experience, flexibility, or special equipment needed.'], ['A softer room', 'Low light, simple language, and a pace that stays human.']], bookTitle: 'Your first class can be simple', bookCopy: 'Tell us when you are free and we will help you choose a starting point.', footer: 'Mindful movement for quieter, steadier days.', documentTitle: 'Mindful movement',
+  },
+  {
+    id: 'wellness-martial-arts', pack: 'midnight', name: 'Martial Arts Hall', desc: 'A disciplined martial arts school layout with programmes, instructors, and membership CTA.', build: wellnessTraining,
+    badge: 'Technique · discipline · respect', title: 'Practice with<br/>purpose.', sub: 'A welcoming martial arts school for focused training, patient coaching, and steady confidence.', cta: 'Try a class',
+    stats: [['5', 'skill levels'], ['14', 'weekly classes'], ['20 yr', 'teaching experience']], programTitle: 'Start at your level', programLead: 'Clear fundamentals for new students and focused progression for returning practitioners.',
+    programs: [{ icon: 'I', h: 'Fundamentals', p: 'Stance, movement, and the habits that make practice safe.' }, { icon: 'II', h: 'Technique', p: 'Detailed drills and partner work at a thoughtful pace.' }, { icon: 'III', h: 'Advanced practice', p: 'Longer rounds for experienced students seeking depth.' }],
+    coachTitle: 'Discipline without intimidation', coachCopy: 'Our instructors teach with clarity and care. You will know what to work on, why it matters, and how to progress.', noteTitle: 'First class', note: 'Wear comfortable clothes, arrive ten minutes early, and we will take care of the rest.', joinTitle: 'Step onto the mat', joinCopy: 'Try one class and see whether this is the practice you have been looking for.', footer: 'A martial arts school for focused, respectful practice.', documentTitle: 'Martial arts school',
+  },
+  {
+    id: 'wellness-recovery-studio', pack: 'slate', name: 'Recovery Studio', desc: 'Modern recovery services page with restorative sessions, a clear process, and booking flow.', build: wellnessCare,
+    badge: 'Recovery sessions · mobility · recharge', title: 'Recover with<br/>intention.', sub: 'A focused space for mobility, restorative movement, and the reset your training week needs.', cta: 'Reserve a session', servicesTitle: 'Recovery that fits your training', servicesLead: 'Choose one focused session or build a regular recovery rhythm.',
+    services: [{ icon: '60', h: 'Mobility session', p: 'Guided movement and practical tools for everyday range of motion.' }, { icon: '90', h: 'Deep reset', p: 'A longer restorative session for busy, demanding weeks.' }, { icon: 'GR', h: 'Small group', p: 'Recovery sessions for teams, clubs, and training partners.' }],
+    approachTitle: 'Make recovery part of the plan', approachCopy: 'We keep it practical: pay attention, move with intention, and leave with something useful to repeat at home.', steps: [['01', 'Arrive with a quick check-in'], ['02', 'Choose the right level of support'], ['03', 'Leave with a simple next step']], bookTitle: 'Give your week a reset', bookCopy: 'Send us your preferred time and we will help you choose a session.', footer: 'Restorative movement for sustainable training weeks.', documentTitle: 'Recovery studio',
+  },
+]
+
+const wellnessVariant = (profile) => v(
+  profile.id,
+  profile.name,
+  profile.desc,
+  (title) => profile.build(PACKS[profile.pack], title, profile),
+)
+
+// ---------------------------------------------------------------------------
+// Data-driven vertical starters
+// ---------------------------------------------------------------------------
+// The large catalogue intentionally reuses four page *structures* while the
+// category seed supplies its own copy, navigation and design pack. This keeps
+// 100 additional starters maintainable without turning this module into a
+// second hard-coded content database.
+const verticalCopy = (value) => esc(templateText(value))
+
+const verticalContent = (profile) => ({
+  nav: profile.nav.map(verticalCopy),
+  badge: verticalCopy(profile.badge),
+  title: verticalCopy(profile.title),
+  lead: verticalCopy(profile.lead),
+  cta: verticalCopy(profile.cta),
+  sectionTitle: verticalCopy(profile.sectionTitle),
+  sectionLead: verticalCopy(profile.sectionLead),
+  storyTitle: verticalCopy(profile.storyTitle),
+  story: verticalCopy(profile.story),
+  steps: profile.steps.map(verticalCopy),
+  ctaTitle: verticalCopy(profile.ctaTitle),
+  ctaCopy: verticalCopy(profile.ctaCopy),
+  footer: verticalCopy(profile.footer),
+  items: profile.items.map((item, index) => ({
+    icon: `0${index + 1}`,
+    h: verticalCopy(item.heading),
+    p: verticalCopy(item.text),
+  })),
+})
+
+const verticalNav = (content) => [
+  ['#collection', content.nav[0]],
+  ['#story', content.nav[1]],
+  ['#contact', content.nav[2]],
+]
+
+const verticalStory = (p, content) => `
+<section id="story" class="soft">
+  <div class="container grid-2" style="align-items:center;">
+    <div>${sectionHead(content.nav[1], content.storyTitle, content.story)}</div>
+    <div class="visual" style="min-height:280px; background:linear-gradient(145deg, ${p.accent}2f, ${p.accent}bb), ${heroPattern(p)};" role="img" aria-label="${content.storyTitle}"></div>
+  </div>
+</section>`
+
+const verticalSteps = (content) => `
+<ul class="tl">
+  ${content.steps.map((step, index) => `<li><span class="when">0${index + 1}</span><h3>${step}</h3><p>${content.sectionLead}</p></li>`).join('')}
+</ul>`
+
+const verticalFooter = (t, content) => footerCols(t, verticalNav(content), content.footer)
+
+function verticalCatalog(p, name, profile) {
+  const t = esc(name)
+  const content = verticalContent(profile)
+  return doc(p, t, `${t} | ${content.sectionTitle}`, `
+${navbar(t, verticalNav(content), ['#contact', content.cta])}
+${heroSplit(t, { pattern: heroPattern(p), badge: content.badge, title: content.title, sub: content.lead, cta: ['#collection', content.cta], cta2: ['#story', content.nav[1]] })}
+${statRow(content.items.map((item, index) => [`0${index + 1}`, item.h]))}
+<section id="collection"><div class="container">${sectionHead(content.nav[0], content.sectionTitle, content.sectionLead)}${cardGrid(3, content.items)}</div></section>
+${verticalStory(p, content)}
+${ctaBand(content.ctaTitle, content.ctaCopy, ['#collection', content.cta])}
+${verticalFooter(t, content)}`)
+}
+
+function verticalService(p, name, profile) {
+  const t = esc(name)
+  const content = verticalContent(profile)
+  return doc(p, t, `${t} | ${content.sectionTitle}`, `
+${navbar(t, verticalNav(content), ['#contact', content.cta])}
+${heroCentered(t, { pattern: heroPattern(p), badge: content.badge, title: content.title, sub: content.lead, cta: ['#contact', content.cta], cta2: ['#collection', content.nav[0]] })}
+<section id="collection" class="soft"><div class="container">${sectionHead(content.nav[0], content.sectionTitle, content.sectionLead)}${cardGrid(3, content.items)}</div></section>
+<section id="story"><div class="container grid-2" style="align-items:start;"><div>${sectionHead(content.nav[1], content.storyTitle, content.story)}</div><div>${verticalSteps(content)}</div></div></section>
+${ctaBand(content.ctaTitle, content.ctaCopy, ['#contact', content.cta])}
+${verticalFooter(t, content)}`)
+}
+
+function verticalEditorial(p, name, profile) {
+  const t = esc(name)
+  const content = verticalContent(profile)
+  return doc(p, t, `${t} | ${content.storyTitle}`, `
+${navbar(t, verticalNav(content), ['#contact', content.cta])}
+<section style="padding:112px 0 72px; background:${heroPattern(p)};"><div class="container narrow"><span class="chip">${content.badge}</span><h1 style="font-size:clamp(42px,7vw,76px); margin-top:22px;">${content.title}</h1><p class="lead" style="font-size:20px;">${content.lead}</p><a class="btn" href="#story">${content.nav[1]}</a></div></section>
+<section id="story"><div class="container grid-2" style="align-items:center;"><div class="visual" style="min-height:360px; background:linear-gradient(155deg, ${p.accent}2d, ${p.accent}c0), ${heroPattern(p)};" role="img" aria-label="${content.storyTitle}"></div><div>${sectionHead(content.nav[1], content.storyTitle, content.story)}<p class="lead" style="margin-bottom:0;">${content.steps.join(' · ')}</p></div></div></section>
+<section id="collection" class="soft"><div class="container">${sectionHead(content.nav[0], content.sectionTitle, content.sectionLead)}${cardGrid(3, content.items)}</div></section>
+${ctaBand(content.ctaTitle, content.ctaCopy, ['#contact', content.cta])}
+${verticalFooter(t, content)}`)
+}
+
+function verticalBooking(p, name, profile) {
+  const t = esc(name)
+  const content = verticalContent(profile)
+  const schedule = content.steps.map((step, index) => `<div class="card" style="padding:20px;"><span class="eyebrow">0${index + 1}</span><h3>${step}</h3><p>${content.sectionLead}</p></div>`).join('')
+  return doc(p, t, `${t} | ${content.cta}`, `
+${navbar(t, verticalNav(content), ['#contact', content.cta])}
+${heroSplit(t, { pattern: heroPattern(p), badge: content.badge, title: content.title, sub: content.lead, cta: ['#contact', content.cta], cta2: ['#collection', content.nav[0]] })}
+<section id="collection"><div class="container">${sectionHead(content.nav[0], content.sectionTitle, content.sectionLead)}<div class="grid-3">${schedule}</div></div></section>
+<section id="story" class="soft"><div class="container grid-2" style="align-items:center;"><div>${sectionHead(content.nav[1], content.storyTitle, content.story)}</div><div>${cardGrid(1, content.items)}</div></div></section>
+${ctaBand(content.ctaTitle, content.ctaCopy, ['#contact', content.cta])}
+${verticalFooter(t, content)}`)
+}
+
+const VERTICAL_BUILDERS = {
+  catalog: verticalCatalog,
+  service: verticalService,
+  editorial: verticalEditorial,
+  booking: verticalBooking,
+}
+
 const v = (id, name, desc, build) => ({ id, name, desc, build })
 const withPacks = (baseId, builder, rows) =>
   rows.map(([packId, name, desc]) =>
     v(`${baseId}-${packId}`, name, desc, (title) => builder(PACKS[packId], title)))
+
+const VERTICAL_CATEGORIES = VERTICAL_CATEGORY_SEEDS.map((seed) => ({
+  id: seed.id,
+  name: templateText(seed.name),
+  icon: seed.icon,
+  desc: templateText(seed.desc),
+  variants: seed.variants.map((variant) => v(
+    `${seed.id}-${variant.id}`,
+    templateText(variant.name),
+    templateText(seed.profile.familyDescriptions[variant.family]),
+    (title) => VERTICAL_BUILDERS[variant.family](PACKS[variant.pack], title, seed.profile),
+  )),
+}))
 
 export const TEMPLATE_LIBRARY = [
   {
@@ -916,6 +1193,34 @@ export const TEMPLATE_LIBRARY = [
       ['sky', 'Sky Links', 'Light blue, maximum legibility.'],
     ]),
   },
+  {
+    id: 'wellness', name: 'Fitness & Wellness', icon: '🧘',
+    desc: 'Studios, coaches, clubs, and restorative practices with distinct starting flows.',
+    variants: WELLNESS_TEMPLATES.map(wellnessVariant),
+  },
+  ...VERTICAL_CATEGORIES,
 ]
 
 export const TEMPLATE_COUNT = TEMPLATE_LIBRARY.reduce((n, c) => n + c.variants.length, 0)
+
+// The wizard and future catalogue entry points need the same public-site
+// category as the gallery. Keeping this beside the library prevents a new
+// template collection from silently falling back to “Other”.
+const CORE_TEMPLATE_SITE_CATEGORY_MAP = {
+  cv: 'personal',
+  portfolio: 'portfolio',
+  landing: 'landing',
+  business: 'business',
+  cafe: 'business',
+  photo: 'portfolio',
+  blog: 'blog',
+  event: 'personal',
+  shop: 'shop',
+  links: 'personal',
+  wellness: 'business',
+}
+
+export const TEMPLATE_SITE_CATEGORY_MAP = {
+  ...CORE_TEMPLATE_SITE_CATEGORY_MAP,
+  ...Object.fromEntries(VERTICAL_CATEGORY_SEEDS.map((seed) => [seed.id, seed.siteCategory])),
+}

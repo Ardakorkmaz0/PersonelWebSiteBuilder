@@ -65,20 +65,20 @@ export default function OwnerSiteCard({
   }
 
   return (
-    <article className="group relative overflow-visible rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] transition hover:-translate-y-0.5 hover:shadow-[var(--studio-shadow)]">
+    <article className="group relative flex h-full flex-col overflow-visible rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] transition duration-150 hover:-translate-y-0.5 hover:border-[var(--studio-border-strong)] hover:shadow-[var(--studio-shadow)]">
       {isPinned && (
-        <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_92%,transparent)] px-2 py-1 text-[10px] font-semibold text-[var(--studio-accent-hover)] shadow-sm backdrop-blur">
+        <span className="absolute left-4 top-4 z-10 inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--studio-accent)_30%,var(--studio-border))] bg-[color-mix(in_srgb,var(--studio-panel-raised)_90%,transparent)] px-2.5 py-1 text-[10px] font-bold text-[var(--studio-accent-hover)] shadow-sm backdrop-blur">
           <PinIcon size={11} /> {t('Pinned')}
         </span>
       )}
-      <Link to={`/editor/${site.id}`} className="block overflow-hidden rounded-t-xl bg-[var(--studio-control)] p-2">
+      <Link to={`/editor/${site.id}`} className="block overflow-hidden rounded-t-2xl border-b border-[var(--studio-border)] bg-[var(--studio-control)] p-2">
         <SitePreview site={site} source="owner" height={145} />
       </Link>
 
-      <div className="p-4">
+      <div className="flex flex-1 flex-col p-4 sm:p-[1.125rem]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate font-semibold text-[var(--studio-text)]">{site.title}</h3>
+            <h3 className="truncate text-[0.95rem] font-bold tracking-[-0.01em] text-[var(--studio-text)]">{site.title}</h3>
             <p className="mt-0.5 truncate text-[11px] text-[var(--studio-text-faint)]">/site/{site.slug}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -137,12 +137,12 @@ export default function OwnerSiteCard({
           <span className="flex items-center gap-1"><StarIcon size={13} /> {(site.favorite_count || 0).toLocaleString()}</span>
           <span className="ml-auto">{t('{count} pages', { count: health.page_count || 1 })}</span>
         </div>
-        <div className="mt-4 flex items-center gap-2">
-          <Link to={`/editor/${site.id}`} className="studio-btn studio-btn-accent min-h-8 px-3">
+        <div className="mt-auto flex items-center gap-2 border-t border-[var(--studio-border)] pt-3.5">
+          <Link to={`/editor/${site.id}`} className="studio-btn studio-btn-accent min-h-9 flex-1 px-3">
             {t('Continue editing')} <ArrowRightIcon size={14} />
           </Link>
           {site.published && (
-            <Link to={`/site/${site.slug}`} title={t('View live site')} className="studio-icon-btn">
+            <Link to={`/site/${site.slug}`} title={t('View live site')} className="studio-icon-btn studio-btn-secondary h-9 w-9">
               <GlobeIcon size={15} />
             </Link>
           )}

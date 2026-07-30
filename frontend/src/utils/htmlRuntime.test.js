@@ -10,6 +10,7 @@ import {
   builderInteractiveTags,
   withBuilderInteractiveHtml,
   withBuilderRuntimeHtml,
+  withEditorViewportMeta,
   withViewportMeta,
 } from './htmlRuntime.js'
 
@@ -34,6 +35,19 @@ describe('withViewportMeta', () => {
 
   it('prepends to bare fragments', () => {
     expect(withViewportMeta('<div>x</div>')).toMatch(/^<meta name="viewport"/)
+  })
+})
+
+describe('withEditorViewportMeta', () => {
+  it('marks a generated viewport as transient editor chrome', () => {
+    const out = withEditorViewportMeta('<html><head></head><body></body></html>')
+    expect(out).toContain('data-pwb-injected')
+    expect(out).toContain('name="viewport"')
+  })
+
+  it('preserves an author-provided viewport without marking it transient', () => {
+    const doc = '<html><head><meta name="viewport" content="width=device-width" /></head><body></body></html>'
+    expect(withEditorViewportMeta(doc)).toBe(doc)
   })
 })
 

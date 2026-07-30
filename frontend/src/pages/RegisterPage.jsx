@@ -4,10 +4,10 @@ import { register, googleLogin } from '../api/auth.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { passwordStrength } from '../utils/passwordStrength.js'
+import AuthShell, { AuthWidgetFrame } from '../components/auth/AuthShell.jsx'
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
 import Recaptcha from '../components/auth/Recaptcha.jsx'
 import { usePublicConfig } from '../utils/usePublicConfig.js'
-import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
 import { useLanguage } from '../i18n/useLanguage.js'
 
 const ENV_RECAPTCHA = !!import.meta.env.VITE_RECAPTCHA_SITE_KEY
@@ -21,13 +21,11 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   // Matches the sign-in form: unchecked keeps the session in
-  // sessionStorage so it ends with the tab. Registering used to persist
-  // to localStorage unconditionally, with no way to say otherwise.
+  // sessionStorage so it ends with the tab.
   const [remember, setRemember] = useState(true)
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
   const cfg = usePublicConfig()
-  // reCAPTCHA is required when a site key is configured (runtime or env).
   const recaptchaOn = !!(cfg?.recaptcha_site_key || ENV_RECAPTCHA)
 
   const strength = passwordStrength(password)
@@ -63,107 +61,95 @@ export default function RegisterPage() {
   }
 
   return (
-    <div
-      className="themed-auth-page flex min-h-screen items-center justify-center p-4"
-      style={{
-        background:
-          'radial-gradient(900px 500px at 80% -10%, rgba(99,102,241,0.14), transparent 60%), radial-gradient(700px 420px at -10% 110%, rgba(67,56,202,0.10), transparent 60%), #f7f8fa',
-      }}
+    <AuthShell
+      title={t('Create your account')}
+      description={t('Build and publish your first site in minutes.')}
+      onSubmit={onSubmit}
+      footer={(
+        <>
+          {t('Already have an account?')}{' '}
+          <Link className="font-semibold text-[var(--studio-accent-hover)] hover:underline" to="/login">
+            {t('Sign in')}
+          </Link>
+        </>
+      )}
     >
-      <LanguageSwitcher className="fixed right-4 top-4 z-20" />
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center justify-center gap-2.5">
-          <span className="brand-mark">S</span>
-          <span className="text-lg font-bold tracking-tight text-[#111827]">Sitebuilder</span>
+      {error && (
+        <div role="alert" className="studio-status-danger rounded-lg border px-3 py-2 text-sm">
+          {error}
         </div>
+      )}
 
-        <form onSubmit={onSubmit} className="ms-card space-y-5 p-8">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-[#111827]">{t('Create your account')}</h1>
-            <p className="mt-1 text-sm text-[#6b7280]">{t('Build and publish your first site in minutes.')}</p>
-          </div>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium text-[var(--studio-text-muted)]">{t('Username')}</span>
+        <input
+          className="ms-input"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
+          required
+        />
+      </label>
 
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium text-[var(--studio-text-muted)]">{t('Email')}</span>
+        <input
+          type="email"
+          className="ms-input"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          required
+        />
+      </label>
 
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-[#374151]">{t('Username')}</span>
-            <input
-              className="ms-input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-            />
-          </label>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium text-[var(--studio-text-muted)]">{t('Password')}</span>
+        <input
+          type="password"
+          className="ms-input"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+          minLength={8}
+          required
+        />
+        {/* Strength meter is a hint; server-side validators remain authoritative. */}
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--studio-control)]">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${password ? strength.percent : 0}%`, background: strength.color }}
+          />
+        </div>
+        <span className="mt-1 flex flex-wrap items-center justify-between gap-1 text-xs text-[var(--studio-text-muted)]">
+          <span>{t('8+ chars, mix letters, numbers & symbols.')}</span>
+          {password && <span style={{ color: strength.color }}>{t(strength.label)}</span>}
+        </span>
+      </label>
 
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-[#374151]">{t('Email')}</span>
-            <input
-              type="email"
-              className="ms-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </label>
+      <label className="flex items-center gap-2 text-sm text-[var(--studio-text-muted)]">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="h-4 w-4 rounded accent-[var(--studio-accent)]"
+        />
+        {t('Remember me')}
+      </label>
 
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-[#374151]">{t('Password')}</span>
-            <input
-              type="password"
-              className="ms-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
-            {/* Strength meter — a hint; the server's validators are the gate. */}
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#e5e7eb]">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${password ? strength.percent : 0}%`, background: strength.color }}
-              />
-            </div>
-            <span className="mt-1 flex items-center justify-between text-xs text-[#6b7280]">
-              <span>{t('8+ chars, mix letters, numbers & symbols.')}</span>
-              {password && <span style={{ color: strength.color }}>{t(strength.label)}</span>}
-            </span>
-          </label>
+      {/* reCAPTCHA renders only when a runtime or build-time site key exists. */}
+      <AuthWidgetFrame>
+        <Recaptcha onChange={setCaptcha} />
+      </AuthWidgetFrame>
 
-          <label className="flex items-center gap-2 text-sm text-[#374151]">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="h-4 w-4 rounded border-[#d1d5db] text-[#4f46e5] focus:ring-[#4f46e5]"
-            />
-            {t('Remember me')}
-          </label>
+      <button type="submit" disabled={loading} className="ms-btn ms-btn-primary w-full py-2.5">
+        {loading ? t('Creating…') : t('Create account')}
+      </button>
 
-          {/* reCAPTCHA renders only when VITE_RECAPTCHA_SITE_KEY is set. */}
-          <Recaptcha onChange={setCaptcha} />
-
-          <button type="submit" disabled={loading} className="ms-btn ms-btn-primary w-full py-2.5">
-            {loading ? t('Creating…') : t('Create account')}
-          </button>
-
-          {/* Google sign-in renders only when VITE_GOOGLE_CLIENT_ID is set. */}
-          <GoogleSignInButton onCredential={onGoogle} onError={setError} />
-
-          <p className="text-center text-sm text-[#6b7280]">
-            {t('Already have an account?')}{' '}
-            <Link className="font-semibold text-[#4f46e5] hover:underline" to="/login">
-              {t('Sign in')}
-            </Link>
-          </p>
-        </form>
-      </div>
-    </div>
+      {/* Google sign-in renders only when a client id exists. */}
+      <AuthWidgetFrame>
+        <GoogleSignInButton onCredential={onGoogle} onError={setError} />
+      </AuthWidgetFrame>
+    </AuthShell>
   )
 }

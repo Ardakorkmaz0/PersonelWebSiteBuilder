@@ -364,7 +364,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
               )}
               <div className="flex gap-2">
                 {!noProvider && (
-                  <button type="button" onClick={generate} className="rounded-lg bg-[var(--studio-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--studio-accent-hover)]">
+                  <button type="button" onClick={generate} className="rounded-lg bg-[var(--studio-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)]">
                     {t('Try again')}
                   </button>
                 )}
@@ -430,7 +430,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
                 onClick={() => setStep(step + 1)}
                 disabled={!canNext}
                 title={canNext ? '' : t('Add a name or a short description first')}
-                className="rounded-lg bg-[var(--studio-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--studio-accent-hover)] disabled:opacity-50"
+                className="rounded-lg bg-[var(--studio-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)] disabled:opacity-50"
               >
                 {t('Next →')}
               </button>
@@ -438,7 +438,7 @@ export default function AiWizard({ open, onClose, onApply, onOpenTemplates, init
               <button
                 type="button"
                 onClick={generate}
-                className="rounded-lg bg-[var(--studio-accent)] px-5 py-2 text-sm font-bold text-white hover:bg-[var(--studio-accent-hover)]"
+                className="rounded-lg bg-[var(--studio-accent)] px-5 py-2 text-sm font-bold text-white hover:bg-[var(--studio-accent-fill-hover)]"
               >
                 {t('✨ Generate my site')}
               </button>

@@ -480,7 +480,11 @@ function inlineNode(c, classedChildren = false) {
     // inside the user's snippet scrolls instead of navigating the sandboxed
     // iframe to `about:srcdoc#` (which whites it out without allow-same-origin).
     const safe = withBuilderInteractiveHtml(doc).replace(/"/g, '&quot;')
-    return `<iframe srcdoc="${safe}" scrolling="no" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" style="display:block;width:100%;height:${h}px;border:0;background:transparent;${styleStr};overflow:hidden"></iframe>`
+    // Keep the desktop height as a fallback, but let the responsive stylesheet
+    // supply the active breakpoint's height through a custom property. A
+    // literal inline `height` outranks the mobile media rule; a `var()` does
+    // not freeze the desktop value and needs no `!important`.
+    return `<iframe srcdoc="${safe}" scrolling="no" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals" style="display:block;width:100%;border:0;background:transparent;${styleStr};overflow:hidden;height:var(--pwb-embed-height,${h}px)"></iframe>`
   }
   const tag = tagFor(c.type)
   const base = baseRules(c.type)
@@ -795,7 +799,7 @@ body { margin: 0; font-family: var(--site-font, system-ui, 'Segoe UI', Roboto, s
         // match, or the embed keeps its PC height inside a taller mobile frame.
         if (c.type === 'html') {
           const mh = Math.max(40, Math.round((c.mobileLayout || c.layout || {}).h || 240))
-          css += `  .c-${c.id} > iframe { height:${mh}px; }\n`
+          css += `  .c-${c.id} > iframe { --pwb-embed-height:${mh}px; }\n`
         }
       }
       if (c.type === 'region') {

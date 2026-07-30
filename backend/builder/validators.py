@@ -591,6 +591,9 @@ def validate_and_clean_schema(schema):
             'language': 'tr' if page.get('language') == 'tr' else 'en',
             'canonicalUrl': sanitize_url(page.get('canonicalUrl'))[:500],
             'noIndex': bool(page.get('noIndex')),
+            # Editor preview chrome: preserved independently from published
+            # HTML, with an opt-out only when the client explicitly sends false.
+            'showScrollIndicator': page.get('showScrollIndicator') is not False,
             'background': sanitize_color(page.get('background')),
             'backgroundMobile': sanitize_color(page.get('backgroundMobile')),
             # Per-breakpoint artboard width + optional "fold" (visible-screen) guide.

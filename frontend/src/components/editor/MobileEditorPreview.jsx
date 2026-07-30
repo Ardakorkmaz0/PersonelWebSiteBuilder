@@ -180,7 +180,7 @@ export default function MobileEditorPreview({
               <div className="space-y-4 p-5">
                 <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#eef2ff] text-[#4f46e5]"><EditIcon size={23} aria-hidden /></div>
                 <p className="text-sm leading-6 text-[#4b5563]">{t('Mobile keeps the site preview-first. Open this link on a desktop computer to make changes.')}</p>
-                <button type="button" onClick={copyEditorLink} className="w-full rounded-xl bg-[var(--studio-accent)] px-4 py-3 text-sm font-semibold text-white hover:bg-[var(--studio-accent-hover)]">
+                <button type="button" onClick={copyEditorLink} className="w-full rounded-xl bg-[var(--studio-accent)] px-4 py-3 text-sm font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)]">
                   {t(copied ? 'Editor link copied' : 'Copy editor link')}
                 </button>
               </div>

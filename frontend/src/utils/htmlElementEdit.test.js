@@ -20,7 +20,7 @@ import {
   selectableParent,
   setElementLink,
 } from './htmlElementEdit.js'
-import { closestPlaceableBlock, insertPositionForY } from './htmlPlacement.js'
+import { closestPlaceableBlock, insertPositionForY, serializeDocument } from './htmlPlacement.js'
 
 beforeEach(() => {
   document.head.querySelector('style[data-pwb-responsive-overrides]')?.remove()
@@ -443,5 +443,239 @@ describe('reorderToPoint', () => {
     const a = document.getElementById('hero')
     document.elementFromPoint = () => a
     expect(reorderToPoint(document, a, 0, 0, { closestPlaceableBlock, insertPositionForY })).toBeNull()
+  })
+})
+
+// The customisation surface an imported page actually needs: type that is not
+// just a size, spacing that is not one number for all four sides, a background
+// that can be a gradient, a row that becomes a column on a phone.
+describe('typography controls', () => {
+  it('writes a real font stack and fetches the family with it', () => {
+    const el = document.getElementById('title')
+    applyElementPatch(el, { fontFamily: 'Playfair Display' })
+
+    expect(el.style.fontFamily).toContain('Playfair Display')
+    // A serif family must not fall back to a sans stack.
+    expect(el.style.fontFamily).toContain('serif')
+    const link = document.querySelector('link[data-pwb-font="Playfair Display"]')
+    expect(link, 'the family has to arrive with the page').toBeTruthy()
+    expect(link.getAttribute('href')).toContain('family=Playfair+Display')
+
+    // Choosing it again must not add a second link.
+    applyElementPatch(el, { fontFamily: 'Playfair Display' })
+    expect(document.querySelectorAll('link[data-pwb-font="Playfair Display"]')).toHaveLength(1)
+  })
+
+  it('round-trips the picker value and falls back to inherit for anything else', () => {
+    const el = document.getElementById('para')
+    applyElementPatch(el, { fontFamily: 'Inter' })
+    expect(describeElement(el).fontFamily).toBe('Inter')
+
+    applyElementPatch(el, { fontFamily: 'system' })
+    expect(describeElement(el).fontFamily).toBe('system')
+
+    // A stack the page itself set is not one of ours — show "inherit", do not
+    // pretend it matches an option.
+    el.style.fontFamily = '"Comic Sans MS", cursive'
+    expect(describeElement(el).fontFamily).toBe('')
+
+    applyElementPatch(el, { fontFamily: '' })
+    expect(el.style.fontFamily).toBe('')
+  })
+
+  it('keeps line height unitless so it survives a font-size change', () => {
+    const el = document.getElementById('para')
+    applyElementPatch(el, { lineHeight: 1.6 })
+    expect(el.style.lineHeight).toBe('1.6')
+    expect(el.style.lineHeight).not.toContain('px')
+    applyElementPatch(el, { lineHeight: 0 })
+    expect(el.style.lineHeight).toBe('')
+  })
+
+  it('writes tracking in em, and 0 is a real value that kills inherited tracking', () => {
+    const el = document.getElementById('title')
+    applyElementPatch(el, { letterSpacing: 0.08 })
+    expect(el.style.letterSpacing).toBe('0.08em')
+    applyElementPatch(el, { letterSpacing: 0 })
+    expect(el.style.letterSpacing).toBe('0em')
+    applyElementPatch(el, { letterSpacing: '' })
+    expect(el.style.letterSpacing).toBe('')
+  })
+
+  it('turns italic and underline on and off', () => {
+    const el = document.getElementById('link')
+    applyElementPatch(el, { italic: true, underline: false })
+    expect(el.style.fontStyle).toBe('italic')
+    // 'none' rather than empty: a link is underlined by the browser, so
+    // removing the underline needs a real declaration.
+    expect(el.style.textDecoration).toBe('none')
+
+    applyElementPatch(el, { italic: false, underline: true })
+    expect(el.style.fontStyle).toBe('')
+    expect(el.style.textDecoration).toBe('underline')
+  })
+})
+
+describe('per-side padding and max width', () => {
+  it('writes each side independently, including 0', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { paddingTop: 48, paddingRight: 24, paddingBottom: 0, paddingLeft: 24 })
+    expect(el.style.getPropertyValue('padding-top')).toBe('48px')
+    expect(el.style.getPropertyValue('padding-right')).toBe('24px')
+    // 0 must be written — it is how you remove the space a stylesheet asked for.
+    expect(el.style.getPropertyValue('padding-bottom')).toBe('0px')
+    expect(el.style.getPropertyValue('padding-left')).toBe('24px')
+  })
+
+  it('beats template CSS, which is the whole reason these are !important', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { paddingTop: 12, maxWidth: 720 })
+    expect(el.style.getPropertyPriority('padding-top')).toBe('important')
+    expect(el.style.getPropertyPriority('max-width')).toBe('important')
+  })
+
+  it('treats max width 0 as "no cap"', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { maxWidth: 720 })
+    expect(el.style.getPropertyValue('max-width')).toBe('720px')
+    applyElementPatch(el, { maxWidth: 0 })
+    expect(el.style.getPropertyValue('max-width')).toBe('')
+  })
+})
+
+describe('background gradient and image', () => {
+  it('builds a two-stop gradient and reads it back into the controls', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { gradientFrom: '#ff0000', gradientTo: '#0000ff', gradientAngle: 120 })
+    // The browser re-serialises colours its own way (hex becomes rgb), so what
+    // matters is that a gradient at the asked-for angle is there — and that it
+    // survives the trip back into the controls.
+    expect(el.style.backgroundImage).toMatch(/^linear-gradient\(120deg,/)
+
+    const info = describeElement(el)
+    expect(info.gradientFrom).toBe('#ff0000')
+    expect(info.gradientTo).toBe('#0000ff')
+    expect(info.gradientAngle).toBe(120)
+  })
+
+  it('changes one gradient stop without being told the others', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { gradientFrom: '#ff0000', gradientTo: '#0000ff', gradientAngle: 90 })
+    applyElementPatch(el, { gradientAngle: 30 })
+
+    // Only the angle was given, so both colours have to have been read back
+    // out of the element rather than lost.
+    const info = describeElement(el)
+    expect(info.gradientAngle).toBe(30)
+    expect(info.gradientFrom).toBe('#ff0000')
+    expect(info.gradientTo).toBe('#0000ff')
+  })
+
+  it('clears the gradient when a stop is emptied, falling back to the flat colour', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { gradientFrom: '#ff0000', gradientTo: '#0000ff' })
+    applyElementPatch(el, { gradientFrom: '' })
+    expect(el.style.backgroundImage).toBe('')
+  })
+
+  it('sets an image with a sensible fit, and clearing it removes the fit too', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { backgroundImage: 'https://example.com/a.jpg' })
+    expect(el.style.backgroundImage).toBe('url("https://example.com/a.jpg")')
+    expect(el.style.getPropertyValue('background-size')).toBe('cover')
+    expect(describeElement(el).backgroundImage).toBe('https://example.com/a.jpg')
+
+    applyElementPatch(el, { backgroundImage: '' })
+    expect(el.style.backgroundImage).toBe('')
+    expect(el.style.getPropertyValue('background-size')).toBe('')
+  })
+
+  it('does not read a gradient as an image URL', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { gradientFrom: '#ffffff', gradientTo: '#000000' })
+    expect(describeElement(el).backgroundImage).toBe('')
+  })
+})
+
+describe('position and stacking', () => {
+  it('gives a sticky element the offset it needs to actually stick', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { position: 'sticky' })
+    expect(el.style.getPropertyValue('position')).toBe('sticky')
+    expect(el.style.getPropertyValue('top')).toBe('0px')
+  })
+
+  it('clears the offset when position goes back to default', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { position: 'sticky' })
+    applyElementPatch(el, { position: '' })
+    expect(el.style.getPropertyValue('position')).toBe('')
+    expect(el.style.getPropertyValue('top')).toBe('')
+  })
+
+  it('treats stack order 0 as unset', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { zIndex: 5 })
+    expect(el.style.getPropertyValue('z-index')).toBe('5')
+    applyElementPatch(el, { zIndex: 0 })
+    expect(el.style.getPropertyValue('z-index')).toBe('')
+  })
+})
+
+describe('the row that becomes a column on a phone', () => {
+  it('stores flex direction as a mobile-only override', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { display: 'flex', flexDirection: 'row' })
+    applyMobileElementPatch(el, { flexDirection: 'column' })
+
+    // Desktop keeps its row…
+    expect(el.style.getPropertyValue('flex-direction')).toBe('row')
+    // …and the phone value rides on the guarded custom property.
+    expect(el.getAttribute('data-pwb-mobile-flex-direction')).toBe('')
+    expect(el.style.getPropertyValue('--pwb-mobile-flex-direction')).toBe('column')
+
+    const rule = document.head.querySelector('style[data-pwb-responsive-overrides]').textContent
+    expect(rule).toContain('max-width: 767px')
+    expect(rule).toContain('[data-pwb-mobile-flex-direction]')
+  })
+
+  it('carries the other responsive properties too', () => {
+    const el = document.getElementById('hero')
+    applyMobileElementPatch(el, { paddingTop: 16, maxWidth: 320, lineHeight: 1.4, letterSpacing: 0.02 })
+    expect(el.style.getPropertyValue('--pwb-mobile-padding-top')).toBe('16px')
+    expect(el.style.getPropertyValue('--pwb-mobile-max-width')).toBe('320px')
+    expect(el.style.getPropertyValue('--pwb-mobile-line-height')).toBe('1.4')
+    expect(el.style.getPropertyValue('--pwb-mobile-letter-spacing')).toBe('0.02em')
+    // A mobile edit must never touch the desktop value.
+    expect(el.style.getPropertyValue('padding-top')).toBe('')
+  })
+
+  it('counts every new override so the panel can offer "reset mobile"', () => {
+    const el = document.getElementById('hero')
+    applyMobileElementPatch(el, { flexDirection: 'column', paddingTop: 8, maxWidth: 300 })
+    expect(describeElement(el).mobileOverrideCount).toBe(3)
+    clearMobileElementStyles(el)
+    expect(describeElement(el).mobileOverrideCount).toBe(0)
+  })
+})
+
+// Everything above only counts if it survives the save. This project has lost
+// user work at exactly this boundary before: the serializer strips the editor's
+// own chrome, and anything new has to be on the right side of that line.
+describe('the new customisation survives serialization', () => {
+  it('keeps the font link, the mobile rule and the overrides', () => {
+    const el = document.getElementById('hero')
+    applyElementPatch(el, { fontFamily: 'Inter', paddingTop: 40, maxWidth: 800, position: 'sticky' })
+    applyMobileElementPatch(el, { flexDirection: 'column', paddingTop: 12 })
+
+    const html = serializeDocument(document)
+
+    expect(html, 'the chosen family must arrive with the page').toContain('data-pwb-font="Inter"')
+    expect(html).toContain('fonts.googleapis.com')
+    expect(html, 'the media rule that powers every mobile override').toContain('data-pwb-responsive-overrides')
+    expect(html).toContain('data-pwb-mobile-flex-direction')
+    expect(html).toContain('--pwb-mobile-flex-direction: column')
+    expect(html).toContain('max-width: 800px')
+    expect(html).toContain('position: sticky')
   })
 })

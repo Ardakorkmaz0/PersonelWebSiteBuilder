@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  LabeledCheckbox,
   LabeledColor,
   LabeledNumber,
   LabeledRange,
@@ -12,6 +13,7 @@ import PanelGroup from './PanelGroup.jsx'
 import PanelTabs from './PanelTabs.jsx'
 import { CodeIcon, CopyIcon, MoreHorizontalIcon, TrashIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { FONT_CHOICES } from '../../utils/htmlElementEdit.js'
 
 const TAG_LABELS = {
   h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', h4: 'Heading 4',
@@ -84,6 +86,43 @@ const OVERFLOW_OPTIONS = [
   ['hidden', 'Hidden'],
   ['auto', 'Auto'],
   ['scroll', 'Scroll'],
+]
+
+const TEXT_TRANSFORM_OPTIONS = [
+  ['', 'Default'],
+  ['none', 'As typed'],
+  ['uppercase', 'UPPERCASE'],
+  ['lowercase', 'lowercase'],
+  ['capitalize', 'Capitalize'],
+]
+
+const FLEX_DIRECTION_OPTIONS = [
+  ['', 'Default'],
+  ['row', 'Row'],
+  ['column', 'Column'],
+  ['row-reverse', 'Row reversed'],
+  ['column-reverse', 'Column reversed'],
+]
+
+const FLEX_WRAP_OPTIONS = [
+  ['', 'Default'],
+  ['nowrap', 'One line'],
+  ['wrap', 'Wrap onto more lines'],
+]
+
+const POSITION_OPTIONS = [
+  ['', 'Default'],
+  ['relative', 'Relative'],
+  ['sticky', 'Sticky (follows the scroll)'],
+  ['absolute', 'Absolute'],
+  ['fixed', 'Fixed to the screen'],
+]
+
+const BACKGROUND_SIZE_OPTIONS = [
+  ['', 'Default'],
+  ['cover', 'Fill the box'],
+  ['contain', 'Fit inside'],
+  ['auto', 'Original size'],
 ]
 
 const PANEL_TABS = [
@@ -294,17 +333,48 @@ export default function HtmlElementPanel({
               </div>
             )}
             <PanelGroup id="html-typography" title={t('Typography')} defaultOpen>
+              <LabeledSelect
+                label={t('Font')}
+                value={info.fontFamily}
+                onChange={(value) => onChange({ fontFamily: value })}
+                options={translatedOptions(FONT_CHOICES)}
+              />
               <LabeledNumber label={t('Font size (px)')} value={info.fontSize} onChange={(value) => onChange({ fontSize: value })} />
               <LabeledSelect label={t('Font weight')} value={info.fontWeight} onChange={(value) => onChange({ fontWeight: value })} options={translatedOptions(WEIGHT_OPTIONS)} />
+              <LabeledNumber label={t('Line height (×)')} value={info.lineHeight} onChange={(value) => onChange({ lineHeight: value })} />
+              <LabeledNumber label={t('Letter spacing (em)')} value={info.letterSpacing} onChange={(value) => onChange({ letterSpacing: value })} />
+              <LabeledSelect label={t('Capitalisation')} value={info.textTransform} onChange={(value) => onChange({ textTransform: value })} options={translatedOptions(TEXT_TRANSFORM_OPTIONS)} />
               <LabeledSelect label={t('Text align')} value={info.textAlign} onChange={(value) => onChange({ textAlign: value })} options={translatedOptions(ALIGN_OPTIONS)} />
+              <div className="flex gap-2">
+                <LabeledCheckbox label={t('Italic')} checked={info.italic} onChange={(value) => onChange({ italic: value })} />
+                <LabeledCheckbox label={t('Underline')} checked={info.underline} onChange={(value) => onChange({ underline: value })} />
+              </div>
             </PanelGroup>
             <PanelGroup id="html-colors" title={t('Colors')} defaultOpen>
               <LabeledColor label={t('Text color')} value={info.color || '#000000'} onChange={(value) => onChange({ color: value })} />
               <LabeledColor label={t('Background')} value={info.background || '#ffffff'} onChange={(value) => onChange({ background: value })} />
             </PanelGroup>
+            <PanelGroup id="html-background" title={t('Background image & gradient')}>
+              <LabeledColor label={t('Gradient from')} value={info.gradientFrom || '#ffffff'} onChange={(value) => onChange({ gradientFrom: value })} />
+              <LabeledColor label={t('Gradient to')} value={info.gradientTo || '#000000'} onChange={(value) => onChange({ gradientTo: value })} />
+              <LabeledNumber label={t('Gradient angle (deg)')} value={info.gradientAngle} onChange={(value) => onChange({ gradientAngle: value })} />
+              <LabeledText label={t('Image URL')} value={info.backgroundImage} onChange={(value) => onChange({ backgroundImage: value })} placeholder="https://…" />
+              <LabeledSelect label={t('Image fit')} value={info.backgroundSize} onChange={(value) => onChange({ backgroundSize: value })} options={translatedOptions(BACKGROUND_SIZE_OPTIONS)} />
+              <p className="text-[11px] leading-relaxed text-[var(--studio-text-faint)]">
+                {t('A gradient and an image share the same slot — setting one replaces the other. Clear both to fall back to the plain colour.')}
+              </p>
+            </PanelGroup>
             <PanelGroup id="html-box" title={t('Box')}>
               <LabeledNumber label={t('Padding (px)')} value={info.padding} onChange={(value) => onChange({ padding: value })} />
               <LabeledNumber label={t('Corner radius (px)')} value={info.radius} onChange={(value) => onChange({ radius: value })} />
+            </PanelGroup>
+            <PanelGroup id="html-padding-sides" title={t('Padding per side')}>
+              <div className="grid grid-cols-2 gap-2">
+                <LabeledNumber label={t('Top')} value={info.paddingTop} onChange={(value) => onChange({ paddingTop: value })} />
+                <LabeledNumber label={t('Right')} value={info.paddingRight} onChange={(value) => onChange({ paddingRight: value })} />
+                <LabeledNumber label={t('Bottom')} value={info.paddingBottom} onChange={(value) => onChange({ paddingBottom: value })} />
+                <LabeledNumber label={t('Left')} value={info.paddingLeft} onChange={(value) => onChange({ paddingLeft: value })} />
+              </div>
             </PanelGroup>
             <PanelGroup id="html-border" title={t('Border')}>
               <LabeledNumber label={t('Border width (px)')} value={info.borderWidth} onChange={(value) => onChange({ borderWidth: value })} />
@@ -350,11 +420,18 @@ export default function HtmlElementPanel({
               <LabeledNumber label={t('Height (px, 0 = auto)')} value={info.height} onChange={(value) => onChange({ height: value })} />
               <LabeledNumber label={t('Margin top (px)')} value={info.marginTop} onChange={(value) => onChange({ marginTop: value })} />
               <LabeledNumber label={t('Margin bottom (px)')} value={info.marginBottom} onChange={(value) => onChange({ marginBottom: value })} />
+              <LabeledNumber label={t('Max width (px, 0 = none)')} value={info.maxWidth} onChange={(value) => onChange({ maxWidth: value })} />
               <LabeledSelect label={t('Display')} value={info.display} onChange={(value) => onChange({ display: value })} options={translatedOptions(DISPLAY_OPTIONS)} />
             </PanelGroup>
+            <PanelGroup id="html-position" title={t('Position & stacking')}>
+              <LabeledSelect label={t('Position')} value={info.position} onChange={(value) => onChange({ position: value })} options={translatedOptions(POSITION_OPTIONS)} />
+              <LabeledNumber label={t('Stack order (z-index)')} value={info.zIndex} onChange={(value) => onChange({ zIndex: value })} />
+            </PanelGroup>
             <PanelGroup id="html-flex-layout" title={t('Layout (rows / flex)')}>
+              <LabeledSelect label={t('Direction')} value={info.flexDirection} onChange={(value) => onChange({ flexDirection: value })} options={translatedOptions(FLEX_DIRECTION_OPTIONS)} />
               <LabeledSelect label={t('Justify (horizontal)')} value={info.justifyContent} onChange={(value) => onChange({ justifyContent: value })} options={translatedOptions(JUSTIFY_OPTIONS)} />
               <LabeledSelect label={t('Align (vertical)')} value={info.alignItems} onChange={(value) => onChange({ alignItems: value })} options={translatedOptions(ALIGN_OPTIONS_FLEX)} />
+              <LabeledSelect label={t('Wrapping')} value={info.flexWrap} onChange={(value) => onChange({ flexWrap: value })} options={translatedOptions(FLEX_WRAP_OPTIONS)} />
               <LabeledNumber label={t('Gap between items (px)')} value={info.gap} onChange={(value) => onChange({ gap: value })} />
               <p className="text-[11px] leading-relaxed text-[var(--studio-text-faint)]">
                 {t('Tip: set Display to “Flex” first if these do not take effect — they arrange the element direct children (e.g. a navbar links).')}

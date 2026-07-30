@@ -26,6 +26,19 @@ const MOBILE_STYLE_FIELDS = [
   ['justify-content', 'justify-content'],
   ['align-items', 'align-items'],
   ['gap', 'gap'],
+  // Responsive typography and spacing: the properties a page actually needs to
+  // say something different about on a phone.
+  ['line-height', 'line-height'],
+  ['letter-spacing', 'letter-spacing'],
+  ['padding-top', 'padding-top'],
+  ['padding-right', 'padding-right'],
+  ['padding-bottom', 'padding-bottom'],
+  ['padding-left', 'padding-left'],
+  ['max-width', 'max-width'],
+  // The single most useful responsive override there is: a row of things on a
+  // desktop becomes a column on a phone.
+  ['flex-direction', 'flex-direction'],
+  ['flex-wrap', 'flex-wrap'],
 ]
 
 const MOBILE_OVERRIDE_SELECTOR = MOBILE_STYLE_FIELDS
@@ -119,6 +132,96 @@ export function cssColorToHex(value) {
   return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`
 }
 
+// The curated families the panel offers. Each is a Google Font (bar the system
+// stack), so picking one also means fetching it — see ensureFontLink.
+export const FONT_CHOICES = [
+  ['', 'Inherit from the page'],
+  ['system', 'System sans'],
+  ['Inter', 'Inter'],
+  ['Poppins', 'Poppins'],
+  ['Montserrat', 'Montserrat'],
+  ['DM Sans', 'DM Sans'],
+  ['Work Sans', 'Work Sans'],
+  ['Space Grotesk', 'Space Grotesk'],
+  ['Playfair Display', 'Playfair Display'],
+  ['Fraunces', 'Fraunces'],
+  ['Lora', 'Lora'],
+  ['Libre Baskerville', 'Libre Baskerville'],
+  ['JetBrains Mono', 'JetBrains Mono'],
+]
+
+const SYSTEM_STACK = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+const SERIF_FAMILIES = new Set(['Playfair Display', 'Fraunces', 'Lora', 'Libre Baskerville'])
+const MONO_FAMILIES = new Set(['JetBrains Mono'])
+
+export function fontStackFor(key) {
+  if (!key) return ''
+  if (key === 'system') return SYSTEM_STACK
+  const fallback = MONO_FAMILIES.has(key) ? 'monospace' : SERIF_FAMILIES.has(key) ? 'serif' : 'sans-serif'
+  return `'${key}', ${fallback}`
+}
+
+// Inline font-family → the key the picker shows. Matching on the first family
+// keeps it stable whatever fallback stack was written after it.
+export function fontFamilyKey(value) {
+  const first = String(value || '').split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+  if (!first) return ''
+  if (/^system-ui$/i.test(first)) return 'system'
+  return FONT_CHOICES.some(([key]) => key === first) ? first : ''
+}
+
+// A chosen Google Font has to arrive with the page, or the element silently
+// falls back to the stack's second name. One link per family, tagged so the
+// export can tell it apart from the document's own links.
+export function ensureFontLink(doc, key) {
+  if (!doc || !key || key === 'system') return
+  const href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(key).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
+  const existing = [...doc.querySelectorAll('link[data-pwb-font]')]
+  if (existing.some((link) => link.getAttribute('data-pwb-font') === key)) return
+  const link = doc.createElement('link')
+  link.setAttribute('rel', 'stylesheet')
+  link.setAttribute('data-pwb-font', key)
+  link.setAttribute('href', href)
+  ;(doc.head || doc.documentElement)?.appendChild(link)
+}
+
+// Computed line-height comes back in pixels (or 'normal'). Show it as the ratio
+// the user thinks in — 1.5 — rather than 24px that changes with every size.
+export function lineHeightRatio(lineHeight, fontSize) {
+  const size = parseFloat(fontSize)
+  const value = parseFloat(lineHeight)
+  if (!Number.isFinite(size) || size <= 0 || !Number.isFinite(value)) return 0
+  return Math.round((value / size) * 100) / 100
+}
+
+// Same idea for tracking: em, not px, so it survives a font-size change.
+export function letterSpacingEm(letterSpacing, fontSize) {
+  const size = parseFloat(fontSize)
+  const value = parseFloat(letterSpacing)
+  if (!Number.isFinite(size) || size <= 0 || !Number.isFinite(value)) return 0
+  return Math.round((value / size) * 1000) / 1000
+}
+
+// `url("…")` → the bare URL, and gradients are not images for this purpose.
+export function backgroundImageUrl(value) {
+  const m = String(value || '').match(/url\(["']?([^"')]+)["']?\)/i)
+  return m ? m[1] : ''
+}
+
+// Our own two-stop gradient, read back so the controls round-trip. Anything
+// hand-written that does not match stays untouched and simply is not shown.
+export function gradientParts(value) {
+  const m = String(value || '').match(
+    /^linear-gradient\(\s*(-?[\d.]+)deg\s*,\s*(#[0-9a-f]{3,8}|rgba?\([^)]+\))\s*,\s*(#[0-9a-f]{3,8}|rgba?\([^)]+\))\s*\)$/i,
+  )
+  if (!m) return { gradientFrom: '', gradientTo: '', gradientAngle: 160 }
+  return {
+    gradientFrom: cssColorToHex(m[2]) || m[2],
+    gradientTo: cssColorToHex(m[3]) || m[3],
+    gradientAngle: Math.round(Number(m[1])),
+  }
+}
+
 // Text is editable as plain textContent when the element has no child
 // elements, or only inline-formatting ones (a heading with a <b> inside —
 // writing flattens the formatting, which beats hiding the field entirely).
@@ -163,6 +266,35 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     textAlign: cs ? cs.textAlign || '' : '',
     color: cs ? cssColorToHex(cs.color) : '',
     background: cs ? cssColorToHex(cs.backgroundColor) : '',
+    // Typography beyond size/weight. Family is read from the INLINE value so the
+    // picker round-trips our own choice; the computed value is a resolved stack
+    // that would never match an option.
+    fontFamily: fontFamilyKey(el.style.fontFamily),
+    // Unitless line-height is what typography wants (it scales with the font),
+    // so it is stored and shown as a ratio rather than pixels.
+    lineHeight: cs ? lineHeightRatio(cs.lineHeight, cs.fontSize) : 0,
+    letterSpacing: cs ? letterSpacingEm(cs.letterSpacing, cs.fontSize) : 0,
+    textTransform: cs ? String(cs.textTransform || '') : '',
+    italic: cs ? String(cs.fontStyle || '').startsWith('italic') : false,
+    underline: cs ? String(cs.textDecorationLine || cs.textDecoration || '').includes('underline') : false,
+    // Per-side padding. The existing single `padding` control stays for the
+    // common case; these are for the times one side has to differ.
+    paddingTop: cs ? px(cs.paddingTop) : 0,
+    paddingRight: cs ? px(cs.paddingRight) : 0,
+    paddingBottom: cs ? px(cs.paddingBottom) : 0,
+    paddingLeft: cs ? px(cs.paddingLeft) : 0,
+    // 0 = no cap. A real max-width is what keeps a text column readable.
+    maxWidth: cs && cs.maxWidth !== 'none' ? px(cs.maxWidth) : 0,
+    // Background beyond a flat colour.
+    backgroundImage: backgroundImageUrl(cs?.backgroundImage),
+    backgroundSize: cs ? String(cs.backgroundSize || '') : '',
+    ...gradientParts(el.style.backgroundImage),
+    // Flow direction of a flex container, and whether it may wrap.
+    flexDirection: cs ? String(cs.flexDirection || '') : '',
+    flexWrap: cs ? String(cs.flexWrap || '') : '',
+    // Stacking: a sticky header is the case that keeps coming up.
+    position: cs ? String(cs.position || '') : '',
+    zIndex: el.style.zIndex !== '' ? Number(el.style.zIndex) : 0,
     padding: cs ? px(cs.paddingTop) : 0,
     radius: cs ? px(cs.borderTopLeftRadius) : 0,
     width: cs ? px(cs.width) : 0,
@@ -368,6 +500,87 @@ export function applyElementPatch(el, patch = {}) {
     const n = Number(patch.gap)
     setImp('gap', n > 0 ? `${n}px` : '')
   }
+  if (patch.flexDirection !== undefined) setImp('flex-direction', patch.flexDirection)
+  if (patch.flexWrap !== undefined) setImp('flex-wrap', patch.flexWrap)
+
+  // ---- Typography -------------------------------------------------------
+  if (patch.fontFamily !== undefined) {
+    const stack = fontStackFor(patch.fontFamily)
+    setImp('font-family', stack)
+    if (stack) ensureFontLink(el.ownerDocument, patch.fontFamily)
+  }
+  if (patch.lineHeight !== undefined) {
+    const n = Number(patch.lineHeight)
+    // Unitless, so it keeps meaning when the font size changes.
+    setImp('line-height', n > 0 ? String(n) : '')
+  }
+  if (patch.letterSpacing !== undefined) {
+    const n = Number(patch.letterSpacing)
+    // 0 is a real choice (kill the tracking a stylesheet applied), so it is
+    // written rather than treated as "unset".
+    setImp('letter-spacing', patch.letterSpacing === '' || !Number.isFinite(n) ? '' : `${n}em`)
+  }
+  if (patch.textTransform !== undefined) setImp('text-transform', patch.textTransform)
+  if (patch.italic !== undefined) setImp('font-style', patch.italic ? 'italic' : '')
+  if (patch.underline !== undefined) {
+    // 'none' is meaningful: links are underlined by the browser, so removing it
+    // needs a real declaration rather than an empty one.
+    setImp('text-decoration', patch.underline ? 'underline' : 'none')
+  }
+
+  // ---- Spacing ----------------------------------------------------------
+  for (const [key, prop] of [
+    ['paddingTop', 'padding-top'],
+    ['paddingRight', 'padding-right'],
+    ['paddingBottom', 'padding-bottom'],
+    ['paddingLeft', 'padding-left'],
+  ]) {
+    if (patch[key] === undefined) continue
+    const n = Number(patch[key])
+    // 0 is a real value here — it removes the space the stylesheet asked for.
+    setImp(prop, Number.isFinite(n) ? `${n}px` : '')
+  }
+  if (patch.maxWidth !== undefined) {
+    const n = Number(patch.maxWidth)
+    setImp('max-width', n > 0 ? `${n}px` : '')
+  }
+
+  // ---- Background -------------------------------------------------------
+  // Gradient and image share `background-image`, so the last one set wins and
+  // clearing either falls back to the flat colour underneath.
+  if (patch.gradientFrom !== undefined || patch.gradientTo !== undefined || patch.gradientAngle !== undefined) {
+    const current = gradientParts(el.style.backgroundImage)
+    const from = patch.gradientFrom !== undefined ? patch.gradientFrom : current.gradientFrom
+    const to = patch.gradientTo !== undefined ? patch.gradientTo : current.gradientTo
+    const angle = Number(patch.gradientAngle !== undefined ? patch.gradientAngle : current.gradientAngle)
+    if (from && to) setImp('background-image', `linear-gradient(${Number.isFinite(angle) ? angle : 160}deg, ${from}, ${to})`)
+    else el.style.removeProperty('background-image')
+  }
+  if (patch.backgroundImage !== undefined) {
+    const url = String(patch.backgroundImage || '').trim()
+    if (url) {
+      setImp('background-image', `url("${url.replace(/"/g, '%22')}")`)
+      if (!el.style.getPropertyValue('background-size')) setImp('background-size', 'cover')
+      if (!el.style.getPropertyValue('background-position')) setImp('background-position', 'center')
+    } else {
+      el.style.removeProperty('background-image')
+      el.style.removeProperty('background-size')
+      el.style.removeProperty('background-position')
+    }
+  }
+  if (patch.backgroundSize !== undefined) setImp('background-size', patch.backgroundSize)
+
+  // ---- Stacking ---------------------------------------------------------
+  if (patch.position !== undefined) {
+    setImp('position', patch.position)
+    // A sticky element with no offset never sticks to anything.
+    if (patch.position === 'sticky' && !el.style.getPropertyValue('top')) setImp('top', '0px')
+    if (!patch.position) el.style.removeProperty('top')
+  }
+  if (patch.zIndex !== undefined) {
+    const n = Number(patch.zIndex)
+    setImp('z-index', patch.zIndex === '' || !Number.isFinite(n) || n === 0 ? '' : String(Math.round(n)))
+  }
 }
 
 // In HTML mode, content is shared across breakpoints while visual edits made
@@ -457,6 +670,30 @@ export function applyMobileElementPatch(el, patch = {}) {
   direct('justifyContent', 'justify-content')
   direct('alignItems', 'align-items')
   if (patch.gap !== undefined) setMobileStyle(el, 'gap', pxAboveZero(patch.gap))
+
+  // Typography and spacing that a phone genuinely needs to state differently —
+  // a 1.1 heading ratio that has to open up, padding that has to come in.
+  if (patch.lineHeight !== undefined) {
+    const n = Number(patch.lineHeight)
+    setMobileStyle(el, 'line-height', n > 0 ? String(n) : '')
+  }
+  if (patch.letterSpacing !== undefined) {
+    const n = Number(patch.letterSpacing)
+    setMobileStyle(el, 'letter-spacing', patch.letterSpacing === '' || !Number.isFinite(n) ? '' : `${n}em`)
+  }
+  for (const [key, name] of [
+    ['paddingTop', 'padding-top'],
+    ['paddingRight', 'padding-right'],
+    ['paddingBottom', 'padding-bottom'],
+    ['paddingLeft', 'padding-left'],
+  ]) {
+    if (patch[key] !== undefined) setMobileStyle(el, name, pxIncludingZero(patch[key]))
+  }
+  if (patch.maxWidth !== undefined) setMobileStyle(el, 'max-width', pxAboveZero(patch.maxWidth))
+  // The row that has to become a column. This is the override the whole
+  // per-breakpoint layer exists for.
+  direct('flexDirection', 'flex-direction')
+  direct('flexWrap', 'flex-wrap')
 
   removeUnusedMobileOverrideStyle(el.ownerDocument)
 }

@@ -222,6 +222,92 @@ export function gradientParts(value) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Link lists — the navigation case
+// ---------------------------------------------------------------------------
+//
+// A nav is a container of anchors, and until now the panel could only edit them
+// one at a time by clicking each one: no way to add a menu item, remove one, or
+// see the set together. These read and write the whole list.
+//
+// The anchors are found ONE level of structure at a time (nav > a, or the a
+// inside each li) so a "Log in" button sitting beside the menu is not swept in
+// with the navigation links.
+
+// Content is shared across breakpoints: a phone shows the same words and the
+// same menu as a desktop, so these keys always write to the element itself
+// rather than into the mobile override layer.
+const CONTENT_PATCH_KEYS = ['text', 'href', 'src', 'alt', 'links']
+
+const LINK_LIST_TAGS = new Set(['NAV', 'UL', 'OL', 'HEADER', 'MENU'])
+
+// Does this element read as a set of links the panel should edit as a list?
+export function isLinkListContainer(el) {
+  if (!el || el.nodeType !== 1) return false
+  if (el.tagName === 'A') return false
+  return linkListAnchors(el).length >= 2 || (LINK_LIST_TAGS.has(el.tagName) && linkListAnchors(el).length >= 1)
+}
+
+// The anchors that make up the list: direct children first, else one per direct
+// child (the <li><a> shape). Deeper anchors belong to their own blocks.
+export function linkListAnchors(el) {
+  if (!el || el.nodeType !== 1) return []
+  const direct = [...el.children].filter((child) => child.tagName === 'A')
+  if (direct.length) return direct
+  const nested = [...el.children]
+    .map((child) => (child.tagName === 'A' ? child : child.querySelector(':scope > a')))
+    .filter(Boolean)
+  return nested.length ? nested : []
+}
+
+export function readElementLinks(el) {
+  return linkListAnchors(el).map((a) => ({
+    text: (a.textContent || '').trim(),
+    href: a.getAttribute('href') || '',
+  }))
+}
+
+// Write the list back. Existing anchors are edited in place — that is what
+// keeps their classes, and with them the design. A new item is CLONED from the
+// last anchor for the same reason: a fresh <a> would arrive unstyled and look
+// broken in every template that styles its menu by class.
+export function setElementLinks(el, links) {
+  const anchors = linkListAnchors(el)
+  if (!anchors.length && !Array.isArray(links)) return
+  const wanted = (Array.isArray(links) ? links : []).map((link) => ({
+    text: String(link?.text ?? '').trim(),
+    href: String(link?.href ?? ''),
+  }))
+
+  anchors.slice(wanted.length).forEach((a) => {
+    // Remove the wrapper too when the anchor is the only thing in its <li>.
+    const holder = a.parentElement
+    if (holder && holder !== el && holder.childElementCount === 1) holder.remove()
+    else a.remove()
+  })
+
+  wanted.forEach((link, index) => {
+    let anchor = anchors[index]
+    if (!anchor) {
+      const template = anchors[anchors.length - 1]
+      if (!template) return
+      const holder = template.parentElement
+      const cloneWrapper = holder && holder !== el && holder.childElementCount === 1
+      const source = cloneWrapper ? holder : template
+      const clone = source.cloneNode(true)
+      source.insertAdjacentElement('afterend', clone)
+      anchor = cloneWrapper ? clone.querySelector('a') : clone
+      if (!anchor) return
+      // A cloned item must not inherit the "current page" marker.
+      anchor.removeAttribute('aria-current')
+      anchor.classList.remove('on', 'active', 'current')
+    }
+    writeElementMultilineText(anchor, link.text)
+    if (link.href) anchor.setAttribute('href', link.href)
+    else anchor.removeAttribute('href')
+  })
+}
+
 // Text is editable as plain textContent when the element has no child
 // elements, or only inline-formatting ones (a heading with a <b> inside —
 // writing flattens the formatting, which beats hiding the field entirely).
@@ -257,6 +343,9 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     href: elementLinkHref(el),
     src: tag === 'img' ? el.getAttribute('src') || '' : null,
     alt: tag === 'img' ? el.getAttribute('alt') || '' : null,
+    // A navigation is a SET of links, and editing them one click at a time was
+    // the only way to touch a menu. null when this element is not a list.
+    links: isLinkListContainer(el) ? readElementLinks(el) : null,
     hasParent: !!parent,
     parentTag: parent ? parent.tagName.toLowerCase() : null,
     ancestors: ancestorTrail(el),
@@ -374,6 +463,7 @@ export function applyElementPatch(el, patch = {}) {
     writeElementMultilineText(el, patch.text)
   }
   if (patch.href !== undefined) setElementLink(el, patch.href)
+  if (patch.links !== undefined) setElementLinks(el, patch.links)
   if (patch.src !== undefined && el.tagName === 'IMG') el.setAttribute('src', patch.src)
   if (patch.alt !== undefined && el.tagName === 'IMG') el.setAttribute('alt', patch.alt)
   const setStyle = (prop, value) => {
@@ -590,12 +680,12 @@ export function applyMobileElementPatch(el, patch = {}) {
   if (!el || el.nodeType !== 1) return
 
   const contentPatch = {}
-  for (const key of ['text', 'href', 'src', 'alt']) {
+  for (const key of CONTENT_PATCH_KEYS) {
     if (patch[key] !== undefined) contentPatch[key] = patch[key]
   }
   if (Object.keys(contentPatch).length) applyElementPatch(el, contentPatch)
 
-  const hasStylePatch = Object.keys(patch).some((key) => !['text', 'href', 'src', 'alt'].includes(key))
+  const hasStylePatch = Object.keys(patch).some((key) => !CONTENT_PATCH_KEYS.includes(key))
   if (!hasStylePatch) return
   ensureMobileOverrideStyle(el.ownerDocument)
 

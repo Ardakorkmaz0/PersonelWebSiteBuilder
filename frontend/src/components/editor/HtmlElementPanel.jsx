@@ -150,6 +150,84 @@ function BoxAlignGlyph({ side }) {
   )
 }
 
+// The navigation editor: the whole menu at once, rather than clicking each
+// item in turn. A new row is cloned from the last link in the markup, so it
+// arrives with the template's own classes and looks like it belongs.
+function LinkListEditor({ links, onChange, t }) {
+  const update = (index, patch) => {
+    onChange(links.map((link, i) => (i === index ? { ...link, ...patch } : link)))
+  }
+  const move = (index, delta) => {
+    const next = [...links]
+    const target = index + delta
+    if (target < 0 || target >= next.length) return
+    ;[next[index], next[target]] = [next[target], next[index]]
+    onChange(next)
+  }
+  return (
+    <div className="space-y-2">
+      {links.map((link, index) => (
+        <div key={index} className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-2">
+          <div className="flex items-center gap-1.5">
+            <input
+              value={link.text}
+              onChange={(event) => update(index, { text: event.target.value })}
+              aria-label={t('Link label')}
+              placeholder={t('Link label')}
+              className="studio-input min-w-0 flex-1 px-2 py-1.5 text-xs"
+            />
+            <button
+              type="button"
+              onClick={() => move(index, -1)}
+              disabled={index === 0}
+              aria-label={t('Move up')}
+              title={t('Move up')}
+              className="studio-icon-btn h-7 w-7 shrink-0 disabled:opacity-30"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => move(index, 1)}
+              disabled={index === links.length - 1}
+              aria-label={t('Move down')}
+              title={t('Move down')}
+              className="studio-icon-btn h-7 w-7 shrink-0 disabled:opacity-30"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(links.filter((_, i) => i !== index))}
+              aria-label={t('Remove link')}
+              title={t('Remove link')}
+              className="studio-icon-btn h-7 w-7 shrink-0 text-[var(--studio-danger)]"
+            >
+              <TrashIcon size={13} />
+            </button>
+          </div>
+          <input
+            value={link.href}
+            onChange={(event) => update(index, { href: event.target.value })}
+            aria-label={t('Link target')}
+            placeholder="#section"
+            className="studio-input mt-1.5 w-full px-2 py-1.5 font-mono text-[11px]"
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...links, { text: t('New link'), href: '#' }])}
+        disabled={!links.length}
+        title={links.length ? undefined : t('This menu has no link to copy the style from yet.')}
+        className="studio-btn studio-btn-secondary w-full px-2 py-1.5 text-xs disabled:opacity-40"
+      >
+        + {t('Add link')}
+      </button>
+    </div>
+  )
+}
+
 function AlignButtons({ label, value, onPick, kind, t }) {
   const Glyph = kind === 'text' ? TextAlignGlyph : BoxAlignGlyph
   const titles = kind === 'text'
@@ -303,7 +381,13 @@ export default function HtmlElementPanel({
                   />
                 )}
               </PanelGroup>
-            ) : (
+            ) : null}
+            {info.links && (
+              <PanelGroup id="html-links" title={t('Menu links')} defaultOpen>
+                <LinkListEditor links={info.links} onChange={(links) => onChange({ links })} t={t} />
+              </PanelGroup>
+            )}
+            {!hasContent && !info.links && (
               <div className="rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-4 text-xs leading-relaxed text-[var(--studio-text-muted)]">
                 {t('This element has no editable text, link or image content.')}
               </div>

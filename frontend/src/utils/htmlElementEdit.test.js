@@ -679,3 +679,126 @@ describe('the new customisation survives serialization', () => {
     expect(html).toContain('position: sticky')
   })
 })
+
+// A navigation is a set of links, and the panel could only ever edit one at a
+// time by clicking it — there was no way to add a menu item at all. The care
+// here is in the ADD: a brand-new <a> arrives unstyled and looks broken in
+// every template that styles its menu by class, so a new item is cloned from
+// the last one instead.
+describe('menu links', () => {
+  const navHtml = `
+    <nav id="nav" class="menu">
+      <a class="nav-link" href="#home">Home</a>
+      <a class="nav-link" href="#work">Work</a>
+    </nav>`
+  const listHtml = `
+    <ul id="list" class="menu">
+      <li class="item"><a class="nav-link" href="#one">One</a></li>
+      <li class="item"><a class="nav-link" href="#two">Two</a></li>
+    </ul>`
+
+  const mount = (html) => {
+    document.body.innerHTML = html
+    return document.body.firstElementChild
+  }
+
+  it('reads links straight out of a nav', () => {
+    const nav = mount(navHtml)
+    expect(describeElement(nav).links).toEqual([
+      { text: 'Home', href: '#home' },
+      { text: 'Work', href: '#work' },
+    ])
+  })
+
+  it('reads them through list items too', () => {
+    const list = mount(listHtml)
+    expect(describeElement(list).links).toEqual([
+      { text: 'One', href: '#one' },
+      { text: 'Two', href: '#two' },
+    ])
+  })
+
+  it('offers no list for something that is not one', () => {
+    document.body.innerHTML = '<p id="p">Text with <a href="#x">one link</a> inside.</p>'
+    expect(describeElement(document.getElementById('p')).links).toBeNull()
+  })
+
+  it('renames and re-targets without disturbing the markup', () => {
+    const nav = mount(navHtml)
+    applyElementPatch(nav, {
+      links: [{ text: 'Start', href: '#top' }, { text: 'Work', href: '#work' }],
+    })
+    const anchors = nav.querySelectorAll('a')
+    expect(anchors[0].textContent).toBe('Start')
+    expect(anchors[0].getAttribute('href')).toBe('#top')
+    // The class is the design — editing must never cost it.
+    expect(anchors[0].className).toBe('nav-link')
+    expect(anchors).toHaveLength(2)
+  })
+
+  it('clones the last link when one is added, so it arrives styled', () => {
+    const nav = mount(navHtml)
+    applyElementPatch(nav, {
+      links: [
+        { text: 'Home', href: '#home' },
+        { text: 'Work', href: '#work' },
+        { text: 'Contact', href: '#contact' },
+      ],
+    })
+    const anchors = [...nav.querySelectorAll('a')]
+    expect(anchors).toHaveLength(3)
+    expect(anchors[2].textContent).toBe('Contact')
+    expect(anchors[2].getAttribute('href')).toBe('#contact')
+    expect(anchors[2].className, 'a new item must look like the others').toBe('nav-link')
+  })
+
+  it('clones the whole list item when the links live in one', () => {
+    const list = mount(listHtml)
+    applyElementPatch(list, {
+      links: [
+        { text: 'One', href: '#one' },
+        { text: 'Two', href: '#two' },
+        { text: 'Three', href: '#three' },
+      ],
+    })
+    const items = [...list.querySelectorAll('li')]
+    expect(items).toHaveLength(3)
+    expect(items[2].className).toBe('item')
+    expect(items[2].querySelector('a').textContent).toBe('Three')
+  })
+
+  it('does not carry the current-page marker onto the new item', () => {
+    document.body.innerHTML = `
+      <nav id="nav"><a class="nav-link on" href="#a" aria-current="page">A</a></nav>`
+    const nav = document.getElementById('nav')
+    applyElementPatch(nav, { links: [{ text: 'A', href: '#a' }, { text: 'B', href: '#b' }] })
+    const anchors = [...nav.querySelectorAll('a')]
+    expect(anchors[1].hasAttribute('aria-current')).toBe(false)
+    expect(anchors[1].classList.contains('on')).toBe(false)
+    // …while keeping the styling class it was cloned from.
+    expect(anchors[1].classList.contains('nav-link')).toBe(true)
+  })
+
+  it('removes an item, and its wrapper with it', () => {
+    const list = mount(listHtml)
+    applyElementPatch(list, { links: [{ text: 'One', href: '#one' }] })
+    expect(list.querySelectorAll('li')).toHaveLength(1)
+    expect(list.textContent.trim()).toBe('One')
+  })
+
+  it('reorders by writing the list back in the new order', () => {
+    const nav = mount(navHtml)
+    applyElementPatch(nav, {
+      links: [{ text: 'Work', href: '#work' }, { text: 'Home', href: '#home' }],
+    })
+    expect([...nav.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Work', 'Home'])
+  })
+
+  it('is content, so a mobile edit writes it to the element itself', () => {
+    const nav = mount(navHtml)
+    applyMobileElementPatch(nav, { links: [{ text: 'Only', href: '#only' }] })
+    // Menus do not differ per breakpoint — no override attribute for this.
+    expect(nav.querySelectorAll('a')).toHaveLength(1)
+    expect(nav.getAttribute('data-pwb-mobile-links')).toBeNull()
+  })
+})

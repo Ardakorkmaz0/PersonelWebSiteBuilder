@@ -14,6 +14,24 @@ export function normalizedSelectionActionsScale(value) {
   return Math.max(0.35, Math.min(1, Number(value) || 1))
 }
 
+// How the bar is counter-scaled, as one style object both toolbars use.
+//
+// This used to be `zoom`, and zoom does not only resize an element — it
+// multiplies its `left`/`top` as well. So the bar drifted by the same factor
+// that kept it readable: correct at 1:1, and further from the selection the
+// smaller the artboard was fitted, which is why it looked wrong on any large
+// canvas. `transform` scales the paint and leaves layout position alone, so the
+// coordinates selectionActionsPosition computes are the coordinates used.
+//
+// `top left` origin because the reserved box (selectionActionsCanvasWidth /
+// Height) is already the SCALED size in design pixels — growing from the
+// top-left corner makes the painted bar fill exactly that reservation.
+export function selectionActionsScaleStyle(canvasScale = 1) {
+  const scale = normalizedSelectionActionsScale(canvasScale)
+  if (scale >= 1) return {}
+  return { transform: `scale(${1 / scale})`, transformOrigin: 'top left' }
+}
+
 // Positioning works in design pixels, while the toolbar should keep a
 // comfortable physical size when a large artboard is scaled down.
 export function selectionActionsCanvasWidth(canvasScale = 1, actionCount = DEFAULT_SELECTION_ACTION_COUNT) {

@@ -6,7 +6,7 @@ import {
 } from '../../store/editorStore.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
-import { normalizedSelectionActionsScale } from './canvasSelectionActionsLayout.js'
+import { selectionActionsScaleStyle } from './canvasSelectionActionsLayout.js'
 
 function findById(components, id) {
   for (const c of components || []) {
@@ -187,7 +187,7 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
               position: 'absolute',
               zIndex: 36,
               boxShadow: '0 8px 22px rgba(15,23,42,0.3)',
-              zoom: 1 / normalizedSelectionActionsScale(canvasScale),
+              ...selectionActionsScaleStyle(canvasScale),
             }),
         ...style,
       }}

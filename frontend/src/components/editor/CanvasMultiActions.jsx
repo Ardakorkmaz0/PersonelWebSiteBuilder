@@ -1,6 +1,6 @@
 import { useEditorStore } from '../../store/editorStore.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
-import { normalizedSelectionActionsScale } from './canvasSelectionActionsLayout.js'
+import { selectionActionsScaleStyle } from './canvasSelectionActionsLayout.js'
 
 // Floating toolbar shown over a MULTI selection (shift-click / marquee). Single
 // selections keep their own per-item toolbar; a group instead needs align,
@@ -72,7 +72,7 @@ export default function CanvasMultiActions({ count, canvasScale = 1, style }) {
         background: '#111827',
         boxShadow: '0 8px 22px rgba(15,23,42,0.3)',
         pointerEvents: 'auto',
-        zoom: 1 / normalizedSelectionActionsScale(canvasScale),
+        ...selectionActionsScaleStyle(canvasScale),
         ...style,
       }}
     >

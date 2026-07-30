@@ -85,6 +85,28 @@ describe('CanvasSelectionActions', () => {
       </LanguageProvider>,
     )
 
-    expect(screen.getByRole('toolbar', { name: 'Arrange' })).toHaveStyle({ zoom: '2' })
+    expect(screen.getByRole('toolbar', { name: 'Arrange' })).toHaveStyle({
+      transform: 'scale(2)',
+      transformOrigin: 'top left',
+    })
+  })
+
+  // This assertion is the bug. The counter-scale used to be `zoom`, which
+  // resizes an element AND multiplies its left/top — so the bar drifted away
+  // from its element by the same factor that kept it readable, further the more
+  // the artboard was fitted down. Position and size must stay independent.
+  it('counter-scales without moving: the given left/top are the used left/top', () => {
+    localStorage.setItem('pwb_language', 'en')
+    loadNestedCanvas()
+
+    render(
+      <LanguageProvider>
+        <CanvasSelectionActions componentId="child" canvasScale={0.4} style={{ left: 320, top: 180 }} />
+      </LanguageProvider>,
+    )
+
+    const toolbar = screen.getByRole('toolbar', { name: 'Arrange' })
+    expect(toolbar).toHaveStyle({ left: '320px', top: '180px' })
+    expect(toolbar.style.zoom).toBe('')
   })
 })

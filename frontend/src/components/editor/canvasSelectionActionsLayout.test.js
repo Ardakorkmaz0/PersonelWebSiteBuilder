@@ -3,6 +3,7 @@ import {
   selectionActionsCanvasHeight,
   selectionActionsCanvasWidth,
   selectionActionsPosition,
+  selectionActionsScaleStyle,
 } from './canvasSelectionActionsLayout.js'
 
 describe('selection action bar placement', () => {
@@ -47,5 +48,59 @@ describe('selection action bar placement', () => {
       targetWidth: 100,
       targetHeight: 44,
     })).toEqual({ left: 8, top: 56, placement: 'below' })
+  })
+})
+
+// How the bar is counter-scaled is a positioning question, not a cosmetic one.
+//
+// It used to be `zoom`, which resizes an element AND multiplies its left/top.
+// So the bar drifted by the very factor that kept it readable: right on a 1:1
+// artboard, and further from the selection the more the canvas was fitted down
+// — measured at 21% fit, a bar that belonged over its element sat 252px to the
+// right of it, and the drift grew with distance from the artboard's origin.
+// The old tests could not see it: they asserted the style attribute, which was
+// always correct — the browser moved the bar afterwards.
+describe('selection action bar counter-scale', () => {
+  it('never uses zoom, which would move the bar as well as resize it', () => {
+    for (const scale of [1, 0.9, 0.5, 0.35, 0.2]) {
+      expect(selectionActionsScaleStyle(scale), `scale ${scale}`).not.toHaveProperty('zoom')
+    }
+  })
+
+  it('scales with a transform, which leaves layout position alone', () => {
+    expect(selectionActionsScaleStyle(0.5)).toEqual({
+      transform: 'scale(2)',
+      transformOrigin: 'top left',
+    })
+    expect(selectionActionsScaleStyle(0.4)).toEqual({
+      transform: 'scale(2.5)',
+      transformOrigin: 'top left',
+    })
+  })
+
+  it('does nothing at all when the artboard is not scaled', () => {
+    expect(selectionActionsScaleStyle(1)).toEqual({})
+    expect(selectionActionsScaleStyle(undefined)).toEqual({})
+    // Above 1:1 the bar is already the right physical size.
+    expect(selectionActionsScaleStyle(2)).toEqual({})
+  })
+
+  it('respects the same floor the reservation uses, so the two cannot disagree', () => {
+    // Below the floor the bar stops growing; the reserved box stops with it.
+    expect(selectionActionsScaleStyle(0.05)).toEqual(selectionActionsScaleStyle(0.35))
+    expect(selectionActionsCanvasWidth(0.05)).toBe(selectionActionsCanvasWidth(0.35))
+  })
+
+  it('paints exactly the box the layout reserved for it', () => {
+    // `top left` origin is only correct while these agree: the reservation is
+    // the SCALED size in design pixels, and the transform grows the unscaled
+    // box from its top-left corner to precisely that.
+    const unscaledWidth = selectionActionsCanvasWidth(1)
+    const unscaledHeight = selectionActionsCanvasHeight(1)
+    for (const scale of [0.8, 0.5, 0.35]) {
+      const factor = Number(selectionActionsScaleStyle(scale).transform.match(/scale\(([\d.]+)\)/)[1])
+      expect(Math.ceil(unscaledWidth * factor), `w @ ${scale}`).toBe(selectionActionsCanvasWidth(scale))
+      expect(Math.ceil(unscaledHeight * factor), `h @ ${scale}`).toBe(selectionActionsCanvasHeight(scale))
+    }
   })
 })

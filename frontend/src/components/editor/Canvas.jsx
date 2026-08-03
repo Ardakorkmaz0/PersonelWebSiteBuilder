@@ -67,6 +67,7 @@ export default function Canvas({
   onBrowserPageEdit,
   onBrowserFaviconEdit,
   onBrowserAddressChange,
+  onSpotlight,
 }) {
   const { t } = useLanguage()
   const page = useEditorStore(selectCurrentPage)
@@ -435,6 +436,7 @@ export default function Canvas({
         <CanvasSelectionActions
           componentId={selectedId}
           canvasScale={canvasScale}
+          onSpotlight={onSpotlight}
           style={{
             left: selectionActionPosition.left,
             top: selectionActionPosition.top,

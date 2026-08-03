@@ -51,6 +51,21 @@ function ParentIcon() {
   )
 }
 
+function ExpandIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <path
+        d="M8 3H3v5M12 3h5v5M8 17H3v-5M12 17h5v-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function FitIcon() {
   return (
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
@@ -89,7 +104,7 @@ function PhoneIcon({ off }) {
 // `inline` docks the bar in the editor toolbar instead of floating it over the
 // selected element: one stable place for every element's actions, so it never
 // covers the design and never has to be hunted for.
-export default function CanvasSelectionActions({ componentId, canvasScale = 1, style, inline = false }) {
+export default function CanvasSelectionActions({ componentId, canvasScale = 1, style, inline = false, onSpotlight }) {
   const { t } = useLanguage()
   const parent = useEditorStore((state) => selectComponentParent(state, componentId))
   const canMoveBackward = useEditorStore((state) => selectCanMoveComponent(state, componentId, 'backward'))
@@ -159,6 +174,11 @@ export default function CanvasSelectionActions({ componentId, canvasScale = 1, s
       !mobileHidden && pcHidden,
       mobileHidden,
     ],
+    // Opens the component on its own, large: the canvas is fitted down too far
+    // to judge type or spacing on.
+    ...(onSpotlight
+      ? [['spotlight', <ExpandIcon key="spotlight-icon" />, t('Open large'), () => onSpotlight(componentId), false]]
+      : []),
     ['delete', <span key="delete-icon" aria-hidden="true">×</span>, t('Delete component'), () => remove(componentId), false],
   ]
 

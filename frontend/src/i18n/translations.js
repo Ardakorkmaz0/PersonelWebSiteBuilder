@@ -976,6 +976,7 @@ export const TURKISH_TRANSLATIONS = {
   'Open large': 'Büyük aç',
   'Rendered with the page’s own styles at {width}px.': 'Sayfanın kendi stilleriyle {width}px genişlikte gösteriliyor.',
   'Tablet': 'Tablet',
+  'Rendered with the site’s own theme at {width}px.': 'Sitenin kendi temasıyla {width}px genişlikte gösteriliyor.',
   'No tools called — the canvas was not changed.': 'Hiçbir araç çağrılmadı; tuval değiştirilmedi.',
   '{count} changes applied': '{count} değişiklik uygulandı',
   '{count} could not be applied': '{count} tanesi uygulanamadı',

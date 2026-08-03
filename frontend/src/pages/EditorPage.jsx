@@ -54,6 +54,7 @@ import {
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import ElementSpotlight from '../components/editor/ElementSpotlight.jsx'
+import ComponentSpotlight from '../components/editor/ComponentSpotlight.jsx'
 import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
 import { pageFileName } from '../utils/pageFiles.js'
 import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
@@ -522,6 +523,8 @@ export default function EditorPage() {
   const [htmlSelection, setHtmlSelection] = useState(null)
   // The element opened in the spotlight overlay (HTML mode), or null.
   const [spotlightElement, setSpotlightElement] = useState(null)
+  // The canvas component opened in the spotlight overlay, or null.
+  const [spotlightComponentId, setSpotlightComponentId] = useState(null)
   // Link tool has a source picked and is waiting for a target — clicking a
   // page in the Files panel then links the source to that page.
   const [linkArmed, setLinkArmed] = useState(false)
@@ -2792,6 +2795,7 @@ export default function EditorPage() {
                     onBrowserPageEdit={editBrowserPage}
                     onBrowserFaviconEdit={editBrowserFavicon}
                     onBrowserAddressChange={changeBrowserAddress}
+                    onSpotlight={setSpotlightComponentId}
                   />
                 ) : canvasMode === 'view' ? (
                   <CanvasPreview
@@ -2834,6 +2838,14 @@ export default function EditorPage() {
                     </Suspense>
                   </div>
                 )}
+                {/* Same overlay as HTML mode, drawing a component instead of a
+                    DOM element — the properties panel inside it is the rail's
+                    own, so an edit here is an edit there. */}
+                <ComponentSpotlight
+                  open={!!spotlightComponentId}
+                  componentId={spotlightComponentId}
+                  onClose={() => setSpotlightComponentId(null)}
+                />
               </div>
               {!aiWorkspaceOpen && canvasMode !== 'source' && <RailSlot
                 side="right"

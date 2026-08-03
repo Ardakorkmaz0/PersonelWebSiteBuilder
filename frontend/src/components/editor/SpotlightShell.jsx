@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useLanguage } from '../../i18n/useLanguage.js'
-import { SPOTLIGHT_WIDTHS } from './spotlightWidths.js'
+import { SPOTLIGHT_WIDTHS, SPOTLIGHT_Z } from './spotlight.js'
 
 export default function SpotlightShell({
   open,
@@ -50,7 +50,8 @@ export default function SpotlightShell({
 
   return (
     <div
-      className="studio-theme-surface fixed inset-0 z-[200] flex"
+      className="studio-theme-surface fixed inset-0 flex"
+      style={{ zIndex: SPOTLIGHT_Z }}
       role="dialog"
       aria-modal="true"
       aria-label={t('Open large')}

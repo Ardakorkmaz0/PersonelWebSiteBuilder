@@ -13,6 +13,7 @@ import { phoneFrameH, phoneFrameW, phoneModel, phoneScreenHeight } from './phone
 import BrowserFrame from './BrowserFrame.jsx'
 import MobileBrowserChrome from './MobileBrowserChrome.jsx'
 import { CANVAS_SCROLLER_ID } from '../../utils/dragAutoScroll.js'
+import { CANVAS_SELECTION_Z } from './spotlight.js'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
@@ -443,7 +444,7 @@ export default function Canvas({
             // Free-canvas selections lift their wrapper to z-index 1000. Keep
             // the shared overlay above that wrapper so it stays clickable when
             // the safe top-edge fallback places it below the selected item.
-            zIndex: 1100,
+            zIndex: CANVAS_SELECTION_Z,
           }}
         />
       )}

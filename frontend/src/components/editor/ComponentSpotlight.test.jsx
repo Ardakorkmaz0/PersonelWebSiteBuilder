@@ -10,6 +10,7 @@ import LanguageProvider from '../../i18n/LanguageProvider.jsx'
 import ComponentSpotlight from './ComponentSpotlight.jsx'
 import CanvasSelectionActions from './CanvasSelectionActions.jsx'
 import { useEditorStore } from '../../store/editorStore.js'
+import { CANVAS_SELECTION_Z, SPOTLIGHT_Z, toggleSpotlightTarget } from './spotlight.js'
 
 function loadPage() {
   useEditorStore.getState().loadSchema({
@@ -143,5 +144,55 @@ describe('the canvas selection toolbar', () => {
       </LanguageProvider>,
     )
     expect(screen.queryByRole('button', { name: 'Open large' })).toBeNull()
+  })
+})
+
+// Two things the first version got wrong, both visible the moment it opened.
+describe('the spotlight is actually on top, and the button toggles it', () => {
+  it('clears the canvas selection chrome it would otherwise sit under', () => {
+    // The floating selection toolbar rides at 1100 so it clears a lifted
+    // component. The overlay opened at 200, so the blue frame and its buttons
+    // painted straight over the blurred backdrop — and stayed clickable.
+    expect(SPOTLIGHT_Z).toBeGreaterThan(CANVAS_SELECTION_Z)
+
+    const { container } = renderSpotlight()
+    const dialog = container.querySelector('[role="dialog"]')
+    expect(Number(dialog.style.zIndex)).toBe(SPOTLIGHT_Z)
+    expect(Number(dialog.style.zIndex)).toBeGreaterThan(CANVAS_SELECTION_Z)
+  })
+
+  it('covers the workspace with a backdrop that takes the clicks', () => {
+    const { container } = renderSpotlight()
+    const backdrop = container.querySelector('[role="dialog"] > button')
+    expect(backdrop.className).toContain('inset-0')
+    expect(backdrop.className).toContain('backdrop-blur')
+  })
+})
+
+describe('toggleSpotlightTarget', () => {
+  // Pressing "open large" again is how you leave — without hunting for the ×
+  // or having to know that Escape works.
+  it('closes when the same thing is pressed twice', () => {
+    expect(toggleSpotlightTarget('card_1', 'card_1')).toBeNull()
+  })
+
+  it('switches straight to another one rather than closing first', () => {
+    expect(toggleSpotlightTarget('card_1', 'card_2')).toBe('card_2')
+  })
+
+  it('opens from nothing', () => {
+    expect(toggleSpotlightTarget(null, 'card_1')).toBe('card_1')
+  })
+
+  it('works on DOM elements too, which is what HTML mode passes', () => {
+    const a = document.createElement('nav')
+    const b = document.createElement('header')
+    expect(toggleSpotlightTarget(a, a)).toBeNull()
+    expect(toggleSpotlightTarget(a, b)).toBe(b)
+  })
+
+  it('stays closed when handed nothing', () => {
+    expect(toggleSpotlightTarget('card_1', null)).toBeNull()
+    expect(toggleSpotlightTarget(null, undefined)).toBeNull()
   })
 })

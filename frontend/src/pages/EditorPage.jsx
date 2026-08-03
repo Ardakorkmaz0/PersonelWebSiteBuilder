@@ -55,6 +55,7 @@ import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import ElementSpotlight from '../components/editor/ElementSpotlight.jsx'
 import ComponentSpotlight from '../components/editor/ComponentSpotlight.jsx'
+import { toggleSpotlightTarget } from '../components/editor/spotlight.js'
 import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
 import { pageFileName } from '../utils/pageFiles.js'
 import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
@@ -2375,7 +2376,7 @@ export default function EditorPage() {
                   onRequestSave={() => save()}
                   onDraftDirtyChange={setWorkspaceDirty}
                   onElementSelect={setHtmlSelection}
-                  onSpotlight={(el) => setSpotlightElement(el)}
+                  onSpotlight={(el) => setSpotlightElement((current) => toggleSpotlightTarget(current, el))}
                   onLinkArmedChange={setLinkArmed}
                   onStartBlank={startBlankHtml}
                   onOpenTemplates={() => setTemplateOpen(true)}
@@ -2798,7 +2799,7 @@ export default function EditorPage() {
                     onBrowserPageEdit={editBrowserPage}
                     onBrowserFaviconEdit={editBrowserFavicon}
                     onBrowserAddressChange={changeBrowserAddress}
-                    onSpotlight={setSpotlightComponentId}
+                    onSpotlight={(id) => setSpotlightComponentId((current) => toggleSpotlightTarget(current, id))}
                   />
                 ) : canvasMode === 'view' ? (
                   <CanvasPreview

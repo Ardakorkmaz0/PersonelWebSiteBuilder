@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useGoBack } from '../utils/useGoBack.js'
+import { Link, useNavigate } from 'react-router-dom'
+import { lastPageOutside } from '../utils/lastVisited.js'
 import { useProjectStore } from '../store/projectStore.js'
 import {
   chooseTargetFolder,
@@ -86,7 +86,10 @@ function LivePane({ url, reloadKey, onReload, onOpenWindow }) {
 // — but operates on an in-memory file map (projectStore), not a server Site.
 export default function CodeProjectPage() {
   const { t } = useLanguage()
-  const goBack = useGoBack('/')
+  // Leaves the workspace, like the editor's — one step back from here is
+  // usually the project you just closed.
+  const navigate = useNavigate()
+  const goBack = useCallback(() => navigate(lastPageOutside('/')), [navigate])
   const rootHandle = useProjectStore((s) => s.rootHandle)
   const rootName = useProjectStore((s) => s.rootName)
   const files = useProjectStore((s) => s.files)

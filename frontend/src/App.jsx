@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
@@ -10,6 +10,7 @@ import LanguageProvider from './i18n/LanguageProvider.jsx'
 import { useLanguage } from './i18n/useLanguage.js'
 import UiThemeProvider from './ui/UiThemeProvider.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary.jsx'
+import { rememberVisit } from './utils/lastVisited.js'
 
 // The editor and the public preview are the heaviest screens — together they
 // pull in the entire renderer, all eight AI templates, the schema validators,
@@ -27,6 +28,15 @@ const FavoritesPage = lazy(() => import('./pages/FavoritesPage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
 const ReviewPage = lazy(() => import('./pages/ReviewPage.jsx'))
+
+// Records every ordinary page the user visits, so a workspace can send them
+// back out to where they actually were rather than one history step back —
+// which, from the editor, is usually another editor.
+function VisitTracker() {
+  const location = useLocation()
+  rememberVisit(location.pathname)
+  return null
+}
 
 function FullScreenLoading() {
   const { t } = useLanguage()
@@ -48,6 +58,7 @@ export default function App() {
         <BrowserRouter>
           {/* Inside the router so it can key itself on the path, and around
               Suspense so a chunk that fails to load is caught too. */}
+          <VisitTracker />
           <AppErrorBoundary>
             <Suspense fallback={<FullScreenLoading />}>
               <Routes>

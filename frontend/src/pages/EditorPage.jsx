@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, useCallback } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   DndContext,
@@ -13,7 +13,7 @@ import {
 import { getSite, updateSite } from '../api/sites.js'
 import { useEditorStore, selectCurrentPage } from '../store/editorStore.js'
 import { useAuthStore } from '../store/authStore.js'
-import { useGoBack } from '../utils/useGoBack.js'
+import { lastPageOutside } from '../utils/lastVisited.js'
 import {
   registry,
   PC_CANVAS_PRESETS,
@@ -330,7 +330,10 @@ export default function EditorPage() {
   const markSaved = useEditorStore((s) => s.markSaved)
   const dirty = useEditorStore((s) => s.dirty)
   const authUser = useAuthStore((s) => s.user)
-  const goBack = useGoBack('/profile')
+  // Back LEAVES the editor. One history step back is usually another editor
+  // (open a site, return, open the next), and moving between pages of a design
+  // is what the page list is for — this button is the way out.
+  const goBack = useCallback(() => navigate(lastPageOutside('/profile')), [navigate])
   const theme = useEditorStore((s) => s.schema.theme)
   const editorSchema = useEditorStore((s) => s.schema)
   const customCss = useEditorStore((s) => s.schema.customCss)

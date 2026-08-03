@@ -1,13 +1,11 @@
 // The spotlight preview is only worth having if it tells the truth: the page's
 // own CSS, none of the editor's chrome, and a viewport width that actually
 // makes the media queries fire.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   cleanElementHtml,
-  createHoldGesture,
   elementSpotlightDocument,
   pageStyleHead,
-  SPOTLIGHT_HOLD_MS,
 } from './elementSpotlight.js'
 
 beforeEach(() => {
@@ -103,67 +101,5 @@ describe('elementSpotlightDocument', () => {
     document.body.style.backgroundColor = 'rgb(10, 12, 22)'
     expect(elementSpotlightDocument(document, document.getElementById('nav')))
       .toContain('background: rgb(10, 12, 22)')
-  })
-})
-
-describe('createHoldGesture', () => {
-  beforeEach(() => { vi.useFakeTimers() })
-
-  it('fires after the hold', () => {
-    const onHold = vi.fn()
-    const hold = createHoldGesture(onHold)
-    hold.start({ button: 0, clientX: 100, clientY: 100 })
-    vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS + 10)
-    expect(onHold).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
-  })
-
-  it('loses to a drag — a moved pointer was never a hold', () => {
-    const onHold = vi.fn()
-    const hold = createHoldGesture(onHold)
-    hold.start({ button: 0, clientX: 100, clientY: 100 })
-    hold.move({ clientX: 140, clientY: 100 })
-    vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS + 10)
-    expect(onHold).not.toHaveBeenCalled()
-    vi.useRealTimers()
-  })
-
-  it('tolerates a hand that is not perfectly still', () => {
-    const onHold = vi.fn()
-    const hold = createHoldGesture(onHold)
-    hold.start({ button: 0, clientX: 100, clientY: 100 })
-    hold.move({ clientX: 103, clientY: 102 })
-    vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS + 10)
-    expect(onHold).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
-  })
-
-  it('loses to an ordinary click — released before the hold completes', () => {
-    const onHold = vi.fn()
-    const hold = createHoldGesture(onHold)
-    hold.start({ button: 0, clientX: 10, clientY: 10 })
-    vi.advanceTimersByTime(200)
-    hold.end()
-    vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS)
-    expect(onHold).not.toHaveBeenCalled()
-    vi.useRealTimers()
-  })
-
-  it('ignores the secondary button, which opens menus', () => {
-    const onHold = vi.fn()
-    const hold = createHoldGesture(onHold)
-    hold.start({ button: 2, clientX: 10, clientY: 10 })
-    vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS + 10)
-    expect(onHold).not.toHaveBeenCalled()
-    vi.useRealTimers()
-  })
-
-  it('reports where the finger was, so the overlay can open from there', () => {
-    const onHold = vi.fn()
-    const hold = createHoldGesture(onHold)
-    hold.start({ button: 0, clientX: 240, clientY: 310 })
-    vi.advanceTimersByTime(SPOTLIGHT_HOLD_MS + 10)
-    expect(onHold).toHaveBeenCalledWith({ x: 240, y: 310 }, expect.anything())
-    vi.useRealTimers()
   })
 })

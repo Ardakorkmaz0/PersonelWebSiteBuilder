@@ -146,6 +146,7 @@ describe('HTML selection quick actions', () => {
       duplicate: 'Çoğalt',
       up: 'Yukarı taşı',
       down: 'Aşağı taşı',
+      spotlight: 'Büyük aç',
       delete: 'Bileşeni sil',
     })
 
@@ -153,10 +154,28 @@ describe('HTML selection quick actions', () => {
     expect(toolbar).toHaveAttribute('role', 'toolbar')
     expect(toolbar).toHaveAttribute('aria-label', 'Düzenle')
     expect(toolbar.style.top).toBe('-40px')
-    expect(toolbar.querySelectorAll('[data-pwb-selection-action]')).toHaveLength(5)
+    // Which actions, not how many — a count says nothing about what is missing.
+    expect([...toolbar.querySelectorAll('[data-pwb-selection-action]')]
+      .map((button) => button.getAttribute('data-pwb-selection-action')))
+      .toEqual(['parent', 'duplicate', 'up', 'down', 'spotlight', 'delete'])
 
     fireEvent.click(toolbar.querySelector('[data-pwb-selection-action="delete"]'))
     expect(onAction).toHaveBeenCalledWith('delete')
+  })
+
+  it('opens the spotlight from the toolbar, and labels it in the user’s language', () => {
+    const selected = document.getElementById('selected')
+    selected.getBoundingClientRect = () => ({ left: 20, top: 80, right: 220, bottom: 120, width: 200, height: 40 })
+    const onAction = vi.fn()
+
+    installSelectionResizeChrome(document, selected, vi.fn(), onAction, { spotlight: 'Büyük aç' })
+
+    const button = document.querySelector('[data-pwb-selection-action="spotlight"]')
+    expect(button).toHaveAttribute('title', 'Büyük aç')
+    expect(button).toHaveAttribute('aria-label', 'Büyük aç')
+
+    fireEvent.click(button)
+    expect(onAction).toHaveBeenCalledWith('spotlight')
   })
 
   it('flips below top-edge selections and never leaks into saved HTML', () => {

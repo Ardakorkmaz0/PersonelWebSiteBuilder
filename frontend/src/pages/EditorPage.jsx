@@ -53,6 +53,7 @@ import {
 } from '../utils/brush.js'
 import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
+import ElementSpotlight from '../components/editor/ElementSpotlight.jsx'
 import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
 import { pageFileName } from '../utils/pageFiles.js'
 import { DEVICES, isMobileDevice } from '../utils/htmlDevices.js'
@@ -519,6 +520,8 @@ export default function EditorPage() {
   // Element selected inside the HTML edit iframe — drives the right-rail
   // element properties panel (null → site settings).
   const [htmlSelection, setHtmlSelection] = useState(null)
+  // The element opened in the spotlight overlay (HTML mode), or null.
+  const [spotlightElement, setSpotlightElement] = useState(null)
   // Link tool has a source picked and is waiting for a target — clicking a
   // page in the Files panel then links the source to that page.
   const [linkArmed, setLinkArmed] = useState(false)
@@ -2366,6 +2369,7 @@ export default function EditorPage() {
                   onRequestSave={() => save()}
                   onDraftDirtyChange={setWorkspaceDirty}
                   onElementSelect={setHtmlSelection}
+                  onSpotlight={(el) => setSpotlightElement(el)}
                   onLinkArmedChange={setLinkArmed}
                   onStartBlank={startBlankHtml}
                   onOpenTemplates={() => setTemplateOpen(true)}
@@ -2427,6 +2431,22 @@ export default function EditorPage() {
                   </div>
                 </div>
               </RailSlot>}
+              {/* Same handlers as the rail's panel: the spotlight is a bigger
+                  window onto the element, not a second inspector. */}
+              <ElementSpotlight
+                open={!!spotlightElement && !!htmlSelection}
+                element={spotlightElement}
+                info={htmlSelection}
+                pages={storePages}
+                onChange={(patch) => workspaceRef.current?.updateSelectedElement?.(patch)}
+                onSelectParent={() => workspaceRef.current?.selectParent?.()}
+                onDuplicate={() => workspaceRef.current?.duplicateSelected?.()}
+                onMoveUp={() => workspaceRef.current?.moveSelected?.('up')}
+                onMoveDown={() => workspaceRef.current?.moveSelected?.('down')}
+                onDelete={() => workspaceRef.current?.deleteSelected?.()}
+                onResetMobile={() => workspaceRef.current?.resetSelectedMobileStyles?.()}
+                onClose={() => setSpotlightElement(null)}
+              />
             </>
           ) : (
             <>

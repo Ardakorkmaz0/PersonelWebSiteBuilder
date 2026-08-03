@@ -381,6 +381,9 @@ export function installSelectionResizeChrome(
     ['duplicate', '⧉', labels.duplicate || 'Duplicate'],
     ['up', '↑', labels.up || 'Move up'],
     ['down', '↓', labels.down || 'Move down'],
+    // Opens the element on its own, large, with the full control set — the
+    // stage here is fitted down too far to judge type or spacing on.
+    ['spotlight', '⛶', labels.spotlight || 'Open large'],
     ['delete', '×', labels.delete || 'Delete component'],
   ]
   for (const [action, glyph, label] of actions) {
@@ -454,6 +457,7 @@ function HtmlWorkspace({
   onRequestSave,
   onDraftDirtyChange,
   onElementSelect,
+  onSpotlight,
   onLinkArmedChange,
   onStartBlank,
   onOpenTemplates,
@@ -669,11 +673,15 @@ function HtmlWorkspace({
       duplicate: t('Duplicate'),
       up: t('Move up'),
       down: t('Move down'),
+      spotlight: t('Open large'),
       delete: t('Delete component'),
     }
   }, [t])
 
   const selectionActionRef = useRef(null)
+  // Held in a ref so the toolbar handler never has to be rebuilt for it.
+  const onSpotlightRef = useRef(null)
+  useEffect(() => { onSpotlightRef.current = onSpotlight }, [onSpotlight])
   const installSelectedElementChrome = useCallback((doc, el) => {
     installSelectionResizeChrome(
       doc,
@@ -706,6 +714,11 @@ function HtmlWorkspace({
       if (!moveElement(el, action)) return
       changed = true
       try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
+    } else if (action === 'spotlight') {
+      // Nothing is mutated — the element is handed to the overlay, which edits
+      // it through the same patch path the right rail uses.
+      onSpotlightRef.current?.(el)
+      return
     } else if (action === 'delete') {
       el.remove()
       next = null

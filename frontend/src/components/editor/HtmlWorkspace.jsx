@@ -384,6 +384,9 @@ export function installSelectionResizeChrome(
     // Opens the element on its own, large, with the full control set — the
     // stage here is fitted down too far to judge type or spacing on.
     ['spotlight', '⛶', labels.spotlight || 'Open large'],
+    // Offer this block to everyone else. Next to "open large" because both are
+    // about the element as a thing in its own right.
+    ['share', '↗', labels.share || 'Share to the community'],
     ['delete', '×', labels.delete || 'Delete component'],
   ]
   for (const [action, glyph, label] of actions) {
@@ -458,6 +461,7 @@ function HtmlWorkspace({
   onDraftDirtyChange,
   onElementSelect,
   onSpotlight,
+  onShare,
   onLinkArmedChange,
   onStartBlank,
   onOpenTemplates,
@@ -674,6 +678,7 @@ function HtmlWorkspace({
       up: t('Move up'),
       down: t('Move down'),
       spotlight: t('Open large'),
+      share: t('Share to the community'),
       delete: t('Delete component'),
     }
   }, [t])
@@ -682,6 +687,8 @@ function HtmlWorkspace({
   // Held in a ref so the toolbar handler never has to be rebuilt for it.
   const onSpotlightRef = useRef(null)
   useEffect(() => { onSpotlightRef.current = onSpotlight }, [onSpotlight])
+  const onShareRef = useRef(null)
+  useEffect(() => { onShareRef.current = onShare }, [onShare])
   const installSelectedElementChrome = useCallback((doc, el) => {
     installSelectionResizeChrome(
       doc,
@@ -714,6 +721,9 @@ function HtmlWorkspace({
       if (!moveElement(el, action)) return
       changed = true
       try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch { /* jsdom */ }
+    } else if (action === 'share') {
+      onShareRef.current?.(el)
+      return
     } else if (action === 'spotlight') {
       // Nothing is mutated — the element is handed to the overlay, which edits
       // it through the same patch path the right rail uses.

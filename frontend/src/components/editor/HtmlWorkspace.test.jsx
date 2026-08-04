@@ -157,7 +157,7 @@ describe('HTML selection quick actions', () => {
     // Which actions, not how many — a count says nothing about what is missing.
     expect([...toolbar.querySelectorAll('[data-pwb-selection-action]')]
       .map((button) => button.getAttribute('data-pwb-selection-action')))
-      .toEqual(['parent', 'duplicate', 'up', 'down', 'spotlight', 'delete'])
+      .toEqual(['parent', 'duplicate', 'up', 'down', 'spotlight', 'share', 'delete'])
 
     fireEvent.click(toolbar.querySelector('[data-pwb-selection-action="delete"]'))
     expect(onAction).toHaveBeenCalledWith('delete')

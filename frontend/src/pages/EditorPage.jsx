@@ -55,6 +55,7 @@ import PropertiesPanel from '../components/editor/PropertiesPanel.jsx'
 import HtmlElementPanel from '../components/editor/HtmlElementPanel.jsx'
 import ElementSpotlight from '../components/editor/ElementSpotlight.jsx'
 import ComponentSpotlight from '../components/editor/ComponentSpotlight.jsx'
+import ShareComponentDialog from '../components/editor/ShareComponentDialog.jsx'
 import { toggleSpotlightTarget } from '../components/editor/spotlight.js'
 import PageFilesPanel from '../components/editor/PageFilesPanel.jsx'
 import { pageFileName } from '../utils/pageFiles.js'
@@ -529,6 +530,8 @@ export default function EditorPage() {
   const [spotlightElement, setSpotlightElement] = useState(null)
   // The canvas component opened in the spotlight overlay, or null.
   const [spotlightComponentId, setSpotlightComponentId] = useState(null)
+  // The element being offered to the community, or null.
+  const [shareElement, setShareElement] = useState(null)
   // Link tool has a source picked and is waiting for a target — clicking a
   // page in the Files panel then links the source to that page.
   const [linkArmed, setLinkArmed] = useState(false)
@@ -2377,6 +2380,7 @@ export default function EditorPage() {
                   onDraftDirtyChange={setWorkspaceDirty}
                   onElementSelect={setHtmlSelection}
                   onSpotlight={(el) => setSpotlightElement((current) => toggleSpotlightTarget(current, el))}
+                  onShare={(el) => setShareElement(el)}
                   onLinkArmedChange={setLinkArmed}
                   onStartBlank={startBlankHtml}
                   onOpenTemplates={() => setTemplateOpen(true)}
@@ -2453,6 +2457,12 @@ export default function EditorPage() {
                 onDelete={() => workspaceRef.current?.deleteSelected?.()}
                 onResetMobile={() => workspaceRef.current?.resetSelectedMobileStyles?.()}
                 onClose={() => setSpotlightElement(null)}
+              />
+              <ShareComponentDialog
+                open={!!shareElement}
+                element={shareElement}
+                sourceSiteId={id}
+                onClose={() => setShareElement(null)}
               />
             </>
           ) : (

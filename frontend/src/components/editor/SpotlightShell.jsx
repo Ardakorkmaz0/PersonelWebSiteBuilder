@@ -68,6 +68,15 @@ export default function SpotlightShell({
       <div className="relative z-10 flex min-w-0 flex-1 flex-col p-4 lg:p-6">
         <div className="mb-3 flex shrink-0 items-center gap-2">
           <span className="shrink-0 truncate text-sm font-semibold text-[var(--studio-text)]">{title}</span>
+          {/* Said out loud, where the mode is entered: this one is still being
+              built, so a control that does nothing yet reads as unfinished
+              rather than as broken. */}
+          <span
+            className="studio-status-warning shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            title={t('This mode is still being built — some controls may not do anything yet.')}
+          >
+            {t('In development')}
+          </span>
           {subtitle ? (
             <span className="min-w-0 truncate font-mono text-[11px] text-[var(--studio-text-faint)]">{subtitle}</span>
           ) : null}

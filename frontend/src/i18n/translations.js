@@ -977,6 +977,8 @@ export const TURKISH_TRANSLATIONS = {
   'Rendered with the page’s own styles at {width}px.': 'Sayfanın kendi stilleriyle {width}px genişlikte gösteriliyor.',
   'Tablet': 'Tablet',
   'Rendered with the site’s own theme at {width}px.': 'Sitenin kendi temasıyla {width}px genişlikte gösteriliyor.',
+  'In development': 'Geliştirme aşamasında',
+  'This mode is still being built — some controls may not do anything yet.': 'Bu mod hâlâ geliştiriliyor; bazı kontroller henüz bir şey yapmayabilir.',
   'No tools called — the canvas was not changed.': 'Hiçbir araç çağrılmadı; tuval değiştirilmedi.',
   '{count} changes applied': '{count} değişiklik uygulandı',
   '{count} could not be applied': '{count} tanesi uygulanamadı',

@@ -196,3 +196,15 @@ describe('toggleSpotlightTarget', () => {
     expect(toggleSpotlightTarget(null, undefined)).toBeNull()
   })
 })
+
+describe('the mode says what it is', () => {
+  // Entering an unfinished mode without being told is how a control that does
+  // nothing yet gets read as a bug.
+  it('marks itself as in development, wherever it is opened from', () => {
+    renderSpotlight()
+    const badge = screen.getByText('In development')
+    expect(badge).toBeInTheDocument()
+    expect(badge.className).toContain('studio-status-warning')
+    expect(badge).toHaveAttribute('title', expect.stringContaining('still being built'))
+  })
+})

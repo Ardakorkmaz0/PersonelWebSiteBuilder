@@ -225,6 +225,9 @@ REST_FRAMEWORK = {
         'anon': os.getenv('DJANGO_THROTTLE_ANON', '120/min'),
         'user': os.getenv('DJANGO_THROTTLE_USER', '6000/hour'),
         'auth': os.getenv('DJANGO_THROTTLE_AUTH', '10/min'),
+        # Publishing to the community library is the most spam-prone surface
+        # there is, and unlike a save it is other people who see the result.
+        'share': os.getenv('DJANGO_THROTTLE_SHARE', '20/hour'),
     },
 }
 

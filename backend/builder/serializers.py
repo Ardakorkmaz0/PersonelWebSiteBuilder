@@ -9,6 +9,7 @@ from .models import (
     Profile,
     Report,
     ReviewComment,
+    SharedComponent,
     Site,
     SiteSettings,
     SiteVersion,
@@ -606,3 +607,29 @@ class UploadedImageSerializer(serializers.ModelSerializer):
             except Exception:  # noqa: BLE001 - decode failure: leave dims null
                 pass
         return super().create(validated_data)
+
+
+class SharedComponentListSerializer(serializers.ModelSerializer):
+    """A shared component as the community grid shows it: enough to render the
+    live preview card and to say who made it. Deliberately includes the artefact
+    — the card previews the real thing in a sandboxed frame rather than a
+    screenshot, which is the difference between browsing and guessing."""
+
+    author_id = serializers.IntegerField(source='author.id', read_only=True)
+    author_username = serializers.CharField(source='author.username', read_only=True)
+    author_display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SharedComponent
+        fields = ('id', 'title', 'description', 'category', 'tags',
+                  'html', 'css', 'fonts', 'policy',
+                  'natural_width', 'natural_height',
+                  'author_id', 'author_username', 'author_display_name',
+                  'use_count', 'view_count', 'created_at')
+        read_only_fields = fields
+
+    def get_author_display_name(self, obj):
+        if not obj.author:
+            return ''
+        prof = getattr(obj.author, 'profile', None)
+        return (prof.display_name if prof and prof.display_name else '') or obj.author.username

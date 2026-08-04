@@ -41,11 +41,19 @@ from .models import (
     Profile,
     Report,
     ReviewComment,
+    SharedComponent,
+    SharedComponentReport,
     Site,
     SiteSettings,
     SiteVersion,
     SiteVisit,
     UploadedImage,
+)
+from .validators import (
+    sanitize_shared_component,
+    shared_component_oversized,
+    shared_component_problems,
+    validate_and_clean_schema,
 )
 from .serializers import (
     AdminReportSerializer,
@@ -60,6 +68,7 @@ from .serializers import (
     RegisterSerializer,
     ReportSerializer,
     SearchUserSerializer,
+    SharedComponentListSerializer,
     SiteListSerializer,
     SiteSettingsSerializer,
     SiteSerializer,
@@ -1311,3 +1320,234 @@ class AdminSiteModerateView(APIView):
         # Resolve any open reports on a taken-down site.
         Report.objects.filter(site=site, status='open').update(status='resolved', resolved_at=timezone.now())
         return Response({'detail': 'Site unpublished.', 'published': False})
+
+
+# ---------------------------------------------------------------------------
+# Community components
+# ---------------------------------------------------------------------------
+
+
+class SharedComponentPagination(PageNumberPagination):
+    page_size = 24
+    page_size_query_param = 'page_size'
+    max_page_size = 60
+
+
+class SharedComponentListView(ListAPIView):
+    """The community grid: published blocks, ranked by the same absolute-time
+    hot score the Explore feed uses, so ordering is an indexed ORDER BY.
+    ?category= narrows, ?q= searches title/description. Anonymous-readable."""
+
+    permission_classes = [AllowAny]
+    serializer_class = SharedComponentListSerializer
+    pagination_class = SharedComponentPagination
+
+    def get_queryset(self):
+        qs = (SharedComponent.objects
+              .filter(status='published')
+              .select_related('author')
+              .order_by('-hot_score'))
+        category = (self.request.query_params.get('category') or '').strip()
+        if category and category != 'all':
+            qs = qs.filter(category=category)
+        query = (self.request.query_params.get('q') or '').strip()
+        if query:
+            qs = qs.filter(Q(title__icontains=query) | Q(description__icontains=query))
+        return qs
+
+
+class SharedComponentDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, component_id):
+        try:
+            component = SharedComponent.objects.select_related('author').get(
+                pk=component_id, status='published',
+            )
+        except SharedComponent.DoesNotExist:
+            return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
+        return Response(SharedComponentListSerializer(component, context={'request': request}).data)
+
+
+class ShareComponentView(APIView):
+    """Publish a block to the community.
+
+    Two gates instead of a review queue, because one person cannot read every
+    submission and a queue nobody empties is the same as no feature. The
+    machine-checkable risk is refused outright (no scripts, no off-site forms —
+    see shared_component_problems), and the author must already have a
+    published site, which costs enough to make throwaway spam accounts
+    pointless. Judgement calls arrive through reports, where a human belongs.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'share'
+
+    def post(self, request):
+        data = sanitize_shared_component(request.data)
+        if not data['title']:
+            return error_response('title_required', 'Give the component a name.', status.HTTP_400_BAD_REQUEST)
+
+        problems = shared_component_oversized(request.data) + shared_component_problems(data['html'], data['css'])
+        if problems:
+            return error_response(
+                'component_refused', problems[0], status.HTTP_400_BAD_REQUEST, problems=problems,
+            )
+
+        if not Site.objects.filter(owner=request.user, published=True).exists():
+            return error_response(
+                'no_published_site',
+                'Publish one of your own sites before sharing components.',
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        source = None
+        source_id = request.data.get('source_site_id')
+        if source_id:
+            source = Site.objects.filter(pk=source_id, owner=request.user).first()
+
+        category = str(request.data.get('category') or '').strip()
+        valid = {c[0] for c in Site.CATEGORY_CHOICES}
+
+        component = SharedComponent.objects.create(
+            author=request.user,
+            source_site=source,
+            category=category if category in valid else 'other',
+            **data,
+        )
+        component.recompute_hot_score(save=True)
+        return Response(
+            SharedComponentListSerializer(component, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def _next_free_y(components):
+    """Drop the block under whatever is already on the page, so using one never
+    lands on top of the design it was added to."""
+    bottom = 0
+    for comp in components or []:
+        layout = comp.get('layout') if isinstance(comp, dict) else None
+        if isinstance(layout, dict):
+            try:
+                bottom = max(bottom, int(layout.get('y') or 0) + int(layout.get('h') or 0))
+            except (TypeError, ValueError):
+                continue
+    return bottom + 24
+
+
+class UseSharedComponentView(APIView):
+    """Put a shared block into one of your own sites.
+
+    The insertion happens HERE rather than in the browser so the artefact
+    cannot skip the server's refusal check on its way in — the client could
+    otherwise post anything it liked straight into a schema. A copy is taken,
+    never a link: a live reference would let the author change what is already
+    running on somebody else's site. The `_sharedFrom` id rides along so a
+    takedown can find the copies later.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, component_id):
+        try:
+            component = SharedComponent.objects.get(pk=component_id, status='published')
+        except SharedComponent.DoesNotExist:
+            return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
+
+        try:
+            site = Site.objects.get(pk=request.data.get('site_id'), owner=request.user)
+        except (Site.DoesNotExist, TypeError, ValueError):
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
+
+        # Refuse again on the way in. A block published before a rule tightened
+        # must not slip into a site just because it is already in the library.
+        problems = shared_component_problems(component.html, component.css, component.policy)
+        if problems:
+            return error_response(
+                'component_refused', problems[0], status.HTTP_400_BAD_REQUEST, problems=problems,
+            )
+
+        page_id = str(request.data.get('page_id') or '').strip()
+        schema = site.schema if isinstance(site.schema, dict) else {}
+        pages = schema.get('pages') if isinstance(schema.get('pages'), list) else []
+        if not pages:
+            return error_response('page_not_found', 'That site has no page to add to.', status.HTTP_400_BAD_REQUEST)
+        target = next((p for p in pages if p.get('id') == page_id), pages[0])
+
+        style = '<style>\n' + component.css + '\n</style>\n' if component.css.strip() else ''
+        block_id = 'html_shared_%s_%s' % (component.pk, int(timezone.now().timestamp()))
+        block = {
+            'id': block_id,
+            'type': 'html',
+            'props': {'code': style + component.html, '_sharedFrom': component.pk},
+            'styles': {},
+            'layout': {
+                'x': 0,
+                'y': _next_free_y(target.get('components')),
+                'w': component.natural_width or 600,
+                'h': component.natural_height or 200,
+            },
+        }
+        target.setdefault('components', []).append(block)
+        # Straight through the normal save gate — a shared block is subject to
+        # exactly the same allowlist as anything the user drew themselves.
+        site.schema = validate_and_clean_schema(schema)
+        site.save(update_fields=['schema', 'updated_at'])
+
+        SharedComponent.objects.filter(pk=component.pk).update(use_count=F('use_count') + 1)
+        component.refresh_from_db(fields=['use_count'])
+        component.recompute_hot_score(save=True)
+        return Response({'site_id': site.pk, 'page_id': target.get('id'), 'block_id': block_id})
+
+
+class SharedComponentViewCountView(APIView):
+    """POST, not a side effect of the GET — the same shape the site feed uses,
+    so a thumbnail or a double render cannot inflate the count."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, component_id):
+        SharedComponent.objects.filter(pk=component_id, status='published').update(
+            view_count=F('view_count') + 1,
+        )
+        component = SharedComponent.objects.filter(pk=component_id).first()
+        if component:
+            component.recompute_hot_score(save=True)
+        return Response({'ok': True})
+
+
+class ReportSharedComponentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, component_id):
+        try:
+            component = SharedComponent.objects.get(pk=component_id, status='published')
+        except SharedComponent.DoesNotExist:
+            return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
+        reason = str(request.data.get('reason') or 'other').strip()
+        valid = {r[0] for r in SharedComponentReport.REASON_CHOICES}
+        report, created = SharedComponentReport.objects.get_or_create(
+            component=component,
+            reporter=request.user,
+            defaults={
+                'reason': reason if reason in valid else 'other',
+                'detail': str(request.data.get('detail') or '')[:500],
+            },
+        )
+        return Response({'reported': True, 'already': not created}, status=status.HTTP_201_CREATED)
+
+
+class WithdrawSharedComponentView(APIView):
+    """The author taking their own block back. It stops being offered; copies
+    already taken are left alone, because they are somebody else's page now."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, component_id):
+        component = SharedComponent.objects.filter(pk=component_id, author=request.user).first()
+        if not component:
+            return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
+        component.status = 'withdrawn'
+        component.save(update_fields=['status'])
+        return Response({'withdrawn': True})

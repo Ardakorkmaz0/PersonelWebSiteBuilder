@@ -489,3 +489,114 @@ class SiteSettings(models.Model):
             obj, _ = cls.objects.get_or_create(pk=1)
             cache.set(cls.CACHE_KEY, obj, 60)
         return obj
+
+
+class SharedComponent(models.Model):
+    """A block someone lifted off their own page and offered to everyone else.
+
+    The artefact is deliberately self-contained — markup plus only the CSS that
+    styles it, scoped so it cannot collide with its new home (the extraction
+    lives in the frontend's componentExport.js). What it must NEVER contain is
+    behaviour: a shared block runs on a stranger's site in front of their
+    visitors, and the published page's sandbox stops a script reading the
+    host's data but does nothing about a convincing fake login form. So v1 is
+    static-only, enforced again here rather than trusted from the client.
+
+    Taken blocks are COPIES, not links: a live link would let the author change
+    what is already running on other people's sites. `use_count` and the
+    `_sharedFrom` id the client stores on the inserted block are what give a
+    takedown reach without giving the author ongoing control.
+    """
+
+    POLICY_CHOICES = [
+        ('static', 'Static — markup and styles only'),
+        ('interactive', 'Interactive — may run scripts (moderated)'),
+    ]
+    STATUS_CHOICES = [
+        ('published', 'Published'),
+        ('removed', 'Removed by moderation'),
+        ('withdrawn', 'Withdrawn by the author'),
+    ]
+
+    # Authorship survives the account: a block already copied into other
+    # people's sites should not lose its attribution if the author leaves.
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='shared_components',
+    )
+    source_site = models.ForeignKey(
+        Site,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='shared_components',
+    )
+    title = models.CharField(max_length=80)
+    description = models.CharField(max_length=300, blank=True, default='')
+    category = models.CharField(max_length=20, choices=Site.CATEGORY_CHOICES, default='other')
+    tags = models.JSONField(default=list, blank=True)
+
+    # The artefact.
+    html = models.TextField()
+    css = models.TextField(blank=True, default='')
+    fonts = models.JSONField(default=list, blank=True)
+    policy = models.CharField(max_length=12, choices=POLICY_CHOICES, default='static')
+
+    # What the receiving editor needs to size the box it drops in.
+    natural_width = models.PositiveIntegerField(default=0)
+    natural_height = models.PositiveIntegerField(default=0)
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='published', db_index=True)
+    use_count = models.PositiveIntegerField(default=0)
+    view_count = models.PositiveIntegerField(default=0)
+    hot_score = models.FloatField(default=0.0, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', '-hot_score'])]
+
+    def __str__(self):
+        return f'{self.title} (#{self.pk})'
+
+    def recompute_hot_score(self, save=False):
+        """Same absolute-time ranking as Site, so the feed is a plain indexed
+        ORDER BY. A use is worth far more than a view here: someone putting a
+        block on their own site is the strongest signal it is any good."""
+        popularity = (self.view_count or 0) + 10 * (self.use_count or 0)
+        created = self.created_at or timezone.now()
+        self.hot_score = math.log10(max(popularity, 1)) + created.timestamp() / 45000.0
+        if save:
+            self.save(update_fields=['hot_score'])
+        return self.hot_score
+
+
+class SharedComponentReport(models.Model):
+    """A user flagging a shared component. Its own model rather than a column on
+    Report so the (component, reporter) uniqueness and the admin queries stay
+    simple — the two things being moderated have nothing else in common."""
+
+    REASON_CHOICES = Report.REASON_CHOICES
+    STATUS_CHOICES = Report.STATUS_CHOICES
+
+    component = models.ForeignKey(SharedComponent, on_delete=models.CASCADE, related_name='reports')
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='component_reports_made',
+    )
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES, default='other')
+    detail = models.CharField(max_length=500, blank=True, default='')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='open', db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('component', 'reporter')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.get_reason_display()} → {self.component_id}'

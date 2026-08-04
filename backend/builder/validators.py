@@ -292,6 +292,11 @@ def sanitize_props(ctype, props):
         # (componentBoxScale); without it a reloaded embed re-scales against
         # the palette default and the box no longer hugs the content. Slugs
         # and clamped numbers only — never rendered as markup.
+        # Where a shared block came from. Not decoration: without it a
+        # takedown cannot find the copies already sitting in people's sites.
+        shared_from = props.get('_sharedFrom')
+        if isinstance(shared_from, int) and 0 < shared_from < 2 ** 31:
+            out['_sharedFrom'] = shared_from
         for key in ('_paletteType', '_paletteVariant'):
             val = props.get(key)
             if isinstance(val, str) and PALETTE_SLUG_RE.match(val):
@@ -617,4 +622,103 @@ def validate_and_clean_schema(schema):
         'customCss': sanitize_custom_css(schema.get('customCss')),
         'customJs': sanitize_custom_js(schema.get('customJs')),
         'pages': clean_pages,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Shared components
+# ---------------------------------------------------------------------------
+#
+# The client extracts a block and refuses anything with behaviour in it. This
+# repeats that refusal on the server, because "the client already checked" is
+# not a security control — the request is just JSON and anyone can post it.
+#
+# Refuse, do not strip. A block that silently loses its <form action> behaves
+# differently for the person who shared it than for the person who takes it,
+# and the author never finds out.
+
+MAX_SHARED_HTML = 64 * 1024
+MAX_SHARED_CSS = 64 * 1024
+
+_SCRIPT_TAG_RE = re.compile(r'<\s*(script|iframe|object|embed|link|meta)\b', re.IGNORECASE)
+_HANDLER_RE = re.compile(r'<[^>]*\son[a-z]+\s*=', re.IGNORECASE)
+_BAD_URL_RE = re.compile(r'\b(?:href|src|action|formaction)\s*=\s*["\']?\s*(?:javascript|vbscript|data:text/html)', re.IGNORECASE)
+# `action="#..."` stays on the page; anything else posts somewhere, and that is
+# the phishing shape the iframe sandbox does nothing about.
+_FORM_ACTION_RE = re.compile(r'<\s*form\b[^>]*\saction\s*=\s*["\']([^"\']*)["\']', re.IGNORECASE)
+# @import pulls in a stylesheet from another origin at render time — a tracking
+# beacon and a way to change the block's look after it was reviewed.
+_CSS_IMPORT_RE = re.compile(r'@import\b', re.IGNORECASE)
+_CSS_URL_RE = re.compile(r'url\(\s*["\']?\s*(javascript|vbscript|data:text/html)', re.IGNORECASE)
+
+
+def shared_component_problems(html, css, policy='static'):
+    """Every reason this artefact may not be shared, in the caller's words.
+    Empty list = acceptable. Mirrors auditSharedHtml in componentExport.js."""
+    problems = []
+    markup = html or ''
+    styles = css or ''
+
+    if not markup.strip():
+        problems.append('There is nothing to share.')
+    if len(markup) > MAX_SHARED_HTML:
+        problems.append(f'The markup is larger than {MAX_SHARED_HTML // 1024} KB.')
+    if len(styles) > MAX_SHARED_CSS:
+        problems.append(f'The styles are larger than {MAX_SHARED_CSS // 1024} KB.')
+
+    if policy != 'interactive':
+        if _SCRIPT_TAG_RE.search(markup):
+            problems.append('Scripts, frames and external references cannot be shared.')
+        if _HANDLER_RE.search(markup):
+            problems.append('Inline event handlers (onclick and friends) cannot be shared.')
+    if _BAD_URL_RE.search(markup):
+        problems.append('javascript: and data:text/html URLs cannot be shared.')
+    for action in _FORM_ACTION_RE.findall(markup):
+        if action.strip() and not action.strip().startswith('#'):
+            problems.append('A form that posts to another address cannot be shared.')
+            break
+    if _CSS_IMPORT_RE.search(styles) or _CSS_URL_RE.search(styles):
+        problems.append('Styles may not import or reference another site.')
+    return problems
+
+
+def shared_component_oversized(payload):
+    """Whether the SUBMITTED artefact was too big — checked before the
+    sanitizer truncates it, or the limit would silently trim instead of
+    refusing and the author would never learn their block was cut in half."""
+    data = payload if isinstance(payload, dict) else {}
+    problems = []
+    if len(_str(data.get('html'))) > MAX_SHARED_HTML:
+        problems.append(f'The markup is larger than {MAX_SHARED_HTML // 1024} KB.')
+    if len(_str(data.get('css'))) > MAX_SHARED_CSS:
+        problems.append(f'The styles are larger than {MAX_SHARED_CSS // 1024} KB.')
+    return problems
+
+
+def sanitize_shared_component(payload):
+    """Allowlist rebuild of a shared-component submission. Anything not named
+    here is dropped — the same contract the component allowlist uses, and the
+    same trap: a field added to the model without being added here is saved as
+    nothing at all."""
+    data = payload if isinstance(payload, dict) else {}
+    tags = data.get('tags')
+    clean_tags = []
+    if isinstance(tags, list):
+        for tag in tags[:8]:
+            text = _str(tag)[:24].strip()
+            if text:
+                clean_tags.append(text)
+    return {
+        'title': _str(data.get('title'))[:80].strip(),
+        'description': _str(data.get('description'))[:300].strip(),
+        'tags': clean_tags,
+        'html': _str(data.get('html'))[:MAX_SHARED_HTML],
+        'css': _str(data.get('css'))[:MAX_SHARED_CSS],
+        'fonts': [
+            _str(f)[:60].strip()
+            for f in (data.get('fonts') if isinstance(data.get('fonts'), list) else [])[:12]
+            if _str(f).strip()
+        ],
+        'natural_width': int(_num(data.get('natural_width'), 0, 0, 4000)),
+        'natural_height': int(_num(data.get('natural_height'), 0, 0, 4000)),
     }

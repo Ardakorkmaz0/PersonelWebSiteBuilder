@@ -2,6 +2,13 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    ReportSharedComponentView,
+    ShareComponentView,
+    SharedComponentDetailView,
+    SharedComponentListView,
+    SharedComponentViewCountView,
+    UseSharedComponentView,
+    WithdrawSharedComponentView,
     AdminReportResolveView,
     AdminReportsView,
     AdminSettingsView,
@@ -68,5 +75,13 @@ urlpatterns = [
     path('public/reviews/<uuid:token>/', PublicReviewView.as_view(), name='public-review'),
     path('ai/local/status/', LocalAiStatusView.as_view(), name='local-ai-status'),
     path('ai/local/proxy/', LocalAiProxyView.as_view(), name='local-ai-proxy'),
+    # Community components
+    path('public/components/', SharedComponentListView.as_view(), name='shared-components'),
+    path('public/components/<int:component_id>/', SharedComponentDetailView.as_view(), name='shared-component'),
+    path('public/components/<int:component_id>/view/', SharedComponentViewCountView.as_view(), name='shared-component-view'),
+    path('public/components/<int:component_id>/use/', UseSharedComponentView.as_view(), name='shared-component-use'),
+    path('public/components/<int:component_id>/report/', ReportSharedComponentView.as_view(), name='shared-component-report'),
+    path('components/', ShareComponentView.as_view(), name='share-component'),
+    path('components/<int:component_id>/withdraw/', WithdrawSharedComponentView.as_view(), name='shared-component-withdraw'),
     path('', include(router.urls)),
 ]

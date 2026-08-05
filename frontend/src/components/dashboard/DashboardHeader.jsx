@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   FolderIcon,
   GlobeIcon,
+  LayersIcon,
   MoreHorizontalIcon,
   LogOutIcon,
   ShieldIcon,
@@ -34,6 +35,7 @@ export function DashboardAvatar({ user, size = 32 }) {
 const NAV_ITEMS = [
   { id: 'explore', label: 'Explore', to: '/', icon: GlobeIcon },
   { id: 'projects', label: 'My sites', to: '/profile#projects', icon: FolderIcon },
+  { id: 'community', label: 'Blocks', to: '/community', icon: LayersIcon },
   { id: 'favorites', label: 'Favorites', to: '/favorites', icon: StarIcon },
 ]
 

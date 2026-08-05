@@ -23,7 +23,10 @@ export const shareComponent = (payload) =>
 
 // Insertion happens on the server so the artefact cannot skip its refusal
 // check on the way in. Returns { site_id, page_id, block_id }.
-export const useComponent = (id, { siteId, pageId = '' }) =>
+//
+// Named `takeComponent`, not `useComponent`: anything called use* is read as a
+// React hook by the linter and by whoever reads the call site next.
+export const takeComponent = (id, { siteId, pageId = '' }) =>
   client
     .post(`/public/components/${id}/use/`, { site_id: siteId, page_id: pageId })
     .then((r) => r.data)

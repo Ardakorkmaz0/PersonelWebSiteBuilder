@@ -5,10 +5,17 @@ import client from './client.js'
 // CSS), so a card can render the real thing in a sandboxed frame instead of
 // showing a screenshot of it.
 
-export const listComponents = ({ category = '', q = '', page = 1 } = {}) =>
+// scope 'mine' switches to your own shelf — your public blocks AND your private
+// ones, which appear nowhere else.
+export const listComponents = ({ category = '', q = '', page = 1, scope = '' } = {}) =>
   client
     .get('/public/components/', {
-      params: { category: category || undefined, q: q || undefined, page },
+      params: {
+        category: category || undefined,
+        q: q || undefined,
+        scope: scope || undefined,
+        page,
+      },
     })
     .then((r) => r.data)
 
@@ -33,6 +40,10 @@ export const takeComponent = (id, { siteId, pageId = '' }) =>
 
 export const reportComponent = (id, { reason, detail = '' }) =>
   client.post(`/public/components/${id}/report/`, { reason, detail }).then((r) => r.data)
+
+// Reversible on purpose: sharing something by mistake costs one click to undo.
+export const setComponentVisibility = (id, visibility) =>
+  client.post(`/components/${id}/visibility/`, { visibility }).then((r) => r.data)
 
 export const withdrawComponent = (id) =>
   client.post(`/components/${id}/withdraw/`).then((r) => r.data)

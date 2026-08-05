@@ -721,4 +721,8 @@ def sanitize_shared_component(payload):
         ],
         'natural_width': int(_num(data.get('natural_width'), 0, 0, 4000)),
         'natural_height': int(_num(data.get('natural_height'), 0, 0, 4000)),
+        # Anything but an explicit 'private' is public. Sharing is the point of
+        # the endpoint, and a typo in this field must not quietly hide a block
+        # its author meant to offer.
+        'visibility': 'private' if _str(data.get('visibility')) == 'private' else 'public',
     }

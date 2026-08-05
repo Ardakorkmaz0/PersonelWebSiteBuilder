@@ -426,3 +426,117 @@ class TestTakedown:
                                          {'action': 'nuke'}, format='json')
         assert res.status_code == 400
         assert res.data['code'] == 'invalid_component_action'
+
+
+class TestPrivateBlocks:
+    """A private block is a personal shelf entry: same extraction, same refusal
+    rules, but it was never offered to anyone. Every way of reaching one has to
+    agree about that, and none of them may reveal that it exists."""
+
+    def test_sharing_defaults_to_public(self, author):
+        res = share(client_for(author))
+        assert res.data['visibility'] == 'public'
+
+    def test_a_private_one_is_kept_off_the_grid(self, author, taker):
+        share(client_for(author), visibility='private')
+        assert client_for(taker).get(reverse('shared-components')).data['count'] == 0
+        # Not even to its author, on the public grid.
+        assert client_for(author).get(reverse('shared-components')).data['count'] == 0
+
+    def test_the_author_finds_it_on_their_own_shelf(self, author, taker):
+        share(client_for(author), visibility='private')
+        share(client_for(author), title='Public one')
+
+        mine = client_for(author).get(reverse('shared-components'), {'scope': 'mine'})
+        assert mine.data['count'] == 2
+        # Somebody else's shelf is their own, not the private block's.
+        assert client_for(taker).get(reverse('shared-components'), {'scope': 'mine'}).data['count'] == 0
+        assert APIClient().get(reverse('shared-components'), {'scope': 'mine'}).data['count'] == 0
+
+    def test_a_stranger_cannot_read_it_by_id(self, author, taker):
+        component = SharedComponent.objects.create(author=author, visibility='private', **GOOD)
+        url = reverse('shared-component', args=[component.pk])
+        # The same 404 a component that never existed would give: the reply must
+        # not be the thing that tells you a private block is there.
+        assert client_for(taker).get(url).status_code == 404
+        assert APIClient().get(url).status_code == 404
+        assert client_for(author).get(url).status_code == 200
+
+    def test_a_stranger_cannot_take_it(self, author, taker):
+        component = SharedComponent.objects.create(author=author, visibility='private', **GOOD)
+        site = Site.objects.filter(owner=taker).first()
+        res = client_for(taker).post(reverse('shared-component-use', args=[component.pk]),
+                                     {'site_id': site.pk}, format='json')
+        assert res.status_code == 404
+        site.refresh_from_db()
+        assert site.schema['pages'][0]['components'] == []
+
+    def test_the_author_can_take_their_own_private_block(self, author, taker):
+        component = SharedComponent.objects.create(author=author, visibility='private', **GOOD)
+        # The author's own site, since that is the only place they can put it.
+        site = Site.objects.filter(owner=author).first()
+        site.schema = {'theme': {}, 'pages': [{'id': 'page_home', 'name': 'Home', 'components': []}]}
+        site.save(update_fields=['schema'])
+
+        res = client_for(author).post(reverse('shared-component-use', args=[component.pk]),
+                                      {'site_id': site.pk}, format='json')
+
+        assert res.status_code == 200
+        site.refresh_from_db()
+        assert len(site.schema['pages'][0]['components']) == 1
+
+    def test_a_private_block_cannot_be_reported_or_counted(self, author, taker):
+        component = SharedComponent.objects.create(author=author, visibility='private', **GOOD)
+        assert client_for(taker).post(
+            reverse('shared-component-report', args=[component.pk]),
+            {'reason': 'spam'}, format='json').status_code == 404
+        client_for(taker).post(reverse('shared-component-view', args=[component.pk]))
+        component.refresh_from_db()
+        assert component.view_count == 0
+
+
+class TestChangingVisibility:
+    def test_the_author_can_hide_a_block_they_already_shared(self, author, taker):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+
+        res = client_for(author).post(reverse('shared-component-visibility', args=[component.pk]),
+                                      {'visibility': 'private'}, format='json')
+
+        assert res.status_code == 200
+        assert res.data['visibility'] == 'private'
+        assert client_for(taker).get(reverse('shared-components')).data['count'] == 0
+
+    def test_and_put_it_back(self, author, taker):
+        component = SharedComponent.objects.create(author=author, visibility='private', **GOOD)
+
+        client_for(author).post(reverse('shared-component-visibility', args=[component.pk]),
+                                {'visibility': 'public'}, format='json')
+
+        assert client_for(taker).get(reverse('shared-components')).data['count'] == 1
+
+    def test_going_private_leaves_copies_already_taken_alone(self, author, taker):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        site = used_by(taker, component)
+
+        client_for(author).post(reverse('shared-component-visibility', args=[component.pk]),
+                                {'visibility': 'private'}, format='json')
+
+        site.refresh_from_db()
+        assert len(site.schema['pages'][0]['components']) == 1
+
+    def test_nobody_else_may_change_it(self, author, taker):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        res = client_for(taker).post(reverse('shared-component-visibility', args=[component.pk]),
+                                     {'visibility': 'private'}, format='json')
+        assert res.status_code == 404
+        component.refresh_from_db()
+        assert component.visibility == 'public'
+
+    def test_a_nonsense_value_is_refused(self, author):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        res = client_for(author).post(reverse('shared-component-visibility', args=[component.pk]),
+                                      {'visibility': 'secret'}, format='json')
+        assert res.status_code == 400
+        assert res.data['code'] == 'invalid_visibility'
+        component.refresh_from_db()
+        assert component.visibility == 'public'

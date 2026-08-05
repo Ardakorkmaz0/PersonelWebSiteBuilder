@@ -1337,17 +1337,31 @@ class SharedComponentPagination(PageNumberPagination):
 class SharedComponentListView(ListAPIView):
     """The community grid: published blocks, ranked by the same absolute-time
     hot score the Explore feed uses, so ordering is an indexed ORDER BY.
-    ?category= narrows, ?q= searches title/description. Anonymous-readable."""
+    ?category= narrows, ?q= searches title/description. Anonymous-readable.
+
+    ?scope=mine switches to the caller's own shelf — their public blocks AND
+    their private ones. Private blocks appear nowhere else; without this they
+    would be write-only, which is not a library.
+    """
 
     permission_classes = [AllowAny]
     serializer_class = SharedComponentListSerializer
     pagination_class = SharedComponentPagination
 
     def get_queryset(self):
-        qs = (SharedComponent.objects
-              .filter(status='published')
-              .select_related('author')
-              .order_by('-hot_score'))
+        mine = (self.request.query_params.get('scope') or '') == 'mine'
+        if mine:
+            if not self.request.user.is_authenticated:
+                return SharedComponent.objects.none()
+            qs = (SharedComponent.objects
+                  .filter(status='published', author=self.request.user)
+                  .select_related('author')
+                  .order_by('-created_at'))
+        else:
+            qs = (SharedComponent.objects
+                  .filter(status='published', visibility='public')
+                  .select_related('author')
+                  .order_by('-hot_score'))
         category = (self.request.query_params.get('category') or '').strip()
         if category and category != 'all':
             qs = qs.filter(category=category)
@@ -1357,15 +1371,30 @@ class SharedComponentListView(ListAPIView):
         return qs
 
 
+def _visible_component(user, component_id):
+    """The one place that decides who may see a shared block: anyone for a
+    public one, only its author for a private one. Returns None rather than
+    raising, so every caller answers the same 404 — a private block must not be
+    distinguishable from one that never existed."""
+    component = (SharedComponent.objects
+                 .select_related('author')
+                 .filter(pk=component_id, status='published')
+                 .first())
+    if not component:
+        return None
+    if component.visibility == 'public':
+        return component
+    if user and user.is_authenticated and component.author_id == user.id:
+        return component
+    return None
+
+
 class SharedComponentDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, component_id):
-        try:
-            component = SharedComponent.objects.select_related('author').get(
-                pk=component_id, status='published',
-            )
-        except SharedComponent.DoesNotExist:
+        component = _visible_component(request.user, component_id)
+        if not component:
             return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
         return Response(SharedComponentListSerializer(component, context={'request': request}).data)
 
@@ -1451,9 +1480,9 @@ class UseSharedComponentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, component_id):
-        try:
-            component = SharedComponent.objects.get(pk=component_id, status='published')
-        except SharedComponent.DoesNotExist:
+        # A private block is takeable by exactly one person: whoever made it.
+        component = _visible_component(request.user, component_id)
+        if not component:
             return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
 
         try:
@@ -1509,9 +1538,9 @@ class SharedComponentViewCountView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, component_id):
-        SharedComponent.objects.filter(pk=component_id, status='published').update(
-            view_count=F('view_count') + 1,
-        )
+        SharedComponent.objects.filter(
+            pk=component_id, status='published', visibility='public',
+        ).update(view_count=F('view_count') + 1)
         component = SharedComponent.objects.filter(pk=component_id).first()
         if component:
             component.recompute_hot_score(save=True)
@@ -1522,9 +1551,10 @@ class ReportSharedComponentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, component_id):
-        try:
-            component = SharedComponent.objects.get(pk=component_id, status='published')
-        except SharedComponent.DoesNotExist:
+        component = SharedComponent.objects.filter(
+            pk=component_id, status='published', visibility='public',
+        ).first()
+        if not component:
             return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
         reason = str(request.data.get('reason') or 'other').strip()
         valid = {r[0] for r in SharedComponentReport.REASON_CHOICES}
@@ -1537,6 +1567,28 @@ class ReportSharedComponentView(APIView):
             },
         )
         return Response({'reported': True, 'already': not created}, status=status.HTTP_201_CREATED)
+
+
+class SharedComponentVisibilityView(APIView):
+    """The author moving their own block between the shelf and the library.
+
+    Reversible on purpose: sharing something by mistake should cost one click
+    to undo, not a withdrawal. Going private stops it being offered from that
+    moment on — copies already taken are somebody else's page and stay put.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, component_id):
+        visibility = str(request.data.get('visibility') or '').strip()
+        if visibility not in {'public', 'private'}:
+            return error_response('invalid_visibility', "visibility must be 'public' or 'private'.")
+        component = SharedComponent.objects.filter(pk=component_id, author=request.user).first()
+        if not component:
+            return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
+        component.visibility = visibility
+        component.save(update_fields=['visibility'])
+        return Response({'visibility': component.visibility})
 
 
 class WithdrawSharedComponentView(APIView):

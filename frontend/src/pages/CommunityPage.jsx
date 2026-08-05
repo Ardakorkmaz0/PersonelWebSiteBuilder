@@ -16,7 +16,12 @@ import UseComponentDialog from '../components/community/UseComponentDialog.jsx'
 import ReportComponentDialog from '../components/community/ReportComponentDialog.jsx'
 import ComponentPreviewDialog from '../components/community/ComponentPreviewDialog.jsx'
 import { FlagIcon } from '../components/icons.jsx'
-import { listComponents, countComponentView, withdrawComponent } from '../api/community.js'
+import {
+  listComponents,
+  countComponentView,
+  withdrawComponent,
+  setComponentVisibility,
+} from '../api/community.js'
 import { sharedBlockHtml } from '../utils/componentExport.js'
 import { STATIC_HTML_SANDBOX } from '../utils/htmlRuntime.js'
 import { useAuthStore } from '../store/authStore.js'
@@ -33,12 +38,15 @@ const CATEGORIES = [
 ]
 
 // One card = one real component, rendered in isolation at a readable size.
-function ComponentCard({ component, onUse, onWithdraw, onReport, onPreview, mine, t }) {
+function ComponentCard({ component, onUse, onWithdraw, onReport, onPreview, onVisibility, mine, t }) {
+  const isPrivate = component.visibility === 'private'
+
   useEffect(() => {
     // Counted once per card that actually appears, and by POST — a render or a
-    // second visit must not inflate it.
-    countComponentView(component.id)
-  }, [component.id])
+    // second visit must not inflate it. A private block has no audience to
+    // count, so it is not asked about.
+    if (!isPrivate) countComponentView(component.id)
+  }, [component.id, isPrivate])
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)]">
@@ -61,7 +69,16 @@ function ComponentCard({ component, onUse, onWithdraw, onReport, onPreview, mine
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-3">
-        <h3 className="truncate text-sm font-semibold text-[var(--studio-text)]">{component.title}</h3>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3 className="truncate text-sm font-semibold text-[var(--studio-text)]">{component.title}</h3>
+          {/* Said on the card, because "is this one out there?" is the question
+              you ask about your own shelf. */}
+          {isPrivate && (
+            <span className="shrink-0 rounded-full border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--studio-text-muted)]">
+              {t('Private')}
+            </span>
+          )}
+        </div>
         {component.description && (
           <p className="line-clamp-2 text-xs leading-relaxed text-[var(--studio-text-muted)]">{component.description}</p>
         )}
@@ -76,13 +93,22 @@ function ComponentCard({ component, onUse, onWithdraw, onReport, onPreview, mine
           {t('Use this')}
         </button>
         {mine ? (
-          <button
-            type="button"
-            onClick={() => onWithdraw(component)}
-            className="studio-btn studio-btn-secondary px-3 py-1.5 text-xs"
-          >
-            {t('Withdraw')}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => onVisibility(component, isPrivate ? 'public' : 'private')}
+              className="studio-btn studio-btn-secondary px-3 py-1.5 text-xs"
+            >
+              {isPrivate ? t('Make public') : t('Make private')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onWithdraw(component)}
+              className="studio-btn studio-btn-secondary px-3 py-1.5 text-xs"
+            >
+              {t('Withdraw')}
+            </button>
+          </>
         ) : (
           <button
             type="button"
@@ -110,15 +136,18 @@ export default function CommunityPage() {
   const [using, setUsing] = useState(null)
   const [reporting, setReporting] = useState(null)
   const [previewing, setPreviewing] = useState(null)
+  // '' = the community grid, 'mine' = your own shelf, the only place a private
+  // block is visible at all.
+  const [scope, setScope] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
     setError('')
-    listComponents({ category, q: query })
+    listComponents({ category, q: query, scope })
       .then((data) => setItems(data?.results || []))
       .catch(() => setError(t('Could not load the community library.')))
       .finally(() => setLoading(false))
-  }, [category, query, t])
+  }, [category, query, scope, t])
 
   useEffect(() => {
     // Typing should not fire a request per keystroke.
@@ -129,6 +158,15 @@ export default function CommunityPage() {
   const withdraw = async (component) => {
     await withdrawComponent(component.id).catch(() => {})
     setItems((rows) => rows.filter((row) => row.id !== component.id))
+  }
+
+  const changeVisibility = async (component, visibility) => {
+    await setComponentVisibility(component.id, visibility).catch(() => {})
+    // On the community grid a block that just went private no longer belongs
+    // there; on your own shelf it stays, wearing the badge.
+    setItems((rows) => (scope === 'mine'
+      ? rows.map((row) => (row.id === component.id ? { ...row, visibility } : row))
+      : rows.filter((row) => row.id !== component.id || visibility === 'public')))
   }
 
   return (
@@ -143,9 +181,31 @@ export default function CommunityPage() {
             </span>
           </div>
           <p className="mt-1 text-sm text-[var(--studio-text-muted)]">
-            {t('Blocks other people made, ready to drop into a site of your own.')}
+            {scope === 'mine'
+              ? t('Everything you shared, public and private.')
+              : t('Blocks other people made, ready to drop into a site of your own.')}
           </p>
         </header>
+
+        {/* Two shelves, not a filter: the community grid, and your own — where
+            a private block is the only place it can be seen. */}
+        <div className="mb-4 inline-flex rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-0.5">
+          {[['', 'Community'], ['mine', 'My blocks']].map(([value, label]) => (
+            <button
+              key={value || 'all'}
+              type="button"
+              onClick={() => setScope(value)}
+              aria-pressed={scope === value}
+              className={
+                scope === value
+                  ? 'rounded-md bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white'
+                  : 'rounded-md px-3 py-1.5 text-xs font-medium text-[var(--studio-text-muted)] hover:text-[var(--studio-text)]'
+              }
+            >
+              {t(label)}
+            </button>
+          ))}
+        </div>
 
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap gap-1.5">
@@ -184,7 +244,9 @@ export default function CommunityPage() {
           <div className="rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] p-8 text-center">
             <p className="text-sm font-medium text-[var(--studio-text)]">{t('Nothing here yet.')}</p>
             <p className="mt-1 text-xs text-[var(--studio-text-muted)]">
-              {t('Share a block from one of your own sites to start the library.')}
+              {scope === 'mine'
+                ? t('Blocks you share — public or private — land here.')
+                : t('Share a block from one of your own sites to start the library.')}
             </p>
           </div>
         ) : (
@@ -197,6 +259,7 @@ export default function CommunityPage() {
                 onWithdraw={withdraw}
                 onReport={setReporting}
                 onPreview={setPreviewing}
+                onVisibility={changeVisibility}
                 mine={!!user && component.author_id === user.id}
                 t={t}
               />

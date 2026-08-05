@@ -656,7 +656,7 @@ class SharedComponentListSerializer(serializers.ModelSerializer):
     class Meta:
         model = SharedComponent
         fields = ('id', 'title', 'description', 'category', 'tags',
-                  'html', 'css', 'fonts', 'policy',
+                  'html', 'css', 'fonts', 'policy', 'visibility',
                   'natural_width', 'natural_height',
                   'author_id', 'author_username', 'author_display_name',
                   'use_count', 'view_count', 'created_at')

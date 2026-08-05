@@ -61,6 +61,32 @@ describe('a block that can be shared', () => {
     expect(payload.source_site_id).toBe(42)
   })
 
+  it('offers it to everyone unless the author says otherwise', async () => {
+    const user = userEvent.setup()
+    renderDialog(mount('<div class="card">Pro</div>'))
+
+    await user.type(screen.getByRole('textbox', { name: /Name/i }), 'Pricing card')
+    await user.click(screen.getByRole('button', { name: 'Share' }))
+
+    expect(shareComponent.mock.calls[0][0].visibility).toBe('public')
+  })
+
+  it('can be kept private, and says what that means before publishing', async () => {
+    const user = userEvent.setup()
+    renderDialog(mount('<div class="card">Pro</div>'))
+
+    await user.click(screen.getByRole('radio', { name: /Private/ }))
+
+    // The consequence changes with the choice — this is the sentence the
+    // author reads before deciding.
+    expect(screen.getByText(/Nobody else sees it/)).toBeInTheDocument()
+
+    await user.type(screen.getByRole('textbox', { name: /Name/i }), 'Pricing card')
+    await user.click(screen.getByRole('button', { name: 'Share' }))
+
+    expect(shareComponent.mock.calls[0][0].visibility).toBe('private')
+  })
+
   it('tells the author what could not travel', () => {
     // A local file reference is not a policy problem — nothing malicious about
     // it — but it cannot follow the block to somebody else's site. That is a

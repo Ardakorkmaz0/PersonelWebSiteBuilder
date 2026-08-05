@@ -517,6 +517,14 @@ class SharedComponent(models.Model):
         ('removed', 'Removed by moderation'),
         ('withdrawn', 'Withdrawn by the author'),
     ]
+    # Separate from status on purpose. Status is what MODERATION and the author
+    # did to the listing; visibility is who it was ever meant for. A private
+    # block is a personal library entry — the same extraction, the same refusal
+    # rules, reusable across your own sites without being offered to strangers.
+    VISIBILITY_CHOICES = [
+        ('public', 'Public — anyone can take it'),
+        ('private', 'Private — only you'),
+    ]
 
     # Authorship survives the account: a block already copied into other
     # people's sites should not lose its attribution if the author leaves.
@@ -548,6 +556,9 @@ class SharedComponent(models.Model):
     natural_height = models.PositiveIntegerField(default=0)
 
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='published', db_index=True)
+    visibility = models.CharField(
+        max_length=8, choices=VISIBILITY_CHOICES, default='public', db_index=True,
+    )
     use_count = models.PositiveIntegerField(default=0)
     view_count = models.PositiveIntegerField(default=0)
     hot_score = models.FloatField(default=0.0, db_index=True)

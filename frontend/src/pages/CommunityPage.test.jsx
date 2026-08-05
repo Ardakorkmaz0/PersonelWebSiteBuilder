@@ -8,13 +8,19 @@ import userEvent from '@testing-library/user-event'
 import LanguageProvider from '../i18n/LanguageProvider.jsx'
 import UiThemeProvider from '../ui/UiThemeProvider.jsx'
 import CommunityPage from './CommunityPage.jsx'
-import { listComponents, countComponentView, withdrawComponent } from '../api/community.js'
+import {
+  listComponents,
+  countComponentView,
+  withdrawComponent,
+  setComponentVisibility,
+} from '../api/community.js'
 import { useAuthStore } from '../store/authStore.js'
 
 vi.mock('../api/community.js', () => ({
   listComponents: vi.fn(),
   countComponentView: vi.fn(),
   withdrawComponent: vi.fn(),
+  setComponentVisibility: vi.fn(),
   reportComponent: vi.fn(),
   takeComponent: vi.fn(),
 }))
@@ -56,6 +62,7 @@ beforeEach(() => {
   listComponents.mockResolvedValue({ results: [CARD], count: 1 })
   countComponentView.mockResolvedValue()
   withdrawComponent.mockResolvedValue({})
+  setComponentVisibility.mockResolvedValue({})
 })
 
 describe('the community grid', () => {
@@ -85,7 +92,7 @@ describe('the community grid', () => {
     await user.click(screen.getByRole('button', { name: 'Portfolio' }))
 
     await waitFor(() =>
-      expect(listComponents).toHaveBeenLastCalledWith({ category: 'portfolio', q: '' }))
+      expect(listComponents).toHaveBeenLastCalledWith({ category: 'portfolio', q: '', scope: '' }))
   })
 
   it('waits for the typing to stop before searching', async () => {
@@ -98,7 +105,7 @@ describe('the community grid', () => {
 
     // Four keystrokes, one request — otherwise the library gets hammered.
     await waitFor(() =>
-      expect(listComponents).toHaveBeenLastCalledWith({ category: '', q: 'hero' }))
+      expect(listComponents).toHaveBeenLastCalledWith({ category: '', q: 'hero', scope: '' }))
     expect(listComponents).toHaveBeenCalledTimes(1)
   })
 })
@@ -150,6 +157,81 @@ describe('who may do what to a block', () => {
 
     expect(withdrawComponent).toHaveBeenCalledWith(3)
     await waitFor(() => expect(screen.queryByTitle('Pricing card')).toBeNull())
+  })
+})
+
+describe('public and private', () => {
+  const asAuthor = () => useAuthStore.setState({ user: { id: 9, username: 'ada' } })
+
+  it('keeps the community grid and your own shelf as separate asks', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByTitle('Pricing card')
+
+    await user.click(screen.getByRole('button', { name: 'My blocks' }))
+
+    await waitFor(() =>
+      expect(listComponents).toHaveBeenLastCalledWith({ category: '', q: '', scope: 'mine' }))
+  })
+
+  it('says on the card when a block is private', async () => {
+    asAuthor()
+    listComponents.mockResolvedValue({ results: [{ ...CARD, visibility: 'private' }], count: 1 })
+    renderPage()
+    await screen.findByTitle('Pricing card')
+
+    expect(screen.getByText('Private')).toBeInTheDocument()
+    // Nobody is looking at a private block, so nothing is counted for it.
+    expect(countComponentView).not.toHaveBeenCalled()
+  })
+
+  it('offers the author one click each way', async () => {
+    const user = userEvent.setup()
+    asAuthor()
+    listComponents.mockResolvedValue({ results: [{ ...CARD, visibility: 'public' }], count: 1 })
+    renderPage()
+    await screen.findByTitle('Pricing card')
+
+    await user.click(screen.getByRole('button', { name: 'Make private' }))
+
+    expect(setComponentVisibility).toHaveBeenCalledWith(3, 'private')
+  })
+
+  it('drops a block from the community grid the moment it goes private', async () => {
+    const user = userEvent.setup()
+    asAuthor()
+    listComponents.mockResolvedValue({ results: [{ ...CARD, visibility: 'public' }], count: 1 })
+    renderPage()
+    await screen.findByTitle('Pricing card')
+
+    await user.click(screen.getByRole('button', { name: 'Make private' }))
+
+    // It no longer belongs on the grid it is being hidden from.
+    await waitFor(() => expect(screen.queryByTitle('Pricing card')).toBeNull())
+  })
+
+  it('keeps it on your own shelf, wearing the badge', async () => {
+    const user = userEvent.setup()
+    asAuthor()
+    listComponents.mockResolvedValue({ results: [{ ...CARD, visibility: 'public' }], count: 1 })
+    renderPage()
+    await screen.findByTitle('Pricing card')
+    await user.click(screen.getByRole('button', { name: 'My blocks' }))
+    await screen.findByTitle('Pricing card')
+
+    await user.click(screen.getByRole('button', { name: 'Make private' }))
+
+    expect(await screen.findByText('Private')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Make public' })).toBeInTheDocument()
+  })
+
+  it('never offers a stranger a switch on somebody else’s block', async () => {
+    listComponents.mockResolvedValue({ results: [{ ...CARD, visibility: 'public' }], count: 1 })
+    renderPage()
+    await screen.findByTitle('Pricing card')
+
+    expect(screen.queryByRole('button', { name: 'Make private' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Make public' })).toBeNull()
   })
 })
 

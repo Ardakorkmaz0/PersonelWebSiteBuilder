@@ -42,6 +42,7 @@ export default function ShareComponentDialog({ open, element, sourceSiteId, onCl
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('other')
+  const [visibility, setVisibility] = useState('public')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [serverProblems, setServerProblems] = useState([])
@@ -76,6 +77,7 @@ export default function ShareComponentDialog({ open, element, sourceSiteId, onCl
         title: title.trim(),
         description: description.trim(),
         category,
+        visibility,
         html: artefact.html,
         css: artefact.css,
         fonts: artefact.fonts,
@@ -200,8 +202,43 @@ export default function ShareComponentDialog({ open, element, sourceSiteId, onCl
               </select>
             </label>
 
+            {/* Who this was ever meant for. Asked here rather than assumed,
+                because the private answer is a real use — a block you want on
+                your own three sites is not something you owe anyone. */}
+            <fieldset className="block">
+              <legend className="mb-1 block text-xs font-medium text-[var(--studio-text-muted)]">{t('Who can use it')}</legend>
+              <div className="flex gap-2">
+                {[
+                  ['public', 'Public', 'Anyone in the community'],
+                  ['private', 'Private', 'Only you, on your own sites'],
+                ].map(([value, label, hint]) => (
+                  <label
+                    key={value}
+                    className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-xs ${
+                      visibility === value
+                        ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                        : 'border-[var(--studio-border)] text-[var(--studio-text-muted)]'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="pwb-share-visibility"
+                      value={value}
+                      checked={visibility === value}
+                      onChange={() => setVisibility(value)}
+                      className="sr-only"
+                    />
+                    <span className="block font-semibold">{t(label)}</span>
+                    <span className="mt-0.5 block text-[10px] leading-snug opacity-80">{t(hint)}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <p className="rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-2 text-[11px] leading-relaxed text-[var(--studio-text-muted)]">
-              {t('Anyone can add this to their own site. Sharing means it is yours to give, and you can withdraw it later.')}
+              {visibility === 'private'
+                ? t('Kept on your own shelf. Nobody else sees it, and you can make it public later.')
+                : t('Anyone can add this to their own site. Sharing means it is yours to give, and you can withdraw it later.')}
             </p>
 
             {serverProblems.length > 0 && (

@@ -8,12 +8,12 @@ import userEvent from '@testing-library/user-event'
 import LanguageProvider from '../../i18n/LanguageProvider.jsx'
 import UseComponentDialog from './UseComponentDialog.jsx'
 import { takeComponent } from '../../api/community.js'
-import { listSites, getSite } from '../../api/sites.js'
+import { listSites, getSite, createSite } from '../../api/sites.js'
 
 vi.mock('../../api/community.js', () => ({ takeComponent: vi.fn() }))
-vi.mock('../../api/sites.js', () => ({ listSites: vi.fn(), getSite: vi.fn() }))
+vi.mock('../../api/sites.js', () => ({ listSites: vi.fn(), getSite: vi.fn(), createSite: vi.fn() }))
 
-const COMPONENT = { id: 3, title: 'Pricing card', html: '<div>Pro</div>', css: '' }
+const COMPONENT = { id: 3, title: 'Pricing card', html: '<div>Pro</div>', css: '.card{padding:24px}' }
 
 // Where the router actually ended up — a spy on useNavigate would only prove
 // the call was made, not that it goes anywhere real.
@@ -45,6 +45,7 @@ beforeEach(() => {
     { id: 22, title: 'Bakery' },
   ])
   getSite.mockResolvedValue({ id: 11, schema: { pages: [{ id: 'home', name: 'Home' }] } })
+  createSite.mockResolvedValue({ id: 77, title: 'Fresh' })
   takeComponent.mockResolvedValue({ site_id: 11, page_id: 'home', block_id: 'c9' })
 })
 
@@ -52,7 +53,9 @@ describe('choosing where the block lands', () => {
   it('lists the sites you own and starts on the first one', async () => {
     renderDialog()
     const picker = await screen.findByRole('combobox', { name: 'Site' })
-    expect([...picker.options].map((option) => option.textContent)).toEqual(['Portfolio', 'Bakery'])
+    // Your sites, and a new one as the last resort rather than a dead end.
+    expect([...picker.options].map((option) => option.textContent))
+      .toEqual(['Portfolio', 'Bakery', '+ A new site'])
     expect(picker.value).toBe('11')
   })
 
@@ -111,12 +114,66 @@ describe('adding it', () => {
   })
 })
 
-describe('when there is nowhere to put it', () => {
-  it('says to make a site first, and cannot be submitted', async () => {
+describe('showing what is about to be added', () => {
+  it('previews the block itself, without the power to run anything', async () => {
+    renderDialog()
+    const frame = await screen.findByTitle('What you are adding')
+    expect(frame.getAttribute('srcdoc')).toContain('Pro')
+    expect(frame.getAttribute('srcdoc')).toContain('padding:24px')
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-scripts')
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin')
+  })
+})
+
+describe('a brand-new site as the destination', () => {
+  it('is what somebody with no sites lands on, instead of a dead end', async () => {
     listSites.mockResolvedValue([])
     renderDialog()
 
-    expect(await screen.findByText('You have no sites yet — create one first.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add to my site' })).toBeDisabled()
+    const picker = await screen.findByRole('combobox', { name: 'Site' })
+    expect(picker.value).toBe('__new__')
+    expect(screen.getByRole('textbox', { name: 'Name the new site' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create site and add' })).toBeEnabled()
+  })
+
+  it('creates the site with the given name, then puts the block in it', async () => {
+    const user = userEvent.setup()
+    takeComponent.mockResolvedValue({ site_id: 77, page_id: 'home', block_id: 'c1' })
+    renderDialog()
+    await screen.findByRole('combobox', { name: 'Site' })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Site' }), '__new__')
+    await user.type(screen.getByRole('textbox', { name: 'Name the new site' }), 'Bakery')
+    await user.click(screen.getByRole('button', { name: 'Create site and add' }))
+
+    expect(createSite).toHaveBeenCalledWith('Bakery')
+    // The id of the site that was just made, not the one that was selected.
+    expect(takeComponent).toHaveBeenCalledWith(3, { siteId: 77, pageId: '' })
+    await waitFor(() => expect(screen.getByTestId('path')).toHaveTextContent('/editor/77'))
+  })
+
+  it('falls back to a default name rather than refusing an empty one', async () => {
+    const user = userEvent.setup()
+    listSites.mockResolvedValue([])
+    renderDialog()
+    await screen.findByRole('combobox', { name: 'Site' })
+
+    await user.click(screen.getByRole('button', { name: 'Create site and add' }))
+
+    expect(createSite).toHaveBeenCalledWith('My new site')
+  })
+
+  it('does not ask which page — a fresh site has exactly one', async () => {
+    const user = userEvent.setup()
+    getSite.mockResolvedValue({
+      id: 11,
+      schema: { pages: [{ id: 'home', name: 'Home' }, { id: 'about', name: 'About' }] },
+    })
+    renderDialog()
+    await screen.findByRole('combobox', { name: 'Page' })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Site' }), '__new__')
+
+    expect(screen.queryByRole('combobox', { name: 'Page' })).toBeNull()
   })
 })

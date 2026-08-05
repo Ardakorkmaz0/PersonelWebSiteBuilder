@@ -3,7 +3,7 @@
 // render it without the power to run anything.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import LanguageProvider from '../i18n/LanguageProvider.jsx'
 import UiThemeProvider from '../ui/UiThemeProvider.jsx'
@@ -100,6 +100,34 @@ describe('the community grid', () => {
     await waitFor(() =>
       expect(listComponents).toHaveBeenLastCalledWith({ category: '', q: 'hero' }))
     expect(listComponents).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('looking closer before taking', () => {
+  it('opens the big preview from the card picture, not just a button', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByTitle('Pricing card')
+
+    await user.click(screen.getByRole('button', { name: 'Preview Pricing card' }))
+
+    // The overlay's own frame, at the desktop width — not the card thumbnail.
+    const frame = await screen.findByTitle('Preview block')
+    expect(frame.style.width).toBe('1100px')
+  })
+
+  it('goes from the preview straight into choosing a site', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByTitle('Pricing card')
+    await user.click(screen.getByRole('button', { name: 'Preview Pricing card' }))
+
+    const preview = screen.getByRole('dialog', { name: 'Preview block' })
+    await user.click(within(preview).getByRole('button', { name: 'Use this' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Add to one of your sites' })).toBeInTheDocument()
+    // The preview steps aside rather than stacking behind the picker.
+    expect(screen.queryByTitle('Preview block')).toBeNull()
   })
 })
 

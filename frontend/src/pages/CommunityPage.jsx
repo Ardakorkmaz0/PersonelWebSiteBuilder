@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react'
 import DashboardHeader from '../components/dashboard/DashboardHeader.jsx'
 import UseComponentDialog from '../components/community/UseComponentDialog.jsx'
 import ReportComponentDialog from '../components/community/ReportComponentDialog.jsx'
+import ComponentPreviewDialog from '../components/community/ComponentPreviewDialog.jsx'
 import { FlagIcon } from '../components/icons.jsx'
 import { listComponents, countComponentView, withdrawComponent } from '../api/community.js'
 import { sharedBlockHtml } from '../utils/componentExport.js'
@@ -32,7 +33,7 @@ const CATEGORIES = [
 ]
 
 // One card = one real component, rendered in isolation at a readable size.
-function ComponentCard({ component, onUse, onWithdraw, onReport, mine, t }) {
+function ComponentCard({ component, onUse, onWithdraw, onReport, onPreview, mine, t }) {
   useEffect(() => {
     // Counted once per card that actually appears, and by POST — a render or a
     // second visit must not inflate it.
@@ -41,13 +42,22 @@ function ComponentCard({ component, onUse, onWithdraw, onReport, mine, t }) {
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)]">
-      <div className="border-b border-[var(--studio-border)] bg-white">
+      {/* The whole preview is the button — clicking the picture is what people
+          try first. The frame itself takes no pointer events, so the click
+          lands here instead of disappearing into the iframe. */}
+      <div className="relative border-b border-[var(--studio-border)] bg-white">
         <iframe
           title={component.title}
           srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:system-ui}</style></head><body>${sharedBlockHtml(component)}</body></html>`}
           sandbox={STATIC_HTML_SANDBOX}
           loading="lazy"
-          className="block h-48 w-full border-0"
+          className="pointer-events-none block h-48 w-full border-0"
+        />
+        <button
+          type="button"
+          onClick={() => onPreview(component)}
+          aria-label={t('Preview {title}', { title: component.title })}
+          className="absolute inset-0 border-0 bg-transparent transition hover:bg-[color-mix(in_srgb,var(--studio-accent)_10%,transparent)]"
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-3">
@@ -99,6 +109,7 @@ export default function CommunityPage() {
   const [error, setError] = useState('')
   const [using, setUsing] = useState(null)
   const [reporting, setReporting] = useState(null)
+  const [previewing, setPreviewing] = useState(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -185,6 +196,7 @@ export default function CommunityPage() {
                 onUse={setUsing}
                 onWithdraw={withdraw}
                 onReport={setReporting}
+                onPreview={setPreviewing}
                 mine={!!user && component.author_id === user.id}
                 t={t}
               />
@@ -193,6 +205,17 @@ export default function CommunityPage() {
         )}
       </main>
 
+      {previewing && (
+        <ComponentPreviewDialog
+          component={previewing}
+          mine={!!user && previewing.author_id === user.id}
+          onClose={() => setPreviewing(null)}
+          // Deciding from the big preview is the point — the choice carries
+          // straight through instead of sending you back to the card.
+          onUse={(component) => { setPreviewing(null); setUsing(component) }}
+          onReport={(component) => { setPreviewing(null); setReporting(component) }}
+        />
+      )}
       {using && <UseComponentDialog component={using} onClose={() => setUsing(null)} />}
       {reporting && <ReportComponentDialog component={reporting} onClose={() => setReporting(null)} />}
     </div>

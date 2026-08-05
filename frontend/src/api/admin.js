@@ -24,6 +24,19 @@ export const suspendUser = (userId, suspend) =>
 export const moderateSite = (siteId, action) =>
   client.post(`/admin/sites/${siteId}/moderate/`, { action }).then((r) => r.data)
 
+// Flagged community blocks. Its own queue: a site gets unpublished, a block
+// gets pulled out of a library it has already been copied out of.
+export const listComponentReports = (status = 'open', page = 1) =>
+  client.get('/admin/component-reports/', { params: { status, page } }).then((r) => r.data)
+
+export const resolveComponentReport = (reportId, action /* 'resolve' | 'dismiss' */) =>
+  client.post(`/admin/component-reports/${reportId}/resolve/`, { action }).then((r) => r.data)
+
+// 'remove' unlists it and leaves copies alone; 'purge' also deletes the copies
+// from every site that took one; 'restore' puts it back in the library.
+export const moderateComponent = (componentId, action) =>
+  client.post(`/admin/components/${componentId}/moderate/`, { action }).then((r) => r.data)
+
 // Runtime SiteSettings (superuser-only). GET masks secrets (returns *_set
 // booleans); PUT — blank secret fields keep the stored value.
 export const getSettings = () => client.get('/admin/settings/').then((r) => r.data)

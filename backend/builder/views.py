@@ -56,6 +56,7 @@ from .validators import (
     validate_and_clean_schema,
 )
 from .serializers import (
+    AdminComponentReportSerializer,
     AdminReportSerializer,
     AdminUserSerializer,
     ExploreSiteSerializer,
@@ -1551,3 +1552,126 @@ class WithdrawSharedComponentView(APIView):
         component.status = 'withdrawn'
         component.save(update_fields=['status'])
         return Response({'withdrawn': True})
+
+
+# ---------------------------------------------------------------------------
+# Community moderation
+# ---------------------------------------------------------------------------
+
+
+class AdminComponentReportsView(ListAPIView):
+    """The shared-block queue. Its own endpoint rather than a filter on the site
+    queue, because acting on the two is nothing alike: a site gets unpublished,
+    a block gets pulled out of a library it has already been copied out of."""
+
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminComponentReportSerializer
+    pagination_class = AdminPagination
+
+    def get_queryset(self):
+        qs = SharedComponentReport.objects.select_related('component', 'component__author', 'reporter')
+        status_filter = self.request.GET.get('status', 'open')
+        if status_filter != 'all':
+            qs = qs.filter(status=status_filter)
+        return qs.order_by('-created_at')
+
+
+class AdminComponentReportResolveView(APIView):
+    """Admin marks a component report resolved or dismissed."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, report_id):
+        action = request.data.get('action')
+        if action not in ('resolve', 'dismiss'):
+            return error_response('invalid_report_action', "action must be 'resolve' or 'dismiss'.")
+        report = SharedComponentReport.objects.filter(pk=report_id).first()
+        if not report:
+            return error_response('report_not_found', 'Report not found.', status.HTTP_404_NOT_FOUND)
+        report.status = 'resolved' if action == 'resolve' else 'dismissed'
+        report.resolved_at = timezone.now()
+        report.save(update_fields=['status', 'resolved_at'])
+        return Response({'detail': 'Report updated.', 'status': report.status})
+
+
+def _purge_shared_copies(component_id):
+    """Delete every block that was taken from this component, wherever it went.
+
+    The copies are somebody else's pages now, so this is the heavy option and
+    stays separate from unlisting. It is what a takedown MEANS for the cases
+    that justify one — a phishing form or someone else's copyrighted work does
+    not stop being those things because it was copied.
+
+    The scan is a full pass over site schemas in Python. JSON containment is not
+    portable across the databases this project runs on, and a takedown is rare
+    enough that a correct slow answer beats a fast dialect-specific one.
+    """
+    marked = 0
+    sites_touched = 0
+    for site in Site.objects.only('id', 'schema').iterator():
+        schema = site.schema if isinstance(site.schema, dict) else None
+        if not schema:
+            continue
+        pages = schema.get('pages') if isinstance(schema.get('pages'), list) else []
+        removed_here = 0
+        for page in pages:
+            components = page.get('components')
+            if not isinstance(components, list):
+                continue
+            kept = [
+                block for block in components
+                if not (isinstance(block, dict)
+                        and isinstance(block.get('props'), dict)
+                        and block['props'].get('_sharedFrom') == component_id)
+            ]
+            removed_here += len(components) - len(kept)
+            page['components'] = kept
+        if removed_here:
+            # Straight back, without re-running the save gate: this only ever
+            # deletes list entries, so there is no new content to validate and
+            # nothing else on the page should shift because of a takedown.
+            site.schema = schema
+            site.save(update_fields=['schema', 'updated_at'])
+            marked += removed_here
+            sites_touched += 1
+    return sites_touched, marked
+
+
+class AdminComponentModerateView(APIView):
+    """Admin acting on a shared block.
+
+    `remove` unlists it: nobody can take it again, and copies already taken are
+    left alone — someone whose page happens to contain an ugly button should not
+    have their site edited from under them. `purge` additionally deletes those
+    copies, which is the only thing that helps when the block itself is the
+    problem. `restore` puts it back in the library.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, component_id):
+        action = request.data.get('action')
+        if action not in ('remove', 'purge', 'restore'):
+            return error_response('invalid_component_action',
+                                  "action must be 'remove', 'purge' or 'restore'.")
+        component = SharedComponent.objects.filter(pk=component_id).first()
+        if not component:
+            return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
+
+        if action == 'restore':
+            component.status = 'published'
+            component.save(update_fields=['status'])
+            return Response({'detail': 'Component restored.', 'status': component.status})
+
+        component.status = 'removed'
+        component.save(update_fields=['status'])
+        SharedComponentReport.objects.filter(component=component, status='open').update(
+            status='resolved', resolved_at=timezone.now(),
+        )
+        payload = {'detail': 'Component removed.', 'status': component.status,
+                   'sites_touched': 0, 'copies_removed': 0}
+        if action == 'purge':
+            sites_touched, copies_removed = _purge_shared_copies(component.pk)
+            payload.update(detail='Component removed and copies deleted.',
+                           sites_touched=sites_touched, copies_removed=copies_removed)
+        return Response(payload)

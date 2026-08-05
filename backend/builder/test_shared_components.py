@@ -266,3 +266,163 @@ class TestAuthorControl:
         assert first.data['already'] is False
         assert second.data['already'] is True
         assert component.reports.count() == 1
+
+
+@pytest.fixture
+def moderator(db):
+    return User.objects.create_user('mod', 'm@example.com', 'pw-12345678', is_staff=True)
+
+
+def used_by(taker_user, component):
+    """Take the component into the taker's site through the real endpoint, so the
+    copy carries whatever marker the takedown will have to find."""
+    site = Site.objects.filter(owner=taker_user).first()
+    res = client_for(taker_user).post(
+        reverse('shared-component-use', args=[component.pk]),
+        {'site_id': site.pk}, format='json',
+    )
+    assert res.status_code == 200
+    return site
+
+
+class TestModerationQueue:
+    def test_shows_open_reports_with_the_block_attached(self, author, taker, moderator):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        client_for(taker).post(reverse('shared-component-report', args=[component.pk]),
+                               {'reason': 'malware', 'detail': 'fake login'}, format='json')
+
+        res = client_for(moderator).get(reverse('admin-component-reports'))
+
+        assert res.status_code == 200
+        row = res.data['results'][0]
+        assert row['component_title'] == 'Pricing card'
+        assert row['reason'] == 'malware'
+        assert row['detail'] == 'fake login'
+        assert row['reporter_username'] == 'taker'
+        # The artefact itself, so the moderator judges the block and not its name.
+        assert 'Pro' in row['component_html']
+        assert 'padding: 24px' in row['component_css']
+
+    def test_is_admin_only(self, author, taker):
+        SharedComponent.objects.create(author=author, **GOOD)
+        assert client_for(taker).get(reverse('admin-component-reports')).status_code == 403
+        assert APIClient().get(reverse('admin-component-reports')).status_code in (401, 403)
+
+    def test_resolving_takes_it_out_of_the_default_queue(self, author, taker, moderator):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        client_for(taker).post(reverse('shared-component-report', args=[component.pk]),
+                               {'reason': 'spam'}, format='json')
+        report = component.reports.first()
+
+        res = client_for(moderator).post(
+            reverse('admin-component-report-resolve', args=[report.pk]),
+            {'action': 'dismiss'}, format='json',
+        )
+
+        assert res.status_code == 200
+        assert res.data['status'] == 'dismissed'
+        assert client_for(moderator).get(reverse('admin-component-reports')).data['count'] == 0
+        assert client_for(moderator).get(
+            reverse('admin-component-reports'), {'status': 'all'}).data['count'] == 1
+
+    def test_a_bad_action_is_refused(self, author, taker, moderator):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        client_for(taker).post(reverse('shared-component-report', args=[component.pk]),
+                               {'reason': 'spam'}, format='json')
+        report = component.reports.first()
+        res = client_for(moderator).post(
+            reverse('admin-component-report-resolve', args=[report.pk]),
+            {'action': 'delete'}, format='json',
+        )
+        assert res.status_code == 400
+        assert res.data['code'] == 'invalid_report_action'
+
+
+class TestTakedown:
+    """Two different things a moderator can mean by taking something down, and
+    the difference between them is whose pages get edited."""
+
+    def test_removing_unlists_it_but_leaves_copies_alone(self, author, taker, moderator):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        site = used_by(taker, component)
+
+        res = client_for(moderator).post(
+            reverse('admin-component-moderate', args=[component.pk]),
+            {'action': 'remove'}, format='json',
+        )
+
+        assert res.status_code == 200
+        component.refresh_from_db()
+        assert component.status == 'removed'
+        # Gone from the library...
+        assert client_for(taker).get(reverse('shared-components')).data['count'] == 0
+        assert client_for(taker).post(
+            reverse('shared-component-use', args=[component.pk]),
+            {'site_id': site.pk}, format='json').status_code == 404
+        # ...but still on the page of the person who already took it.
+        site.refresh_from_db()
+        assert len(site.schema['pages'][0]['components']) == 1
+
+    def test_purging_deletes_the_copies_too(self, author, taker, moderator):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        site = used_by(taker, component)
+
+        res = client_for(moderator).post(
+            reverse('admin-component-moderate', args=[component.pk]),
+            {'action': 'purge'}, format='json',
+        )
+
+        assert res.status_code == 200
+        assert res.data['sites_touched'] == 1
+        assert res.data['copies_removed'] == 1
+        site.refresh_from_db()
+        assert site.schema['pages'][0]['components'] == []
+
+    def test_a_purge_touches_only_the_copies_of_that_block(self, author, taker, moderator):
+        keep = SharedComponent.objects.create(author=author, **{**GOOD, 'title': 'Innocent'})
+        drop = SharedComponent.objects.create(author=author, **GOOD)
+        site = used_by(taker, keep)
+        used_by(taker, drop)
+
+        client_for(moderator).post(reverse('admin-component-moderate', args=[drop.pk]),
+                                   {'action': 'purge'}, format='json')
+
+        site.refresh_from_db()
+        survivors = site.schema['pages'][0]['components']
+        assert [block['props']['_sharedFrom'] for block in survivors] == [keep.pk]
+
+    def test_a_takedown_closes_the_reports_that_asked_for_it(self, author, taker, moderator):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        client_for(taker).post(reverse('shared-component-report', args=[component.pk]),
+                               {'reason': 'copyright'}, format='json')
+
+        client_for(moderator).post(reverse('admin-component-moderate', args=[component.pk]),
+                                   {'action': 'remove'}, format='json')
+
+        assert component.reports.first().status == 'resolved'
+
+    def test_restoring_puts_it_back_in_the_library(self, author, taker, moderator):
+        component = SharedComponent.objects.create(author=author, status='removed', **GOOD)
+
+        res = client_for(moderator).post(reverse('admin-component-moderate', args=[component.pk]),
+                                         {'action': 'restore'}, format='json')
+
+        assert res.status_code == 200
+        component.refresh_from_db()
+        assert component.status == 'published'
+        assert client_for(taker).get(reverse('shared-components')).data['count'] == 1
+
+    def test_only_an_admin_may_take_anything_down(self, author, taker):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        res = client_for(taker).post(reverse('admin-component-moderate', args=[component.pk]),
+                                     {'action': 'purge'}, format='json')
+        assert res.status_code == 403
+        component.refresh_from_db()
+        assert component.status == 'published'
+
+    def test_a_bad_moderation_action_is_refused(self, author, moderator):
+        component = SharedComponent.objects.create(author=author, **GOOD)
+        res = client_for(moderator).post(reverse('admin-component-moderate', args=[component.pk]),
+                                         {'action': 'nuke'}, format='json')
+        assert res.status_code == 400
+        assert res.data['code'] == 'invalid_component_action'

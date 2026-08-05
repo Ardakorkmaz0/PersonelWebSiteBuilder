@@ -10,6 +10,7 @@ from .models import (
     Report,
     ReviewComment,
     SharedComponent,
+    SharedComponentReport,
     Site,
     SiteSettings,
     SiteVersion,
@@ -166,6 +167,39 @@ class AdminReportSerializer(serializers.ModelSerializer):
 
     def get_reporter_username(self, obj):
         return obj.reporter.username if obj.reporter else '(deleted)'
+
+
+class AdminComponentReportSerializer(serializers.ModelSerializer):
+    """A flagged block, with the block itself attached.
+
+    The artefact rides along on purpose: judging a shared component from its
+    title is guesswork, and a moderator deciding whether to pull something off
+    other people's pages should be looking at the thing, not at a description
+    of it."""
+
+    reporter_username = serializers.SerializerMethodField()
+    reason_label = serializers.CharField(source='get_reason_display', read_only=True)
+    component_title = serializers.CharField(source='component.title', read_only=True)
+    component_status = serializers.CharField(source='component.status', read_only=True)
+    component_use_count = serializers.IntegerField(source='component.use_count', read_only=True)
+    component_html = serializers.CharField(source='component.html', read_only=True)
+    component_css = serializers.CharField(source='component.css', read_only=True)
+    component_author = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SharedComponentReport
+        fields = ('id', 'reason', 'reason_label', 'detail', 'status', 'created_at',
+                  'resolved_at', 'reporter_username', 'component', 'component_title',
+                  'component_status', 'component_use_count', 'component_author',
+                  'component_html', 'component_css')
+        read_only_fields = fields
+
+    def get_reporter_username(self, obj):
+        return obj.reporter.username if obj.reporter else '(deleted)'
+
+    def get_component_author(self, obj):
+        author = getattr(obj.component, 'author', None)
+        return author.username if author else '(deleted)'
 
 
 class SiteSettingsSerializer(serializers.ModelSerializer):

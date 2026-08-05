@@ -9,6 +9,9 @@ from .views import (
     SharedComponentViewCountView,
     UseSharedComponentView,
     WithdrawSharedComponentView,
+    AdminComponentModerateView,
+    AdminComponentReportResolveView,
+    AdminComponentReportsView,
     AdminReportResolveView,
     AdminReportsView,
     AdminSettingsView,
@@ -83,5 +86,8 @@ urlpatterns = [
     path('public/components/<int:component_id>/report/', ReportSharedComponentView.as_view(), name='shared-component-report'),
     path('components/', ShareComponentView.as_view(), name='share-component'),
     path('components/<int:component_id>/withdraw/', WithdrawSharedComponentView.as_view(), name='shared-component-withdraw'),
+    path('admin/component-reports/', AdminComponentReportsView.as_view(), name='admin-component-reports'),
+    path('admin/component-reports/<int:report_id>/resolve/', AdminComponentReportResolveView.as_view(), name='admin-component-report-resolve'),
+    path('admin/components/<int:component_id>/moderate/', AdminComponentModerateView.as_view(), name='admin-component-moderate'),
     path('', include(router.urls)),
 ]

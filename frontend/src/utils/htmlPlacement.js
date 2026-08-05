@@ -376,6 +376,11 @@ export function serializeDocument(doc) {
     .querySelectorAll(`svg[data-pwb-chrome], svg[data-pwb-connections], [${DROP_LINE_ATTR}]`)
     .forEach((el) => el.remove())
   root.querySelectorAll('[data-pwb-resize-overlay]').forEach((el) => el.remove())
+  // The editor shows script-revealed content at rest so it can be edited; the
+  // marker that does it is chrome, and the saved file keeps the author's own
+  // reveal exactly as they wrote it.
+  root.querySelectorAll('style[data-pwb-motion-style]').forEach((el) => el.remove())
+  root.querySelectorAll('[data-pwb-motion-rest]').forEach((el) => el.removeAttribute('data-pwb-motion-rest'))
   // Strip styles/scripts the Code-project preview injected for visual fidelity
   // (the original <link>/<script src> are kept), so saving the file back never
   // bakes the resolved CSS/JS into the source.

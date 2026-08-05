@@ -53,8 +53,9 @@ import { componentToHtml } from '../../utils/componentToHtml.js'
 import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
 import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
+import { applyMotionRest, clearMotionRest } from '../../utils/htmlMotion.js'
 import BrushControls from './BrushControls.jsx'
-import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon } from '../icons.jsx'
+import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
@@ -541,9 +542,24 @@ function HtmlWorkspace({
   // happens before the iframe body exists).
   const [loadTick, setLoadTick] = useState(0)
   const [linkHint, setLinkHint] = useState(null) // link-tool guidance text
+  // Show content whose reveal never ran at its resting state. On by default:
+  // an uploaded page that hides half of itself for a scroll animation is
+  // otherwise half-missing in the editor, and you cannot edit what is not
+  // there. Turning it off shows the file's raw truth instead.
+  const [motionRest, setMotionRest] = useState(true)
+  const [restedCount, setRestedCount] = useState(0)
   const linkSourceRef = useRef(null) // chosen <a> awaiting a target (link tool)
 
   const iframeRef = useRef(null)
+  // Toggling rest acts on the document that is already loaded — reseeding it
+  // would throw away whatever has been typed since.
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument
+    if (!doc || mode !== 'edit') return
+    if (motionRest) setRestedCount(applyMotionRest(doc))
+    else { clearMotionRest(doc); setRestedCount(0) }
+  }, [motionRest, mode, loadTick])
+
   const [stage, setStage] = useState({ w: 0, h: 0 })
   const placing = !!pendingType
   // Keep the latest pendingType in a ref so the iframe listeners (bound once
@@ -1373,6 +1389,8 @@ function HtmlWorkspace({
       ensureEditHintChrome(doc)
       attachSelectionListeners(doc)
       if (pendingRef.current) attachPlacementListeners(doc)
+      // Resting the unrun reveals is the loadTick effect's job — bumping the
+      // tick above is what triggers it, for both a fresh load and a toggle.
       // Edit iframes run no scripts, so the parent handles the post-AI
       // "scroll to what changed" hint directly.
       if (scrollOnce && scrollOnce.html === editSeed) {
@@ -1570,6 +1588,36 @@ function HtmlWorkspace({
                 <MonitorIcon size={14} />
                 <span className="hidden xl:inline">{t('Browser')}</span>
             </button>
+          )}
+          {/* Said out loud only when it is actually doing something. "Why is my
+              page half empty / why does nothing animate" is answered here, next
+              to the one click that plays it for real. */}
+          {mode === 'edit' && restedCount > 0 && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMotionRest((on) => !on)}
+                aria-pressed={motionRest}
+                title={t('{count} elements are revealed by the page’s own script, which does not run while editing. They are shown at their finished state.', { count: restedCount })}
+                className={`studio-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs ${
+                  motionRest
+                    ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                    : 'studio-btn-secondary'
+                }`}
+              >
+                <SparklesIcon size={14} />
+                <span className="hidden xl:inline">{t('Motion at rest')}</span>
+                <span className="rounded-full bg-[var(--studio-panel)] px-1.5 text-[10px] font-semibold">{restedCount}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode('view')}
+                title={t('Play the animations in View')}
+                className="studio-btn studio-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs"
+              >
+                ▶ <span className="hidden xl:inline">{t('Play')}</span>
+              </button>
+            </div>
           )}
           {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
               empty page: there's no document to act on, so the starter card is

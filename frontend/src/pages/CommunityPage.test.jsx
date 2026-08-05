@@ -80,8 +80,11 @@ describe('the community grid', () => {
   it('counts a view once the card is on screen, by POST', async () => {
     renderPage()
     await screen.findByTitle('Pricing card')
+    // Waited for rather than asserted on the spot: the card can be in the DOM a
+    // tick before its effect runs. A second count would leave this at 2 and the
+    // wait would never pass, so "exactly once" is still what is being proved.
+    await waitFor(() => expect(countComponentView).toHaveBeenCalledTimes(1))
     expect(countComponentView).toHaveBeenCalledWith(3)
-    expect(countComponentView).toHaveBeenCalledTimes(1)
   })
 
   it('filters by category without re-asking for everything', async () => {

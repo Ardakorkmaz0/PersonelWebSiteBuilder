@@ -3,9 +3,11 @@
 // open. Getting the second half wrong would be a worse bug than the first.
 import { describe, expect, it, beforeEach } from 'vitest'
 import {
+  applyElementMotion,
   applyMotionRest,
   clearMotionRest,
   hiddenByMotion,
+  readElementMotion,
   MOTION_REST_ATTR,
 } from './htmlMotion.js'
 import { serializeDocument } from './htmlPlacement.js'
@@ -156,5 +158,66 @@ describe('what gets saved', () => {
     expect(saved).toContain('data-aos="fade-up"')
     expect(saved).not.toContain(MOTION_REST_ATTR)
     expect(saved).not.toContain('data-pwb-motion-style')
+  })
+})
+
+// Giving an uploaded page's element one of the builder's own animations. The
+// contract is the attribute and the classes — the stylesheet and the observer
+// already ship with View and with the published page, so writing anything else
+// into the document would be pollution.
+describe('applying a builder animation to a real element', () => {
+  function el(html = '<section>Hi</section>') {
+    document.body.innerHTML = html
+    return document.body.firstElementChild
+  }
+
+  it('writes the entrance the motion layer reads', () => {
+    const node = el()
+    applyElementMotion(node, { animIn: 'fade-up', animSpeed: 'slow' })
+    expect(node.getAttribute('data-anim-in')).toBe('fade-up')
+    expect(node.style.getPropertyValue('--pwb-anim-dur')).toBe('1150ms')
+  })
+
+  it('reads back what it wrote', () => {
+    const node = el()
+    applyElementMotion(node, { animIn: 'zoom', animSpeed: 'fast' })
+    applyElementMotion(node, { animHover: 'lift' })
+    expect(readElementMotion(node)).toEqual({ animIn: 'zoom', animHover: 'lift', animSpeed: 'fast' })
+  })
+
+  it('reports nothing on an untouched element', () => {
+    expect(readElementMotion(el())).toEqual({ animIn: 'none', animHover: 'none', animSpeed: 'normal' })
+  })
+
+  it('changes one without disturbing the other', () => {
+    const node = el()
+    applyElementMotion(node, { animIn: 'fade', animSpeed: 'normal' })
+    applyElementMotion(node, { animHover: 'glow' })
+    expect(node.getAttribute('data-anim-in')).toBe('fade')
+    applyElementMotion(node, { animIn: 'bounce' })
+    expect(readElementMotion(node).animHover).toBe('glow')
+  })
+
+  it('swaps a hover rather than stacking them', () => {
+    const node = el()
+    applyElementMotion(node, { animHover: 'lift' })
+    applyElementMotion(node, { animHover: 'tilt' })
+    expect([...node.classList].filter((c) => c.startsWith('pwb-hover-'))).toEqual(['pwb-hover-tilt'])
+  })
+
+  it('leaves no trace when cleared', () => {
+    const node = el('<section class="card">Hi</section>')
+    applyElementMotion(node, { animIn: 'fade', animSpeed: 'slow', animHover: 'lift' })
+    applyElementMotion(node, { animIn: 'none', animHover: 'none' })
+    // The author's own class survives; ours, the attribute and the custom
+    // property do not — a cleared animation must not leave the file dirty.
+    expect(node.outerHTML).toBe('<section class="card">Hi</section>')
+  })
+
+  it('keeps the element in the saved document', () => {
+    const node = el()
+    applyElementMotion(node, { animIn: 'fade-up', animSpeed: 'normal' })
+    // Unlike the rest layer, this IS the user's choice and belongs in the file.
+    expect(serializeDocument(document)).toContain('data-anim-in="fade-up"')
   })
 })

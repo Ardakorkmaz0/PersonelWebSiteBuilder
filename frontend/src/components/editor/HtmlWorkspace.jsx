@@ -53,7 +53,7 @@ import { componentToHtml } from '../../utils/componentToHtml.js'
 import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
 import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
-import { applyMotionRest, clearMotionRest } from '../../utils/htmlMotion.js'
+import { applyElementMotion, applyMotionRest, clearMotionRest } from '../../utils/htmlMotion.js'
 import BrushControls from './BrushControls.jsx'
 import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
@@ -1001,6 +1001,11 @@ function HtmlWorkspace({
       }),
     resetSelectedMobileStyles: () =>
       mutateSelected((doc, el) => { clearMobileElementStyles(el) }),
+    // The Animation tab, acting on the element the user actually has selected.
+    // Writes the attribute/classes the motion contract reads — View and the
+    // published page already carry the stylesheet and the observer.
+    applyMotionToSelected: (patch) =>
+      mutateSelected((doc, el) => { applyElementMotion(el, patch) }),
     duplicateSelected: () =>
       mutateSelected((doc, el) => {
         const clone = duplicateElement(el)

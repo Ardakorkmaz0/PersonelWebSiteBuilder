@@ -1,4 +1,5 @@
 import { readElementMultilineText, writeElementMultilineText } from './domMultilineText.js'
+import { readElementMotion } from './htmlMotion.js'
 
 const MOBILE_STYLE_TAG_ATTR = 'data-pwb-responsive-overrides'
 const MOBILE_VAR_PREFIX = '--pwb-mobile-'
@@ -346,6 +347,8 @@ export function describeElement(el, win = el?.ownerDocument?.defaultView) {
     // A navigation is a SET of links, and editing them one click at a time was
     // the only way to touch a menu. null when this element is not a list.
     links: isLinkListContainer(el) ? readElementLinks(el) : null,
+    // What the Animation tab needs to show "in use" instead of guessing.
+    motion: readElementMotion(el),
     hasParent: !!parent,
     parentTag: parent ? parent.tagName.toLowerCase() : null,
     ancestors: ancestorTrail(el),

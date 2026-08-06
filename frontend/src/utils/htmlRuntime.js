@@ -343,15 +343,37 @@ const SCRIPT_END = '</scr' + 'ipt>'
 
 const INTERACTIVE_STYLE = `[data-builder-tabs] [role="tab"]{appearance:none;background:var(--builder-tab-bg,transparent);border:0;border-bottom:2px solid transparent;padding:var(--builder-tab-padding,8px 14px);font:inherit;font-weight:500;color:var(--builder-tab-color,#6b7280);cursor:pointer;margin-bottom:-1px;border-radius:var(--builder-tab-radius,0)}[data-builder-tabs] [role="tab"][aria-selected="true"]{background:var(--builder-tab-active-bg,var(--builder-tab-bg,transparent));color:var(--builder-tab-active-color,#1d1d1f);border-bottom-color:var(--builder-tab-active-border,#2563eb)}[data-builder-tabs] [role="tablist"]{display:flex;gap:var(--builder-tab-gap,4px);flex-wrap:wrap;background:var(--builder-tablist-bg,transparent);border-bottom:1px solid var(--builder-tablist-border,#e5e7eb);padding:var(--builder-tablist-padding,0);margin-bottom:12px}[data-builder-tabs] [role="tabpanel"]{background:var(--builder-panel-bg,transparent);border:1px solid var(--builder-panel-border,transparent);border-radius:var(--builder-panel-radius,0);padding:var(--builder-panel-padding,0);box-sizing:border-box}[data-builder-tabs] [role="tabpanel"][hidden]{display:none !important}`
 
-function runtimeInjection() {
-  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}<style data-builder-motion-style>${MOTION_CSS}</style><script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
+// Styles belong in <head> so they apply to the first paint. Scripts that READ
+// the document do not: the reveal observer collects `[data-anim-in]` the moment
+// it runs, and in <head> that is before a single element of <body> exists — it
+// finds nothing, bails, and the animation never plays. Measured: injected into
+// <head>, a page with two revealed elements ended up unarmed with neither
+// revealed. So the two halves are emitted separately and land in different
+// places.
+function runtimeHeadTags() {
+  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><style data-builder-motion-style>${MOTION_CSS}</style>`
+}
+
+function runtimeBodyTags() {
+  return `<script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}<script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
 }
 
 // The editor-only half: the readonly-enforcement runtime WITHOUT the shared
 // interactive shim, for documents that already carry the shim.
-function editorOnlyRuntimeInjection() {
-  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}`
+function editorOnlyHeadTags() {
+  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style>`
 }
+
+function editorOnlyBodyTags() {
+  return `<script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}`
+}
+
+// String.prototype.replace expands `$&`, `$1`, "$'" and friends INSIDE the
+// replacement string. The runtime scripts contain `$&` (an escaping helper), so
+// passing them as a replacement string silently rewrote them — measured: the
+// helper's `'\\$&'` came out as `'\\</head>'`. A function replacer is taken
+// literally, which is the only safe way to splice code into markup.
+const literal = (text) => () => text
 
 // The interactive shim alone (style + script) for static HTML exports that do
 // not need the editor's readonly enforcement — only the runtime behaviours that
@@ -380,12 +402,12 @@ function hasInteractiveRuntime(html) {
 export function withBuilderInteractiveHtml(html) {
   if (hasInteractiveRuntime(html)) return String(html || '')
   const inject = builderInteractiveTags()
-  let out = String(html || '')
+  const out = String(html || '')
   if (/<style[^>]*data-pwb-embed-reset/i.test(out) && /<\/head>/i.test(out)) {
-    return out.replace(/<\/head>/i, inject + '</head>')
+    return out.replace(/<\/head>/i, literal(inject + '</head>'))
   }
-  if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, inject + '</body>')
-  if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
+  if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, literal(inject + '</body>'))
+  if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, literal(inject + '</head>'))
   return out + inject
 }
 
@@ -393,11 +415,16 @@ export function withBuilderRuntimeHtml(html) {
   // The editor's readonly runtime is a superset of the interactive one, so a
   // document that already has the interactive half only needs the editor part
   // — injecting the whole thing would duplicate the shared handlers.
-  const inject = hasInteractiveRuntime(html) ? editorOnlyRuntimeInjection() : runtimeInjection()
+  const shimmed = hasInteractiveRuntime(html)
+  const head = shimmed ? editorOnlyHeadTags() : runtimeHeadTags()
+  const body = shimmed ? editorOnlyBodyTags() : runtimeBodyTags()
   let out = String(html || '')
-  if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
-  if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + inject)
-  return inject + out
+  if (/<\/head>/i.test(out)) out = out.replace(/<\/head>/i, literal(head + '</head>'))
+  else if (/<head[^>]*>/i.test(out)) out = out.replace(/<head[^>]*>/i, (m) => m + head)
+  else out = head + out
+  // End of body, where everything the scripts look for already exists.
+  if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, literal(body + '</body>'))
+  return out + body
 }
 
 // Ensure the document declares a mobile viewport. Without one, phones render

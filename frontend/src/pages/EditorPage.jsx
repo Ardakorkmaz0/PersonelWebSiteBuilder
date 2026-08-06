@@ -2299,6 +2299,13 @@ export default function EditorPage() {
                   key="html-rail"
                   onPickComponent={(type, html) => { setPendingType(type); setPendingHtml(html || null) }}
                   onCollapse={() => setRail('left', false)}
+                  // In HTML mode the Animation tab acts on the element selected in
+                  // the document, not on a schema component — without this it had
+                  // nothing to apply to and said so forever.
+                  htmlMotion={{
+                    info: htmlSelection,
+                    onApply: (patch) => workspaceRef.current?.applyMotionToSelected?.(patch),
+                  }}
                   filesPanel={
                     <PageFilesPanel
                       mode="html"

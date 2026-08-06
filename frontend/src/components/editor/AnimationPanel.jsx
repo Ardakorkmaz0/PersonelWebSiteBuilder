@@ -144,16 +144,35 @@ function PreviewTile({ label, reveal, children }) {
 // The Animation tab: pick a scroll entrance or a hover effect, preview it on both
 // a sample site and this page, then apply it to the selected component. The last
 // pick is remembered so reopening the editor lands on it.
-export default function AnimationPanel() {
+//
+// Two kinds of selection reach this panel. On the component canvas it is a
+// schema component and the motion lives in its props. In HTML mode it is a real
+// element in the user's document, and the motion is written onto that element —
+// same vocabulary, different target. The panel used to know only about the
+// first, so in HTML mode "Use this animation" was permanently greyed out with
+// "select an element" while an element was plainly selected. `html` carries the
+// HTML-mode selection and the callback that applies to it.
+export default function AnimationPanel({ html = null }) {
   const { t } = useLanguage()
-  const selectedId = useEditorStore((s) => s.selectedId)
+  const htmlMode = !!html
+  const storeSelectedId = useEditorStore((s) => s.selectedId)
   const updateProps = useEditorStore((s) => s.updateProps)
-  const selected = useEditorStore((s) => {
+  const storeSelected = useEditorStore((s) => {
     const id = s.selectedId
     if (!id) return null
     return (selectCurrentPage(s)?.components || []).find((c) => c.id === id) || null
   })
-  const pinned = selected?.props?.scrollBehavior === 'fixed' || selected?.props?.scrollBehavior === 'sticky'
+  // One shape for both worlds, so everything below stops caring which it is.
+  const selectedId = htmlMode ? (html.info ? 'html-element' : null) : storeSelectedId
+  const motion = htmlMode
+    ? (html.info?.motion || { animIn: 'none', animHover: 'none', animSpeed: 'normal' })
+    : {
+      animIn: storeSelected?.props?.animIn || 'none',
+      animHover: storeSelected?.props?.animHover || 'none',
+      animSpeed: storeSelected?.props?.animSpeed || 'normal',
+    }
+  const pinned = !htmlMode
+    && (storeSelected?.props?.scrollBehavior === 'fixed' || storeSelected?.props?.scrollBehavior === 'sticky')
 
   // Start on the last-used entrance (returning users see it immediately);
   // a first-timer starts with nothing picked, so the preview + Use appear only
@@ -176,11 +195,14 @@ export default function AnimationPanel() {
 
   const applyEntrance = () => {
     if (!selectedId || pinned) return
-    updateProps(selectedId, { animIn: picked, animSpeed: selected?.props?.animSpeed || 'normal' })
+    const patch = { animIn: picked, animSpeed: motion.animSpeed }
+    if (htmlMode) html.onApply?.(patch)
+    else updateProps(storeSelectedId, patch)
   }
   const applyHover = (hover) => {
     if (!selectedId || pinned) return
-    updateProps(selectedId, { animHover: hover })
+    if (htmlMode) html.onApply?.({ animHover: hover })
+    else updateProps(storeSelectedId, { animHover: hover })
   }
 
   const styleRef = useRef(null)
@@ -227,11 +249,16 @@ export default function AnimationPanel() {
                 <SampleSite />
               </div>
             </PreviewTile>
-            <PreviewTile label={t('This page')} reveal={picked}>
-              <div className="flex h-full items-center justify-center">
-                <PageThumbnail />
-              </div>
-            </PreviewTile>
+            {/* An HTML page has no component schema to draw, so this tile could
+                only ever say "This page is empty" — a false statement about a
+                page full of content. It is left out there instead. */}
+            {!htmlMode && (
+              <PreviewTile label={t('This page')} reveal={picked}>
+                <div className="flex h-full items-center justify-center">
+                  <PageThumbnail />
+                </div>
+              </PreviewTile>
+            )}
           </div>
           <button
             type="button"
@@ -239,7 +266,7 @@ export default function AnimationPanel() {
             disabled={!selectedId || pinned}
             className="mt-2.5 w-full rounded-lg bg-[var(--studio-accent)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--studio-accent-fill-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {selected?.props?.animIn === picked ? t('In use') : t('Use this animation')}
+            {motion.animIn === picked ? t('In use') : t('Use this animation')}
           </button>
           <p className="mt-1.5 text-[11px] leading-snug text-[#9ca3af]">
             {pinned
@@ -264,11 +291,11 @@ export default function AnimationPanel() {
             <button
               key={value}
               type="button"
-              onClick={() => applyHover(selected?.props?.animHover === value ? 'none' : value)}
+              onClick={() => applyHover(motion.animHover === value ? 'none' : value)}
               disabled={!selectedId || pinned}
               title={t('Hover to try; click to apply')}
               className={`rounded-lg border p-1.5 transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                selected?.props?.animHover === value
+                motion.animHover === value
                   ? 'border-[#4f46e5] bg-[#eef2ff]'
                   : 'border-[#e5e7eb] hover:border-[#4f46e5]'
               }`}

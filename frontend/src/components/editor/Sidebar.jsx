@@ -557,7 +557,7 @@ function initialTab(hasFiles) {
 // `onPickComponent(type)` opts the palette into HTML-placement mode (omitted
 // → classic dnd-kit canvas palette, where `onArmPlacement(data)` is the
 // click/tap-to-place fallback). `onCollapse` hides the whole rail.
-export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, filesPanel }) {
+export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, filesPanel, htmlMotion = null }) {
   const { t } = useLanguage()
   const [tab, setTabState] = useState(() => initialTab(!!filesPanel))
   const setTab = (id) => {
@@ -603,7 +603,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
         {filesPanel && tab === 'files' ? (
           filesPanel
         ) : filesPanel && tab === 'animation' ? (
-          <AnimationPanel />
+          <AnimationPanel html={htmlMotion} />
         ) : (
           <>
             {/* Discovery lives in the BlockLibrary overlay (sections, every

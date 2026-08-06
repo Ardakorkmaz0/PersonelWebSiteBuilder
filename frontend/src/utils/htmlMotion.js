@@ -142,3 +142,64 @@ export function clearMotionRest(doc) {
   doc.querySelectorAll(`style[${MOTION_REST_STYLE_ATTR}]`).forEach((el) => el.remove())
   doc.querySelectorAll(`[${MOTION_REST_ATTR}]`).forEach((el) => el.removeAttribute(MOTION_REST_ATTR))
 }
+
+// ---------------------------------------------------------------------------
+// Giving an element in an uploaded page one of the builder's own animations
+// ---------------------------------------------------------------------------
+//
+// Nothing is injected into the document to make this play. Both places an HTML
+// page is actually shown already carry the motion stylesheet and the reveal
+// observer — the editor's View mode through withBuilderRuntimeHtml, the
+// published page through withBuilderInteractiveHtml. So the whole job is to
+// write the contract those two read: `data-anim-in` for the entrance,
+// `pwb-hover pwb-hover-*` for the hover, and the two custom properties for
+// speed. That is also why nothing here needs stripping on save: the attribute
+// IS the user's choice, and it belongs in their file.
+
+const HOVER_CLASS_PREFIX = 'pwb-hover-'
+const SPEED_MS = { fast: 450, normal: 750, slow: 1150 }
+
+/** What motion this element already carries, in the same shape the panel uses. */
+export function readElementMotion(el) {
+  if (!el || el.nodeType !== 1) return { animIn: 'none', animHover: 'none', animSpeed: 'normal' }
+  const hover = [...el.classList].find((name) => name.startsWith(HOVER_CLASS_PREFIX))
+  const duration = Number.parseInt(el.style.getPropertyValue('--pwb-anim-dur'), 10)
+  const speed = Object.keys(SPEED_MS).find((key) => SPEED_MS[key] === duration) || 'normal'
+  return {
+    animIn: el.getAttribute('data-anim-in') || 'none',
+    animHover: hover ? hover.slice(HOVER_CLASS_PREFIX.length) : 'none',
+    animSpeed: speed,
+  }
+}
+
+/** Apply (or clear, with 'none') an entrance and/or a hover effect. Only the
+ * keys present in the patch are touched, so setting a hover never disturbs an
+ * entrance that is already there. */
+export function applyElementMotion(el, patch = {}) {
+  if (!el || el.nodeType !== 1) return
+  if ('animIn' in patch) {
+    const reveal = patch.animIn
+    if (!reveal || reveal === 'none') {
+      el.removeAttribute('data-anim-in')
+      el.style.removeProperty('--pwb-anim-dur')
+      el.style.removeProperty('--pwb-anim-delay')
+    } else {
+      el.setAttribute('data-anim-in', reveal)
+    }
+  }
+  if ('animSpeed' in patch && el.hasAttribute('data-anim-in')) {
+    const ms = SPEED_MS[patch.animSpeed] || SPEED_MS.normal
+    el.style.setProperty('--pwb-anim-dur', `${ms}ms`)
+  }
+  if ('animHover' in patch) {
+    for (const name of [...el.classList]) {
+      if (name.startsWith(HOVER_CLASS_PREFIX)) el.classList.remove(name)
+    }
+    const hover = patch.animHover
+    if (!hover || hover === 'none') el.classList.remove('pwb-hover')
+    else el.classList.add('pwb-hover', `${HOVER_CLASS_PREFIX}${hover}`)
+  }
+  // An empty style attribute left behind reads as a change in the saved file.
+  if (el.getAttribute('style') === '') el.removeAttribute('style')
+  if (el.getAttribute('class') === '') el.removeAttribute('class')
+}

@@ -218,3 +218,45 @@ describe('display-time injectors never duplicate an embedded runtime', () => {
     expect(out).toMatch(/data-builder-interactive>/)
   })
 })
+
+// Two ways the injected runtime was quietly broken. Both were found by
+// measuring a real View frame, and both are invisible in a diff.
+describe('splicing the runtime into a document', () => {
+  const PAGE = '<!DOCTYPE html><html><head><title>t</title></head><body><h1 data-anim-in="fade-up">Hi</h1></body></html>'
+
+  it('runs the reveal observer where the elements exist, not before them', () => {
+    const out = withBuilderRuntimeHtml(PAGE)
+    const headEnd = out.indexOf('</head>')
+    const observer = out.indexOf('data-builder-motion>')
+    const heading = out.indexOf('<h1')
+
+    // In <head> the observer collects [data-anim-in] before <body> is parsed,
+    // finds none, and gives up — measured as "armed: false, nothing revealed".
+    expect(observer).toBeGreaterThan(headEnd)
+    expect(observer).toBeGreaterThan(heading)
+    // The stylesheet still belongs up top, so the first paint is already styled.
+    expect(out.indexOf('data-builder-motion-style')).toBeLessThan(headEnd)
+  })
+
+  it('keeps the injected script byte-for-byte instead of letting $& expand', () => {
+    // String.prototype.replace rewrites `$&` inside a replacement STRING. The
+    // runtime carries `'\$&'` in an escaping helper; splicing it in as a string
+    // turned that into `'\</head>'` — a live page running corrupted code.
+    for (const html of [
+      PAGE,
+      '<html><head><title>t</title></head><body>no closing body tag',
+      '<div>fragment with no head at all</div>',
+    ]) {
+      const out = withBuilderRuntimeHtml(html)
+      expect(out).toContain(String.raw`'\\$&'`)
+      expect(out).not.toContain(String.raw`'\\</head>'`)
+      expect(out).not.toContain(String.raw`'\\</body>'`)
+    }
+  })
+
+  it('does the same for the published page’s runtime', () => {
+    const out = withBuilderInteractiveHtml(PAGE)
+    expect(out).not.toContain('</head>\'')
+    expect(out).toContain('data-builder-motion')
+  })
+})

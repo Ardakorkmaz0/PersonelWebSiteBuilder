@@ -381,6 +381,9 @@ export function serializeDocument(doc) {
   // reveal exactly as they wrote it.
   root.querySelectorAll('style[data-pwb-motion-style]').forEach((el) => el.remove())
   root.querySelectorAll('[data-pwb-motion-rest]').forEach((el) => el.removeAttribute('data-pwb-motion-rest'))
+  // The inline-block an animation needed is part of that animation and stays in
+  // the file; only the receipt that says WE added it is editor bookkeeping.
+  root.querySelectorAll('[data-pwb-anim-inline]').forEach((el) => el.removeAttribute('data-pwb-anim-inline'))
   // Strip styles/scripts the Code-project preview injected for visual fidelity
   // (the original <link>/<script src> are kept), so saving the file back never
   // bakes the resolved CSS/JS into the source.

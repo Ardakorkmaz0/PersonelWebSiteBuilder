@@ -221,3 +221,68 @@ describe('applying a builder animation to a real element', () => {
     expect(serializeDocument(document)).toContain('data-anim-in="fade-up"')
   })
 })
+
+// A non-replaced inline box drops transforms, so every entrance except a plain
+// fade did nothing on a <span> or an <a>. Measured in a browser: block 28px,
+// span 0, anchor 0, <img> 28, inline-block 28.
+describe('an inline element still has to move', () => {
+  function mount(html, display) {
+    document.body.innerHTML = html
+    const el = document.body.firstElementChild
+    Object.defineProperty(el.ownerDocument, 'defaultView', {
+      configurable: true,
+      value: { getComputedStyle: () => ({ display }) },
+    })
+    return el
+  }
+
+  it('gives a plain inline element a box so the transform applies', () => {
+    const el = mount('<span>Logo</span>', 'inline')
+    applyElementMotion(el, { animIn: 'fade-up', animSpeed: 'normal' })
+    expect(el.style.display).toBe('inline-block')
+  })
+
+  it('does the same for a hover effect, which also moves things', () => {
+    const el = mount('<a href="#">Link</a>', 'inline')
+    applyElementMotion(el, { animHover: 'lift' })
+    expect(el.style.display).toBe('inline-block')
+  })
+
+  it('leaves a replaced element alone — it already takes transforms', () => {
+    const el = mount('<img alt="">', 'inline')
+    applyElementMotion(el, { animIn: 'fade-up', animSpeed: 'normal' })
+    expect(el.style.display).toBe('')
+  })
+
+  it('leaves anything that is not plain inline alone', () => {
+    for (const display of ['block', 'inline-block', 'flex', 'inline-flex', 'grid']) {
+      const el = mount('<div>x</div>', display)
+      applyElementMotion(el, { animIn: 'zoom', animSpeed: 'normal' })
+      expect(el.style.display, display).toBe('')
+    }
+  })
+
+  it('keeps the box while any motion remains, and gives it back when none does', () => {
+    const el = mount('<span class="logo">Logo</span>', 'inline')
+    applyElementMotion(el, { animIn: 'fade-up', animSpeed: 'normal' })
+    applyElementMotion(el, { animHover: 'lift' })
+
+    // Entrance gone, hover stays → the hover still needs the box.
+    applyElementMotion(el, { animIn: 'none' })
+    expect(el.style.display).toBe('inline-block')
+
+    applyElementMotion(el, { animHover: 'none' })
+    // Nothing left to transform → the element is exactly as it was found.
+    expect(el.outerHTML).toBe('<span class="logo">Logo</span>')
+  })
+
+  it('never touches a display the author set themselves', () => {
+    const el = mount('<span style="display:block">x</span>', 'block')
+    applyElementMotion(el, { animIn: 'fade', animSpeed: 'normal' })
+    applyElementMotion(el, { animIn: 'none' })
+    // Clearing removes only what the animation added; the author's own display
+    // is still theirs. (jsdom reserialises the attribute, so read the property.)
+    expect(el.style.display).toBe('block')
+    expect(el.hasAttribute('data-pwb-anim-inline')).toBe(false)
+  })
+})

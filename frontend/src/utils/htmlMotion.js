@@ -159,6 +159,44 @@ export function clearMotionRest(doc) {
 const HOVER_CLASS_PREFIX = 'pwb-hover-'
 const SPEED_MS = { fast: 450, normal: 750, slow: 1150 }
 
+// A non-replaced inline box DROPS transforms — silently. Every entrance except
+// plain fade is built from one, so on a <span> or an <a> the whole catalogue
+// degrades to a fade and the swatch the user picked was a lie. Measured in a
+// browser: block moved 28px, <span> and <a> moved 0, while <img> (replaced) and
+// an already-inline-block span both moved 28. So the fix is needed for exactly
+// one case, and giving it a box is the smallest thing that makes the chosen
+// animation the animation that plays.
+const INLINE_FIX_ATTR = 'data-pwb-anim-inline'
+const REPLACED_TAGS = new Set([
+  'img', 'video', 'audio', 'canvas', 'svg', 'iframe', 'embed', 'object',
+  'input', 'select', 'textarea', 'button', 'progress', 'meter',
+])
+
+function transformIsIgnored(el) {
+  if (REPLACED_TAGS.has(el.tagName.toLowerCase())) return false
+  const win = el.ownerDocument?.defaultView
+  if (!win) return false
+  try {
+    // inline-block / inline-flex / inline-grid all take transforms; only the
+    // plain inline box does not.
+    return win.getComputedStyle(el).display === 'inline'
+  } catch {
+    return false
+  }
+}
+
+function syncInlineFix(el) {
+  const wantsTransform = el.hasAttribute('data-anim-in') || el.classList.contains('pwb-hover')
+  if (wantsTransform && !el.hasAttribute(INLINE_FIX_ATTR) && transformIsIgnored(el)) {
+    el.setAttribute(INLINE_FIX_ATTR, '')
+    el.style.display = 'inline-block'
+  } else if (!wantsTransform && el.hasAttribute(INLINE_FIX_ATTR)) {
+    // Only ever removes what this added — the marker is the receipt.
+    el.removeAttribute(INLINE_FIX_ATTR)
+    el.style.removeProperty('display')
+  }
+}
+
 /** What motion this element already carries, in the same shape the panel uses. */
 export function readElementMotion(el) {
   if (!el || el.nodeType !== 1) return { animIn: 'none', animHover: 'none', animSpeed: 'normal' }
@@ -199,6 +237,9 @@ export function applyElementMotion(el, patch = {}) {
     if (!hover || hover === 'none') el.classList.remove('pwb-hover')
     else el.classList.add('pwb-hover', `${HOVER_CLASS_PREFIX}${hover}`)
   }
+  // Done last: it depends on the entrance AND the hover, so it can only be
+  // decided once both have been written.
+  syncInlineFix(el)
   // An empty style attribute left behind reads as a change in the saved file.
   if (el.getAttribute('style') === '') el.removeAttribute('style')
   if (el.getAttribute('class') === '') el.removeAttribute('class')

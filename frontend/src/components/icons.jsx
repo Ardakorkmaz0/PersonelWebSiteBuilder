@@ -368,3 +368,15 @@ export const InstagramIcon = (p) => (
     <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" stroke="none" />
   </Icon>
 )
+
+export const MaximizeIcon = (p) => (
+  <Icon {...p}>
+    <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
+  </Icon>
+)
+
+export const MinimizeIcon = (p) => (
+  <Icon {...p}>
+    <path d="M3 8h5V3M21 8h-5V3M3 16h5v5M21 16h-5v5" />
+  </Icon>
+)

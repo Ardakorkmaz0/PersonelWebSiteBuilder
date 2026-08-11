@@ -42,6 +42,9 @@ import {
   UndoIcon,
 } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
+import CanvasZoomControl from '../components/editor/CanvasZoomControl.jsx'
+import useFullscreenEditing from '../components/editor/useFullscreenEditing.js'
+import { readZoom, writeZoom } from '../components/editor/canvasZoom.js'
 import CanvasPreview from '../components/editor/CanvasPreview.jsx'
 import BrushControls from '../components/editor/BrushControls.jsx'
 import {
@@ -113,6 +116,7 @@ const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 const LAST_VIEWPORT_KEY = 'pwb_default_editor_viewport'
 const AI_PANEL_LAYOUT_KEY = 'pwb_ai_panel_layout'
 const BROWSER_FRAME_KEY = 'pwb_browser_frame'
+const CANVAS_ZOOM_KEY = 'pwb_canvas_zoom'
 const HTML_DEVICE_KEYS = {
   pc: 'pwb_last_html_pc_device',
   mobile: 'pwb_last_html_mobile_device',
@@ -556,8 +560,16 @@ export default function EditorPage() {
     try { return localStorage.getItem('pwb_right_open') !== '0' } catch { return true }
   })
   const [drawer, setDrawer] = useState(null) // 'left' | 'right' | null — narrow only
-  const leftOpen = isNarrow ? drawer === 'left' : deskLeftOpen
-  const rightOpen = isNarrow ? drawer === 'right' : deskRightOpen
+  const { fullscreen, toggleFullscreen } = useFullscreenEditing()
+  // Derived, not written: full screen borrows the rails rather than closing
+  // them, so leaving it restores whatever the user had open.
+  const leftOpen = !fullscreen && (isNarrow ? drawer === 'left' : deskLeftOpen)
+  const rightOpen = !fullscreen && (isNarrow ? drawer === 'right' : deskRightOpen)
+  // How big the component canvas is drawn, and what "fit" currently works out
+  // to — the canvas measures it, the toolbar shows it.
+  const [canvasZoom, setCanvasZoomState] = useState(() => readZoom(CANVAS_ZOOM_KEY))
+  const setCanvasZoom = (next) => { setCanvasZoomState(next); writeZoom(CANVAS_ZOOM_KEY, next) }
+  const [canvasFitScale, setCanvasFitScale] = useState(1)
   const setRail = (side, open) => {
     if (isNarrow) {
       setDrawer(open ? side : null)
@@ -2329,6 +2341,8 @@ export default function EditorPage() {
                   html={siteHtml}
                   deviceId={htmlDevice}
                   landscape={htmlLandscape}
+                  fullscreen={fullscreen}
+                  onToggleFullscreen={toggleFullscreen}
                   deviceControls={
                     <>
                       <div className="studio-segment shrink-0">
@@ -2699,6 +2713,15 @@ export default function EditorPage() {
                       </button>
                     </>
                   )}
+                  {canvasMode === 'edit' && (
+                    <CanvasZoomControl
+                      zoom={canvasZoom}
+                      fitScale={canvasFitScale}
+                      onZoom={setCanvasZoom}
+                      fullscreen={fullscreen}
+                      onToggleFullscreen={toggleFullscreen}
+                    />
+                  )}
                   <div className="relative ml-auto shrink-0">
                     <button
                       type="button"
@@ -2800,6 +2823,8 @@ export default function EditorPage() {
                 )}
                 {canvasMode === 'edit' ? (
                   <Canvas
+                    zoom={canvasZoom}
+                    onFitScale={setCanvasFitScale}
                     brushMode={brushMode}
                     brushColor={brushColor}
                     brushTarget={brushTarget}

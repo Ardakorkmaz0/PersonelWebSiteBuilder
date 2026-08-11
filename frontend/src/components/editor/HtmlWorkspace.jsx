@@ -54,6 +54,8 @@ import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
 import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
 import { applyElementMotion, applyMotionRest, clearMotionRest } from '../../utils/htmlMotion.js'
+import CanvasZoomControl from './CanvasZoomControl.jsx'
+import { readZoom, writeZoom, zoomScale } from './canvasZoom.js'
 import BrushControls from './BrushControls.jsx'
 import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
@@ -241,6 +243,7 @@ function scrollOnceScript(index) {
 
 // Editor-only extras appended to the view srcDoc (kept out of saved HTML —
 // saving reads the html prop / edit DOM, never the view document).
+const HTML_ZOOM_KEY = 'pwb_html_canvas_zoom'
 const HTML_RESIZE_OVERLAY_ATTR = 'data-pwb-resize-overlay'
 const HTML_RESIZE_MIN = 20
 const HTML_RESIZE_EDGE = 14
@@ -445,6 +448,10 @@ function HtmlWorkspace({
   // Device frame picker (PC/Mobile + size dropdown) rendered by the editor —
   // lives in this toolbar so the single-row app header stays uncluttered.
   deviceControls = null,
+  // Full screen is the editor's business (it hides the rails), so the state
+  // lives there and the workspace only renders the switch.
+  fullscreen = false,
+  onToggleFullscreen,
   browserFrame = false,
   onBrowserFrameToggle,
   browserSiteTitle = 'My Site',
@@ -542,6 +549,11 @@ function HtmlWorkspace({
   // happens before the iframe body exists).
   const [loadTick, setLoadTick] = useState(0)
   const [linkHint, setLinkHint] = useState(null) // link-tool guidance text
+  // How big the page is drawn, remembered across sessions. Picking a device
+  // wider than the editor area used to shrink everything to fit, so the size
+  // you set was never the size you saw.
+  const [zoom, setZoomState] = useState(() => readZoom(HTML_ZOOM_KEY))
+  const setZoom = (next) => { setZoomState(next); writeZoom(HTML_ZOOM_KEY, next) }
   // Show content whose reveal never ran at its resting state. On by default:
   // an uploaded page that hides half of itself for a scroll animation is
   // otherwise half-missing in the editor, and you cannot edit what is not
@@ -1077,7 +1089,10 @@ function HtmlWorkspace({
   const pageH = mobileBrowser ? Math.max(200, contentH - mobileBrowserChromeH(phone)) : contentH
   const previewW = contentW + (framedPhone ? phoneFrameW(phone) : desktopBrowser ? browserFrameW() : 0)
   const previewH = contentH + (framedPhone ? phoneFrameH(phone) : desktopBrowser ? browserFrameH() : 0)
-  const scale = Math.min(1, availableW / previewW || 1, availableH / previewH || 1)
+  // "Fit" keeps its old ceiling of 1:1 — the page is not blown up just because
+  // there is room. Anything beyond that is the zoom control, chosen on purpose.
+  const fitScale = Math.min(1, availableW / previewW || 1, availableH / previewH || 1)
+  const scale = zoomScale(zoom, fitScale)
 
   // ----- placement: splice the component's snippet into the document ---------
   const placeAt = useCallback((clientX, clientY) => {
@@ -1572,6 +1587,15 @@ function HtmlWorkspace({
             )}
           </div>
           {deviceControls}
+          {mode !== 'source' && mode !== 'live' && (
+            <CanvasZoomControl
+              zoom={zoom}
+              fitScale={fitScale}
+              onZoom={setZoom}
+              fullscreen={fullscreen}
+              onToggleFullscreen={onToggleFullscreen}
+            />
+          )}
           {/* Phones get the frame too — a browser runs there as well, and its
               chrome is exactly what decides how much page fits on screen. Only
               a landscape phone is left out: there is no bezel to put it in. */}

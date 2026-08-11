@@ -14,6 +14,7 @@ import BrowserFrame from './BrowserFrame.jsx'
 import MobileBrowserChrome from './MobileBrowserChrome.jsx'
 import { CANVAS_SCROLLER_ID } from '../../utils/dragAutoScroll.js'
 import { CANVAS_SELECTION_Z } from './spotlight.js'
+import { zoomScale } from './canvasZoom.js'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
@@ -69,6 +70,8 @@ export default function Canvas({
   onBrowserFaviconEdit,
   onBrowserAddressChange,
   onSpotlight,
+  zoom = 'fit',
+  onFitScale,
 }) {
   const { t } = useLanguage()
   const page = useEditorStore(selectCurrentPage)
@@ -172,11 +175,26 @@ export default function Canvas({
   // now, so a short editor window scales the whole device down instead of
   // letting it run off the bottom. The desktop artboard still fits on width
   // alone: it is as tall as the page and scrolls in the workspace.
-  const canvasScale = Math.min(
+  // What "fit" lands on. Still capped at 1:1 so the default keeps behaving the
+  // way it always has — an artboard is not silently blown up because there is
+  // room. Going bigger is the zoom control's job, and it is explicit.
+  const fitScale = Math.min(
     1,
     editorWidth ? editorWidth / frameW : 1,
     isMobile && editorHeight ? editorHeight / frameH : 1,
   )
+  // Everything below already divides pointer coordinates by canvasScale, so
+  // feeding the chosen zoom through the same variable keeps hit-testing,
+  // marquee selection and the counter-scaled toolbars correct at any zoom.
+  const canvasScale = zoomScale(zoom, fitScale)
+
+  // The toolbar owns the control but only the canvas can measure the fit, so
+  // the number it should show is reported back up. Through a ref, so an inline
+  // callback from the parent cannot make this effect re-run every render and
+  // set state in a loop.
+  const fitScaleCbRef = useRef(onFitScale)
+  useEffect(() => { fitScaleCbRef.current = onFitScale }, [onFitScale])
+  useEffect(() => { fitScaleCbRef.current?.(fitScale) }, [fitScale])
 
   // The action bar is a sibling of the selected DOM node, not a child of the
   // page/header. Measuring the node's real screen rectangle means this stays
@@ -630,7 +648,7 @@ export default function Canvas({
           <div
             style={{
               width: frameW,
-              transform: canvasScale < 1 ? `scale(${canvasScale})` : undefined,
+              transform: canvasScale === 1 ? undefined : `scale(${canvasScale})`,
               transformOrigin: 'top left',
             }}
           >
@@ -679,7 +697,7 @@ export default function Canvas({
         <div
           style={{
             width: frameW,
-            transform: canvasScale < 1 ? `scale(${canvasScale})` : undefined,
+            transform: canvasScale === 1 ? undefined : `scale(${canvasScale})`,
             transformOrigin: 'top left',
           }}
         >

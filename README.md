@@ -63,7 +63,11 @@ If PowerShell blocks the script, run it explicitly:
 powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-Then open http://localhost:5173 (backend runs on http://127.0.0.1:8000).
+Then open http://localhost:5173 (backend runs on http://127.0.0.1:8001).
+
+> The backend uses **8001**, not Django's usual 8000. 8000 is what every Django
+> project defaults to, so on a machine running more than one the first to start
+> takes the port and the others end up talking to the wrong API.
 
 ### Run manually
 
@@ -75,7 +79,7 @@ python -m venv .venv
 .venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py runserver        # http://127.0.0.1:8000
+python manage.py runserver 127.0.0.1:8001   # http://127.0.0.1:8001
 ```
 
 Frontend:

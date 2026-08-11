@@ -1,7 +1,10 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore.js'
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api'
+// 8001, not Django's 8000: that port is the default for every Django project on
+// the machine, so whichever one starts first wins it and the others silently
+// talk to a stranger's API. Overridable with VITE_API_URL.
+const baseURL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api'
 
 const client = axios.create({ baseURL })
 

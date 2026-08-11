@@ -161,7 +161,7 @@ export const LOCAL_PROXY_PATH = '/api/ai/local'
 export function resolveBackendBase() {
   const envBase = import.meta.env?.VITE_API_URL
   if (envBase) return envBase.replace(/\/api\/?$/, '')
-  return 'http://127.0.0.1:8000'
+  return 'http://127.0.0.1:8001'
 }
 
 // Score how well-suited a model name is to function-calling. Higher is

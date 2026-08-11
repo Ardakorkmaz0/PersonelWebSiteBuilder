@@ -19,6 +19,21 @@ function Test-Port($port) {
   } catch { return $false }
 }
 
+# Is the thing on that port OUR backend, or somebody else's?
+#
+# "Port is busy" used to be read as "we are already running", and that is how a
+# different Django project on the same machine got mistaken for this one: the
+# script skipped starting the backend, the app talked to a stranger's API, and
+# every request came back 404 as a "network error" with nothing to point at.
+# So the port is asked what it is, not just whether it answers.
+function Test-OurBackend($port) {
+  try {
+    $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/public/config/" `
+         -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+    return $r.StatusCode -eq 200
+  } catch { return $false }
+}
+
 Write-Host "==> Starting PersonelWebSiteBuilder..." -ForegroundColor Cyan
 
 # --- Backend setup (first run only) ---
@@ -36,14 +51,23 @@ if (-not (Test-Path (Join-Path $frontend 'node_modules'))) {
 }
 
 # --- Backend server ---
-if (Test-Port 8000) {
-  Write-Host "==> Backend is already running (port 8000), skipping." -ForegroundColor DarkGray
+# 8001, not Django's 8000: 8000 is what every Django project defaults to, so on
+# a machine with more than one the first to start takes it and the rest quietly
+# point at the wrong API.
+$backendPort = 8001
+if (Test-OurBackend $backendPort) {
+  Write-Host "==> Backend is already running (port $backendPort), skipping." -ForegroundColor DarkGray
+} elseif (Test-Port $backendPort) {
+  Write-Host "==> Port $backendPort is taken by something that is NOT this backend." -ForegroundColor Red
+  Write-Host "    Stop whatever is on it, or set a free port in start.ps1 and frontend/.env" -ForegroundColor Red
+  Write-Host "    (VITE_API_URL=http://127.0.0.1:<port>/api)." -ForegroundColor Red
+  exit 1
 } else {
-  Write-Host "==> Starting backend -> http://127.0.0.1:8000" -ForegroundColor Green
+  Write-Host "==> Starting backend -> http://127.0.0.1:$backendPort" -ForegroundColor Green
   $cmd = "Set-Location '$backend'; " +
-         "Write-Host 'BACKEND  http://127.0.0.1:8000' -ForegroundColor Green; " +
+         "Write-Host 'BACKEND  http://127.0.0.1:$backendPort' -ForegroundColor Green; " +
          "& '$venvPy' manage.py migrate; " +
-         "& '$venvPy' manage.py runserver 127.0.0.1:8000"
+         "& '$venvPy' manage.py runserver 127.0.0.1:$backendPort"
   Start-Process powershell -ArgumentList '-NoExit', '-Command', $cmd
 }
 

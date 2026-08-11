@@ -350,23 +350,14 @@ const INTERACTIVE_STYLE = `[data-builder-tabs] [role="tab"]{appearance:none;back
 // <head>, a page with two revealed elements ended up unarmed with neither
 // revealed. So the two halves are emitted separately and land in different
 // places.
-function runtimeHeadTags() {
-  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style><style data-builder-motion-style>${MOTION_CSS}</style>`
-}
-
-function runtimeBodyTags() {
-  return `<script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}<script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
-}
-
-// The editor-only half: the readonly-enforcement runtime WITHOUT the shared
-// interactive shim, for documents that already carry the shim.
-function editorOnlyHeadTags() {
-  return `<style data-builder-runtime-style>${RUNTIME_STYLE}</style>`
-}
-
-function editorOnlyBodyTags() {
-  return `<script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}`
-}
+// One tag per capability, so a document can be given the halves it is missing
+// instead of all of them or none.
+const RUNTIME_STYLE_TAG = `<style data-builder-runtime-style>${RUNTIME_STYLE}</style>`
+const MOTION_STYLE_TAG = `<style data-builder-motion-style>${MOTION_CSS}</style>`
+const INTERACTIVE_STYLE_TAG = `<style data-builder-interactive-style>${INTERACTIVE_STYLE}</style>`
+const RUNTIME_SCRIPT_TAG = `<script data-builder-runtime-script>${RUNTIME_SCRIPT}${SCRIPT_END}`
+const INTERACTIVE_TAG = `<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}`
+const MOTION_OBSERVER_TAG = `<script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
 
 // String.prototype.replace expands `$&`, `$1`, "$'" and friends INSIDE the
 // replacement string. The runtime scripts contain `$&` (an escaping helper), so
@@ -379,7 +370,7 @@ const literal = (text) => () => text
 // not need the editor's readonly enforcement — only the runtime behaviours that
 // make tabs/modals/dropdowns work in the published page.
 export function builderInteractiveTags() {
-  return `<style data-builder-interactive-style>${INTERACTIVE_STYLE}</style><script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}<style data-builder-motion-style>${MOTION_CSS}</style><script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
+  return INTERACTIVE_STYLE_TAG + INTERACTIVE_TAG + MOTION_STYLE_TAG + MOTION_OBSERVER_TAG
 }
 
 // Split-project exports share these assets across every page instead of
@@ -392,17 +383,33 @@ export function builderInteractiveJs() {
   return `${MOTION_ARM_JS}\n${INTERACTIVE_SCRIPT}\n${MOTION_OBSERVER_JS}`
 }
 
-// Does this document already carry the interactive runtime? Anything the
-// builder itself wrote does — both exporters embed builderInteractiveTags —
-// so re-injecting on display would ship it twice.
+// Does this document already carry the interactive shim / the motion runtime?
+//
+// Asked SEPARATELY, and that separation is the whole point. They used to be one
+// question — "did the builder write this?" — and a yes skipped both. Every page
+// this builder has ever exported carries the shim marker, so on those pages the
+// motion stylesheet and the reveal observer were never injected and
+// `data-anim-in` was an inert attribute: nothing hidden, nothing revealed, in
+// Edit and in View alike, whatever element it was put on. Measured: a document
+// with the shim marker and no motion tags came back from withBuilderRuntimeHtml
+// with neither the stylesheet nor the observer.
 function hasInteractiveRuntime(html) {
   return /data-builder-interactive\b/.test(String(html || ''))
 }
 
+function hasMotionRuntime(html) {
+  return /data-builder-motion\b/.test(String(html || ''))
+}
+
 export function withBuilderInteractiveHtml(html) {
-  if (hasInteractiveRuntime(html)) return String(html || '')
-  const inject = builderInteractiveTags()
   const out = String(html || '')
+  const shim = hasInteractiveRuntime(out)
+  const motion = hasMotionRuntime(out)
+  if (shim && motion) return out
+  // Only what is missing: an older export has the shim but no motion, and a
+  // second shim would double-bind every handler it installs.
+  const inject = (shim ? '' : INTERACTIVE_STYLE_TAG + INTERACTIVE_TAG)
+    + (motion ? '' : MOTION_STYLE_TAG + MOTION_OBSERVER_TAG)
   if (/<style[^>]*data-pwb-embed-reset/i.test(out) && /<\/head>/i.test(out)) {
     return out.replace(/<\/head>/i, literal(inject + '</head>'))
   }
@@ -415,10 +422,15 @@ export function withBuilderRuntimeHtml(html) {
   // The editor's readonly runtime is a superset of the interactive one, so a
   // document that already has the interactive half only needs the editor part
   // — injecting the whole thing would duplicate the shared handlers.
-  const shimmed = hasInteractiveRuntime(html)
-  const head = shimmed ? editorOnlyHeadTags() : runtimeHeadTags()
-  const body = shimmed ? editorOnlyBodyTags() : runtimeBodyTags()
   let out = String(html || '')
+  const shim = hasInteractiveRuntime(out)
+  const motion = hasMotionRuntime(out)
+  // Styles in <head> for the first paint; scripts that READ the document at the
+  // end of <body>, where the elements they look for already exist.
+  const head = RUNTIME_STYLE_TAG + (motion ? '' : MOTION_STYLE_TAG)
+  const body = RUNTIME_SCRIPT_TAG
+    + (shim ? '' : INTERACTIVE_TAG)
+    + (motion ? '' : MOTION_OBSERVER_TAG)
   if (/<\/head>/i.test(out)) out = out.replace(/<\/head>/i, literal(head + '</head>'))
   else if (/<head[^>]*>/i.test(out)) out = out.replace(/<head[^>]*>/i, (m) => m + head)
   else out = head + out

@@ -260,3 +260,42 @@ describe('splicing the runtime into a document', () => {
     expect(out).toContain('data-builder-motion')
   })
 })
+
+// The bug that made "apply an animation" do nothing on a real site: every page
+// this builder exports carries the interactive-shim marker, and the guard read
+// that as "this document has the whole runtime". It does not necessarily have
+// the motion half, and without it data-anim-in is an inert attribute.
+describe('a document that has some of the runtime already', () => {
+  const withShim = `<!DOCTYPE html><html><head><title>t</title></head><body>
+    <h1 data-anim-in="fade-up">Hi</h1>
+    <script data-builder-interactive>/* an older export */</script></body></html>`
+
+  it('still gets the motion half it is missing', () => {
+    const out = withBuilderRuntimeHtml(withShim)
+    expect(out).toContain('data-builder-motion-style')
+    expect(out).toContain('data-builder-motion>')
+  })
+
+  it('does not get a second copy of the shim it already has', () => {
+    const out = withBuilderRuntimeHtml(withShim)
+    expect(out.split('data-builder-interactive>').length - 1).toBe(1)
+  })
+
+  it('is left completely alone once it has both', () => {
+    const complete = withBuilderInteractiveHtml('<html><head></head><body><p>x</p></body></html>')
+    expect(withBuilderInteractiveHtml(complete)).toBe(complete)
+  })
+
+  it('tops up the published page the same way', () => {
+    const out = withBuilderInteractiveHtml(withShim)
+    expect(out).toContain('data-builder-motion-style')
+    expect(out.split('data-builder-interactive>').length - 1).toBe(1)
+  })
+
+  it('gives a plain uploaded page everything', () => {
+    const out = withBuilderRuntimeHtml('<html><head></head><body><h1 data-anim-in="zoom">Hi</h1></body></html>')
+    expect(out).toContain('data-builder-motion-style')
+    expect(out).toContain('data-builder-motion>')
+    expect(out).toContain('data-builder-interactive>')
+  })
+})

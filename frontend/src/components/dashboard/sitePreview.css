@@ -1,0 +1,23 @@
+/* Loading shimmer for site thumbnails (and the Explore skeleton cards). */
+.site-preview-shimmer {
+  display: block;
+  background:
+    linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in srgb, var(--studio-text) 7%, transparent) 50%,
+      transparent 80%
+    ),
+    var(--studio-control);
+  background-size: 220% 100%, 100% 100%;
+  animation: site-preview-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes site-preview-shimmer {
+  from { background-position: 120% 0, 0 0; }
+  to { background-position: -120% 0, 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-preview-shimmer { animation: none; }
+}

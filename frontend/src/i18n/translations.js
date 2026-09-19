@@ -2363,6 +2363,8 @@ export const TURKISH_TRANSLATIONS = {
   'Discover today': 'Bugün keşfet',
   'Updated from community activity': 'Topluluk hareketlerine göre güncellendi',
   'Featured': 'Öne çıkan',
+  'Loading preview…': 'Önizleme yükleniyor…',
+  'No preview': 'Önizleme yok',
   'By {name}': '{name} tarafından',
   'Trending now': 'Şu an popüler',
   'Recently published': 'Yeni yayınlananlar',

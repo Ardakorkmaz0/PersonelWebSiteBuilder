@@ -1,0 +1,284 @@
+/* Explore feed: image-first site cards, the feed grid and its category rail.
+   Colours come from the studio tokens so light and dark themes both work; the
+   glass controls sit on top of a site's own thumbnail, so they use their own
+   dark translucent fill in either theme. */
+
+/* ---- grid --------------------------------------------------------------- */
+
+.explore-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: dense;
+  gap: 1.25rem;
+}
+@media (min-width: 640px) {
+  .explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .explore-grid > .explore-card-featured { grid-column: span 2; }
+}
+@media (min-width: 1100px) {
+  .explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Bento: the featured site takes two columns and two rows, the next two
+     cards stack beside it. */
+  .explore-grid > .explore-card-featured { grid-row: span 2; }
+}
+
+/* ---- category rail ------------------------------------------------------- */
+
+.explore-rail {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.25rem;
+  margin: 0 -0.25rem;
+  scrollbar-width: none;
+}
+.explore-rail::-webkit-scrollbar { display: none; }
+.explore-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-panel-raised);
+  color: var(--studio-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.55rem 0.95rem;
+  transition: 160ms var(--studio-motion-ease, ease);
+  transition-property: background-color, border-color, color, box-shadow;
+}
+.explore-chip:hover {
+  border-color: var(--studio-border-strong);
+  color: var(--studio-text);
+}
+.explore-chip[aria-pressed='true'] {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent);
+  color: #fff;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--studio-accent) 30%, transparent);
+}
+.explore-chip:focus-visible {
+  outline: 2px solid var(--studio-focus-ring, var(--studio-accent));
+  outline-offset: 2px;
+}
+
+/* ---- card ---------------------------------------------------------------- */
+
+.explore-card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--studio-border);
+  border-radius: 1.25rem;
+  background: var(--studio-panel-raised);
+  box-shadow: 0 1px 2px rgba(15, 20, 35, 0.05);
+  isolation: isolate;
+  transition: 240ms cubic-bezier(0.2, 0.75, 0.2, 1);
+  transition-property: transform, box-shadow, border-color;
+}
+.explore-card:hover,
+.explore-card:focus-within {
+  border-color: color-mix(in srgb, var(--studio-accent) 35%, var(--studio-border));
+  box-shadow: 0 2px 4px rgba(15, 20, 35, 0.06), 0 22px 48px rgba(15, 20, 35, 0.16);
+  transform: translateY(-4px);
+}
+
+.explore-card-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--studio-control);
+  border-bottom: 1px solid var(--studio-border);
+}
+.explore-card-featured .explore-card-media { aspect-ratio: 16 / 8; }
+@media (min-width: 1100px) {
+  .explore-card-featured .explore-card-media {
+    aspect-ratio: auto;
+    flex: 1 1 auto;
+    min-height: 16rem;
+  }
+}
+
+.explore-card-preview {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* A soft shade under the floating actions so they read on any thumbnail. */
+.explore-card-media::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 45%;
+  background: linear-gradient(to top, rgba(8, 10, 18, 0.55), transparent);
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+/* Glass controls: they sit on the site's own thumbnail, so a dark translucent
+   fill in either theme. */
+.explore-card-action,
+.explore-card-fav {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(12, 14, 24, 0.55);
+  color: #fff;
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  backdrop-filter: blur(10px) saturate(1.4);
+}
+
+.explore-card-fav {
+  position: absolute;
+  z-index: 2;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border-radius: 999px;
+  transition: 160ms ease;
+  transition-property: transform, background-color, color, opacity;
+}
+.explore-card-fav:hover { transform: scale(1.08); }
+.explore-card-fav-active { color: #fbbf24; }
+/* The star shows on hover / focus, and stays once the site is a favourite —
+   on every card at once it sat over each site's own navigation. */
+.explore-card-fav:not(.explore-card-fav-active) { opacity: 0; }
+.explore-card:hover .explore-card-fav,
+.explore-card:focus-within .explore-card-fav { opacity: 1; }
+
+.explore-card-actions {
+  position: absolute;
+  z-index: 2;
+  right: 0.7rem;
+  bottom: 0.7rem;
+  left: 0.7rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: 220ms cubic-bezier(0.2, 0.75, 0.2, 1);
+  transition-property: opacity, transform;
+}
+.explore-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.55rem 0.8rem;
+  white-space: nowrap;
+  transition: background-color 160ms ease;
+}
+.explore-card-action:hover:not(:disabled) { background: rgba(12, 14, 24, 0.75); }
+.explore-card-action:disabled { opacity: 0.7; cursor: progress; }
+.explore-card-action-primary {
+  border-color: color-mix(in srgb, var(--studio-accent) 60%, white);
+  background: var(--studio-accent);
+}
+.explore-card-action-primary:hover:not(:disabled) { background: var(--studio-accent-hover); }
+
+.explore-card:hover .explore-card-actions,
+.explore-card:focus-within .explore-card-actions {
+  opacity: 1;
+  transform: none;
+}
+.explore-card:hover .explore-card-media::after,
+.explore-card:focus-within .explore-card-media::after { opacity: 1; }
+
+/* Touch screens have no hover: keep the actions and their shade on. */
+@media (hover: none) {
+  .explore-card-actions { opacity: 1; transform: none; }
+  .explore-card-fav:not(.explore-card-fav-active) { opacity: 1; }
+  .explore-card-media::after { opacity: 1; }
+}
+
+.explore-card-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem 1rem;
+}
+.explore-card-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: -0.3rem;
+  color: var(--studio-text-faint);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.explore-card-kicker-accent { color: var(--studio-accent-hover); }
+.explore-card-title { min-width: 0; }
+.explore-card-title h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--studio-text);
+  font-size: 0.975rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 160ms ease;
+}
+.explore-card-featured .explore-card-title h2 { font-size: 1.25rem; }
+.explore-card-title:hover h2 { color: var(--studio-accent-hover); }
+
+.explore-card-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.explore-card-owner {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--studio-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+a.explore-card-owner:hover { color: var(--studio-text); }
+.explore-card-stats {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 0.75rem;
+  color: var(--studio-text-faint);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.explore-card-stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ---- skeleton ------------------------------------------------------------ */
+
+.explore-card-skeleton { pointer-events: none; }
+.explore-card-skeleton-line {
+  display: block;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: var(--studio-control);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explore-card,
+  .explore-card-actions,
+  .explore-card-fav { transition: none; }
+  .explore-card:hover,
+  .explore-card:focus-within { transform: none; }
+}

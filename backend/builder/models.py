@@ -114,6 +114,12 @@ class Site(models.Model):
         default=_domain_verification_token,
         editable=False,
     )
+    # A moderator's takedown, kept apart from `published` on purpose: that one
+    # is the OWNER's draft/live switch, and a takedown that only flipped it was
+    # undone by the owner's next save. While this is set the site is off every
+    # public surface and cannot be published again; only an admin lifts it.
+    moderation_blocked = models.BooleanField(default=False)
+    moderated_at = models.DateTimeField(null=True, blank=True)
     # How many times the public /site/<slug> page has been viewed (by anyone
     # other than the owner).
     view_count = models.PositiveIntegerField(default=0)

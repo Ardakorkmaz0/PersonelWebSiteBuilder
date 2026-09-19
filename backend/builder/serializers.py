@@ -130,6 +130,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
             {
                 'id': s.id, 'title': s.title, 'slug': s.slug,
                 'published': s.published, 'view_count': s.view_count,
+                'moderation_blocked': s.moderation_blocked,
                 'favorite_count': len(s.favorited_by.all()),
                 'category': s.category, 'updated_at': s.updated_at,
                 'open_report_count': sum(1 for r in s.reports.all() if r.status == 'open'),
@@ -460,11 +461,23 @@ class SiteSerializer(serializers.ModelSerializer):
         fields = ('id', 'title', 'slug', 'schema', 'html', 'published',
                   'category', 'tags', 'site_options', 'review_token',
                   'custom_domain', 'domain_status', 'domain_verification_token',
-                  'view_count', 'created_at', 'updated_at')
+                  'moderation_blocked', 'view_count', 'created_at', 'updated_at')
+        # custom_domain is changed only through /sites/<id>/domain/, which
+        # normalises and validates it and moves domain_status along with it.
+        # Writable here, a plain PATCH stored any string ("https://invalid
+        # domain/path") and skipped both.
         read_only_fields = (
-            'id', 'slug', 'review_token', 'domain_status',
-            'domain_verification_token', 'view_count', 'created_at', 'updated_at',
+            'id', 'slug', 'review_token', 'custom_domain', 'domain_status',
+            'domain_verification_token', 'moderation_blocked', 'view_count',
+            'created_at', 'updated_at',
         )
+
+    # `published` stays the owner's own switch and is saved as sent, even
+    # while a moderator's block is on: every public way in (access.py) checks
+    # the block too, so a blocked site stays off the platform whatever the
+    # switch says. Refusing the value instead would fail every save — auto
+    # saves included — from an editor that still shows the site as live.
+    # `moderation_blocked` comes back in the response so the editor can say so.
 
     def validate_schema(self, value):
         return validate_and_clean_schema(value)

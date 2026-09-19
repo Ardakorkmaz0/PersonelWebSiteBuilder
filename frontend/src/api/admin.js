@@ -20,7 +20,8 @@ export const resolveReport = (reportId, action /* 'resolve' | 'dismiss' */) =>
 export const suspendUser = (userId, suspend) =>
   client.post(`/admin/users/${userId}/suspend/`, { suspend }).then((r) => r.data)
 
-// Take down a site: 'unpublish' (reversible) or 'delete' (hard).
+// Take down a site: 'unpublish' (a moderation block the owner cannot lift),
+// 'reinstate' (lifts it; the site comes back unpublished) or 'delete' (hard).
 export const moderateSite = (siteId, action) =>
   client.post(`/admin/sites/${siteId}/moderate/`, { action }).then((r) => r.data)
 

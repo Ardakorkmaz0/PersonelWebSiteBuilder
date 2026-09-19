@@ -182,7 +182,9 @@ function UsersTab() {
   async function onModerate(u, site, action) {
     const msg = action === 'delete'
       ? t('Permanently DELETE "{title}"? This cannot be undone.', { title: site.title })
-      : t('Unpublish "{title}"? It will be removed from Explore and its public URL (the owner keeps the draft).', { title: site.title })
+      : action === 'reinstate'
+        ? t('Reinstate "{title}"? The takedown is lifted and the owner can publish it again.', { title: site.title })
+        : t('Unpublish "{title}"? It will be removed from Explore and its public URL (the owner keeps the draft).', { title: site.title })
     if (!window.confirm(msg)) return
     setBusy(site.id)
     setError('')
@@ -193,7 +195,10 @@ function UsersTab() {
         if (action === 'delete') {
           return { ...x, sites: x.sites.filter((s) => s.id !== site.id), site_count: x.site_count - 1 }
         }
-        return { ...x, sites: x.sites.map((s) => (s.id === site.id ? { ...s, published: false, open_report_count: 0 } : s)) }
+        const patch = action === 'reinstate'
+          ? { moderation_blocked: false }
+          : { published: false, moderation_blocked: true, open_report_count: 0 }
+        return { ...x, sites: x.sites.map((s) => (s.id === site.id ? { ...s, ...patch } : s)) }
       }))
     } catch (e) {
       setError(apiError(e))
@@ -295,13 +300,19 @@ function UsersTab() {
                           <div className="text-xs text-[#9ca3af]">/site/{s.slug}</div>
                         </td>
                         <td className="px-3 py-2 text-xs">
-                          <span
-                            className={`rounded-full px-2 py-0.5 font-semibold ${
-                              s.published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
-                            }`}
-                          >
-                            {s.published ? t('Published') : t('Draft')}
-                          </span>
+                          {s.moderation_blocked ? (
+                            <span className="studio-status-warning rounded-full border px-2 py-0.5 font-semibold">
+                              {t('Taken down')}
+                            </span>
+                          ) : (
+                            <span
+                              className={`rounded-full px-2 py-0.5 font-semibold ${
+                                s.published ? 'bg-[#dcfce7] text-[#15803d]' : 'bg-[#f3f4f6] text-[#6b7280]'
+                              }`}
+                            >
+                              {s.published ? t('Published') : t('Draft')}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-xs text-[#9ca3af]">
                           <span className="inline-flex items-center gap-3">
@@ -314,13 +325,22 @@ function UsersTab() {
                             {s.published && (
                               <Link to={`/site/${s.slug}`} className="font-medium text-[#4f46e5] hover:underline">{t('View')}</Link>
                             )}
-                            {s.published && (
+                            {s.published && !s.moderation_blocked && (
                               <button
                                 onClick={() => onModerate(u, s, 'unpublish')}
                                 disabled={busy === s.id}
                                 className="font-medium text-[var(--studio-warning)] hover:underline disabled:opacity-50"
                               >
                                 {t('Unpublish')}
+                              </button>
+                            )}
+                            {s.moderation_blocked && (
+                              <button
+                                onClick={() => onModerate(u, s, 'reinstate')}
+                                disabled={busy === s.id}
+                                className="font-medium text-[#4f46e5] hover:underline disabled:opacity-50"
+                              >
+                                {t('Reinstate')}
                               </button>
                             )}
                             <button

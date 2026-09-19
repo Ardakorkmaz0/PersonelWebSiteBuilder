@@ -35,6 +35,7 @@ from django.db.models.functions import TruncDate
 
 from . import runtime_config
 from .api_errors import error_response
+from .access import is_public, is_reachable, public_sites
 from .models import (
     Favorite,
     FormSubmission,
@@ -777,16 +778,10 @@ class PublicSiteView(APIView):
         is_owner = (
             request.user.is_authenticated and site.owner_id == request.user.id
         )
-        # A suspended owner's published work is off the platform, same as on the
-        # profile page and in search — otherwise "suspend" only blocked login
-        # while every published URL kept serving. The owner still reaches their
-        # own site so nothing is lost to them.
-        if not site.owner.is_active and not is_owner:
-            return Response(
-                {'detail': 'Site not found or not published.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if not site.published and not is_owner:
+        # Unpublished, taken down by a moderator, or owned by a suspended
+        # account: off the platform (see access.py). The owner still reaches
+        # their own site so nothing is lost to them.
+        if not is_owner and not is_public(site):
             return Response(
                 {'detail': 'Site not found or not published.'},
                 status=status.HTTP_404_NOT_FOUND,
@@ -810,7 +805,7 @@ class SiteViewCountView(APIView):
 
     def post(self, request, slug):
         is_owner = request.user.is_authenticated
-        qs = Site.objects.filter(slug=slug, published=True, owner__is_active=True)
+        qs = public_sites().filter(slug=slug)
         if is_owner:
             qs = qs.exclude(owner_id=request.user.id)
         # F() so concurrent views don't clobber each other; update() touches the
@@ -846,7 +841,9 @@ class PublicFormSubmissionView(APIView):
 
     def post(self, request, slug):
         try:
-            site = Site.objects.get(slug=slug, published=True)
+            # Same rule as the page: a suspended owner's or taken-down site
+            # takes no more messages.
+            site = public_sites().get(slug=slug)
         except Site.DoesNotExist:
             return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
         serializer = PublicFormSubmissionSerializer(data=request.data)
@@ -867,10 +864,13 @@ class PublicReviewView(APIView):
     permission_classes = [AllowAny]
 
     def _site(self, token):
+        # A review link works on drafts, but not past a suspension or a
+        # moderator's takedown — it used to keep serving both.
         try:
-            return Site.objects.get(review_token=token)
+            site = Site.objects.select_related('owner').get(review_token=token)
         except (Site.DoesNotExist, ValueError):
             return None
+        return site if is_reachable(site) else None
 
     def get(self, request, token):
         site = self._site(token)
@@ -929,7 +929,7 @@ class PublicProfileView(APIView):
         profile, _ = Profile.objects.get_or_create(user=user)
         prof = ProfileSerializer(profile, context={'request': request}).data
         sites = (
-            Site.objects.filter(owner=user, published=True)
+            public_sites().filter(owner=user)
             .select_related('owner', 'owner__profile')
             .annotate(favorite_count=Count('favorited_by'))
             .order_by('-hot_score', '-updated_at')
@@ -967,7 +967,7 @@ class ExploreView(ListAPIView):
         # already behave that way. Without it the feed — the most visible
         # surface of all — kept showing a suspended creator's sites.
         qs = (
-            Site.objects.filter(published=True, owner__is_active=True)
+            public_sites()
             .select_related('owner', 'owner__profile')
             .annotate(favorite_count=Count('favorited_by'))
             .order_by('-hot_score', '-updated_at')
@@ -1006,7 +1006,7 @@ class GlobalSearchView(APIView):
             return Response({'query': query, 'sites': [], 'users': []})
 
         sites = list(
-            Site.objects.filter(published=True, owner__is_active=True)
+            public_sites()
             .filter(
                 Q(title__icontains=query)
                 | Q(owner__username__icontains=query)
@@ -1027,7 +1027,7 @@ class GlobalSearchView(APIView):
             .annotate(
                 published_site_count=Count(
                     'sites',
-                    filter=Q(sites__published=True),
+                    filter=Q(sites__published=True, sites__moderation_blocked=False),
                     distinct=True,
                 ),
             )
@@ -1055,7 +1055,11 @@ class FavoritesView(APIView):
         )
         by_id = {
             s.id: s
+            # A favourite of a site that has since gone private, been taken
+            # down or lost its owner to a suspension stays in the table but
+            # is not shown — it used to be listed with all of its content.
             for s in Site.objects.filter(id__in=fav_ids)
+            .filter(Q(pk__in=public_sites().values('pk')) | Q(owner=request.user))
             .select_related('owner', 'owner__profile')
             .annotate(favorite_count=Count('favorited_by'))
         }
@@ -1074,7 +1078,7 @@ class FavoriteToggleView(APIView):
             site = Site.objects.get(pk=site_id)
         except Site.DoesNotExist:
             return None
-        return site if (site.published or site.owner_id == request.user.id) else None
+        return site if (is_public(site) or site.owner_id == request.user.id) else None
 
     def post(self, request, site_id):
         site = self._site(request, site_id)
@@ -1101,11 +1105,16 @@ class CloneSiteView(APIView):
 
     def post(self, request, slug):
         try:
-            src = Site.objects.get(slug=slug)
+            src = Site.objects.select_related('owner').get(slug=slug)
         except Site.DoesNotExist:
             return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
-        if not (src.published or src.owner_id == request.user.id):
+        own = src.owner_id == request.user.id
+        if not (is_public(src) or own):
             return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
+        # Not even the owner: a copy starts unblocked, so cloning a taken-down
+        # site would be a way to publish it again.
+        if src.moderation_blocked:
+            return error_response('site_moderated', 'This site was taken down by a moderator.', status.HTTP_403_FORBIDDEN)
         copy = Site.objects.create(
             owner=request.user,
             title=f'{src.title} (copy)'[:100],
@@ -1128,7 +1137,7 @@ class ReportSiteView(APIView):
 
     def post(self, request, site_id):
         try:
-            site = Site.objects.get(pk=site_id, published=True)
+            site = public_sites().get(pk=site_id)
         except Site.DoesNotExist:
             return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
         if site.owner_id == request.user.id:
@@ -1300,15 +1309,20 @@ class AdminUserSuspendView(APIView):
 
 class AdminSiteModerateView(APIView):
     """Admin takes down a reported/abusive site: `unpublish` (reversible — pulls
-    it from Explore + the public URL but keeps the owner's draft) or `delete`
-    (hard removal). Admin-only."""
+    it from Explore + the public URL but keeps the owner's draft), `reinstate`
+    (lifts that takedown) or `delete` (hard removal). Admin-only.
+
+    `unpublish` sets the moderation block as well as clearing `published`: the
+    owner controls `published`, so on its own the takedown lasted until their
+    next save. While blocked the owner cannot publish it (SiteSerializer) nor
+    clone it out; `reinstate` hands it back to them unpublished."""
 
     permission_classes = [IsAdminUser]
 
     def post(self, request, site_id):
         action = request.data.get('action')
-        if action not in ('unpublish', 'delete'):
-            return error_response('invalid_site_action', "action must be 'unpublish' or 'delete'.")
+        if action not in ('unpublish', 'reinstate', 'delete'):
+            return error_response('invalid_site_action', "action must be 'unpublish', 'reinstate' or 'delete'.")
         try:
             site = Site.objects.get(pk=site_id)
         except Site.DoesNotExist:
@@ -1316,11 +1330,18 @@ class AdminSiteModerateView(APIView):
         if action == 'delete':
             site.delete()
             return Response({'detail': 'Site deleted.', 'deleted': True})
+        if action == 'reinstate':
+            site.moderation_blocked = False
+            site.moderated_at = None
+            site.save(update_fields=['moderation_blocked', 'moderated_at'])
+            return Response({'detail': 'Site reinstated.', 'published': site.published, 'moderation_blocked': False})
         site.published = False
-        site.save(update_fields=['published'])
+        site.moderation_blocked = True
+        site.moderated_at = timezone.now()
+        site.save(update_fields=['published', 'moderation_blocked', 'moderated_at'])
         # Resolve any open reports on a taken-down site.
         Report.objects.filter(site=site, status='open').update(status='resolved', resolved_at=timezone.now())
-        return Response({'detail': 'Site unpublished.', 'published': False})
+        return Response({'detail': 'Site unpublished.', 'published': False, 'moderation_blocked': True})
 
 
 # ---------------------------------------------------------------------------
@@ -1424,7 +1445,7 @@ class ShareComponentView(APIView):
                 'component_refused', problems[0], status.HTTP_400_BAD_REQUEST, problems=problems,
             )
 
-        if not Site.objects.filter(owner=request.user, published=True).exists():
+        if not public_sites().filter(owner=request.user).exists():
             return error_response(
                 'no_published_site',
                 'Publish one of your own sites before sharing components.',

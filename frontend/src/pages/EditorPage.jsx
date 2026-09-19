@@ -369,6 +369,10 @@ export default function EditorPage() {
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [published, setPublished] = useState(false)
+  // A moderator took the site down: it stays off the platform whatever the
+  // publish switch says (the server enforces it), so say so rather than let
+  // Publish look like it worked.
+  const [moderationBlocked, setModerationBlocked] = useState(false)
   const [siteOptions, setSiteOptions] = useState({})
   const [reviewToken, setReviewToken] = useState('')
   const [customDomain, setCustomDomain] = useState('')
@@ -811,6 +815,7 @@ export default function EditorPage() {
         setTitle(data.title)
         setSlug(data.slug)
         setPublished(data.published)
+        setModerationBlocked(!!data.moderation_blocked)
         setSiteOptions(data.site_options || {})
         setReviewToken(data.review_token || '')
         setCustomDomain(data.custom_domain || '')
@@ -1335,6 +1340,7 @@ export default function EditorPage() {
         { saveSource: versionSource || (auto ? 'auto' : 'manual') },
       )
       setPublished(data.published)
+      setModerationBlocked(!!data.moderation_blocked)
       setSlug(data.slug)
       if (htmlRevisionRef.current === htmlRevisionAtSave) setHtmlDirty(false)
       if (metaRevisionRef.current === metaRevisionAtSave) {
@@ -2320,6 +2326,12 @@ export default function EditorPage() {
           </Link>
         </div>
       </header>
+      )}
+
+      {moderationBlocked && (
+        <div role="status" className="studio-status-warning border-b px-4 py-2 text-sm">
+          {t('A moderator has taken this site down. You can keep editing it, but it stays off Explore and its public address until the takedown is lifted.')}
+        </div>
       )}
 
       {error && (

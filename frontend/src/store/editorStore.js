@@ -1670,18 +1670,25 @@ export const useEditorStore = create((set, get) => ({
     get().record('paste')
     set((state) => {
       const page = selectCurrentPage(state)
-      const clones = state.clipboard.map((c) => {
-        const copy = cloneTree(c)
-        copy.layout = {
-          ...(c.layout || { x: 0, y: 0, w: 200, h: 80 }),
-          x: (c.layout?.x || 0) + 24,
-          y: (c.layout?.y || 0) + 24,
-        }
-        return copy
-      })
+      const offset = (layout) => layout && {
+        ...layout,
+        x: (layout.x || 0) + 24,
+        y: (layout.y || 0) + 24,
+      }
+      // The clipboard moves along with every paste, so pasting again cascades
+      // (+24, +48, …). It used to paste from the same origin each time, and a
+      // second Ctrl+V dropped its copy exactly on top of the first — two
+      // components that looked like one.
+      const shifted = state.clipboard.map((c) => ({
+        ...c,
+        layout: offset(c.layout || { x: 0, y: 0, w: 200, h: 80 }),
+        ...(c.mobileLayout ? { mobileLayout: offset(c.mobileLayout) } : {}),
+      }))
+      const clones = shifted.map((c) => ({ ...cloneTree(c), layout: c.layout, ...(c.mobileLayout ? { mobileLayout: c.mobileLayout } : {}) }))
       const newIds = clones.map((c) => c.id)
       return {
         schema: withComponents(state.schema, page.id, [...page.components, ...clones]),
+        clipboard: shifted,
         selectedIds: newIds,
         selectedId: newIds[newIds.length - 1] || null,
         dirty: true,

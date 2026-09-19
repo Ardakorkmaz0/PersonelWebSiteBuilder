@@ -903,8 +903,11 @@ export default function EditorPage() {
         const key = e.key.toLowerCase()
         // Only take the key when the component clipboard has work to do;
         // otherwise leave the browser's own copy/cut/paste alone.
+        // Only page-level blocks can be copied; a block inside a container
+        // would otherwise take the key and copy nothing.
+        const topLevel = new Set((selectCurrentPage(state).components || []).map((c) => c.id))
         if (!canvasClipboardOwnsShortcut(key, {
-          hasSelection: state.selectedIds.length > 0,
+          hasSelection: state.selectedIds.some((id) => topLevel.has(id)),
           hasClipboard: state.clipboard.length > 0,
           textSelected: hasDocumentTextSelection(),
         })) return

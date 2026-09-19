@@ -120,3 +120,16 @@ describe('align / distribute stay on the artboard', () => {
     for (const id of ['a', 'b', 'c']) expect(Number.isInteger(layoutOf(id).x)).toBe(true)
   })
 })
+
+describe('pasting again cascades', () => {
+  it('each Ctrl+V lands 24px further than the last, never on top of it', () => {
+    load([box('a', 100, 100)])
+    s().selectComponent('a')
+    s().copySelection()
+    s().pasteClipboard()
+    s().pasteClipboard()
+    const xs = page().components.map((c) => c.layout.x)
+    expect(xs).toEqual([100, 124, 148])
+    expect(new Set(page().components.map((c) => c.id)).size).toBe(3)
+  })
+})

@@ -81,3 +81,16 @@ describe('editor clipboard shortcuts', () => {
     window.getSelection().removeAllRanges()
   }, 30000)
 })
+
+describe('copy on a block inside a container', () => {
+  it('leaves the key to the browser instead of copying nothing', async () => {
+    await openEditor()
+    useEditorStore.getState().addComponent('container', 20, 200)
+    const box = useEditorStore.getState().schema.pages[0].components.find((c) => c.type === 'container')
+    useEditorStore.getState().addComponent('button', 10, 10, box.id)
+    const inner = useEditorStore.getState().schema.pages[0].components
+      .find((c) => c.id === box.id).children[0]
+    useEditorStore.getState().selectComponent(inner.id)
+    expect(press('c').defaultPrevented).toBe(false)
+  }, 30000)
+})

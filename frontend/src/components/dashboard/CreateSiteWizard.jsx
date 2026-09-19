@@ -139,6 +139,10 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
         pages: [{
           id: 'page_home',
           name: contentLanguage === 'tr' ? 'Ana Sayfa' : 'Home',
+          // The page carries the language itself: `contentLanguage` above is not
+          // part of the saved schema, so a Turkish site opened with its page
+          // language (lang attribute, SEO tags) still set to English.
+          language: contentLanguage,
           mode: html ? 'html' : 'empty',
           html,
           components: [],

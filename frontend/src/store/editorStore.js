@@ -30,7 +30,7 @@ function genId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function blankPage(name = 'New Page', folder = '', id, mode = 'empty') {
+function blankPage(name = 'New Page', folder = '', id, mode = 'empty', language = 'en') {
   return {
     id: id || genId('page'),
     name,
@@ -41,7 +41,7 @@ function blankPage(name = 'New Page', folder = '', id, mode = 'empty') {
     components: [],
     background: '#ffffff',
     backgroundMobile: '#ffffff',
-    language: 'en',
+    language: language === 'tr' ? 'tr' : 'en',
     canonicalUrl: '',
     noIndex: false,
     // Preview chrome only: keeps a slim non-layout scroll cue on phone View.
@@ -1244,7 +1244,9 @@ export const useEditorStore = create((set, get) => ({
   addPage: (name = 'New Page', folder = '', mode = 'empty') => {
     get().record('add-page')
     set((state) => {
-      const page = blankPage(name, folder, undefined, mode)
+      // A new page speaks the language of the page it was added from, so a
+      // Turkish site does not grow English pages one by one.
+      const page = blankPage(name, folder, undefined, mode, selectCurrentPage(state).language)
       return {
         schema: { ...state.schema, pages: [...state.schema.pages, page] },
         currentPageId: page.id,

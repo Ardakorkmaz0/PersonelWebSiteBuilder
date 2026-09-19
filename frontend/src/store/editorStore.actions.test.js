@@ -910,3 +910,17 @@ describe('mobile auto arrange', () => {
     expect(selectCurrentPage(useEditorStore.getState()).mobileManual).toBe(false)
   })
 })
+
+describe('page language', () => {
+  it('a page added to a Turkish page is Turkish', () => {
+    s().loadSchema({ theme: {}, pages: [{ id: 'p1', name: 'Ana Sayfa', language: 'tr', components: [] }] })
+    s().addPage('Yeni')
+    expect(selectCurrentPage(useEditorStore.getState()).language).toBe('tr')
+  })
+
+  it('an English site still gets English pages', () => {
+    s().loadSchema({ theme: {}, pages: [{ id: 'p1', name: 'Home', components: [] }] })
+    s().addPage('New')
+    expect(selectCurrentPage(useEditorStore.getState()).language).toBe('en')
+  })
+})

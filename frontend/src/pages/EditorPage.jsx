@@ -2439,7 +2439,7 @@ export default function EditorPage() {
                       >
                         {DEVICES.map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.label}
+                            {t(d.label)}
                           </option>
                         ))}
                       </select>

@@ -21,6 +21,9 @@ const API_CODE_MESSAGES = {
   self_suspend_forbidden: 'You cannot suspend your own account.',
   admin_suspend_forbidden: 'Another administrator cannot be suspended.',
   invalid_site_action: 'The selected site action is invalid.',
+  site_moderated: 'This site was taken down by a moderator.',
+  // Development only: runserver kept going while a migration was added.
+  database_outdated: 'The database is behind the code. Run "python manage.py migrate" in backend/ and reload the page.',
   api_error: 'The server could not complete the request.',
 }
 
@@ -61,6 +64,27 @@ function translatedIfKnown(language, message) {
   return language === 'tr' && localized === message ? '' : localized
 }
 
+// A response that is text rather than DRF's JSON. An unhandled server error
+// arrives this way: Django's debug traceback (dozens of lines of paths and
+// settings) in development, an HTML "Server Error (500)" page in production.
+// Either was shown verbatim in the red error bar. The details belong in the
+// server log and the console; the person gets one plain sentence.
+const SERVER_ERROR_MESSAGE = 'The server ran into an error ({status}). Please try again in a moment.'
+const MAX_PLAIN_MESSAGE = 200
+
+function textBodyMessage(language, err, text, fallback) {
+  const status = err?.response?.status || 0
+  const body = text.trim()
+  const looksLikeAPage = /^</.test(body) || /Traceback|Request Method:|Django Version:/.test(body)
+  if (status >= 500 || looksLikeAPage || body.length > MAX_PLAIN_MESSAGE) {
+    if (typeof console !== 'undefined') console.error('Server error response', status, body.slice(0, 2000))
+    return status
+      ? translate(language, SERVER_ERROR_MESSAGE, { status })
+      : translate(language, fallback)
+  }
+  return translatedIfKnown(language, body) || body || translate(language, fallback)
+}
+
 // Pull a localized, human-readable message out of a structured DRF response.
 export function apiError(err, fallback = 'Something went wrong.') {
   const language = detectInitialLanguage()
@@ -69,7 +93,7 @@ export function apiError(err, fallback = 'Something went wrong.') {
     if (err?.code === 'ERR_NETWORK') return translate(language, 'Network error. Check your connection.')
     return translatedIfKnown(language, err?.message) || err?.message || translate(language, fallback)
   }
-  if (typeof data === 'string') return translatedIfKnown(language, data) || data
+  if (typeof data === 'string') return textBodyMessage(language, err, data, fallback)
 
   const codeMessage = API_CODE_MESSAGES[data.code]
   if (codeMessage) return translate(language, codeMessage)

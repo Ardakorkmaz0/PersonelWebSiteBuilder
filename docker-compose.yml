@@ -38,6 +38,10 @@ services:
       DJANGO_CORS_ORIGINS: 'http://localhost:5173'
       # Toggle these on once real TLS terminates in front:
       DJANGO_SSL_REDIRECT: 'False'
+      # Nothing else serves /media/ in this stack, so Django does (from the
+      # `media` volume below). Without it every uploaded image URL is a 404.
+      # Turn it off when a proxy or a bucket takes /media/ over.
+      DJANGO_SERVE_MEDIA: 'True'
     volumes:
       # Persist uploaded images and the SQLite fallback across rebuilds.
       - media:/app/media

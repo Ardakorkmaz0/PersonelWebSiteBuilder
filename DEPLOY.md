@@ -123,6 +123,7 @@ password). At minimum:
       DATABASE_URL: 'postgres://builder:A-STRONG-DB-PASSWORD@db:5432/builder'
       DJANGO_CORS_ORIGINS: 'https://app.example.com'
       DJANGO_SSL_REDIRECT: 'True'      # leave False only if nothing terminates TLS yet
+      DJANGO_SERVE_MEDIA: 'True'       # Django serves uploaded images from the media volume (§8a)
   db:
     environment:
       POSTGRES_PASSWORD: 'A-STRONG-DB-PASSWORD'   # must match DATABASE_URL above
@@ -206,6 +207,7 @@ DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DBNAME
 DJANGO_CORS_ORIGINS=https://app.example.com
 REDIS_URL=redis://HOST:6379/0      # recommended (see §7a)
 DJANGO_SSL_REDIRECT=True
+DJANGO_SERVE_MEDIA=True            # unless a proxy or bucket serves /media/ (§8a)
 ```
 
 ### 5.3 Migrate, collect static, create admin
@@ -283,6 +285,7 @@ the backend's `DJANGO_CORS_ORIGINS`, or the browser will block API calls.
 | `DJANGO_SSL_REDIRECT` | recommended | `True` | Default `True` in prod; set `False` only if nothing terminates TLS yet. |
 | `SENTRY_DSN` | recommended | `https://…@sentry.io/…` | Error monitoring; off when unset. |
 | `DJANGO_FRONTEND_URL` | if using email | `https://app.example.com` | Builds the password-reset link. |
+| `DJANGO_SERVE_MEDIA` | **yes, one of** | `True` | Django serves uploaded images from `MEDIA_ROOT`. Defaults to `DJANGO_DEBUG`, so a production process serves **nothing** under `/media/` unless this is on **or** a proxy/bucket does it (§8a) — uploads then succeed but every image URL 404s. |
 | `DJANGO_HSTS_SECONDS` | optional | `31536000` | HSTS lifetime (1 year default). |
 | `DJANGO_THROTTLE_AUTH` | optional | `10/min` | Brute-force cap on login/register/google. |
 | `DJANGO_CSP_REPORT_ONLY` | optional | `True` | Log CSP violations instead of blocking (while testing). |
@@ -320,6 +323,30 @@ If TLS is **not** in place yet on a first bring-up, set `DJANGO_SSL_REDIRECT=Fal
 temporarily so you're not redirected to a non-existent HTTPS endpoint — then turn
 it back on once certs are live.
 
+### 8a. Uploaded images (`/media/`)
+
+Something has to answer `/media/…`, or uploads succeed and their URLs 404.
+Pick one:
+
+- **One server (the Compose stack):** `DJANGO_SERVE_MEDIA=True` — Django serves
+  the `media` volume (`builder/media.py`). Simple and fine at this scale.
+- **A proxy in front:** let it serve the folder and set
+  `DJANGO_SERVE_MEDIA=False`. Uploads may be **SVG**, which runs scripts when
+  opened directly — send the same sandboxing headers Django sends:
+  ```
+  api.example.com {
+      handle_path /media/* {
+          root * /srv/builder/media
+          header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox"
+          header X-Content-Type-Options nosniff
+          file_server
+      }
+      reverse_proxy 127.0.0.1:8000
+  }
+  ```
+- **Several instances:** a local folder is not shared between them — use object
+  storage (§11) and set `DJANGO_SERVE_MEDIA=False`.
+
 ---
 
 ## 9. Post-deploy smoke test (do this before sharing the link)
@@ -337,6 +364,8 @@ it back on once certs are live.
    (or, with no SMTP, that the link is printed in the server logs).
 7. **DEBUG is really off:** visit a non-existent backend URL — you should get a
    plain 404, **not** Django's yellow debug page.
+8. **Images are served:** upload an image in the editor, then open the URL it was
+   given (`…/media/images/…`) in a new tab — it must load, not 404 (§8a).
 
 ---
 
@@ -377,8 +406,8 @@ well-scoped:
   one instance, but uploads from one web node aren't visible to another. At
   multi-instance scale add `django-storages[boto3]`, set the S3 storage backend,
   and provide `AWS_*` env vars. No model changes — `ImageField` URLs just point
-  at the bucket. (Until then, the Docker `media` volume / a single instance is
-  fine.)
+  at the bucket, and set `DJANGO_SERVE_MEDIA=False`. (Until then, the Docker
+  `media` volume / a single instance with `DJANGO_SERVE_MEDIA=True` is fine.)
 - **Token security (JWT):** DRF `TokenAuthentication` issues **static,
   non-expiring** tokens. Throttling + HTTPS cover launch; for stronger security
   move to `djangorestframework-simplejwt` (short access + refresh, rotation).

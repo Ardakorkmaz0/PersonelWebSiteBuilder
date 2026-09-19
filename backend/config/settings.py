@@ -192,6 +192,10 @@ STATICFILES_STORAGE = (
 # User-uploaded images — see builder.models.UploadedImage.
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# Whether this process serves MEDIA_ROOT itself (builder/media.py). Right for
+# one instance with a local media volume; turn it off once a proxy or a bucket
+# serves /media/ (and do that before running several instances).
+SERVE_MEDIA = _env_bool('DJANGO_SERVE_MEDIA', DEBUG)
 
 # Cap a single upload at ~6 MB so a 5 MB image (the validator's limit) plus
 # multipart overhead still fits without 413.

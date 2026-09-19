@@ -26,9 +26,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
-      - name: Lint (non-blocking — pre-existing issues tracked in #75)
+      - name: Lint
         run: npm run lint
-        continue-on-error: true
       - name: Test
         run: npm run test:run
       - name: Build (smoke)
@@ -49,6 +48,10 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install
         run: pip install -r requirements.txt
+      - name: Migrations are complete
+        # A model change without its migration passes every test (the test DB
+        # is built from the models) and then breaks the real database.
+        run: python manage.py makemigrations --check --dry-run
       - name: Migrate (sanity)
         run: python manage.py migrate --noinput
       - name: Test

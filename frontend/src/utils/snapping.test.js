@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { snapDraggedRect } from './snapping.js'
+import { SNAP_THRESHOLD, snapDraggedRect, snapThresholdFor } from './snapping.js'
 
 const artboard = { w: 1000, h: 0 }
 
@@ -23,5 +23,30 @@ describe('snapDraggedRect', () => {
     const out = snapDraggedRect({ id: 'b', x: 203, y: 11, w: 50, h: 50 }, siblings, artboard, 10)
     expect(out.x).toBe(200) // sibling snap, not grid (would be 200 too, so use y)
     expect(out.y).toBe(10) // no sibling on y → grid rounds 11 → 10
+  })
+})
+
+describe('snap threshold follows the zoom', () => {
+  const siblings = [{ id: 'a', x: 100, y: 0, w: 50, h: 50 }]
+  const artboard = { w: 1000, h: 0 }
+
+  it('is a constant distance on screen, not in design pixels', () => {
+    expect(snapThresholdFor(1)).toBe(SNAP_THRESHOLD)
+    expect(snapThresholdFor(0.25)).toBe(SNAP_THRESHOLD * 4)
+    expect(snapThresholdFor(4)).toBe(SNAP_THRESHOLD / 4)
+    expect(snapThresholdFor(0)).toBe(SNAP_THRESHOLD)
+    expect(snapThresholdFor(undefined)).toBe(SNAP_THRESHOLD)
+  })
+
+  it('still reaches a nearby edge when the canvas is zoomed far out', () => {
+    // 12 design px away = 3 screen px at 25%: close enough to snap there.
+    const out = snapDraggedRect({ id: 'b', x: 112, y: 300, w: 50, h: 50 }, siblings, artboard, 0, snapThresholdFor(0.25))
+    expect(out.x).toBe(100)
+  })
+
+  it('does not grab from across the screen when zoomed far in', () => {
+    // 4 design px away = 16 screen px at 400%: a deliberate placement, left alone.
+    const out = snapDraggedRect({ id: 'b', x: 104, y: 300, w: 50, h: 50 }, siblings, artboard, 0, snapThresholdFor(4))
+    expect(out.x).toBe(104)
   })
 })

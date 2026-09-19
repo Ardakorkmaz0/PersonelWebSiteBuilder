@@ -13,6 +13,7 @@ import { phoneFrameH, phoneFrameW, phoneModel, phoneScreenHeight } from './phone
 import BrowserFrame from './BrowserFrame.jsx'
 import MobileBrowserChrome from './MobileBrowserChrome.jsx'
 import { CANVAS_SCROLLER_ID } from '../../utils/dragAutoScroll.js'
+import { trackPointerDrag } from '../../utils/pointerDrag.js'
 import { CANVAS_SELECTION_Z } from './spotlight.js'
 import { zoomScale } from './canvasZoom.js'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
@@ -21,6 +22,7 @@ import { BRUSH_CURSOR } from './brushCursor.js'
 import PreviewScrollIndicator from './PreviewScrollIndicator.jsx'
 import CanvasSelectionActions from './CanvasSelectionActions.jsx'
 import { selectionActionsPosition } from './canvasSelectionActionsLayout.js'
+import { chromeBadgeStyle, chromeMetrics } from './selectionChrome.js'
 
 // One editable free canvas, rendered at the active breakpoint's chosen artboard
 // width. PC edits each component's `layout`; Mobile edits its `mobileLayout` on a
@@ -167,9 +169,9 @@ export default function Canvas({
       setEditorHeight(Math.max(1, el.clientHeight - 64 - CAPTION_ROOM))
     }
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    return () => observer.disconnect()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(el)
+    return () => observer?.disconnect()
   }, [isMobile])
   // A phone also has to fit the workspace VERTICALLY — it is a fixed object
   // now, so a short editor window scales the whole device down instead of
@@ -187,6 +189,14 @@ export default function Canvas({
   // feeding the chosen zoom through the same variable keeps hit-testing,
   // marquee selection and the counter-scaled toolbars correct at any zoom.
   const canvasScale = zoomScale(zoom, fitScale)
+  // Canvas-level overlays (marquee, snap guides, link arrows, fold) are chrome
+  // too: same physical weight at every zoom as the selection frame.
+  const chrome = chromeMetrics(canvasScale)
+  // A zoom the user picked can make the device wider or taller than the
+  // workspace. The workspace then has to scroll both ways, or the part of the
+  // design past the edge is simply unreachable. On 'fit' nothing overflows, and
+  // the old clipping stays so rounding can never flash a stray scrollbar.
+  const zoomedPastFit = zoom !== 'fit'
 
   // The toolbar owns the control but only the canvas can measure the fit, so
   // the number it should show is reported back up. Through a ref, so an inline
@@ -318,10 +328,14 @@ export default function Canvas({
       }
       return
     }
+    // Right- and middle-clicks are not a selection gesture at all: they used to
+    // fall into the deselect below, so opening the context menu (or a middle
+    // click to scroll) emptied the properties panel.
+    if (e.button !== 0) return
     // Only a plain left-drag on the bare canvas (not on a component, which stops
     // its own pointerdown) begins a marquee. A click that doesn't move just
     // deselects, exactly like before.
-    if (flowMode || e.button !== 0 || e.target !== canvasElRef.current) {
+    if (flowMode || e.target !== canvasElRef.current) {
       select(null)
       return
     }
@@ -333,8 +347,12 @@ export default function Canvas({
     const onMove = (ev) => {
       const m = marqueeRef.current
       if (!m) return
-      m.curX = (ev.clientX - rect.left) / canvasScale
-      m.curY = (ev.clientY - rect.top) / canvasScale
+      // Re-measured each move: the workspace can scroll under a marquee (wheel,
+      // or now both axes when zoomed), and a rect taken at pointerdown would
+      // make the box drift away from the pointer by that distance.
+      const now = canvasElRef.current?.getBoundingClientRect() || rect
+      m.curX = (ev.clientX - now.left) / canvasScale
+      m.curY = (ev.clientY - now.top) / canvasScale
       if (!m.moved && Math.abs(m.curX - m.startX) + Math.abs(m.curY - m.startY) < 5) return
       m.moved = true
       setMarquee({
@@ -342,12 +360,13 @@ export default function Canvas({
         x2: Math.max(m.startX, m.curX), y2: Math.max(m.startY, m.curY),
       })
     }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
+    const onUp = (ev) => {
       const m = marqueeRef.current
       marqueeRef.current = null
       setMarquee(null)
+      // A cancelled gesture (the browser took the touch, the window lost focus)
+      // just drops the box; it is not a click and not a selection.
+      if (ev && ev.type !== 'pointerup') return
       if (!m || !m.moved) { select(null); return }
       const x1 = Math.min(m.startX, m.curX)
       const y1 = Math.min(m.startY, m.curY)
@@ -367,8 +386,7 @@ export default function Canvas({
         .map((c) => c.id)
       selectMany(ids)
     }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    trackPointerDrag(e, { onMove, onEnd: onUp })
   }
 
   const canvas = (
@@ -476,6 +494,7 @@ export default function Canvas({
             top: marquee.y1,
             width: marquee.x2 - marquee.x1,
             height: marquee.y2 - marquee.y1,
+            borderWidth: chrome.hairline,
             backgroundColor: 'rgba(79,70,229,0.12)',
             zIndex: 50,
           }}
@@ -507,8 +526,11 @@ export default function Canvas({
           className="pointer-events-none absolute inset-x-0"
           style={{ top: fold, zIndex: 40 }}
         >
-          <div className="border-t-2 border-dashed border-amber-500" />
-          <span className="absolute right-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+          <div className="border-t-2 border-dashed border-amber-500" style={{ borderTopWidth: chrome.frame }} />
+          <span
+            className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium text-white shadow"
+            style={{ ...chromeBadgeStyle(chrome, 'top-right'), top: 4 * chrome.hairline, right: 4 * chrome.hairline }}
+          >
             {t('Visible screen limit')} · {fold}px
           </span>
         </div>
@@ -543,12 +565,12 @@ export default function Canvas({
                 x2={p.x2}
                 y2={p.y2}
                 stroke="#4f46e5"
-                strokeWidth="2.5"
-                strokeDasharray="6 4"
+                strokeWidth={2.5 * chrome.hairline}
+                strokeDasharray={`${6 * chrome.hairline} ${4 * chrome.hairline}`}
                 opacity="0.9"
                 markerEnd="url(#canvas-arrowhead)"
               />
-              <circle cx={p.x1} cy={p.y1} r="4.5" fill="#4f46e5" />
+              <circle cx={p.x1} cy={p.y1} r={4.5 * chrome.hairline} fill="#4f46e5" />
             </g>
           ))}
         </svg>
@@ -568,7 +590,7 @@ export default function Canvas({
                 top: 0,
                 bottom: 0,
                 width: 0,
-                borderLeft: '1px dashed #ec4899',
+                borderLeft: `${chrome.hairline}px dashed #ec4899`,
                 zIndex: 45,
               }}
             />
@@ -581,7 +603,7 @@ export default function Canvas({
                 left: 0,
                 right: 0,
                 height: 0,
-                borderTop: '1px dashed #ec4899',
+                borderTop: `${chrome.hairline}px dashed #ec4899`,
                 zIndex: 45,
               }}
             />
@@ -638,7 +660,7 @@ export default function Canvas({
     return (
       <main
         ref={scrollElRef}
-        className="flex-1 overflow-hidden bg-[var(--studio-shell)] p-8"
+        className={`flex-1 ${zoomedPastFit ? 'overflow-auto' : 'overflow-hidden'} bg-[var(--studio-shell)] p-8`}
         onClickCapture={preventCanvasAnchorClicks}
       >
         <div
@@ -687,7 +709,7 @@ export default function Canvas({
     <main
       id={CANVAS_SCROLLER_ID}
       ref={scrollElRef}
-      className="flex-1 overflow-x-hidden overflow-y-auto bg-[var(--studio-shell)] p-8"
+      className={`flex-1 ${zoomedPastFit ? 'overflow-auto' : 'overflow-x-hidden overflow-y-auto'} bg-[var(--studio-shell)] p-8`}
       onClickCapture={preventCanvasAnchorClicks}
     >
       <div

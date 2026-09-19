@@ -59,6 +59,7 @@ import { readZoom, writeZoom, zoomScale } from './canvasZoom.js'
 import BrushControls from './BrushControls.jsx'
 import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { shouldForwardIframeShortcut } from '../../utils/editorLeave.js'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
 // - View: real document in a sandboxed iframe with scripts enabled.
@@ -686,9 +687,12 @@ function HtmlWorkspace({
       updateSelectionResizeChrome(doc, el)
     }
 
+    // Ends on pointercancel too: a touch the browser takes over never sends
+    // pointerup, and the element then kept resizing on every later move.
     function onUp() {
       win.removeEventListener('pointermove', onMove)
       win.removeEventListener('pointerup', onUp)
+      win.removeEventListener('pointercancel', onUp)
       updateSelectionResizeChrome(doc, el)
       onCommitRef.current?.(serializeDocument(doc))
       onElementSelect?.(describeElement(el))
@@ -696,6 +700,7 @@ function HtmlWorkspace({
 
     win.addEventListener('pointermove', onMove)
     win.addEventListener('pointerup', onUp)
+    win.addEventListener('pointercancel', onUp)
   }, [onElementSelect])
 
   const selectionChromeLabels = useCallback(() => {
@@ -1093,6 +1098,14 @@ function HtmlWorkspace({
   // there is room. Anything beyond that is the zoom control, chosen on purpose.
   const fitScale = Math.min(1, availableW / previewW || 1, availableH / previewH || 1)
   const scale = zoomScale(zoom, fitScale)
+  // On the responsive device, going from 'fit' to a chosen zoom (or back) moves
+  // the iframe between the CSS-filled frame and the scaled one, which remounts
+  // it. Fold what was typed into the seed first — exactly as the browser-frame
+  // toggle does — or that text would be reloaded away.
+  const changeZoom = (next) => {
+    if (isFit && !desktopBrowser && (zoom === 'fit') !== (next === 'fit')) prepareForFrameChange()
+    setZoom(next)
+  }
 
   // ----- placement: splice the component's snippet into the document ---------
   const placeAt = useCallback((clientX, clientY) => {
@@ -1408,6 +1421,7 @@ function HtmlWorkspace({
       // type" discoverable. Stripped from every save by serializeDocument.
       ensureEditHintChrome(doc)
       attachSelectionListeners(doc)
+      attachShortcutForwarding(doc)
       if (pendingRef.current) attachPlacementListeners(doc)
       // Resting the unrun reveals is the loadTick effect's job — bumping the
       // tick above is what triggers it, for both a fresh load and a toggle.
@@ -1419,6 +1433,27 @@ function HtmlWorkspace({
         if (el) flashNode(doc, el)
       }
     }
+  }
+
+  // Editor shortcuts typed while the page has focus (see
+  // shouldForwardIframeShortcut): replay them on the editor window, and keep
+  // the browser's own default (the Save-page dialog) when the editor took them.
+  function attachShortcutForwarding(doc) {
+    doc.addEventListener('keydown', (e) => {
+      if (!shouldForwardIframeShortcut(e, { designMode: doc.designMode })) return
+      const relay = new KeyboardEvent('keydown', {
+        key: e.key,
+        code: e.code,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+        bubbles: true,
+        cancelable: true,
+      })
+      window.dispatchEvent(relay)
+      if (relay.defaultPrevented) e.preventDefault()
+    })
   }
 
   // Click → select the element for the properties panel (alongside the
@@ -1591,7 +1626,7 @@ function HtmlWorkspace({
             <CanvasZoomControl
               zoom={zoom}
               fitScale={fitScale}
-              onZoom={setZoom}
+              onZoom={changeZoom}
               fullscreen={fullscreen}
               onToggleFullscreen={onToggleFullscreen}
             />
@@ -1859,13 +1894,21 @@ function HtmlWorkspace({
         ) : (
           <main
             ref={stageRef}
-            className="relative flex flex-1 items-start justify-center overflow-hidden bg-[var(--studio-shell)] p-3"
+            // A chosen zoom can make the page bigger than the stage; it must
+            // then scroll both ways or the rest of it is out of reach. The
+            // scaled box centres itself with auto margins rather than
+            // justify-center, which would push its left edge past the scroll
+            // origin where no scrollbar can reach it.
+            className={`relative flex flex-1 items-start ${zoom === 'fit' ? 'overflow-hidden' : 'overflow-auto'} bg-[var(--studio-shell)] p-3`}
           >
-            {isFit && !desktopBrowser ? (
+            {isFit && !desktopBrowser && zoom === 'fit' ? (
               // Responsive ("area width") preview: the iframe simply FILLS the
               // stage via CSS, so its width tracks side-rail collapses and
               // window resizes with no JS measurement — a frozen ResizeObserver
-              // can no longer leave the preview stuck at half width.
+              // can no longer leave the preview stuck at half width. A chosen
+              // zoom takes the scaled branch below instead (it used to stay
+              // here, where the zoom control changed its number and nothing
+              // else): the page keeps the area's width and is drawn at the zoom.
               <div
                 className="h-full w-full overflow-hidden bg-white"
                 style={{ boxShadow: placing ? 'inset 0 0 0 2px #2563eb' : 'none' }}
@@ -1873,7 +1916,10 @@ function HtmlWorkspace({
                 {stageIframe}
               </div>
             ) : (
-              <div style={{ width: Math.round(previewW * scale), height: Math.round(previewH * scale) }}>
+              <div
+                className="mx-auto shrink-0"
+                style={{ width: Math.round(previewW * scale), height: Math.round(previewH * scale) }}
+              >
                 <div
                   style={{
                     width: previewW,

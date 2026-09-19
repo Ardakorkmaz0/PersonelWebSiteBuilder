@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   EDITOR_AUTO_SAVE_DELAY_MS,
+  canvasClipboardOwnsShortcut,
+  hasDocumentTextSelection,
+  shouldForwardIframeShortcut,
   editorShortcutScope,
   hasUnsavedEditorChanges,
   isTypingTarget,
@@ -98,5 +101,55 @@ describe('isTypingTarget', () => {
     expect(isTypingTarget({ tagName: 'DIV' })).toBe(false)
     expect(isTypingTarget({ tagName: 'BUTTON' })).toBe(false)
     expect(isTypingTarget(null)).toBe(false)
+  })
+})
+
+describe('shouldForwardIframeShortcut — keys typed inside the HTML edit iframe', () => {
+  const inPage = (key, extra = {}) => ({ key, ctrlKey: true, target: { tagName: 'DIV' }, ...extra })
+
+  it('always forwards Save, even while typing, so the browser dialog never opens', () => {
+    expect(shouldForwardIframeShortcut(inPage('s'), { designMode: 'on' })).toBe(true)
+    expect(shouldForwardIframeShortcut(inPage('S', { metaKey: true, ctrlKey: false }), { designMode: 'off' })).toBe(true)
+  })
+
+  it('forwards undo / redo when the page is not being typed into', () => {
+    expect(shouldForwardIframeShortcut(inPage('z'), { designMode: 'off' })).toBe(true)
+    expect(shouldForwardIframeShortcut(inPage('y'), { designMode: 'off' })).toBe(true)
+  })
+
+  it('leaves undo to the text while the caret is in it', () => {
+    expect(shouldForwardIframeShortcut(inPage('z'), { designMode: 'on' })).toBe(false)
+    expect(shouldForwardIframeShortcut(inPage('z', { target: { tagName: 'INPUT' } }), { designMode: 'off' })).toBe(false)
+  })
+
+  it('ignores plain keys and unrelated shortcuts', () => {
+    expect(shouldForwardIframeShortcut({ key: 's', target: { tagName: 'DIV' } })).toBe(false)
+    expect(shouldForwardIframeShortcut(inPage('b'), { designMode: 'on' })).toBe(false)
+  })
+})
+
+describe('canvasClipboardOwnsShortcut — component clipboard vs the browser', () => {
+  it('lets the browser copy when there is nothing to copy', () => {
+    expect(canvasClipboardOwnsShortcut('c', { hasSelection: false })).toBe(false)
+    expect(canvasClipboardOwnsShortcut('x', { hasSelection: false })).toBe(false)
+  })
+
+  it('lets the browser copy highlighted text even with a component selected', () => {
+    expect(canvasClipboardOwnsShortcut('c', { hasSelection: true, textSelected: true })).toBe(false)
+  })
+
+  it('takes copy / cut for a selection, and paste only with something to paste', () => {
+    expect(canvasClipboardOwnsShortcut('C', { hasSelection: true })).toBe(true)
+    expect(canvasClipboardOwnsShortcut('x', { hasSelection: true })).toBe(true)
+    expect(canvasClipboardOwnsShortcut('v', { hasClipboard: false })).toBe(false)
+    expect(canvasClipboardOwnsShortcut('v', { hasClipboard: true })).toBe(true)
+    expect(canvasClipboardOwnsShortcut('d', { hasSelection: true })).toBe(false)
+  })
+
+  it('reads a text selection safely', () => {
+    expect(hasDocumentTextSelection({ getSelection: () => ({ toString: () => 'Hello' }) })).toBe(true)
+    expect(hasDocumentTextSelection({ getSelection: () => ({ toString: () => '' }) })).toBe(false)
+    expect(hasDocumentTextSelection({ getSelection: () => { throw new Error('no') } })).toBe(false)
+    expect(hasDocumentTextSelection(null)).toBe(false)
   })
 })

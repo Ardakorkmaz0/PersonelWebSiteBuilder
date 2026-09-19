@@ -1703,3 +1703,11 @@ button:not(:disabled),
     box-shadow: 0 3px 10px rgba(38, 35, 112, 0.28);
   }
 }
+
+/* Hover ring of an unselected edit-canvas item. The shadow itself comes from
+   hoverRingStyle() in components/editor/selectionChrome.js, so it is drawn on
+   the same side of the edge as the selection frame and at the same physical
+   weight at any zoom. */
+.pwb-chrome-hover:hover {
+  box-shadow: var(--pwb-chrome-hover-shadow, inset 0 0 0 1px #a6b7d6);
+}

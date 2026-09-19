@@ -36,18 +36,21 @@ export default function useFullscreenEditing() {
     return () => document.removeEventListener('keydown', onKey)
   }, [fullscreen])
 
+  // The browser calls happen here, in the click itself, not inside a state
+  // updater: updaters must be pure — StrictMode runs them twice, which asked for
+  // full screen twice — and a request made later than the click can lose the
+  // user activation the browser demands for it.
   const toggleFullscreen = useCallback(() => {
-    setFullscreen((on) => {
-      if (on) {
-        if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
-        return false
-      }
-      // Requested, not awaited: if the browser refuses, the panels still get
-      // out of the way, which is most of the value.
-      document.documentElement?.requestFullscreen?.().catch(() => {})
-      return true
-    })
-  }, [])
+    if (fullscreen) {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+      setFullscreen(false)
+      return
+    }
+    // Requested, not awaited: if the browser refuses, the panels still get
+    // out of the way, which is most of the value.
+    document.documentElement?.requestFullscreen?.().catch(() => {})
+    setFullscreen(true)
+  }, [fullscreen])
 
   return { fullscreen, toggleFullscreen }
 }

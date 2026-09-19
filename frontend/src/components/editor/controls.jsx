@@ -369,22 +369,40 @@ function AlignGlyph({ position }) {
   )
 }
 
+// One number with an optional unit, e.g. "16px", "-0.02em", "1.5rem", "50%".
+const CSS_LENGTH_RE = /^\s*(-?(?:\d+\.?\d*|\.\d+))\s*(px|em|rem|%|vw|vh)?\s*$/i
+
+// A length field that keeps the unit the value already has.
+//
+// It used to read only the leading number and write every edit back as px, so
+// any other unit was silently converted: every heading ships with
+// letter-spacing -0.02em, which one click turned into 0.98px; 1.5rem became
+// 2.5px, 50% became 51px, and "10px 24px" lost its horizontal padding. The unit
+// is now kept and shown; a value that is not a single length (several values,
+// calc(), clamp()) is edited as text so nothing is thrown away.
 export function LabeledPx({ label, value, onChange }) {
-  const match = /^(-?\d+(?:\.\d+)?)/.exec(String(value ?? ''))
+  const raw = String(value ?? '')
+  const match = CSS_LENGTH_RE.exec(raw)
+  if (raw.trim() && !match) {
+    return <LabeledText label={label} value={raw} onChange={onChange} />
+  }
   const num = match ? match[1] : ''
+  const unit = (match?.[2] || 'px').toLowerCase()
+  const fine = unit === 'em' || unit === 'rem'
   return (
     <label className="block">
       <span className={labelCls}>{label}</span>
       <div className="flex items-center gap-1">
         <input
           type="number"
+          step={fine ? 0.01 : 1}
           className={inputCls}
           value={num}
           onChange={(e) =>
-            onChange(e.target.value === '' ? '' : `${e.target.value}px`)
+            onChange(e.target.value === '' ? '' : `${e.target.value}${unit}`)
           }
         />
-        <span className="text-xs text-[#6b7280]">px</span>
+        <span className="text-xs text-[#6b7280]">{unit}</span>
       </div>
     </label>
   )

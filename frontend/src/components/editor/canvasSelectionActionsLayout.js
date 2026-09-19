@@ -10,8 +10,12 @@ const SCREEN_EDGE_GAP = 8
 
 export const DEFAULT_SELECTION_ACTION_COUNT = 7
 
+// The floor keeps a tiny fitted artboard from turning the bar into a wall; there
+// is no ceiling, because the canvas can now be zoomed PAST 1:1 and a bar that
+// grew with it would cover the thing it is for (at 400% it was 4x its size).
 export function normalizedSelectionActionsScale(value) {
-  return Math.max(0.35, Math.min(1, Number(value) || 1))
+  const scale = Number(value)
+  return Math.max(0.35, Number.isFinite(scale) && scale > 0 ? scale : 1)
 }
 
 // How the bar is counter-scaled, as one style object both toolbars use.
@@ -28,7 +32,7 @@ export function normalizedSelectionActionsScale(value) {
 // top-left corner makes the painted bar fill exactly that reservation.
 export function selectionActionsScaleStyle(canvasScale = 1) {
   const scale = normalizedSelectionActionsScale(canvasScale)
-  if (scale >= 1) return {}
+  if (scale === 1) return {}
   return { transform: `scale(${1 / scale})`, transformOrigin: 'top left' }
 }
 

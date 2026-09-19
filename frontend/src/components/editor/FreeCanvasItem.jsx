@@ -2,58 +2,27 @@ import { useEffect, useRef, useState } from 'react'
 import { useEditorStore, selectCurrentPage } from '../../store/editorStore.js'
 import { RenderComponent } from '../renderer/Renderer.jsx'
 import { ContainerEditor, RegionEditor, TabsEditor } from './FlowCanvasItem.jsx'
-import { snapDraggedRect } from '../../utils/snapping.js'
+import { snapDraggedRect, snapThresholdFor } from '../../utils/snapping.js'
 import { beginDragScroll } from '../../utils/dragAutoScroll.js'
+import { trackPointerDrag } from '../../utils/pointerDrag.js'
 import { embedAspectLock } from '../../utils/htmlSnippetSizing.js'
 import { fixedRailInset } from '../../utils/railInset.js'
 import { BRUSH_CURSOR } from './brushCursor.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import {
+  HOVER_RING_CLASS,
+  chromeBadgeStyle,
+  chromeMetrics,
+  frameOutsets as frameOutsetsFor,
+  hoverRingStyle,
+  resizeEdgeHitZones,
+  resizeHandles,
+} from './selectionChrome.js'
+import { ResizeAffordances, SelectionFrame } from './ChromeAffordances.jsx'
 
 const MIN = 20
-const ACCENT = '#4f46e5'
-const HANDLE_SIZE = 10
 // Native types sized by their own content rather than the palette's guess.
 const CONTENT_GROW_TYPES = new Set(['tabs'])
-const HANDLE_OFFSET = HANDLE_SIZE / 2
-const EDGE_HIT_SIZE = 14
-const EDGE_HIT_OFFSET = EDGE_HIT_SIZE / 2
-const FRAME_OUTSET = 2
-
-function edgeOutsets(rect, amount) {
-  const maxW = rect.maxW || 0
-  const maxH = rect.maxH || 0
-  return {
-    top: rect.y <= amount ? 0 : -amount,
-    left: rect.x <= amount ? 0 : -amount,
-    right: maxW && rect.x + rect.w >= maxW - amount ? 0 : -amount,
-    bottom: maxH && rect.y + rect.h >= maxH - amount ? 0 : -amount,
-  }
-}
-
-// [direction, absolute-position style, cursor]
-function resizeHandles(rect) {
-  const edge = edgeOutsets(rect, HANDLE_OFFSET)
-  return [
-    ['nw', { top: edge.top, left: edge.left }, 'nwse-resize'],
-    ['n', { top: edge.top, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
-    ['ne', { top: edge.top, right: edge.right }, 'nesw-resize'],
-    ['e', { top: '50%', right: edge.right, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
-    ['se', { bottom: edge.bottom, right: edge.right }, 'nwse-resize'],
-    ['s', { bottom: edge.bottom, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
-    ['sw', { bottom: edge.bottom, left: edge.left }, 'nesw-resize'],
-    ['w', { top: '50%', left: edge.left, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
-  ]
-}
-
-function resizeEdgeHitZones(rect) {
-  const edge = edgeOutsets(rect, EDGE_HIT_OFFSET)
-  return [
-    ['n', { top: edge.top, left: 0, right: 0, height: EDGE_HIT_SIZE }, 'ns-resize'],
-    ['e', { top: 0, right: edge.right, bottom: 0, width: EDGE_HIT_SIZE }, 'ew-resize'],
-    ['s', { bottom: edge.bottom, left: 0, right: 0, height: EDGE_HIT_SIZE }, 'ns-resize'],
-    ['w', { top: 0, left: edge.left, bottom: 0, width: EDGE_HIT_SIZE }, 'ew-resize'],
-  ]
-}
 
 export default function FreeCanvasItem({
   component,
@@ -158,11 +127,12 @@ export default function FreeCanvasItem({
     h,
     maxW: viewport === 'mobile' ? page.mobileWidth || 390 : page.canvasWidth || 1000,
   }
-  const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
-  const handles = resizeHandles(chromeRect).filter(([dir]) => (
+  const chrome = chromeMetrics(canvasScale)
+  const frameOutsets = frameOutsetsFor(chromeRect, chrome)
+  const handles = resizeHandles(chromeRect, chrome).filter(([dir]) => (
     stackedRegion ? dir === 's' : !viewportStretch || dir === 'n' || dir === 's'
   ))
-  const edgeHitZones = resizeEdgeHitZones(chromeRect).filter(([dir]) => (
+  const edgeHitZones = resizeEdgeHitZones(chromeRect, chrome).filter(([dir]) => (
     stackedRegion ? dir === 's' : !viewportStretch || dir === 'n' || dir === 's'
   ))
   const hidden =
@@ -303,12 +273,11 @@ export default function FreeCanvasItem({
           pinOffsetY: Math.round(baseOffY + (pinY === 'bottom' ? -dy : dy)),
         })
       }
-      const onUpPin = () => {
-        window.removeEventListener('pointermove', onMovePin)
-        window.removeEventListener('pointerup', onUpPin)
-      }
-      window.addEventListener('pointermove', onMovePin)
-      window.addEventListener('pointerup', onUpPin)
+      state.beginHistoryGesture()
+      trackPointerDrag(e, {
+        onMove: onMovePin,
+        onEnd: () => useEditorStore.getState().endHistoryGesture(),
+      })
       return
     }
     // Snapshot the dragged group's origins + the snap siblings/artboard ONCE.
@@ -349,6 +318,7 @@ export default function FreeCanvasItem({
         siblings,
         artboard,
         grid,
+        snapThresholdFor(canvasScale),
       )
       if (groupIds.length === 1) {
         setLayout(component.id, { x: viewportStretch ? 0 : snap.x, y: snap.y })
@@ -366,18 +336,18 @@ export default function FreeCanvasItem({
       }
       setDragGuides(snap.guides)
     }
-    function onMove(ev) {
-      drag.track(ev)
-      moveTo(ev.clientX, ev.clientY)
-    }
-    function onUp() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      drag.stop()
-      clearDragGuides()
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    state.beginHistoryGesture()
+    trackPointerDrag(e, {
+      onMove: (ev) => {
+        drag.track(ev)
+        moveTo(ev.clientX, ev.clientY)
+      },
+      onEnd: () => {
+        drag.stop()
+        clearDragGuides()
+        useEditorStore.getState().endHistoryGesture()
+      },
+    })
   }
 
   function startResize(e, dir) {
@@ -419,17 +389,17 @@ export default function FreeCanvasItem({
       }
       setLayout(component.id, { x: nx, y: ny, w: nw, h: nh })
     }
-    function onMove(ev) {
-      drag.track(ev)
-      resizeTo(ev.clientX, ev.clientY)
-    }
-    function onUp() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      drag.stop()
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    useEditorStore.getState().beginHistoryGesture()
+    trackPointerDrag(e, {
+      onMove: (ev) => {
+        drag.track(ev)
+        resizeTo(ev.clientX, ev.clientY)
+      },
+      onEnd: () => {
+        drag.stop()
+        useEditorStore.getState().endHistoryGesture()
+      },
+    })
   }
 
   // Hidden on THIS breakpoint means gone from this canvas — exactly like the
@@ -470,10 +440,9 @@ export default function FreeCanvasItem({
         // Armed link source stays a solid blue ring (with a light wash) until
         // the next click picks the target — same affordance as HTML mode.
         background: isLinkSource ? 'rgba(79, 70, 229, 0.10)' : undefined,
+        ...hoverRingStyle(chrome, frameOutsets),
       }}
-      className={
-        isSelected || linkMode || brushMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'
-      }
+      className={isSelected || linkMode || brushMode ? '' : HOVER_RING_CLASS}
     >
       {component.type === 'region' ? (
         <div className="h-full w-full overflow-visible">
@@ -516,7 +485,7 @@ export default function FreeCanvasItem({
 
       {hidden && (
         <span
-          style={{ position: 'absolute', top: 2, left: 2, zIndex: 25 }}
+          style={chromeBadgeStyle(chrome, 'top-left')}
           className="rounded-lg bg-[#111827]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           {t('Hidden on {viewport}', { viewport: t(viewport === 'mobile' ? 'mobile' : 'PC') })}
@@ -530,7 +499,7 @@ export default function FreeCanvasItem({
               ? 'Pinned to the screen — stays put while the page scrolls. Drag to adjust the pin offsets.'
               : 'Sticky — scrolls with the page until it reaches the edge, then stays.'
           }
-          style={{ position: 'absolute', bottom: 2, left: 2, zIndex: 25 }}
+          style={chromeBadgeStyle(chrome, 'bottom-left')}
           className="rounded-lg bg-[#4f46e5]/85 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           {pinMode === 'fixed' ? 'Pinned' : 'Sticky'}
@@ -538,60 +507,18 @@ export default function FreeCanvasItem({
       )}
 
       {((isSelected && !brushMode) || isLinkSource) && (
-        <div
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            top: frameOutsets.top,
-            right: frameOutsets.right,
-            bottom: frameOutsets.bottom,
-            left: frameOutsets.left,
-            border: `${isLinkSource ? 3 : 2}px solid ${ACCENT}`,
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
-            boxSizing: 'border-box',
-            pointerEvents: 'none',
-            zIndex: 28,
-          }}
-        />
+        <SelectionFrame outsets={frameOutsets} metrics={chrome} link={isLinkSource} />
       )}
 
+      {/* The action bar itself is docked in the editor toolbar (one stable
+          spot for every element) — only the resize affordances live here. */}
       {isPrimarySingle && !linkMode && (
-        <>
-          {/* The action bar itself is docked in the editor toolbar (one stable
-              spot for every element) — only the resize affordances live here. */}
-          {edgeHitZones.map(([dir, pos, cursor]) => (
-            <div
-              key={`edge-${dir}`}
-              aria-hidden="true"
-              onPointerDown={(e) => startResize(e, dir)}
-              style={{
-                position: 'absolute',
-                zIndex: 29,
-                cursor,
-                touchAction: 'none',
-                ...pos,
-              }}
-            />
-          ))}
-          {handles.map(([dir, pos, cursor]) => (
-            <div
-              key={dir}
-              onPointerDown={(e) => startResize(e, dir)}
-              style={{
-                position: 'absolute',
-                width: HANDLE_SIZE,
-                height: HANDLE_SIZE,
-                background: ACCENT,
-                border: '1px solid #ffffff',
-                borderRadius: 2,
-                boxShadow: '0 1px 5px rgba(15,23,42,0.22)',
-                zIndex: 30,
-                cursor,
-                ...pos,
-              }}
-            />
-          ))}
-        </>
+        <ResizeAffordances
+          handles={handles}
+          edgeZones={edgeHitZones}
+          metrics={chrome}
+          onStart={startResize}
+        />
       )}
     </div>
   )

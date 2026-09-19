@@ -63,6 +63,12 @@ describe('stepping', () => {
     expect(nextZoom(MAX_ZOOM, 1, 1)).toBe(MAX_ZOOM)
     expect(nextZoom(MIN_ZOOM, -1, 1)).toBe(MIN_ZOOM)
   })
+
+  it('never moves the opposite way when fit already lies beyond the last step', () => {
+    // A wide artboard in a narrow window fits below the smallest step.
+    expect(nextZoom('fit', -1, 0.2)).toBe('fit')
+    expect(nextZoom('fit', 1, 0.2)).toBe(MIN_ZOOM)
+  })
 })
 
 describe('remembering it', () => {

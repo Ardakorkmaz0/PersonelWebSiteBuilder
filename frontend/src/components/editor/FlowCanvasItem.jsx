@@ -20,76 +20,56 @@ import {
   responsiveRegionChildLayout,
 } from '../../utils/regionLayout.js'
 import { autoLayoutChildStyle, autoLayoutContainerStyle } from '../../utils/autoLayout.js'
+import { trackPointerDrag } from '../../utils/pointerDrag.js'
+import {
+  CHROME_ACCENT,
+  HOVER_RING_CLASS,
+  chromeBadgeStyle,
+  chromeMetrics,
+  frameOutsets as frameOutsetsFor,
+  hoverRingStyle,
+  resizeEdgeHitZones,
+  resizeHandles,
+} from './selectionChrome.js'
+import { ResizeAffordances, SelectionFrame } from './ChromeAffordances.jsx'
 
-const ACCENT = '#4f46e5'
 const MIN = 20
-const HANDLE_SIZE = 10
-const HANDLE_OFFSET = HANDLE_SIZE / 2
-const EDGE_HIT_SIZE = 14
-const EDGE_HIT_OFFSET = EDGE_HIT_SIZE / 2
-const FRAME_OUTSET = 2
 const FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
 
 // Resize handles for flow mode. Width (E) controls how the block packs in its row;
 // Height (S) sets the box height; SE does both. Full-bleed blocks only expose
 // height. Width only matters on PC (mobile blocks are full-width), but HEIGHT is
 // editable on mobile too so the spacing can be tuned there like on PC.
-function edgeOutsets(rect, amount) {
-  const maxW = rect.maxW || 0
-  const maxH = rect.maxH || 0
-  return {
-    top: rect.y <= amount ? 0 : -amount,
-    left: rect.x <= amount ? 0 : -amount,
-    right: maxW && rect.x + rect.w >= maxW - amount ? 0 : -amount,
-    bottom: maxH && rect.y + rect.h >= maxH - amount ? 0 : -amount,
-  }
-}
-
-function freeResizeHandles(rect) {
-  const edge = edgeOutsets(rect, HANDLE_OFFSET)
-  return [
-    ['nw', { top: edge.top, left: edge.left }, 'nwse-resize'],
-    ['n', { top: edge.top, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
-    ['ne', { top: edge.top, right: edge.right }, 'nesw-resize'],
-    ['e', { top: '50%', right: edge.right, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
-    ['se', { bottom: edge.bottom, right: edge.right }, 'nwse-resize'],
-    ['s', { bottom: edge.bottom, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
-    ['sw', { bottom: edge.bottom, left: edge.left }, 'nesw-resize'],
-    ['w', { top: '50%', left: edge.left, marginTop: -HANDLE_OFFSET }, 'ew-resize'],
-  ]
-}
-
-function freeResizeEdgeHitZones(rect) {
-  const edge = edgeOutsets(rect, EDGE_HIT_OFFSET)
-  return [
-    ['n', { top: edge.top, left: 0, right: 0, height: EDGE_HIT_SIZE }, 'ns-resize'],
-    ['e', { top: 0, right: edge.right, bottom: 0, width: EDGE_HIT_SIZE }, 'ew-resize'],
-    ['s', { bottom: edge.bottom, left: 0, right: 0, height: EDGE_HIT_SIZE }, 'ns-resize'],
-    ['w', { top: 0, left: edge.left, bottom: 0, width: EDGE_HIT_SIZE }, 'ew-resize'],
-  ]
-}
-
-function flowResizeHandles({ full, viewport }) {
-  const horizontal = full ? 0 : -HANDLE_OFFSET
-  const bottom = -HANDLE_OFFSET
+function flowResizeHandles({ full, viewport }, chrome) {
+  const half = chrome.handleOffset
+  const horizontal = full ? 0 : -half
+  const bottom = -half
   const handles = [
-    ['s', { bottom, left: '50%', marginLeft: -HANDLE_OFFSET }, 'ns-resize'],
+    ['s', { bottom, left: '50%', marginLeft: -half }, 'ns-resize'],
   ]
   if (!full && viewport === 'pc') {
-    handles.unshift(['e', { top: '50%', right: horizontal, marginTop: -HANDLE_OFFSET }, 'ew-resize'])
+    handles.unshift(['e', { top: '50%', right: horizontal, marginTop: -half }, 'ew-resize'])
     handles.push(['se', { bottom, right: horizontal }, 'nwse-resize'])
   }
   return handles
 }
 
-function flowResizeEdgeHitZones({ full, viewport }) {
+function flowResizeEdgeHitZones({ full, viewport }, chrome) {
+  const size = chrome.edgeHit
+  const offset = chrome.edgeHitOffset
   const edges = [
-    ['s', { bottom: -EDGE_HIT_OFFSET, left: 0, right: 0, height: EDGE_HIT_SIZE }, 'ns-resize'],
+    ['s', { bottom: -offset, left: 0, right: 0, height: size }, 'ns-resize'],
   ]
   if (!full && viewport === 'pc') {
-    edges.push(['e', { top: 0, right: -EDGE_HIT_OFFSET, bottom: 0, width: EDGE_HIT_SIZE }, 'ew-resize'])
+    edges.push(['e', { top: 0, right: -offset, bottom: 0, width: size }, 'ew-resize'])
   }
   return edges
+}
+
+// The same outset on every side, for items whose parent does not clip them.
+function uniformOutsets(chrome) {
+  const o = -chrome.outset
+  return { top: o, right: o, bottom: o, left: o }
 }
 
 export default function FlowCanvasItem({
@@ -183,12 +163,12 @@ export default function FlowCanvasItem({
       if (dir.includes('s')) patch.h = Math.max(MIN, orig.h + (ev.clientY - sy) / canvasScale)
       setLayout(component.id, patch)
     }
-    function onUp() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    // One undo step per gesture; ends on pointerup, cancel or loss of focus.
+    useEditorStore.getState().beginHistoryGesture()
+    trackPointerDrag(e, {
+      onMove,
+      onEnd: () => useEditorStore.getState().endHistoryGesture(),
+    })
   }
 
   // Hidden on this breakpoint: don't render the full (faded) box — it just leaves a
@@ -225,17 +205,18 @@ export default function FlowCanvasItem({
     )
   }
 
+  const chrome = chromeMetrics(canvasScale)
   const horizontalFrameOutset = full || viewport !== 'pc' || parentDirection === 'column'
     ? 0
-    : -FRAME_OUTSET
+    : -chrome.outset
   const frameOutsets = {
-    top: -FRAME_OUTSET,
+    top: -chrome.outset,
     right: horizontalFrameOutset,
-    bottom: -FRAME_OUTSET,
+    bottom: -chrome.outset,
     left: horizontalFrameOutset,
   }
-  const handles = isSelected && !brushMode ? flowResizeHandles({ full, viewport }) : []
-  const edgeHitZones = isSelected && !brushMode ? flowResizeEdgeHitZones({ full, viewport }) : []
+  const handles = isSelected && !brushMode ? flowResizeHandles({ full, viewport }, chrome) : []
+  const edgeHitZones = isSelected && !brushMode ? flowResizeEdgeHitZones({ full, viewport }, chrome) : []
 
   return (
     <div
@@ -259,8 +240,9 @@ export default function FlowCanvasItem({
           : {}),
         cursor: brushMode ? BRUSH_CURSOR : 'pointer',
         zIndex: isSelected ? 20 : pinMode ? 10 : 1,
+        ...hoverRingStyle(chrome, frameOutsets),
       }}
-      className={isSelected || brushMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'}
+      className={isSelected || brushMode ? '' : HOVER_RING_CLASS}
     >
       {pinMode && (
         <span
@@ -269,7 +251,7 @@ export default function FlowCanvasItem({
               ? 'Pinned to the screen — stays put while the page scrolls.'
               : 'Sticky — scrolls with the page until it reaches the edge, then stays.'
           }
-          style={{ position: 'absolute', bottom: 2, left: 2, zIndex: 25 }}
+          style={chromeBadgeStyle(chrome, 'bottom-left')}
           className="rounded-lg bg-[#4f46e5]/85 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           {pinMode === 'fixed' ? 'Pinned' : 'Sticky'}
@@ -316,59 +298,18 @@ export default function FlowCanvasItem({
       )}
 
       {isSelected && !brushMode && (
-        <div
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            top: frameOutsets.top,
-            right: frameOutsets.right,
-            bottom: frameOutsets.bottom,
-            left: frameOutsets.left,
-            border: `2px solid ${ACCENT}`,
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
-            boxSizing: 'border-box',
-            pointerEvents: 'none',
-            zIndex: 28,
-          }}
-        />
+        <SelectionFrame outsets={frameOutsets} metrics={chrome} />
       )}
 
       {/* Element actions are docked in the editor toolbar — one stable spot for
           every selection, nested ones included, so nothing floats over the design. */}
 
-      {edgeHitZones.map(([dir, pos, cursor]) => (
-        <div
-          key={`edge-${dir}`}
-          aria-hidden="true"
-          onPointerDown={(e) => startResize(e, dir)}
-          style={{
-            position: 'absolute',
-            zIndex: 29,
-            cursor,
-            touchAction: 'none',
-            ...pos,
-          }}
-        />
-      ))}
-
-      {handles.map(([dir, pos, cursor]) => (
-        <div
-          key={dir}
-          onPointerDown={(e) => startResize(e, dir)}
-          style={{
-            position: 'absolute',
-            width: HANDLE_SIZE,
-            height: HANDLE_SIZE,
-            background: ACCENT,
-            border: '1px solid #ffffff',
-            borderRadius: 2,
-            boxShadow: '0 1px 5px rgba(15,23,42,0.22)',
-            zIndex: 30,
-            cursor,
-            ...pos,
-          }}
-        />
-      ))}
+      <ResizeAffordances
+        handles={handles}
+        edgeZones={edgeHitZones}
+        metrics={chrome}
+        onStart={startResize}
+      />
     </div>
   )
 }
@@ -420,6 +361,8 @@ export function RegionEditor({
   const { ref, actualW } = useFitToWidth(designW, designH)
   const safeW = Math.max(1, Math.min(designW, actualW || designW))
   const showGrid = selectedId === component.id || isOver || kids.length === 0
+  // The grid is not scaled beyond the canvas itself (data-builder-fit-scale=1).
+  const gridChrome = chromeMetrics(canvasScale)
   const setRefs = (el) => {
     ref.current = el
     setNodeRef(el)
@@ -450,9 +393,23 @@ export function RegionEditor({
       >
         {showGrid && (
           <>
-            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 border-l border-dashed border-[#4f46e5]/55" />
-            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 border-r border-dashed border-[#4f46e5]/55" />
-            <span className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-[#4f46e5]/80 px-1.5 py-0.5 text-[10px] font-medium text-white">
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 z-10 border-l border-dashed border-[#4f46e5]/55"
+              style={{ borderLeftWidth: gridChrome.hairline }}
+            />
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 z-10 border-r border-dashed border-[#4f46e5]/55"
+              style={{ borderRightWidth: gridChrome.hairline }}
+            />
+            <span
+              className="pointer-events-none rounded bg-[#4f46e5]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              style={{
+                ...chromeBadgeStyle(gridChrome, 'top-left'),
+                top: 8 * gridChrome.hairline,
+                left: 8 * gridChrome.hairline,
+                zIndex: 10,
+              }}
+            >
               {t('Content grid')} · {Math.round(safeW)}px
             </span>
           </>
@@ -511,6 +468,8 @@ export function ContainerEditor({
   const { setNodeRef, isOver } = useDroppable({ id: component.id })
   const userStyles = sanitizeStyles(stylesFor(component, viewport))
   const { ref, scale, scaledHeight } = useFitToWidth(designW, designH)
+  // The drop outline sits on this box, which is painted at the canvas scale.
+  const dropChrome = chromeMetrics(canvasScale)
   const setRefs = (el) => {
     ref.current = el
     setNodeRef(el)
@@ -532,8 +491,8 @@ export function ContainerEditor({
           width: '100%',
           height: 'auto',
           boxSizing: 'border-box',
-          outline: isOver ? `2px dashed ${ACCENT}` : undefined,
-          outlineOffset: -2,
+          outline: isOver ? `${dropChrome.frame}px dashed ${CHROME_ACCENT}` : undefined,
+          outlineOffset: -dropChrome.frame,
         }}
       >
         {kids.length === 0 ? (
@@ -546,6 +505,7 @@ export function ContainerEditor({
               key={c.id}
               component={c}
               container={component}
+              canvasScale={canvasScale}
               brushMode={brushMode}
               brushColor={brushColor}
               brushTarget={brushTarget}
@@ -568,8 +528,8 @@ export function ContainerEditor({
         boxSizing: 'border-box',
         position: 'relative',
         overflowX: userStyles.overflow || userStyles.overflowX || 'clip',
-        outline: isOver ? `2px dashed ${ACCENT}` : undefined,
-        outlineOffset: -2,
+        outline: isOver ? `${dropChrome.frame}px dashed ${CHROME_ACCENT}` : undefined,
+        outlineOffset: -dropChrome.frame,
       }}
     >
       <div
@@ -612,6 +572,7 @@ export function ContainerEditor({
 function FlowChildItem({
   component,
   container,
+  canvasScale = 1,
   brushMode = false,
   brushColor = '#4f46e5',
   brushTarget = 'smart',
@@ -624,6 +585,10 @@ function FlowChildItem({
   if (isHidden(component, viewport)) return null
   const isSelected = selectedId === component.id
   const childStyle = autoLayoutChildStyle(component, container.props) || {}
+  // A flowing cell is never clipped by its container, so the frame always sits
+  // fully outside it — the same place the free-canvas frame sits.
+  const chrome = chromeMetrics(canvasScale)
+  const outsets = uniformOutsets(chrome)
   return (
     <div
       data-cid={component.id}
@@ -642,14 +607,15 @@ function FlowChildItem({
         position: 'relative',
         boxSizing: 'border-box',
         cursor: brushMode ? BRUSH_CURSOR : 'pointer',
-        outline: isSelected ? `2px solid ${ACCENT}` : undefined,
-        outlineOffset: 1,
-        borderRadius: 4,
+        zIndex: isSelected ? 20 : undefined,
+        ...hoverRingStyle(chrome, outsets),
       }}
+      className={isSelected || brushMode ? '' : HOVER_RING_CLASS}
     >
       <div className="pointer-events-none h-full w-full">
         <RenderComponent component={component} viewport={viewport} editorPreview />
       </div>
+      {isSelected && !brushMode && <SelectionFrame outsets={outsets} metrics={chrome} />}
     </div>
   )
 }
@@ -686,9 +652,12 @@ function TabsCanvasItem({
     maxW: bounds?.w,
     maxH: bounds?.h,
   }
-  const frameOutsets = edgeOutsets(chromeRect, FRAME_OUTSET)
-  const handles = brushMode ? [] : freeResizeHandles(chromeRect)
-  const edgeHitZones = brushMode ? [] : freeResizeEdgeHitZones(chromeRect)
+  // interactionScale is the scale this item is really painted at: the canvas
+  // scale times any fit-down of the mini-canvas it lives in.
+  const chrome = chromeMetrics(interactionScale)
+  const frameOutsets = frameOutsetsFor(chromeRect, chrome)
+  const handles = brushMode ? [] : resizeHandles(chromeRect, chrome)
+  const edgeHitZones = brushMode ? [] : resizeEdgeHitZones(chromeRect, chrome)
   const applyLayout = (patch) => setLayout(
     component.id,
     layoutMapper ? layoutMapper(patch, { x, y, w, h }) : patch,
@@ -713,12 +682,12 @@ function TabsCanvasItem({
         y: orig.y + (ev.clientY - sy) / interactionScale,
       })
     }
-    function onUp() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    // One undo step per gesture; ends on pointerup, cancel or loss of focus.
+    useEditorStore.getState().beginHistoryGesture()
+    trackPointerDrag(e, {
+      onMove,
+      onEnd: () => useEditorStore.getState().endHistoryGesture(),
+    })
   }
 
   function startResize(e, dir) {
@@ -747,12 +716,12 @@ function TabsCanvasItem({
       }
       applyLayout({ x: nx, y: ny, w: nw, h: nh })
     }
-    function onUp() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    // One undo step per gesture; ends on pointerup, cancel or loss of focus.
+    useEditorStore.getState().beginHistoryGesture()
+    trackPointerDrag(e, {
+      onMove,
+      onEnd: () => useEditorStore.getState().endHistoryGesture(),
+    })
   }
 
   // Hidden on THIS breakpoint means gone from this canvas, like the published
@@ -772,8 +741,9 @@ function TabsCanvasItem({
         cursor: brushMode ? BRUSH_CURSOR : 'move',
         zIndex: isSelected ? 20 : 1,
         opacity: hidden ? 0.35 : 1,
+        ...hoverRingStyle(chrome, frameOutsets),
       }}
-      className={isSelected || brushMode ? '' : 'hover:shadow-[inset_0_0_0_1px_#a6b7d6]'}
+      className={isSelected || brushMode ? '' : HOVER_RING_CLASS}
     >
       {component.type === 'region' ? (
         <div className="h-full w-full overflow-visible">
@@ -816,7 +786,7 @@ function TabsCanvasItem({
 
       {hidden && (
         <span
-          style={{ position: 'absolute', top: 2, left: 2, zIndex: 25 }}
+          style={chromeBadgeStyle(chrome, 'top-left')}
           className="rounded-lg bg-[#111827]/80 px-1.5 py-0.5 text-[10px] font-medium text-white"
         >
           {t('Hidden on {viewport}', { viewport: t(viewport === 'mobile' ? 'mobile' : 'PC') })}
@@ -826,53 +796,13 @@ function TabsCanvasItem({
       {isSelected && !brushMode && (
         <>
           {/* Actions live in the docked toolbar bar; only the frame is drawn here. */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              top: frameOutsets.top,
-              right: frameOutsets.right,
-              bottom: frameOutsets.bottom,
-              left: frameOutsets.left,
-              border: `2px solid ${ACCENT}`,
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
-              boxSizing: 'border-box',
-              pointerEvents: 'none',
-              zIndex: 28,
-            }}
+          <SelectionFrame outsets={frameOutsets} metrics={chrome} />
+          <ResizeAffordances
+            handles={handles}
+            edgeZones={edgeHitZones}
+            metrics={chrome}
+            onStart={startResize}
           />
-          {edgeHitZones.map(([dir, pos, cursor]) => (
-            <div
-              key={`edge-${dir}`}
-              aria-hidden="true"
-              onPointerDown={(e) => startResize(e, dir)}
-              style={{
-                position: 'absolute',
-                zIndex: 29,
-                cursor,
-                touchAction: 'none',
-                ...pos,
-              }}
-            />
-          ))}
-          {handles.map(([dir, pos, cursor]) => (
-            <div
-              key={dir}
-              onPointerDown={(e) => startResize(e, dir)}
-              style={{
-                position: 'absolute',
-                width: HANDLE_SIZE,
-                height: HANDLE_SIZE,
-                background: ACCENT,
-                border: '1px solid #ffffff',
-                borderRadius: 2,
-                boxShadow: '0 1px 5px rgba(15,23,42,0.22)',
-                zIndex: 30,
-                cursor,
-                ...pos,
-              }}
-            />
-          ))}
         </>
       )}
     </div>
@@ -907,6 +837,8 @@ export function TabsEditor({
   const boundsH = Math.max(1, Math.round(component.layout?.h || designH))
   const { setNodeRef, isOver } = useDroppable({ id: component.id })
   const { ref: panelRef, scale, scaledHeight } = useFitToWidth(designW, designH)
+  // The drop outline sits on the panel, which is painted at the canvas scale.
+  const dropChrome = chromeMetrics(canvasScale)
   const setPanelRefs = (el) => {
     panelRef.current = el
     setNodeRef(el)
@@ -989,8 +921,8 @@ export function TabsEditor({
           position: 'relative',
           minHeight: scaledHeight,
           overflowX: 'clip',
-          outline: isOver ? `2px dashed ${ACCENT}` : undefined,
-          outlineOffset: -2,
+          outline: isOver ? `${dropChrome.frame}px dashed ${CHROME_ACCENT}` : undefined,
+          outlineOffset: -dropChrome.frame,
           flex: 1,
         }}
       >

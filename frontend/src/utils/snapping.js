@@ -16,7 +16,16 @@
 // the artboard centre we both snap to it AND emit the guide line), so the
 // visual reflects exactly what the snap did.
 
-export const SNAP_THRESHOLD = 6 // pixels of slack for the magnetic snap
+// Pixels of slack for the magnetic snap, measured ON SCREEN. The drag works in
+// design pixels, so callers drawing the canvas scaled pass
+// snapThresholdFor(scale): at 25% zoom a fixed 6 design px was 1.5 screen px
+// (snapping never engaged) and at 400% it was 24 (everything stuck).
+export const SNAP_THRESHOLD = 6
+
+export function snapThresholdFor(canvasScale = 1) {
+  const scale = Number(canvasScale)
+  return SNAP_THRESHOLD / (Number.isFinite(scale) && scale > 0 ? scale : 1)
+}
 
 // Build the candidate axis values (x positions for vertical guides, y for
 // horizontal). artboard = { w, h }; siblings = [{ id, x, y, w, h }, ...].
@@ -42,12 +51,12 @@ function buildCandidates(siblings, artboard, draggedId) {
 // to the rect's start coordinate — for any probe (left, centre or right),
 // new_start = old_start + (cand - probe) keeps that probe aligned with
 // the candidate. Returns { delta, pos } or null.
-function snapAxis(start, size, candidates) {
+function snapAxis(start, size, candidates, threshold) {
   let best = null
   const tryMatch = (probe) => {
     for (const cand of candidates) {
       const delta = cand - probe
-      if (Math.abs(delta) >= SNAP_THRESHOLD) continue
+      if (Math.abs(delta) >= threshold) continue
       if (!best || Math.abs(delta) < Math.abs(best.delta)) {
         best = { delta, pos: cand }
       }
@@ -62,11 +71,11 @@ function snapAxis(start, size, candidates) {
 // `grid` (px, 0 = off): when an axis finds NO sibling/artboard snap, the position
 // rounds to the nearest grid line instead — so dragging lands on a tidy grid
 // while edge/centre alignment still wins when it's in range.
-export function snapDraggedRect(rect, siblings, artboard, grid = 0) {
+export function snapDraggedRect(rect, siblings, artboard, grid = 0, threshold = SNAP_THRESHOLD) {
   const { x, y, w, h, id } = rect
   const cands = buildCandidates(siblings, artboard, id)
-  const x2 = snapAxis(x, w, cands.xs)
-  const y2 = snapAxis(y, h, cands.ys)
+  const x2 = snapAxis(x, w, cands.xs, threshold)
+  const y2 = snapAxis(y, h, cands.ys, threshold)
   const guides = []
   let outX = x
   let outY = y

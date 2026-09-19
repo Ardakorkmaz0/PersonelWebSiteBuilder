@@ -1043,6 +1043,14 @@ function normalizeSchema(schema, options = {}) {
 let lastKey = null
 let lastTime = 0
 let burstStart = 0
+// An open pointer gesture (drag / resize), or null. While one is open the
+// first real edit takes the undo snapshot and every later edit joins it, so a
+// gesture is exactly one undo step however long it lasts. Time-based
+// coalescing could not promise that: holding still for half a second, or
+// dragging for longer than COALESCE_MAX_MS (a cap that exists for typing), cut
+// one drag into several steps, and a single Ctrl+Z put the item back only part
+// of the way.
+let gesture = null
 
 export const useEditorStore = create((set, get) => ({
   schema: emptySchema(),
@@ -1118,7 +1126,10 @@ export const useEditorStore = create((set, get) => ({
   // (a drag or a run of keystrokes becomes a single undo step).
   record: (key) => {
     const now = Date.now()
-    if (
+    if (gesture) {
+      if (gesture.recorded) return
+      gesture.recorded = true
+    } else if (
       key
       && key === lastKey
       && now - lastTime < COALESCE_MS
@@ -1136,8 +1147,21 @@ export const useEditorStore = create((set, get) => ({
     }))
   },
 
+  // Open / close a pointer gesture (see `gesture` above). Opening takes no
+  // snapshot by itself — a click that never moves leaves no empty undo step.
+  // Closing also ends coalescing, so the next edit is its own step even when
+  // it has the same key (two drags of one item are two undos).
+  beginHistoryGesture: () => {
+    gesture = { recorded: false }
+  },
+  endHistoryGesture: () => {
+    gesture = null
+    lastKey = null
+  },
+
   loadSchema: (schema) => {
     const normalized = normalizeSchema(schema)
+    gesture = null
     lastKey = null
     lastTime = 0
     burstStart = 0
@@ -1806,7 +1830,7 @@ export const useEditorStore = create((set, get) => ({
       const apply = (arr) =>
         arr.map((c) =>
           pos[c.id]
-            ? { ...c, [key]: { ...(c[key] || c.layout), ...pos[c.id] } }
+            ? { ...c, [key]: clampLayout({ ...(c[key] || c.layout), ...pos[c.id] }, layoutBoundsFor(page, c.id, key)) }
             : Array.isArray(c.children)
               ? { ...c, children: apply(c.children) }
               : c,
@@ -1854,7 +1878,7 @@ export const useEditorStore = create((set, get) => ({
       const apply = (arr) =>
         arr.map((c) =>
           pos[c.id]
-            ? { ...c, [key]: { ...(c[key] || c.layout), ...pos[c.id] } }
+            ? { ...c, [key]: clampLayout({ ...(c[key] || c.layout), ...pos[c.id] }, layoutBoundsFor(page, c.id, key)) }
             : Array.isArray(c.children)
               ? { ...c, children: apply(c.children) }
               : c,
@@ -2481,6 +2505,7 @@ export const useEditorStore = create((set, get) => ({
   undo: () =>
     set((state) => {
       if (state.past.length === 0) return {}
+      gesture = null
       lastKey = null
       const previous = state.past[state.past.length - 1]
       const currentPageId = previous.pages.some((p) => p.id === state.currentPageId)
@@ -2500,6 +2525,7 @@ export const useEditorStore = create((set, get) => ({
   redo: () =>
     set((state) => {
       if (state.future.length === 0) return {}
+      gesture = null
       lastKey = null
       const next = state.future[0]
       const currentPageId = next.pages.some((p) => p.id === state.currentPageId)
@@ -2509,7 +2535,7 @@ export const useEditorStore = create((set, get) => ({
         schema: next,
         currentPageId,
         future: state.future.slice(1),
-        past: [...state.past, state.schema],
+        past: [...state.past.slice(-(HISTORY_LIMIT - 1)), state.schema],
         selectedId: null,
         selectedIds: [],
         dirty: true,

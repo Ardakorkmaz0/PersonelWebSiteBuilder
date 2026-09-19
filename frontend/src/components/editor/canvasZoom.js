@@ -68,6 +68,11 @@ export function zoomPercent(zoom, fitScale) {
  * 62%, not 110%. */
 export function nextZoom(zoom, direction, fitScale) {
   const current = zoomPercent(zoom, fitScale)
-  if (direction > 0) return ZOOM_STEPS.find((step) => step > current) ?? MAX_ZOOM
-  return [...ZOOM_STEPS].reverse().find((step) => step < current) ?? MIN_ZOOM
+  const next = direction > 0
+    ? ZOOM_STEPS.find((step) => step > current)
+    : [...ZOOM_STEPS].reverse().find((step) => step < current)
+  // Past the last step there is nowhere to go, so stay put. Falling back to the
+  // far end instead turned the button around: a 1920px artboard fitted at 20%
+  // jumped IN to 25% on 'zoom out'.
+  return next ?? zoom
 }

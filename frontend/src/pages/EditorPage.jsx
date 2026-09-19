@@ -76,7 +76,9 @@ import { pageHasMotion } from '../utils/motion.js'
 import { htmlSnippetSize } from '../utils/htmlSnippetSizing.js'
 import {
   EDITOR_AUTO_SAVE_DELAY_MS,
+  canvasClipboardOwnsShortcut,
   editorShortcutScope,
+  hasDocumentTextSelection,
   shouldBlockEditorUnload,
   shouldRunEditorAutoSave,
 } from '../utils/editorLeave.js'
@@ -897,9 +899,21 @@ export default function EditorPage() {
       const state = useEditorStore.getState()
 
       if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); state.selectAll(); return }
-      if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); state.pasteClipboard(); return }
-      if (mod && e.key.toLowerCase() === 'c') { e.preventDefault(); state.copySelection(); return }
-      if (mod && e.key.toLowerCase() === 'x') { e.preventDefault(); state.cutSelection(); return }
+      if (mod && ['c', 'x', 'v'].includes(e.key.toLowerCase())) {
+        const key = e.key.toLowerCase()
+        // Only take the key when the component clipboard has work to do;
+        // otherwise leave the browser's own copy/cut/paste alone.
+        if (!canvasClipboardOwnsShortcut(key, {
+          hasSelection: state.selectedIds.length > 0,
+          hasClipboard: state.clipboard.length > 0,
+          textSelected: hasDocumentTextSelection(),
+        })) return
+        e.preventDefault()
+        if (key === 'c') state.copySelection()
+        else if (key === 'x') state.cutSelection()
+        else state.pasteClipboard()
+        return
+      }
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); state.duplicateSelection(); return }
 
       if (!state.selectedIds.length) return
@@ -927,16 +941,21 @@ export default function EditorPage() {
   // Clicking a cross-page link (#pageId) inside the HTML View iframe posts a
   // 'pwb-navigate' message (the iframe is sandboxed and can't switch pages
   // itself). Honour it so links can be tested right in the editor, the same
-  // way the published page does.
+  // way the published page does. Bound once; the latest pages and page switch
+  // are read through a ref (it used to have no dependency list at all, so the
+  // listener was torn down and re-added on every render of the editor).
+  const navigateTargetRef = useRef(null)
+  navigateTargetRef.current = { storePages, switchToPage }
   useEffect(() => {
     const onMsg = (e) => {
       if (e.data?.type !== 'pwb-navigate') return
       const pid = decodeURIComponent(String(e.data.hash || '').replace(/^#/, ''))
-      if (pid && storePages.some((p) => p.id === pid)) switchToPage(pid)
+      const { storePages: pages, switchToPage: go } = navigateTargetRef.current || {}
+      if (pid && pages?.some((p) => p.id === pid)) go(pid)
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  })
+  }, [])
 
   function onDragStart(event) {
     const data = event.active.data.current

@@ -81,8 +81,17 @@ describe('selection action bar counter-scale', () => {
   it('does nothing at all when the artboard is not scaled', () => {
     expect(selectionActionsScaleStyle(1)).toEqual({})
     expect(selectionActionsScaleStyle(undefined)).toEqual({})
-    // Above 1:1 the bar is already the right physical size.
-    expect(selectionActionsScaleStyle(2)).toEqual({})
+  })
+
+  it('shrinks back to its physical size when the canvas is zoomed past 1:1', () => {
+    // Zoom can now draw the artboard at 200-400%; the bar lives inside it and
+    // would otherwise grow with it until it covered the selection.
+    expect(selectionActionsScaleStyle(2)).toEqual({
+      transform: 'scale(0.5)',
+      transformOrigin: 'top left',
+    })
+    // Its reserved box shrinks in design pixels by the same factor.
+    expect(selectionActionsCanvasWidth(2)).toBe(Math.ceil(selectionActionsCanvasWidth(1) / 2))
   })
 
   it('respects the same floor the reservation uses, so the two cannot disagree', () => {

@@ -83,6 +83,7 @@ import {
   shouldRunEditorAutoSave,
 } from '../utils/editorLeave.js'
 import { createSaveQueue } from '../utils/saveQueue.js'
+import { projectSnapshot } from '../utils/projectSnapshot.js'
 import {
   clearLocalFileHandle,
   downloadHtmlFile,
@@ -529,6 +530,26 @@ export default function EditorPage() {
     htmlRevisionRef.current += 1
     setHtmlDirty(true)
   }
+
+  // An import swaps the schema (undoable in the store) AND every page's HTML
+  // (held here, outside the store). Undo used to bring the old schema back but
+  // leave the imported documents in place. Each import remembers which page
+  // HTML belongs to the schema object before and after it; store undo/redo
+  // restore those exact objects, so when one of them becomes current again its
+  // documents come back with it.
+  const htmlForSchemaRef = useRef(new WeakMap())
+  function rememberHtmlForSchema(schema, htmlMap) {
+    if (schema) htmlForSchemaRef.current.set(schema, htmlMap)
+  }
+  useEffect(() => useEditorStore.subscribe((state, prev) => {
+    if (state.schema === prev.schema) return
+    const saved = htmlForSchemaRef.current.get(state.schema)
+    if (!saved) return
+    setPageHtmlMap((current) => (current === saved ? current : saved))
+    htmlRevisionRef.current += 1
+    setHtmlDirty(true)
+    setWorkspaceSession((session) => session + 1)
+  }), [])
   // Element selected inside the HTML edit iframe — drives the right-rail
   // element properties panel (null → site settings).
   const [htmlSelection, setHtmlSelection] = useState(null)
@@ -798,19 +819,13 @@ export default function EditorPage() {
         setTagsText(Array.isArray(data.tags) ? data.tags.join(', ') : '')
         metaRevisionRef.current = 0
         setMetaDirty(false)
-        // Per-page HTML from the schema; legacy single-document sites carry
-        // their html at the site level — map it onto the first page.
-        const map = {}
+        // Per-page HTML comes out of the schema into the page map (legacy
+        // single-document sites carry theirs at the site level — it lands on
+        // the first page). See utils/projectSnapshot.js.
         const pages = data.schema?.pages || []
-        pages.forEach((p) => {
-          if (p?.html && p.html.trim()) map[p.id] = p.html
-        })
-        const firstId = pages[0]?.id
-        if (data.html && firstId && !map[firstId]) map[firstId] = data.html
-        setPageHtmlMap(map)
+        setPageHtmlMap(loadSchema(data.schema, { legacySiteHtml: data.html }))
         htmlRevisionRef.current = 0
         setHtmlDirty(false)
-        loadSchema(data.schema)
         // A site's saved schema must not decide which device the editor opens
         // on. Apply the user's global PC/Mobile preference after every load.
         useEditorStore.getState().setViewport(readLastViewport())
@@ -1262,29 +1277,35 @@ export default function EditorPage() {
     }
   }
 
-  async function performSave(nextPublished = published, { auto = false, versionSource } = {}) {
-      setAutoSaveState('saving')
-      const schemaBase = useEditorStore.getState().schema
-      // Fold the open workspace surface's html into the active page first.
-      const live = workspaceRef.current?.getHtml?.()
-      const map = { ...pageHtmlMap }
-      if (live != null && live !== siteHtml) {
-        map[currentPageId] = live
+  // The page documents as they are right now: the map, with the open HTML
+  // workspace's document folded in — it runs ahead of the map while the user
+  // types. Save and export both write this, through projectSnapshot, so a
+  // backup can never hold an older page than the server does. `commit` also
+  // brings the map up to date (save does; an export only reads).
+  function liveHtmlMap({ commit = false } = {}) {
+    const live = workspaceRef.current?.getHtml?.()
+    const map = { ...pageHtmlMap }
+    if (live != null && live !== siteHtml) {
+      map[currentPageId] = live
+      if (commit) {
         setSiteHtml(live)
         markHtmlDirty()
       }
+    }
+    return map
+  }
+
+  async function performSave(nextPublished = published, { auto = false, versionSource } = {}) {
+      setAutoSaveState('saving')
+      const schemaBase = useEditorStore.getState().schema
+      const map = liveHtmlMap({ commit: true })
       // A save may finish after the user has already made another edit. These
       // snapshots ensure we acknowledge only the exact revision sent below.
       const htmlRevisionAtSave = htmlRevisionRef.current
       const metaRevisionAtSave = metaRevisionRef.current
       // Per-page html rides inside the schema; the home page's document is
       // mirrored to site.html so single-page flows (and old data) keep working.
-      const schema = {
-        ...schemaBase,
-        pages: schemaBase.pages.map((p) => ({ ...p, html: map[p.id] || '' })),
-      }
-      const homeId = schemaBase.pages[0]?.id
-      const html = map[homeId] || ''
+      const { schema, homeHtml: html } = projectSnapshot(schemaBase, map)
       // A blank title 400s on the server (required field) and so does one
       // over 100 chars (model max_length) — save with a safe value instead
       // of failing the whole request over the title input.
@@ -1454,9 +1475,10 @@ export default function EditorPage() {
     else window.open(`/site/${nextSlug}`, '_blank')
   }
 
-  // Download the current design as a portable project file (.json).
+  // Download the current design as a portable project file (.json) — the same
+  // snapshot a save sends, so HTML pages go out with their current documents.
   function exportProject() {
-    const schema = useEditorStore.getState().schema
+    const { schema } = projectSnapshot(useEditorStore.getState().schema, liveHtmlMap())
     const blob = new Blob([JSON.stringify(schema, null, 2)], {
       type: 'application/json',
     })
@@ -1583,13 +1605,21 @@ export default function EditorPage() {
         setPageMode(currentPageId, 'html')
         return 'html'
       }
-      const okJson = importSchema(JSON.parse(await jsons[0].text()))
-      if (okJson) {
-        // A component project replaces the HTML of EVERY page.
-        setPageHtmlMap({})
+      const raw = JSON.parse(await jsons[0].text())
+      const schemaBefore = useEditorStore.getState().schema
+      const htmlBefore = liveHtmlMap()
+      const importedHtml = importSchema(raw)
+      if (importedHtml) {
+        // The project brings every page's document with it. This used to set
+        // an EMPTY map, so imported HTML pages opened blank and the next save
+        // wrote '' over them.
+        rememberHtmlForSchema(schemaBefore, htmlBefore)
+        rememberHtmlForSchema(useEditorStore.getState().schema, importedHtml)
+        setPageHtmlMap(importedHtml)
         setHtmlPast([])
         setHtmlFuture([])
         markHtmlDirty()
+        setWorkspaceSession((session) => session + 1)
         return 'json'
       }
       setError(t('Could not import: no usable design found in those files.'))
@@ -3053,17 +3083,9 @@ export default function EditorPage() {
               // rollback — push the schema + html back into the editor
               // store + local state so the canvas reflects it immediately
               // (no manual reload needed).
-              if (fresh?.schema) loadSchema(fresh.schema)
               {
-                // Rebuild the per-page html map exactly like the initial load.
-                const map = {}
-                const pages = fresh?.schema?.pages || []
-                pages.forEach((p) => {
-                  if (p?.html && p.html.trim()) map[p.id] = p.html
-                })
-                const firstId = pages[0]?.id
-                if (fresh?.html && firstId && !map[firstId]) map[firstId] = fresh.html
-                setPageHtmlMap(map)
+                // The per-page html map comes back exactly like the initial load.
+                setPageHtmlMap(fresh?.schema ? loadSchema(fresh.schema, { legacySiteHtml: fresh.html }) : {})
                 setHtmlPast([])
                 setHtmlFuture([])
                 htmlRevisionRef.current = 0

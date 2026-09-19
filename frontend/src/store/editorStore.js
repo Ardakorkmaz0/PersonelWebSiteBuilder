@@ -10,6 +10,7 @@ import { componentPresetStyles, componentPresetProps } from '../utils/componentP
 import { recolorHtml } from '../utils/htmlRecolor.js'
 import { regionContentWidth } from '../utils/regionLayout.js'
 import { anchorOf, anchorProblem, elementIdFor, retargetLinks, slugifyAnchor } from '../utils/anchors.js'
+import { splitPageHtml } from '../utils/projectSnapshot.js'
 
 const HISTORY_LIMIT = 60
 // Gap between two same-key edits that still counts as one gesture.
@@ -1181,8 +1182,12 @@ export const useEditorStore = create((set, get) => ({
     lastKey = null
   },
 
-  loadSchema: (schema) => {
-    const normalized = normalizeSchema(schema)
+  // Returns the pages' HTML documents, keyed by page id — the editor holds
+  // those outside this store (see utils/projectSnapshot.js), so they are lifted
+  // out here instead of lingering in the schema as a copy nothing updates.
+  // `legacySiteHtml` is site.html of sites that predate per-page HTML.
+  loadSchema: (schema, { legacySiteHtml = '' } = {}) => {
+    const { schema: normalized, htmlMap } = splitPageHtml(normalizeSchema(schema), legacySiteHtml)
     gesture = null
     lastKey = null
     lastTime = 0
@@ -1199,18 +1204,21 @@ export const useEditorStore = create((set, get) => ({
       linkMode: false,
       linkSourceId: null,
     })
+    return htmlMap
   },
 
   // Import a project from a parsed JSON object (the app's own schema format, e.g.
   // an exported file or the Code panel's schema.json). Unknown component types are
   // dropped so it stays valid + safe; styles/URLs are sanitized at render and on
   // save. Replaces the current design but is undoable and left unsaved (dirty).
+  // Returns the imported pages' HTML keyed by page id (as loadSchema does), or
+  // false when there was nothing to import.
   importSchema: (raw) => {
     const valid = raw && Array.isArray(raw.pages) && raw.pages.length > 0
     if (!valid) return false
+    const { schema: normalized, htmlMap } = splitPageHtml(normalizeSchema(raw, { filterUnknown: true }))
     get().record('import')
     set(() => {
-      const normalized = normalizeSchema(raw, { filterUnknown: true })
       return {
         schema: normalized,
         currentPageId: normalized.pages[0].id,
@@ -1222,7 +1230,7 @@ export const useEditorStore = create((set, get) => ({
         linkSourceId: null,
       }
     })
-    return true
+    return htmlMap
   },
 
   // ---- Pages -------------------------------------------------------------

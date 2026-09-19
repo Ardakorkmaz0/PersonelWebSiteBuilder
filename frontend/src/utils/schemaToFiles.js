@@ -46,7 +46,8 @@ import {
 import { motionClassSuffix, motionCssVars, motionHeadTags, motionRevealAttr } from './motion.js'
 import { pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
 
-const MOBILE_BREAKPOINT = 768
+// Widths at or below this get the phone layout on the published site.
+export const MOBILE_BREAKPOINT = 768
 const FLOW_FULL_WIDTH_TYPES = new Set(['navbar', 'section', 'region', 'divider'])
 const FLOW_FIXED_HEIGHT_TYPES = new Set(['image', 'divider', 'spacer'])
 

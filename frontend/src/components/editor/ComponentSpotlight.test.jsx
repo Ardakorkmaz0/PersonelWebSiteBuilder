@@ -208,3 +208,74 @@ describe('the mode says what it is', () => {
     expect(badge).toHaveAttribute('title', expect.stringContaining('still being built'))
   })
 })
+
+// Reported with a screenshot: editor on Mobile, spotlight switched to Desktop,
+// and the navbar still showed the phone ☰ at 1100px — then its opened menu was
+// cut off after the first link.
+describe('the width picked in the spotlight decides the breakpoint', () => {
+  function loadNavbar() {
+    useEditorStore.getState().loadSchema({
+      theme: {},
+      pages: [{
+        id: 'page_home',
+        name: 'Home',
+        components: [{
+          id: 'nav',
+          type: 'navbar',
+          props: {
+            brand: 'Navbar',
+            links: [
+              { label: 'Home', href: '#top' },
+              { label: 'Features', href: '#features' },
+              { label: 'Pricing', href: '#pricing' },
+            ],
+          },
+          styles: {},
+          layout: { x: 0, y: 0, w: 1000, h: 64 },
+        }],
+      }],
+    })
+  }
+
+  const menuButton = () => screen.queryByRole('button', { name: /navigation menu/i })
+
+  it('shows the desktop bar on Desktop even while the editor is on Mobile', async () => {
+    loadNavbar()
+    useEditorStore.getState().setViewport('mobile')
+    renderSpotlight({ componentId: 'nav' })
+    expect(menuButton()).toBeInTheDocument() // opened on Phone, like the editor
+    await userEvent.click(screen.getByRole('button', { name: /Desktop/ }))
+    expect(menuButton()).toBeNull()
+    expect(document.querySelector('[data-spotlight-viewport]').dataset.spotlightViewport).toBe('pc')
+    expect(screen.getByText('Pricing')).toBeVisible()
+  })
+
+  it('uses the published cut-off: a 760px tablet gets the phone menu', async () => {
+    loadNavbar()
+    renderSpotlight({ componentId: 'nav' })
+    await userEvent.click(screen.getByRole('button', { name: /Tablet/ }))
+    expect(menuButton()).toBeInTheDocument()
+  })
+
+  it('leaves room for the phone menu to open inside the preview', async () => {
+    loadNavbar()
+    useEditorStore.getState().setViewport('mobile')
+    renderSpotlight({ componentId: 'nav' })
+    const box = document.querySelector('[data-spotlight-viewport]')
+    // Bar (64) + margin (48) + three menu rows and the panel chrome.
+    expect(parseFloat(box.style.height)).toBeGreaterThanOrEqual(64 + 48 + 3 * 46)
+    await userEvent.click(menuButton())
+    expect(menuButton()).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+describe('spotlightViewport', () => {
+  it('matches the published site media query', async () => {
+    const { spotlightViewport } = await import('./spotlight.js')
+    const { MOBILE_BREAKPOINT } = await import('../../utils/schemaToFiles.js')
+    expect(spotlightViewport(MOBILE_BREAKPOINT)).toBe('mobile')
+    expect(spotlightViewport(MOBILE_BREAKPOINT + 1)).toBe('pc')
+    expect(spotlightViewport(390)).toBe('mobile')
+    expect(spotlightViewport(1100)).toBe('pc')
+  })
+})

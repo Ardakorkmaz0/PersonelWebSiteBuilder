@@ -1,4 +1,5 @@
 import { isDeadSectionLink } from './linkTargets.js'
+import { elementIdFor } from './anchors.js'
 
 function htmlDocument(html) {
   if (!html?.trim() || typeof DOMParser === 'undefined') return null
@@ -41,7 +42,7 @@ export function analyzeSiteReadiness({ title, pages = [], pageHtmlMap = {}, site
     // names no component on THIS page (and no page) scrolls nowhere — the
     // default navbar's #about / #contact until someone points them somewhere.
     const onPage = []
-    walkComponents(components, (component) => onPage.push({ id: component.id }))
+    walkComponents(components, (component) => onPage.push({ id: elementIdFor(component) }))
     const deadAnchor = (href) => (
       typeof href === 'string' && !pageIds.has(href.slice(1)) && isDeadSectionLink(href, onPage)
     )

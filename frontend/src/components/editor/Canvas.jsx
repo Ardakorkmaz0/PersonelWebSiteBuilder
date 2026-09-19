@@ -14,6 +14,7 @@ import BrowserFrame from './BrowserFrame.jsx'
 import MobileBrowserChrome from './MobileBrowserChrome.jsx'
 import { CANVAS_SCROLLER_ID } from '../../utils/dragAutoScroll.js'
 import { trackPointerDrag } from '../../utils/pointerDrag.js'
+import { elementIdFor } from '../../utils/anchors.js'
 import { CANVAS_SELECTION_Z } from './spotlight.js'
 import { zoomScale } from './canvasZoom.js'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
@@ -296,7 +297,8 @@ export default function Canvas({
     .map((c) => {
       const href = c.props?.href || ''
       if (!href.startsWith('#')) return null
-      const target = components.find((k) => k.id === href.slice(1))
+      // A section name (#about) resolves like a component id does.
+      const target = components.find((k) => elementIdFor(k) === href.slice(1))
       if (!target || target.id === c.id) return null
       const sL = (isMobile ? c.mobileLayout || c.layout : c.layout) || {}
       const tL = (isMobile ? target.mobileLayout || target.layout : target.layout) || {}

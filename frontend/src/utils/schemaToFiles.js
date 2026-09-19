@@ -45,6 +45,7 @@ import {
 } from './navbarLayout.js'
 import { motionClassSuffix, motionCssVars, motionHeadTags, motionRevealAttr } from './motion.js'
 import { pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
+import { elementIdFor } from './anchors.js'
 
 // Widths at or below this get the phone layout on the published site.
 export const MOBILE_BREAKPOINT = 768
@@ -389,7 +390,7 @@ function inlineNode(c, classedChildren = false) {
     const inner = kids.map((ch) => {
       const filled = { ...ch, styles: { ...(ch.styles || {}), width: '100%', height: '100%' } }
       const geometry = classedChildren ? '' : ` style="${regionChildInlineStyle(ch, designW)}"`
-      return `<div class="region-child region-${esc(c.id)}-${esc(ch.id)}${nestedClass(ch)}"${geometry}>${linkWrap(filled, inlineNode(filled))}</div>`
+      return `<div id="${esc(elementIdFor(ch))}" class="region-child region-${esc(c.id)}-${esc(ch.id)}${nestedClass(ch)}"${geometry}>${linkWrap(filled, inlineNode(filled))}</div>`
     }).join('')
     return `<section style="position:relative;width:100%;height:100%;overflow:hidden;${styleStr}"><div class="region-inner" style="position:relative;width:100%;max-width:${designW}px;height:100%;margin:0 auto;overflow:hidden">${inner}</div></section>`
   }
@@ -402,7 +403,7 @@ function inlineNode(c, classedChildren = false) {
         .map((ch) => {
           const filled = { ...ch, styles: { ...(ch.styles || {}), width: '100%' } }
           const childCss = autoLayoutChildCss(ch, c.props)
-          return `<div class="${nestedClass(ch).trim()}" style="${childCss}">${linkWrap(filled, inlineNode(filled))}</div>`
+          return `<div id="${esc(elementIdFor(ch))}" class="${nestedClass(ch).trim()}" style="${childCss}">${linkWrap(filled, inlineNode(filled))}</div>`
         })
         .join('')
       return `<div style="${autoCss};${styleStr}">${inner}</div>`
@@ -420,7 +421,7 @@ function inlineNode(c, classedChildren = false) {
           : { ...ch, styles: { ...(ch.styles || {}), width: '100%', height: '100%' } }
         const wrapH = grows ? '' : `;height:${Math.round(l.h || 80)}px`
         const wrapMinH = grows ? `;min-height:${Math.round(l.h || 80)}px` : ''
-        return `<div class="${nestedClass(ch).trim()}" style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px${wrapH}${wrapMinH}">${linkWrap(filled, inlineNode(filled))}</div>`
+        return `<div id="${esc(elementIdFor(ch))}" class="${nestedClass(ch).trim()}" style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px${wrapH}${wrapMinH}">${linkWrap(filled, inlineNode(filled))}</div>`
       })
       .join('')
     return `<div style="display:block;position:relative;min-height:${h}px;${styleStr}">${inner}</div>`
@@ -449,7 +450,7 @@ function inlineNode(c, classedChildren = false) {
               ...ch,
               styles: { ...(ch.styles || {}), width: '100%', height: '100%' },
             }
-            return `<div style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px">${linkWrap(filled, inlineNode(filled))}</div>`
+            return `<div id="${esc(elementIdFor(ch))}" style="position:absolute;left:${Math.round(l.x || 0)}px;top:${Math.round(l.y || 0)}px;width:${Math.round(l.w || 200)}px;height:${Math.round(l.h || 80)}px">${linkWrap(filled, inlineNode(filled))}</div>`
           })
           .join('')
         const hidden = t.id === activeId ? '' : ' hidden'
@@ -579,8 +580,8 @@ function openTag(c, extraAttrs = '') {
   // source, so the published bar animates exactly as the editor's Motion panel
   // promised.
   const cls = `c-${c.id}${motionClassSuffix(c.props)}`
-  // id lets in-page links (#componentId) scroll to this component.
-  const idAttr = ` id="${esc(c.id)}"${motionRevealAttr(c.props)}${extraAttrs}`
+  // id lets in-page links (#anchor, else #componentId) scroll to this component.
+  const idAttr = ` id="${esc(elementIdFor(c))}"${motionRevealAttr(c.props)}${extraAttrs}`
   if (tag === 'a') {
     const href = sanitizeUrl((c.props || {}).href)
     const ext = /^https?:\/\//i.test(href)
@@ -651,7 +652,7 @@ function pageBody(page, { fixed = 'all' } = {}) {
         // iframe preview looked broken next to the non-Custom-JS path. The box
         // is positioned by its `.c-<id>` rule, exactly like every other type, so
         // the mobile breakpoint can move and resize it.
-        return `      <div id="${esc(c.id)}" class="c-${esc(c.id)}${motionClassSuffix(c.props)}"${motionRevealAttr(c.props)}${sticky}>${linkWrap(c, inlineNode(c, c.type === 'region'))}</div>`
+        return `      <div id="${esc(elementIdFor(c))}" class="c-${esc(c.id)}${motionClassSuffix(c.props)}"${motionRevealAttr(c.props)}${sticky}>${linkWrap(c, inlineNode(c, c.type === 'region'))}</div>`
       }
       const tag = tagFor(c.type)
       const el =

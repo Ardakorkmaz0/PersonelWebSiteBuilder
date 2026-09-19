@@ -26,6 +26,10 @@ PARENT_TYPES = {'container', 'tabs', 'region'}
 MAX_TABS = 12
 TAB_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
 PALETTE_SLUG_RE = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
+# A block's readable in-page anchor. It becomes the element's id on the
+# published page, so `#about` links land on it: lowercase slug, starts and ends
+# with a letter or digit, and never the reserved `top`.
+ANCHOR_RE = re.compile(r'^[a-z0-9](?:[a-z0-9_-]{0,58}[a-z0-9])?$')
 
 MAX_NESTING_DEPTH = 4
 MAX_CHILDREN = 60
@@ -398,6 +402,12 @@ def sanitize_shared_props(props):
     dock_x = props.get('dockX')
     if dock_x in ('auto', 'left', 'center', 'right', 'stretch'):
         clean['dockX'] = dock_x
+    # Before the early return below: it applies to every block, pinned or not.
+    # Missing here, every save would drop it and each #about link would go dead
+    # again on the next load.
+    anchor = props.get('anchor')
+    if isinstance(anchor, str) and ANCHOR_RE.match(anchor) and anchor != 'top':
+        clean['anchor'] = anchor
     # Motion (scroll-reveal + hover). Cross-type, so it lives here rather than in
     # every per-type branch; slugs + a clamped delay only, so a save can't smuggle
     # markup or an unbounded value through. Only stored when set, to keep legacy

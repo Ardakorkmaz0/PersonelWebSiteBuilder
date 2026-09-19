@@ -1,12 +1,15 @@
 // In-page link targets for the component canvas.
 //
-// A "section on this page" link is `#<element id>`, and on the canvas an
-// element's id is its component id — `region_x7k2ab`, not `about`. The link
-// field used to be a bare text box, so the only ids anyone typed were the
-// readable ones (`#about`, `#contact`, which is also what a new navbar ships
-// with), and none of them existed: the link scrolled nowhere on the published
-// site and nothing in the editor said so. These helpers list the real targets
-// so the field can offer them by name, and tell a dead id from a live one.
+// A "section on this page" link is `#<element id>`. On the canvas an element's
+// id is the block's section name when it has one (`about`, see anchors.js),
+// else its component id — `region_x7k2ab`. The link field used to be a bare
+// text box, so the only ids anyone typed were readable ones (`#about`,
+// `#contact`, which is also what a new navbar ships with) that no block
+// answered to: the link scrolled nowhere on the published site and nothing in
+// the editor said so. These helpers list the real targets so the field can
+// offer them by name, and tell a dead id from a live one.
+
+import { anchorOf, elementIdFor } from './anchors.js'
 
 function firstLine(value) {
   return String(value ?? '').split(/\r?\n/)[0].trim()
@@ -41,13 +44,19 @@ function innerTextHint(component) {
   return ''
 }
 
+/** What a block reads as: its own words, else the first words inside it. */
+export function blockTextHint(component) {
+  return componentTextHint(component) || innerTextHint(component)
+}
+
 export function linkSectionsFor(components, { excludeId = null } = {}) {
   const out = []
   const walk = (list, depth) => {
     for (const c of readingOrder(list)) {
       if (!c?.id) continue
       if (c.id !== excludeId) {
-        out.push({ id: c.id, type: c.type, text: componentTextHint(c) || innerTextHint(c), depth })
+        // The id a link must use is the element id: the section name when set.
+        out.push({ id: elementIdFor(c), anchor: anchorOf(c), type: c.type, text: componentTextHint(c) || innerTextHint(c), depth })
       }
       if (Array.isArray(c.children) && c.children.length) walk(c.children, depth + 1)
     }

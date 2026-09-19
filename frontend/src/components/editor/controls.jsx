@@ -669,7 +669,7 @@ export function LinkTargetControl({ label, value, onChange, pages = [], sections
       )}
       {kind === 'section' && pickable && !knownSection && (
         <p className="studio-status-warning mt-1 rounded-md border px-2 py-1 text-[11px] leading-snug">
-          {t('No block on this page has the id "{id}", so this link goes nowhere. Pick a block from the list.', { id: sectionId })}
+          {t('No block on this page is called "#{id}", so this link goes nowhere. Pick a block from the list, or give one the section name "{id}".', { id: sectionId })}
         </p>
       )}
       {kind === 'url' && (

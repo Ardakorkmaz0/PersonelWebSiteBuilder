@@ -523,3 +523,30 @@ def test_page_without_mode_is_derived_from_its_document():
     }]})['pages'][0]
     assert legacy['mode'] == 'html'
     assert plain['mode'] == 'empty'
+
+
+def _saved_props(props, ctype='region'):
+    schema = {'pages': [{'id': 'home', 'name': 'Home', 'components': [
+        {'id': 'band_1', 'type': ctype, 'props': props, 'styles': {}, 'layout': {'x': 0, 'y': 0, 'w': 1000, 'h': 300}},
+    ]}]}
+    return validate_and_clean_schema(schema)['pages'][0]['components'][0]['props']
+
+
+def test_block_anchor_survives_a_save():
+    # The readable section name (#about). Dropped by the save gate, every link
+    # pointing at it would go dead again on the next load.
+    assert _saved_props({'anchor': 'hakkimizda'})['anchor'] == 'hakkimizda'
+    assert _saved_props({'anchor': 'pricing-2025'}, 'heading')['anchor'] == 'pricing-2025'
+
+
+def test_block_anchor_survives_on_a_pinned_block_too():
+    props = _saved_props({'anchor': 'top-bar', 'scrollBehavior': 'fixed'}, 'navbar')
+    assert props['anchor'] == 'top-bar'
+
+
+@pytest.mark.parametrize('bad', [
+    'About', 'has space', '"><script>', '-lead', 'trail-', 'top', '', 'x' * 61, 42, None,
+])
+def test_block_anchor_rejects_anything_but_a_slug(bad):
+    # It is written into an HTML id attribute on the published page.
+    assert 'anchor' not in _saved_props({'anchor': bad})

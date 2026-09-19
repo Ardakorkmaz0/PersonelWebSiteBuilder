@@ -15,6 +15,7 @@ import { autoLayoutChildCss, autoLayoutContainerCss, isAutoLayout } from './auto
 import { motionHeadTags } from './motion.js'
 import { pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
 import { pinnedLayoutStyle } from '../components/renderer/layout.js'
+import { elementIdFor } from './anchors.js'
 
 const FULL_WIDTH = new Set(['navbar', 'section', 'region', 'divider'])
 
@@ -86,7 +87,17 @@ function tabsCssVars(props = {}) {
   ].join(';')
 }
 
+// Every element this writer emits for a component passes through here exactly
+// once, so this is also where it gets its id: the block's anchor (#about), else
+// its component id. This writer used to emit no ids at all, so every in-page
+// link died when a page was converted to HTML or opened in the Code panel.
 function styleAttr(component, extra = '') {
+  const id = elementIdFor(component)
+  const idAttr = id ? ` id="${esc(id)}"` : ''
+  return idAttr + styleOnly(component, extra)
+}
+
+function styleOnly(component, extra = '') {
   const clean = sanitizeStyles(component.styles || {})
   const parts = Object.entries(clean)
     .filter(([k]) => !DROP_STYLES.has(k))

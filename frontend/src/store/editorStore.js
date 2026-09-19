@@ -9,6 +9,7 @@ import {
 import { componentPresetStyles, componentPresetProps } from '../utils/componentPresets.js'
 import { recolorHtml } from '../utils/htmlRecolor.js'
 import { regionContentWidth } from '../utils/regionLayout.js'
+import { anchorOf, anchorProblem, elementIdFor, retargetLinks, slugifyAnchor } from '../utils/anchors.js'
 
 const HISTORY_LIMIT = 60
 // Gap between two same-key edits that still counts as one gesture.
@@ -384,11 +385,32 @@ function moveInTree(components, id, dir) {
   )
 }
 
-// Deep-clone a subtree with fresh ids.
-function cloneTree(c) {
+// Deep-clone a subtree with fresh ids. A section name (props.anchor) is an
+// element id on the page, so a copy that lands on the SAME page must not carry
+// it — two elements answering to #about, and the link lands on whichever comes
+// first. Copies onto another page (a duplicated page, copy-to-page) may keep it.
+function cloneTree(c, { keepAnchors = false } = {}) {
   const copy = { ...structuredClone(c), id: genId(c.type) }
-  if (hasKids(c)) copy.children = c.children.map(cloneTree)
+  if (!keepAnchors && copy.props && 'anchor' in copy.props) {
+    const props = { ...copy.props }
+    delete props.anchor
+    copy.props = props
+  }
+  if (hasKids(c)) copy.children = c.children.map((child) => cloneTree(child, { keepAnchors }))
   return copy
+}
+
+// Could every section name in this subtree be used on a page with these
+// components without clashing with one already there?
+function subtreeAnchorsFree(c, components, pages) {
+  const anchors = []
+  const walk = (node) => {
+    const anchor = anchorOf(node)
+    if (anchor) anchors.push(anchor)
+    for (const kid of Array.isArray(node?.children) ? node.children : []) walk(kid)
+  }
+  walk(c)
+  return anchors.every((anchor) => !anchorProblem(anchor, { components, pages }))
 }
 
 // Insert a node right after `id` within its parent array.
@@ -1289,7 +1311,7 @@ export const useEditorStore = create((set, get) => ({
         id: genId('page'),
         name: `${src.name} copy`,
         // Fresh component ids so classes/anchors stay unique across pages.
-        components: (src.components || []).map(cloneTree),
+        components: (src.components || []).map((c) => cloneTree(c, { keepAnchors: true })),
       }
       const idx = state.schema.pages.findIndex((p) => p.id === id)
       const pages = [...state.schema.pages]
@@ -1684,7 +1706,14 @@ export const useEditorStore = create((set, get) => ({
         layout: offset(c.layout || { x: 0, y: 0, w: 200, h: 80 }),
         ...(c.mobileLayout ? { mobileLayout: offset(c.mobileLayout) } : {}),
       }))
-      const clones = shifted.map((c) => ({ ...cloneTree(c), layout: c.layout, ...(c.mobileLayout ? { mobileLayout: c.mobileLayout } : {}) }))
+      // Cut + paste is a move: the block keeps its section name, and the links
+      // that lead to it keep working. A copy of something still on the page
+      // would duplicate the name, so it pastes without one.
+      const clones = shifted.map((c) => ({
+        ...cloneTree(c, { keepAnchors: subtreeAnchorsFree(c, page.components, state.schema.pages) }),
+        layout: c.layout,
+        ...(c.mobileLayout ? { mobileLayout: c.mobileLayout } : {}),
+      }))
       const newIds = clones.map((c) => c.id)
       return {
         schema: withComponents(state.schema, page.id, [...page.components, ...clones]),
@@ -1921,7 +1950,8 @@ export const useEditorStore = create((set, get) => ({
       return 'armed'
     }
     if (id === state.linkSourceId) return 'same'
-    get().updateProps(state.linkSourceId, { href: `#${id}` })
+    // The target's element id: its section name when it has one (#about).
+    get().updateProps(state.linkSourceId, { href: `#${elementIdFor(node)}` })
     set({ linkSourceId: null })
     return 'linked'
   },
@@ -2056,6 +2086,43 @@ export const useEditorStore = create((set, get) => ({
       }))
       return { schema: withComponents(state.schema, page.id, components), dirty: true }
     })
+  },
+
+  // Give a block a readable section name (#about), or clear it with ''. The
+  // text is turned into a slug first. The block's element id changes with it,
+  // so every link on this page that led to the old id is pointed at the new
+  // one in the same undo step — renaming a section never strands its links.
+  // Returns { ok, anchor, problem } so the panel can say why a name was
+  // refused ('reserved' | 'page' | 'taken'); nothing changes then.
+  setAnchor: (id, raw) => {
+    const state0 = get()
+    const page0 = selectCurrentPage(state0)
+    const node = findInTree(page0.components, id)
+    if (!node) return { ok: false, anchor: '', problem: 'missing' }
+    const anchor = slugifyAnchor(raw)
+    const problem = anchorProblem(anchor, {
+      components: page0.components,
+      pages: state0.schema.pages,
+      selfId: id,
+    })
+    if (problem) return { ok: false, anchor, problem }
+    if (anchor === anchorOf(node)) return { ok: true, anchor, problem: '' }
+    const from = elementIdFor(node)
+    const to = anchor || id
+    get().record('anchor-' + id)
+    set((state) => {
+      const page = selectCurrentPage(state)
+      let components = mapTree(page.components, id, (c) => {
+        const props = { ...c.props }
+        if (anchor) props.anchor = anchor
+        else delete props.anchor
+        return { ...c, props }
+      })
+      components = retargetLinks(components, from, to)
+      // Only props changed — no layout to re-derive.
+      return { schema: mapPage(state.schema, page.id, (p) => ({ ...p, components })), dirty: true }
+    })
+    return { ok: true, anchor, problem: '' }
   },
 
   // Style edits are breakpoint-scoped: while the MOBILE viewport is active
@@ -2403,7 +2470,8 @@ export const useEditorStore = create((set, get) => ({
       const target = state.schema.pages.find((p) => p.id === pageId)
       const src = findInTree(page.components, id)
       if (!target || !src) return {}
-      const copy = cloneTree(src)
+      // Keep the section names only if the other page does not already use them.
+      const copy = cloneTree(src, { keepAnchors: subtreeAnchorsFree(src, target.components, state.schema.pages) })
       return {
         schema: withComponents(state.schema, pageId, [...target.components, copy]),
         dirty: true,

@@ -41,7 +41,8 @@ import {
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
-import { linkSectionsFor } from '../../utils/linkTargets.js'
+import { blockTextHint, linkSectionsFor } from '../../utils/linkTargets.js'
+import { anchorOf, anchorProblem, slugifyAnchor } from '../../utils/anchors.js'
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 
@@ -348,6 +349,79 @@ function SectionTitle({ children }) {
     <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
       {children}
     </h3>
+  )
+}
+
+const ANCHOR_PROBLEMS = {
+  reserved: '"#{anchor}" is used by the editor itself. Choose another name.',
+  page: 'A page is already called "#{anchor}", so a link to it would switch pages. Choose another name.',
+  taken: 'Another block on this page is already called "#{anchor}".',
+}
+
+// A block's readable section name (#about). The name is committed on Enter or
+// when the field is left — slugifying on every keystroke would eat the hyphen
+// you are about to type. Keyed by the block and its current name in the panel,
+// so selecting another block or an undo starts the draft over.
+function SectionNameControl({ component, suggestion }) {
+  const { t } = useLanguage()
+  const setAnchor = useEditorStore((s) => s.setAnchor)
+  const current = anchorOf(component)
+  const [draft, setDraft] = useState(current)
+  const [problem, setProblem] = useState('')
+  const preview = slugifyAnchor(draft)
+  const commit = (value) => {
+    const result = setAnchor(component.id, value)
+    setProblem(result.ok ? '' : result.problem)
+    if (result.ok) setDraft(result.anchor)
+  }
+  return (
+    <div className="space-y-1.5">
+      {/* The group is already titled "Section name"; the field does not repeat it. */}
+      <label className="block">
+        <div className="flex items-center gap-1.5">
+          <span aria-hidden="true" className="text-sm font-semibold text-[var(--studio-text-muted)]">#</span>
+          <input
+            type="text"
+            aria-label={t('Section name')}
+            className="studio-input min-w-0 w-full px-2.5 py-2 text-sm"
+            value={draft}
+            placeholder={suggestion || t('e.g. about')}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setProblem('')
+            }}
+            onBlur={() => commit(draft)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                commit(draft)
+              }
+            }}
+          />
+        </div>
+      </label>
+      {problem && problem !== 'missing' ? (
+        <p className="studio-status-warning rounded-md border px-2 py-1 text-[11px] leading-snug">
+          {t(ANCHOR_PROBLEMS[problem], { anchor: preview })}
+        </p>
+      ) : draft && preview !== draft ? (
+        <p className="text-[11px] text-[var(--studio-text-faint)]">{t('Saved as #{anchor}', { anchor: preview || '—' })}</p>
+      ) : null}
+      {!current && suggestion ? (
+        <button
+          type="button"
+          onClick={() => commit(suggestion)}
+          className="studio-btn studio-btn-secondary px-2 py-1 text-xs"
+        >
+          {t('Use #{anchor}', { anchor: suggestion })}
+        </button>
+      ) : null}
+      <p className="text-[11px] leading-snug text-[var(--studio-text-faint)]">
+        {current
+          ? t('Links reach this block as #{anchor}. Renaming it updates the links on this page.', { anchor: current })
+          : t('Name this block so links can point to it, e.g. #about.')}
+      </p>
+    </div>
   )
 }
 
@@ -1082,7 +1156,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   // are generated (region_x7k2ab), so a typed id was almost always a dead link.
   const labelUses = new Map()
   const linkSections = linkSectionsFor(page?.components, { excludeId: component.id }).map((s) => {
-    const base = `${t(registry[s.type]?.label || s.type)}${s.text ? ` · ${s.text}` : ''}`
+    const base = `${s.anchor ? `#${s.anchor} · ` : ''}${t(registry[s.type]?.label || s.type)}${s.text ? ` · ${s.text}` : ''}`
     // Two blocks that read the same still have to be told apart in the list.
     const n = (labelUses.get(base) || 0) + 1
     labelUses.set(base, n)
@@ -1234,6 +1308,27 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
       />
     </PanelGroup>
   ) : null
+  // Any block can be a link destination. Bands are the usual ones, so their
+  // group starts open; for the rest it waits closed until wanted.
+  const anchorSuggestion = (() => {
+    const slug = slugifyAnchor(blockTextHint(component))
+    return slug && !anchorProblem(slug, { components: page?.components, pages: schema.pages, selfId: component.id })
+      ? slug
+      : ''
+  })()
+  const anchorSection = (
+    <PanelGroup
+      id="anchor"
+      title={t('Section name')}
+      defaultOpen={component.type === 'region' || component.type === 'section'}
+    >
+      <SectionNameControl
+        key={`${component.id}:${anchorOf(component)}`}
+        component={component}
+        suggestion={anchorSuggestion}
+      />
+    </PanelGroup>
+  )
 
   // Auto-layout for containers: a Stack/Row/Grid flow makes the children reflow
   // responsively instead of sitting at fixed x/y — the single biggest lever for
@@ -1311,7 +1406,6 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
       {t('Nothing to set here for this component.')}
     </p>
   )
-  const contentTabEmpty = !contentSection && !linkSection && componentPresets.length === 0
   const designTabEmpty =
     visibleStyleGroups(def.editableStyles || []).filter((g) => g.title !== LAYOUT_STYLE_GROUP).length === 0
     && !extendedMode
@@ -1373,11 +1467,11 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
       >
         {propsTab === 'content' && (
           <>
-            {contentTabEmpty && emptyTabHint}
         {/* Main properties FIRST — the thing you dropped the component for
             (its image, text, links) must not hide below secondary tooling. */}
         {component.type === 'region' && isMobile ? null : contentSection}
         {linkSection}
+        {anchorSection}
         {componentPresets.length > 0 && (
           <PanelGroup id="presets" title={t('Presets')}>
             <LabeledSelect

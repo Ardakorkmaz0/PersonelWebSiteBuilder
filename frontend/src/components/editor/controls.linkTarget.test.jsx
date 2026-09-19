@@ -36,7 +36,7 @@ describe('section links on the component canvas', () => {
 
   it('says so when the id matches no block — the default navbar #about', () => {
     renderControl('#about')
-    expect(screen.getByText(/No block on this page has the id "about"/)).toBeInTheDocument()
+    expect(screen.getByText(/No block on this page is called "#about"/)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/section id/)).toHaveValue('about')
   })
 

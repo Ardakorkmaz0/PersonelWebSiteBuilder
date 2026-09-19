@@ -24,6 +24,7 @@ import {
 import { scaleCssValue, scaledPx } from './scale.js'
 import { regionContentWidth, responsiveRegionChildLayout } from '../../utils/regionLayout.js'
 import { autoLayoutChildStyle, autoLayoutContainerStyle } from '../../utils/autoLayout.js'
+import { elementIdFor } from '../../utils/anchors.js'
 
 function isViewportStretch(component) {
   return component?.type === 'region' || (
@@ -57,7 +58,7 @@ function RegionRender({ component, style, viewport, editorPreview, canvasDesignW
           if (isHidden(child, viewport)) return null
           const layout = responsiveRegionChildLayout(child, designW, safeW, viewport)
           return (
-            <div key={child.id} style={{ position: 'absolute', left: layout.x, top: layout.y, width: layout.w, height: layout.h }}>
+            <div key={child.id} id={elementIdFor(child)} style={{ position: 'absolute', left: layout.x, top: layout.y, width: layout.w, height: layout.h }}>
               <RenderComponent
                 component={child}
                 viewport={viewport}
@@ -174,6 +175,7 @@ function TabsRender({ component, style, viewport, boxScale = 1, editorPreview = 
                 return (
                 <div
                   key={c.id}
+                  id={elementIdFor(c)}
                   style={{
                     position: 'absolute',
                     left: l.x || 0,
@@ -259,7 +261,7 @@ export function RenderComponent({
           {kids.map((c) => {
             if (isHidden(c, viewport)) return null
             return (
-              <div key={c.id} style={autoLayoutChildStyle(c, component.props)}>
+              <div key={c.id} id={elementIdFor(c)} style={autoLayoutChildStyle(c, component.props)}>
                 <RenderComponent component={c} viewport={viewport} editorPreview={editorPreview} />
               </div>
             )
@@ -284,6 +286,7 @@ export function RenderComponent({
           return (
             <div
               key={c.id}
+              id={elementIdFor(c)}
               style={{
                 position: 'absolute',
                 left: l.x || 0,
@@ -379,7 +382,7 @@ export function Renderer({
           if (isHidden(c, viewport)) return null
           return (
             // id lets in-page links (#componentId) scroll to this component.
-            <div key={c.id} id={c.id} style={pinnedLayoutStyle(c, flowItemStyle(c, viewport, canvasW))}>
+            <div key={c.id} id={elementIdFor(c)} style={pinnedLayoutStyle(c, flowItemStyle(c, viewport, canvasW))}>
               <RenderComponent component={c} flowMode viewport={viewport} canvasDesignWidth={baseDesignW} />
             </div>
           )
@@ -414,8 +417,8 @@ export function Renderer({
         return (
           <div
             key={c.id}
-            // id lets in-page links (#componentId) scroll to this component.
-            id={c.id}
+            // id lets in-page links (#anchor, else #componentId) scroll here.
+            id={elementIdFor(c)}
             style={pinnedLayoutStyle(c, baseStyle)}
           >
             <RenderComponent component={c} viewport={viewport} canvasDesignWidth={baseDesignW} />

@@ -41,6 +41,7 @@ import {
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
+import { linkSectionsFor } from '../../utils/linkTargets.js'
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 
@@ -350,17 +351,17 @@ function SectionTitle({ children }) {
   )
 }
 
-function PropControl({ field, value, onChange, extras, pages = [] }) {
+function PropControl({ field, value, onChange, extras, pages = [], sections = null }) {
   const { t } = useLanguage()
   const label = t(field.label)
   const options = field.options?.map(([optionValue, optionLabel]) => [optionValue, t(optionLabel)])
   // An href field becomes the visual link-target picker (page / top / section
   // / URL) instead of a raw text box.
   if (field.key === 'href') {
-    return <LinkTargetControl label={label} value={value} onChange={onChange} pages={pages} />
+    return <LinkTargetControl label={label} value={value} onChange={onChange} pages={pages} sections={sections} />
   }
   if (field.control === 'link') {
-    return <LinkTargetControl label={label} value={value} onChange={onChange} pages={pages} />
+    return <LinkTargetControl label={label} value={value} onChange={onChange} pages={pages} sections={sections} />
   }
   if (field.control === 'textarea') {
     return <LabeledTextarea label={label} value={value} onChange={onChange} />
@@ -385,7 +386,7 @@ function PropControl({ field, value, onChange, extras, pages = [] }) {
     )
   }
   if (field.control === 'links') {
-    return <LinksEditor label={label} value={value} onChange={onChange} pages={pages} />
+    return <LinksEditor label={label} value={value} onChange={onChange} pages={pages} sections={sections} />
   }
   if (field.control === 'htmlContent') {
     return <HtmlContentControl label={label} value={value} onChange={onChange} pages={pages} />
@@ -1077,6 +1078,16 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
 
   const def = registry[component.type]
   const layout = component[layoutKey] || component.layout
+  // The blocks a "section on this page" link can point at, by name. Their ids
+  // are generated (region_x7k2ab), so a typed id was almost always a dead link.
+  const labelUses = new Map()
+  const linkSections = linkSectionsFor(page?.components, { excludeId: component.id }).map((s) => {
+    const base = `${t(registry[s.type]?.label || s.type)}${s.text ? ` · ${s.text}` : ''}`
+    // Two blocks that read the same still have to be told apart in the list.
+    const n = (labelUses.get(base) || 0) + 1
+    labelUses.set(base, n)
+    return { id: s.id, label: `${'— '.repeat(s.depth)}${base}${n > 1 ? ` (${n})` : ''}` }
+  })
   const componentPresets = presetsForType(component.type)
   const scrollBehavior = component.props?.scrollBehavior || 'normal'
   const scaleSingleSize = (factor) => {
@@ -1196,6 +1207,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           field={field}
           value={component.props[field.sourceKey || field.key]}
           pages={schema.pages}
+          sections={linkSections}
           onChange={(val) => updateProps(component.id, { [field.sourceKey || field.key]: val })}
           extras={
             component.type === 'tabs' && field.control === 'tabs'
@@ -1217,6 +1229,7 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
         label={t('Wrap in a link')}
         value={component.props.href}
         pages={schema.pages}
+        sections={linkSections}
         onChange={(val) => updateProps(component.id, { href: val })}
       />
     </PanelGroup>

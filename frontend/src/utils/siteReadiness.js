@@ -1,3 +1,5 @@
+import { isDeadSectionLink } from './linkTargets.js'
+
 function htmlDocument(html) {
   if (!html?.trim() || typeof DOMParser === 'undefined') return null
   try { return new DOMParser().parseFromString(html, 'text/html') } catch { return null }
@@ -15,6 +17,7 @@ export function analyzeSiteReadiness({ title, pages = [], pageHtmlMap = {}, site
   let weakLinks = 0
   let emptyPages = 0
   let mobileGaps = 0
+  const pageIds = new Set(pages.map((page) => page.id))
 
   for (const page of pages) {
     const html = pageHtmlMap[page.id] ?? page.html ?? ''
@@ -34,9 +37,25 @@ export function analyzeSiteReadiness({ title, pages = [], pageHtmlMap = {}, site
     }
     const components = page.components || []
     if (!components.length) emptyPages += 1
+    // In-page anchors land on an element whose id is a component id. One that
+    // names no component on THIS page (and no page) scrolls nowhere — the
+    // default navbar's #about / #contact until someone points them somewhere.
+    const onPage = []
+    walkComponents(components, (component) => onPage.push({ id: component.id }))
+    const deadAnchor = (href) => (
+      typeof href === 'string' && !pageIds.has(href.slice(1)) && isDeadSectionLink(href, onPage)
+    )
     walkComponents(components, (component) => {
-      if (component.type === 'image' && !component.props?.alt?.trim()) missingAlt += 1
-      if (['button', 'link'].includes(component.type) && !component.props?.href?.trim()) weakLinks += 1
+      const props = component.props || {}
+      if (component.type === 'image' && !props.alt?.trim()) missingAlt += 1
+      // 'linkbutton' is the link-styled button; the check used to name a
+      // 'link' type that does not exist, so those were never looked at.
+      if (['button', 'linkbutton'].includes(component.type) && !props.href?.trim()) weakLinks += 1
+      if (deadAnchor(props.href)) weakLinks += 1
+      if (deadAnchor(props.buttonHref)) weakLinks += 1
+      if (component.type === 'navbar' && Array.isArray(props.links)) {
+        for (const link of props.links) if (deadAnchor(link?.href)) weakLinks += 1
+      }
       if (!page.flowMode && !component.mobileLayout) mobileGaps += 1
     })
   }

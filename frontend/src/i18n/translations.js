@@ -1173,6 +1173,8 @@ export const TURKISH_TRANSLATIONS = {
   'Section on this page': 'Bu sayfadaki bölüm',
   'External URL': 'Harici URL',
   'section id (e.g. contact)': 'bölüm kimliği (ör. contact)',
+  'Custom id…': 'Özel kimlik…',
+  'No block on this page has the id "{id}", so this link goes nowhere. Pick a block from the list.': 'Bu sayfada "{id}" kimliğine sahip bir blok yok, bu yüzden bu bağlantı hiçbir yere gitmiyor. Listeden bir blok seçin.',
   'Clicking scrolls to the top of the page.': 'Tıklandığında sayfanın başına kaydırır.',
   'New link': 'Yeni bağlantı',
   'Label': 'Etiket',

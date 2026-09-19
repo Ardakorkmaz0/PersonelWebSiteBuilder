@@ -41,3 +41,32 @@ describe('site workflow tools', () => {
     expect(schema.pages[0].components[0].props.text).toBe('Old')
   })
 })
+
+describe('readiness: links on the component canvas', () => {
+  const page = (components) => ({ id: 'home', name: 'Home', components })
+  const layout = { x: 0, y: 0, w: 100, h: 40 }
+  const run = (components, extraPages = []) => analyzeSiteReadiness({
+    title: 'Demo', pages: [page(components), ...extraPages], siteOptions: {},
+  }).weakLinks
+
+  it('counts a link button with no destination (the "link" type it looked for does not exist)', () => {
+    expect(run([{ id: 'lb', type: 'linkbutton', props: { text: 'Read', href: '' }, layout, mobileLayout: layout }])).toBe(1)
+  })
+
+  it('counts navbar links that point at no block on the page — the default #about / #contact', () => {
+    const nav = {
+      id: 'nav', type: 'navbar', layout, mobileLayout: layout,
+      props: { links: [{ label: 'Home', href: '#' }, { label: 'About', href: '#about' }, { label: 'Work', href: '#work_1' }, { label: 'Page 2', href: '#p2' }] },
+    }
+    const work = { id: 'work_1', type: 'region', props: {}, layout, mobileLayout: layout }
+    // #about is dead; '#', a real block and another page are fine.
+    expect(run([nav, work], [{ id: 'p2', name: 'Two', components: [work] }])).toBe(1)
+  })
+
+  it('counts a dead anchor on a button and on a section button', () => {
+    expect(run([
+      { id: 'b', type: 'button', props: { href: '#nowhere' }, layout, mobileLayout: layout },
+      { id: 's', type: 'section', props: { buttonHref: '#gone' }, layout, mobileLayout: layout },
+    ])).toBe(2)
+  })
+})

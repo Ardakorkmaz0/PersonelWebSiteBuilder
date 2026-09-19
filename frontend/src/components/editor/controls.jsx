@@ -585,7 +585,14 @@ export function TabsEditorControl({ label, value, onChange, activeId, onActiveCh
 // section, or an external URL — and the right href is written for you. The
 // published page navigates by `#<pageId>` (page switch), `#top` (scroll up),
 // or `#<section-id>` (scroll to element), all handled by the runtime.
-export function LinkTargetControl({ label, value, onChange, pages = [] }) {
+//
+// `sections` ([{ id, label }], optional) are the blocks on the current page. On
+// the component canvas an element's id is its component id, so a section link
+// is picked from them by name; without the list (HTML pages, whose ids the
+// author wrote) the id is typed, as before.
+const CUSTOM_SECTION = '__custom'
+
+export function LinkTargetControl({ label, value, onChange, pages = [], sections = null }) {
   const { t } = useLanguage()
   const href = typeof value === 'string' ? value : ''
   const pageIds = new Set(pages.map((p) => p.id))
@@ -597,11 +604,15 @@ export function LinkTargetControl({ label, value, onChange, pages = [] }) {
   else if (href.startsWith('#')) kind = 'section'
   else kind = 'url'
 
+  const pickable = Array.isArray(sections) && sections.length > 0
+  const sectionId = href.replace(/^#/, '')
+  const knownSection = pickable && sections.some((s) => s.id === sectionId)
+
   const setKind = (k) => {
     if (k === 'none') onChange('')
     else if (k === 'top') onChange('#top')
     else if (k === 'page') onChange('#' + (pages[0]?.id || ''))
-    else if (k === 'section') onChange('#section')
+    else if (k === 'section') onChange('#' + (pickable ? sections[0].id : 'section'))
     else onChange(/^https?:/i.test(href) ? href : 'https://')
   }
 
@@ -632,14 +643,34 @@ export function LinkTargetControl({ label, value, onChange, pages = [] }) {
           ))}
         </select>
       )}
-      {kind === 'section' && (
+      {kind === 'section' && pickable && (
+        <select
+          className={inputCls + ' mb-1'}
+          aria-label={t('Section on this page')}
+          value={knownSection ? sectionId : CUSTOM_SECTION}
+          onChange={(e) => onChange(
+            '#' + (e.target.value === CUSTOM_SECTION ? (knownSection ? 'section' : sectionId) : e.target.value),
+          )}
+        >
+          {sections.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
+          <option value={CUSTOM_SECTION}>{t('Custom id…')}</option>
+        </select>
+      )}
+      {kind === 'section' && !knownSection && (
         <input
           type="text"
           className={inputCls}
-          value={href.replace(/^#/, '')}
+          value={sectionId}
           placeholder={t('section id (e.g. contact)')}
           onChange={(e) => onChange('#' + e.target.value.replace(/^#/, ''))}
         />
+      )}
+      {kind === 'section' && pickable && !knownSection && (
+        <p className="studio-status-warning mt-1 rounded-md border px-2 py-1 text-[11px] leading-snug">
+          {t('No block on this page has the id "{id}", so this link goes nowhere. Pick a block from the list.', { id: sectionId })}
+        </p>
       )}
       {kind === 'url' && (
         <input
@@ -657,7 +688,7 @@ export function LinkTargetControl({ label, value, onChange, pages = [] }) {
   )
 }
 
-export function LinksEditor({ label, value, onChange, pages = [] }) {
+export function LinksEditor({ label, value, onChange, pages = [], sections = null }) {
   const { t } = useLanguage()
   const links = Array.isArray(value) ? value : []
 
@@ -694,6 +725,7 @@ export function LinksEditor({ label, value, onChange, pages = [] }) {
               value={link.href ?? ''}
               onChange={(href) => update(i, { href })}
               pages={pages}
+              sections={sections}
             />
           </div>
         ))}

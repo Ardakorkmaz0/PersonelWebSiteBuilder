@@ -1951,7 +1951,7 @@ function HtmlWorkspace({
               placeholder={t('This page has no HTML yet — paste or write a full document here, then Apply & Save.')}
               className="min-h-0 flex-1 resize-none bg-[#1e1e1e] p-4 font-mono text-sm leading-relaxed text-gray-100 outline-none placeholder:text-gray-500"
             />
-            <CodeLineGlow targetRef={sourceRef} line={glow?.line} endLine={glow?.endLine} onClear={clearGlow} />
+            <CodeLineGlow targetRef={sourceRef} text={sourceDraft} line={glow?.line} endLine={glow?.endLine} onClear={clearGlow} />
           </main>
         ) : !String(html || '').trim() ? (
           /* Empty page: keep the full workspace chrome (toolbar, device bar)

@@ -601,7 +601,7 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
               <code>{file?.content}</code>
             </pre>
           )}
-          <CodeLineGlow targetRef={codeBodyRef} line={glow?.line} endLine={glow?.endLine} onClear={clearGlow} />
+          <CodeLineGlow targetRef={codeBodyRef} text={file?.content || ''} line={glow?.line} endLine={glow?.endLine} onClear={clearGlow} />
           </div>
 
           <div className="flex shrink-0 items-center gap-3 border-t border-white/10 bg-[#151a23] px-3 py-1.5 text-[10px] text-gray-500">

@@ -7,6 +7,8 @@
 // text is therefore matched from the most specific signal down to the weakest,
 // and the number is only the last resort.
 
+import { lineBoxIn } from './textFieldLineBox.js'
+
 const ID_ATTR = /\sid="([^"]+)"/
 
 export function lineIndexFor(content, target = {}) {
@@ -61,9 +63,13 @@ export function revealLine(element, content, target) {
   if (!element || index < 0) return { start: -1, end: -1 }
   const lines = String(content ?? '').split('\n')
   const last = Math.min(lines.length - 1, index + spanOf(target) - 1)
+  // Measured: these fields wrap, so counting line-heights lands somewhere above
+  // the line whenever anything above it took more than one row.
+  const box = lineBoxIn(element, content, index + 1, last - index + 1)
   const parsed = Number.parseFloat(window.getComputedStyle?.(element)?.lineHeight)
   const lineHeight = Number.isFinite(parsed) && parsed > 0 ? parsed : 22
-  const top = Math.max(0, index * lineHeight - element.clientHeight / 3)
+  const offsetTop = box ? box.top : index * lineHeight
+  const top = Math.max(0, offsetTop - element.clientHeight / 3)
 
   if (element.tagName === 'TEXTAREA') {
     const offset = (upTo) => lines.slice(0, upTo).reduce((sum, line) => sum + line.length + 1, 0)

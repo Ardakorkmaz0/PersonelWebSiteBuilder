@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { lineBoxIn } from '../../utils/textFieldLineBox.js'
 
 // The line the live code ticker sent you to, lit up in the source view.
 //
@@ -10,7 +11,7 @@ import { useLanguage } from '../../i18n/useLanguage.js'
 
 const FADE_AFTER_MS = 6000
 
-export default function CodeLineGlow({ targetRef, line, endLine, onClear }) {
+export default function CodeLineGlow({ targetRef, text, line, endLine, onClear }) {
   const { t } = useLanguage()
   const [band, setBand] = useState(null)
   // The change is a region, not a line: everything it rewrote lights up.
@@ -21,14 +22,17 @@ export default function CodeLineGlow({ targetRef, line, endLine, onClear }) {
     const element = targetRef?.current
     if (!element || !line) return undefined
     const place = () => {
-      const styles = window.getComputedStyle(element)
-      const lineHeight = Number.parseFloat(styles.lineHeight) || 22
-      const paddingTop = Number.parseFloat(styles.paddingTop) || 0
-      const top = paddingTop + (line - 1) * lineHeight - element.scrollTop
-      const height = lineHeight * count
+      // Measured, not counted: these fields wrap, so a long line above this one
+      // pushes it down by more than one row.
+      const box = lineBoxIn(element, text ?? element.value ?? element.textContent, line, count)
+      if (!box) {
+        setBand(null)
+        return
+      }
+      const top = box.top - element.scrollTop
       // Hidden rather than clamped when it is off-screen: a band stuck to the
       // top edge would point at the wrong line.
-      setBand(top > -height && top < element.clientHeight ? { top, height } : null)
+      setBand(top > -box.height && top < element.clientHeight ? { top, height: box.height } : null)
     }
     // Deferred so the first placement reads a field that has finished laying out.
     const settle = window.setTimeout(place, 0)
@@ -39,7 +43,7 @@ export default function CodeLineGlow({ targetRef, line, endLine, onClear }) {
       element.removeEventListener('scroll', place)
       window.removeEventListener('resize', place)
     }
-  }, [targetRef, line, count])
+  }, [targetRef, text, line, count])
 
   // Long enough to find your place, short enough not to become part of the file.
   useEffect(() => {

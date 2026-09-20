@@ -10,9 +10,12 @@ import { useLanguage } from '../../i18n/useLanguage.js'
 
 const FADE_AFTER_MS = 6000
 
-export default function CodeLineGlow({ targetRef, line, onClear }) {
+export default function CodeLineGlow({ targetRef, line, endLine, onClear }) {
   const { t } = useLanguage()
   const [band, setBand] = useState(null)
+  // The change is a region, not a line: everything it rewrote lights up.
+  const last = Math.max(line || 0, Number(endLine) || line || 0)
+  const count = line ? last - line + 1 : 0
 
   useEffect(() => {
     const element = targetRef?.current
@@ -22,9 +25,10 @@ export default function CodeLineGlow({ targetRef, line, onClear }) {
       const lineHeight = Number.parseFloat(styles.lineHeight) || 22
       const paddingTop = Number.parseFloat(styles.paddingTop) || 0
       const top = paddingTop + (line - 1) * lineHeight - element.scrollTop
+      const height = lineHeight * count
       // Hidden rather than clamped when it is off-screen: a band stuck to the
       // top edge would point at the wrong line.
-      setBand(top > -lineHeight && top < element.clientHeight ? { top, height: lineHeight } : null)
+      setBand(top > -height && top < element.clientHeight ? { top, height } : null)
     }
     // Deferred so the first placement reads a field that has finished laying out.
     const settle = window.setTimeout(place, 0)
@@ -35,7 +39,7 @@ export default function CodeLineGlow({ targetRef, line, onClear }) {
       element.removeEventListener('scroll', place)
       window.removeEventListener('resize', place)
     }
-  }, [targetRef, line])
+  }, [targetRef, line, count])
 
   // Long enough to find your place, short enough not to become part of the file.
   useEffect(() => {
@@ -53,7 +57,7 @@ export default function CodeLineGlow({ targetRef, line, onClear }) {
       )}
       <div className="code-glow-bar" role="status">
         <span className="code-glow-dot" aria-hidden="true" />
-        <span>{t('Jumped to line {line}', { line })}</span>
+        <span>{count > 1 ? t('Jumped to lines {line}-{end}', { line, end: last }) : t('Jumped to line {line}', { line })}</span>
         <button type="button" onClick={onClear} title={t('Clear highlight')} aria-label={t('Clear highlight')}>
           ×
         </button>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore.js'
-import { pageToResponsiveHtml } from '../../utils/pageCode.js'
+import { schemaToFiles } from '../../utils/schemaToFiles.js'
 import { changedCodeLines } from '../../utils/codeDiff.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
@@ -25,6 +25,20 @@ function prefersReducedMotion() {
 function trim(text) {
   const flat = text.replace(/\t/g, '  ')
   return flat.length > MAX_CHARS ? `${flat.slice(0, MAX_CHARS - 1)}…` : flat
+}
+
+// The files a component page is actually made of, in the order they are worth
+// reporting. Moving a block or restyling it rewrites the STYLESHEET, not the
+// markup — reading only the page's html is why dragging something across the
+// canvas used to produce no line at all.
+function watchedFiles(schema, pageId) {
+  const files = schemaToFiles(schema)
+  const htmlFiles = files.filter((file) => file.lang === 'html')
+  const index = (schema?.pages || []).findIndex((page) => page.id === pageId)
+  const pageFile = htmlFiles[index >= 0 ? index : 0]
+  return [pageFile, ...['styles.css', 'custom.css', 'custom.js'].map((name) => files.find((file) => file.name === name))]
+    .filter(Boolean)
+    .map((file) => ({ name: file.name, content: file.content }))
 }
 
 // The code block, as a button when there is somewhere to go and a plain block
@@ -62,7 +76,9 @@ export default function CodeActivityOverlay({
     [schema, pageId],
   )
 
-  const lastHtml = useRef(null)
+  // name -> last seen content, so a change is reported against the file it
+  // happened in rather than against one document that may not hold it.
+  const lastFiles = useRef(new Map())
   const nextId = useRef(0)
   // One piece of state, so a new edit replaces the whole card — how much of it
   // is typed and whether it is on its way out travel with the change itself.
@@ -72,31 +88,37 @@ export default function CodeActivityOverlay({
   // switching pages never reads as an edit. The card left over from the page
   // we came from is dropped at render, below.
   useEffect(() => {
-    lastHtml.current = null
+    lastFiles.current = new Map()
   }, [pageId])
 
   useEffect(() => {
     if (!authored && !page) return undefined
     const timer = window.setTimeout(() => {
-      let html
-      if (authored) html = String(source ?? '')
+      let files
+      if (authored) files = [{ name: fileName, content: String(source ?? '') }]
       else {
         try {
-          html = pageToResponsiveHtml(page, title || page.name || 'Page', schema)
+          files = watchedFiles(schema, pageId)
         } catch {
-          return // a half-finished edit that the writer cannot render yet
+          return // a half-finished edit that the writers cannot render yet
         }
       }
-      const previous = lastHtml.current
-      lastHtml.current = html
-      if (previous === null || previous === html) return
-      const diff = changedCodeLines(previous, html, MAX_LINES)
-      if (!diff) return
+      const seen = lastFiles.current
+      const first = seen.size === 0
+      let found = null
+      for (const file of files) {
+        const previous = seen.get(file.name)
+        seen.set(file.name, file.content)
+        if (first || previous === undefined || previous === file.content || found) continue
+        const diff = changedCodeLines(previous, file.content, MAX_LINES)
+        if (diff) found = { ...diff, file: file.name }
+      }
+      if (!found) return
       nextId.current += 1
-      setChange({ ...diff, id: nextId.current, pageId, typed: 0, leaving: false })
+      setChange({ ...found, id: nextId.current, pageId, typed: 0, leaving: false })
     }, REBUILD_MS)
     return () => window.clearTimeout(timer)
-  }, [authored, source, page, pageId, schema, title])
+  }, [authored, source, fileName, page, pageId, schema, title])
 
   const id = change?.id
   const done = !!change?.done
@@ -157,8 +179,17 @@ export default function CodeActivityOverlay({
   const caretLine = lines.findIndex((line) => line.typing)
 
   const first = change.lines[0]
+  const span = change.span || { start: first.number, end: first.number, count: 1 }
+  // The whole region goes to the source, not just the line the card had room
+  // for: what was changed is what should light up there.
   const openSource = onOpenSource
-    ? () => onOpenSource({ line: first.number, text: first.text, removed: first.removed })
+    ? () => onOpenSource({
+      file: change.file,
+      line: span.start,
+      endLine: span.end,
+      text: first.text,
+      removed: first.removed,
+    })
     : null
 
   return (
@@ -171,7 +202,9 @@ export default function CodeActivityOverlay({
         <div className="code-activity-head">
           <span className={`code-activity-dot ${writing ? 'code-activity-dot-live' : ''}`} aria-hidden="true" />
           <span className="code-activity-label">{t('Live code')}</span>
-          <span className="code-activity-file">{fileName}:{first.number}</span>
+          <span className="code-activity-file">
+            {change.file || fileName}:{span.start}{span.count > 1 ? `-${span.end}` : ''}
+          </span>
           <button
             type="button"
             onClick={() => setChange(null)}
@@ -196,8 +229,13 @@ export default function CodeActivityOverlay({
             </span>
           ))}
         </Body>
-        {change.hiddenCount > 0 && !writing && (
-          <div className="code-activity-more">{t('+{count} more lines', { count: change.hiddenCount })}</div>
+        {(change.hiddenCount > 0 || change.otherHunks > 0) && !writing && (
+          <div className="code-activity-more">
+            {[
+              change.hiddenCount > 0 && t('+{count} more lines', { count: change.hiddenCount }),
+              change.otherHunks > 0 && t('{count} more places in this file', { count: change.otherHunks }),
+            ].filter(Boolean).join(' · ')}
+          </div>
         )}
       </div>
     </div>

@@ -541,9 +541,9 @@ function HtmlWorkspace({
   const [sourceDraft, setSourceDraft] = useState(html)
   const sourceRef = useRef(null)
   const [pendingReveal, setPendingReveal] = useState(null)
-  const [glowLine, setGlowLine] = useState(null)
+  const [glow, setGlow] = useState(null)
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
-  const clearGlow = useCallback(() => setGlowLine(null), [])
+  const clearGlow = useCallback(() => setGlow(null), [])
   const sourceDraftDirty = hasUnsavedSourceDraft(mode, sourceDraft, html)
   useEffect(() => {
     onDraftDirtyChange?.(sourceDraftDirty)
@@ -626,6 +626,15 @@ function HtmlWorkspace({
   // A ref, not state: it's a live DOM node inside the iframe.
   const selectedRef = useRef(null)
   const selectRefreshTimer = useRef(null)
+  // Typing in the iframe does not commit (that would be an undo entry per
+  // keystroke), so the live code ticker would never see text edits. This is a
+  // read-only heartbeat: it re-reads the document, it does not save it.
+  const docPulseTimer = useRef(null)
+  // The committed document, readable from the listener without re-binding it.
+  const htmlRef = useRef(html)
+  useEffect(() => { htmlRef.current = html }, [html])
+  const [docPulse, setDocPulse] = useState(null)
+
 
   // Palette clicks leave keyboard focus in the parent document, so the iframe
   // listener alone cannot receive Escape. Cover both focus locations and clear
@@ -1013,13 +1022,20 @@ function HtmlWorkspace({
     // view mode: srcDoc derives from the html prop — nothing to reseed.
   }, [clearSelection, mode])
 
+  // What the live code ticker reads: the document as it stands right now,
+  // including edits that have not been committed yet (typing). Outside Edit the
+  // committed html IS the document. The pulse carries the html it was taken
+  // from, so a commit landing in between falls straight back to the committed
+  // document instead of diffing against a snapshot that is already behind it.
+  const tickerDocument = mode === 'edit' && docPulse?.base === html ? docPulse.doc : html
+
   // Runs once Source is actually showing, so the field holds the document.
   useEffect(() => {
     if (!pendingReveal || mode !== 'source') return undefined
     const timer = window.setTimeout(() => {
-      const index = revealLine(sourceRef.current, sourceDraft, pendingReveal)
+      const region = revealLine(sourceRef.current, sourceDraft, pendingReveal)
       setPendingReveal(null)
-      setGlowLine(index >= 0 ? index + 1 : null)
+      setGlow(region.start >= 0 ? { line: region.start + 1, endLine: region.end + 1 } : null)
     }, 30)
     return () => window.clearTimeout(timer)
   }, [pendingReveal, mode, sourceDraft])
@@ -1534,6 +1550,13 @@ function HtmlWorkspace({
         }
       }, 250)
     })
+    doc.addEventListener('input', () => {
+      if (docPulseTimer.current) window.clearTimeout(docPulseTimer.current)
+      docPulseTimer.current = window.setTimeout(
+        () => setDocPulse({ base: htmlRef.current, doc: readHtml() }),
+        300,
+      )
+    })
     const refreshChrome = () => updateSelectionResizeChrome(doc, selectedRef.current)
     doc.defaultView?.addEventListener('scroll', refreshChrome, { passive: true })
     doc.defaultView?.addEventListener('resize', refreshChrome)
@@ -1627,7 +1650,7 @@ function HtmlWorkspace({
     <div className="studio-theme-surface relative flex min-h-0 min-w-0 flex-1">
       {liveCode && mode !== 'source' && (
         <CodeActivityOverlay
-          document={html}
+          document={tickerDocument}
           fileName={fileName}
           holdMs={liveCodeHold}
           onOpenSource={(target) => { switchMode('source'); setPendingReveal({ ...target, at: Date.now() }) }}
@@ -1923,12 +1946,12 @@ function HtmlWorkspace({
             <textarea
               ref={sourceRef}
               value={sourceDraft}
-              onChange={(e) => { setGlowLine(null); setSourceDraft(e.target.value) }}
+              onChange={(e) => { setGlow(null); setSourceDraft(e.target.value) }}
               spellCheck={false}
               placeholder={t('This page has no HTML yet — paste or write a full document here, then Apply & Save.')}
               className="min-h-0 flex-1 resize-none bg-[#1e1e1e] p-4 font-mono text-sm leading-relaxed text-gray-100 outline-none placeholder:text-gray-500"
             />
-            <CodeLineGlow targetRef={sourceRef} line={glowLine} onClear={clearGlow} />
+            <CodeLineGlow targetRef={sourceRef} line={glow?.line} endLine={glow?.endLine} onClear={clearGlow} />
           </main>
         ) : !String(html || '').trim() ? (
           /* Empty page: keep the full workspace chrome (toolbar, device bar)

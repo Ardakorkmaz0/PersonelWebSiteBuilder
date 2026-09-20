@@ -86,6 +86,40 @@ describe('CodeActivityOverlay', () => {
     await waitFor(() => expect(codeText()).toContain(expected), { timeout: 2000 })
   })
 
+  // Moving a block rewrites the STYLESHEET, not the markup: reading only the
+  // page's html reported nothing at all for a drag across the canvas.
+  it('reports a move, and says which file it happened in', async () => {
+    seedPages({ components: [{ id: 'c1', type: 'heading', props: { text: 'Hi' }, layout: { x: 0, y: 0, w: 300, h: 60 } }] })
+    renderOverlay()
+    await new Promise((resolve) => window.setTimeout(resolve, 220))
+
+    act(() => useEditorStore.getState().setLayout('c1', { x: 240, y: 96, w: 300, h: 60 }))
+
+    await waitFor(() => expect(codeText()).toMatch(/240px|96px/), { timeout: 2000 })
+    expect(document.querySelector('.code-activity-file').textContent).toContain('styles.css')
+  })
+
+  it('hands the whole changed region to the editor, not just the first line', async () => {
+    const onOpenSource = vi.fn()
+    seedPages({ components: [{ id: 'c1', type: 'heading', props: { text: 'Hi' }, layout: { x: 0, y: 0, w: 300, h: 60 } }] })
+    render(
+      <UiThemeProvider>
+        <LanguageProvider>
+          <CodeActivityOverlay pageId="p1" title="My Site" holdMs={0} onOpenSource={onOpenSource} />
+        </LanguageProvider>
+      </UiThemeProvider>,
+    )
+    await new Promise((resolve) => window.setTimeout(resolve, 220))
+
+    act(() => useEditorStore.getState().addComponent('navbar'))
+    await waitFor(() => expect(document.querySelector('.code-activity')).not.toBeNull(), { timeout: 2000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Source' }))
+
+    const target = onOpenSource.mock.calls[0][0]
+    expect(target.file).toBeTruthy()
+    expect(target.endLine).toBeGreaterThanOrEqual(target.line)
+  })
+
   it('works from the document itself for an HTML page', async () => {
     const doc = (heading) => ['<html>', '<body>', `<h1>${heading}</h1>`, '</body>', '</html>'].join('\n')
     const page = (heading) => (

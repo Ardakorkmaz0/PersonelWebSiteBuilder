@@ -43,26 +43,37 @@ export function lineIndexFor(content, target = {}) {
   return Math.min(lines.length - 1, Math.max(0, Math.round(line) - 1))
 }
 
-// Scrolls `element` (a textarea or a scrollable block) so the found line sits a
-// third of the way down, and selects it when the element can hold a selection.
-// Returns the line index it landed on, or -1 when there was nothing to find.
+// How many lines the change covers: the target carries the region's first and
+// last line, and a text match may shift the whole block without resizing it.
+function spanOf(target = {}) {
+  const start = Number(target.line)
+  const end = Number(target.endLine)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 1
+  return Math.max(1, Math.round(end - start) + 1)
+}
+
+// Scrolls `element` (a textarea or a scrollable block) so the found region sits
+// a third of the way down, and selects it when the element can hold a
+// selection. Returns { start, end } as 0-based line indexes, or nulls when
+// there was nothing to find.
 export function revealLine(element, content, target) {
   const index = lineIndexFor(content, target)
-  if (!element || index < 0) return -1
+  if (!element || index < 0) return { start: -1, end: -1 }
   const lines = String(content ?? '').split('\n')
+  const last = Math.min(lines.length - 1, index + spanOf(target) - 1)
   const parsed = Number.parseFloat(window.getComputedStyle?.(element)?.lineHeight)
   const lineHeight = Number.isFinite(parsed) && parsed > 0 ? parsed : 22
   const top = Math.max(0, index * lineHeight - element.clientHeight / 3)
 
   if (element.tagName === 'TEXTAREA') {
-    const start = lines.slice(0, index).reduce((sum, line) => sum + line.length + 1, 0)
+    const offset = (upTo) => lines.slice(0, upTo).reduce((sum, line) => sum + line.length + 1, 0)
     try {
       element.focus({ preventScroll: true })
-      element.setSelectionRange(start, start + lines[index].length)
+      element.setSelectionRange(offset(index), offset(last) + lines[last].length)
     } catch { /* a read-only or detached field — scrolling is still useful */ }
   }
   // After the selection: setSelectionRange scrolls the caret into view itself,
-  // which would leave the line wherever the browser felt like putting it.
+  // which would leave the region wherever the browser felt like putting it.
   element.scrollTop = top
-  return index
+  return { start: index, end: last }
 }

@@ -141,15 +141,15 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
       },
     ]
   }, [base, schema])
-  const files = [...generatedFiles, ...exportPreviewFiles]
+  const files = useMemo(() => [...generatedFiles, ...exportPreviewFiles], [generatedFiles, exportPreviewFiles])
   const [activeSelection, setActiveSelection] = useState({
     pageId: currentPageId,
     name: null,
   })
   const [copied, setCopied] = useState(false)
   const [pendingReveal, setPendingReveal] = useState(null)
-  const [glowLine, setGlowLine] = useState(null)
-  const clearGlow = useCallback(() => setGlowLine(null), [])
+  const [glow, setGlow] = useState(null)
+  const clearGlow = useCallback(() => setGlow(null), [])
   const codeBodyRef = useRef(null)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const exportMenuRef = useRef(null)
@@ -162,7 +162,7 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
     ? activeSelection.name || currentPageFileName || 'index.html'
     : currentPageFileName || 'index.html'
   // A different file, or an edit, and the highlight no longer points anywhere.
-  const selectFile = (name) => { setGlowLine(null); setActiveSelection({ pageId: currentPageId, name }) }
+  const selectFile = (name) => { setGlow(null); setActiveSelection({ pageId: currentPageId, name }) }
   const file = files.find((item) => item.name === active) || files[0]
   const lines = file?.content ? file.content.split('\n').length : 1
   const dirtyHtmlFiles = generatedFiles.filter((item) => (
@@ -208,18 +208,23 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
     // The live code ticker sends the change it just showed; open the page's own
     // file and put that line on screen.
     revealCode: (target) => {
-      setActiveSelection({ pageId: currentPageId, name: currentPageFileName || 'index.html' })
+      // The ticker says which generated file it read: a move rewrites the
+      // stylesheet, so opening the page's html would show the wrong place.
+      const name = (target?.file && files.some((item) => item.name === target.file))
+        ? target.file
+        : currentPageFileName || 'index.html'
+      setActiveSelection({ pageId: currentPageId, name })
       setPendingReveal(target && { ...target, at: Date.now() })
     },
-  }), [applyPendingHtml, currentPageFileName, currentPageId, dirtyHtmlFiles.length])
+  }), [applyPendingHtml, currentPageFileName, currentPageId, dirtyHtmlFiles.length, files])
 
   // Runs after the file above has rendered, so the element holds its content.
   useEffect(() => {
     if (!pendingReveal) return undefined
     const timer = window.setTimeout(() => {
-      const index = revealLine(codeBodyRef.current, file?.content || '', pendingReveal)
+      const region = revealLine(codeBodyRef.current, file?.content || '', pendingReveal)
       setPendingReveal(null)
-      setGlowLine(index >= 0 ? index + 1 : null)
+      setGlow(region.start >= 0 ? { line: region.start + 1, endLine: region.end + 1 } : null)
     }, 30)
     return () => window.clearTimeout(timer)
   }, [pendingReveal, file?.content])
@@ -306,7 +311,7 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
   }
 
   function updateFile(value) {
-    setGlowLine(null)
+    setGlow(null)
     if (file?.editableKind === 'html') {
       setHtmlDrafts((drafts) => ({ ...drafts, [file.name]: value }))
     }
@@ -596,7 +601,7 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
               <code>{file?.content}</code>
             </pre>
           )}
-          <CodeLineGlow targetRef={codeBodyRef} line={glowLine} onClear={clearGlow} />
+          <CodeLineGlow targetRef={codeBodyRef} line={glow?.line} endLine={glow?.endLine} onClear={clearGlow} />
           </div>
 
           <div className="flex shrink-0 items-center gap-3 border-t border-white/10 bg-[#151a23] px-3 py-1.5 text-[10px] text-gray-500">

@@ -6,7 +6,7 @@
 <br>
 <br>
 
-### WebSiteBuilder
+### SiteBuilder
 
 <!-- Short description right next to the logo -->
 
@@ -16,7 +16,7 @@
 <!-- Add a line break to clear the alignment for subsequent content -->
 <br clear="left"/>
 
-A personal website builder with two editing paths:
+A  site builder with two editing paths:
 
 - Build from ready-made components on a free canvas, then tune desktop/mobile
   layouts independently.

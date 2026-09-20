@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, useCallback } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   DndContext,
@@ -44,6 +44,7 @@ import {
 } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import CodeActivityOverlay from '../components/editor/CodeActivityOverlay.jsx'
+import { applyHtmlPageSettings, readHtmlPageSettings } from '../utils/htmlPageSettings.js'
 import CanvasZoomControl from '../components/editor/CanvasZoomControl.jsx'
 import useFullscreenEditing from '../components/editor/useFullscreenEditing.js'
 import { readZoom, writeZoom } from '../components/editor/canvasZoom.js'
@@ -1267,6 +1268,20 @@ export default function EditorPage() {
     // component design remains in the schema and "Remove HTML" can restore it.
     try { localStorage.setItem(`pwb_htmlmode_${id}`, nextMode) } catch { /* ignore */ }
     importHtmlIntoPage(pageId, html)
+  }
+
+  // An uploaded page's settings ARE its document: the panel reads the head and
+  // writes back into it, so a hand edit in Source shows up in the controls and
+  // a control actually changes the published page.
+  const htmlPageSettings = useMemo(
+    () => (currentPageIsHtml ? readHtmlPageSettings(siteHtml) : null),
+    [currentPageIsHtml, siteHtml],
+  )
+
+  function changeHtmlPageSettings(patch) {
+    const live = workspaceRef.current?.getHtml?.() ?? siteHtml
+    const next = applyHtmlPageSettings(live, patch)
+    if (next !== live) commitHtml(next, { reseedWorkspace: true })
   }
 
   function applyManagedSchema(nextSchema) {
@@ -2607,7 +2622,12 @@ export default function EditorPage() {
                         onClose={() => workspaceRef.current?.clearSelection?.()}
                       />
                     ) : (
-                      <PropertiesPanel htmlMode onApplyThemeToHtml={applyThemeToAllHtmlPages} />
+                      <PropertiesPanel
+                        htmlMode
+                        onApplyThemeToHtml={applyThemeToAllHtmlPages}
+                        htmlPageSettings={htmlPageSettings}
+                        onHtmlPageSettings={changeHtmlPageSettings}
+                      />
                     )}
                   </div>
                 </div>

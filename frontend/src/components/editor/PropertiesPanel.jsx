@@ -564,7 +564,17 @@ const OPEN_BY_DEFAULT = new Set(['Typography', 'Colors', 'Spacing'])
 // Spacing is layout, not looks, so it lives under the Layout tab.
 const LAYOUT_STYLE_GROUP = 'Spacing'
 
-export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, simpleMode = false }) {
+// On an uploaded page the DOCUMENT is the page: `htmlPageSettings` is what its
+// head currently says and `onHtmlPageSettings` writes back into it. Without
+// them these controls would edit a schema nothing publishes — which is how a
+// language picked here used to change nothing at all.
+export default function PropertiesPanel({
+  htmlMode = false,
+  onApplyThemeToHtml,
+  simpleMode = false,
+  htmlPageSettings = null,
+  onHtmlPageSettings,
+}) {
   const { t } = useLanguage()
   const selectedId = useEditorStore((s) => s.selectedId)
   const schema = useEditorStore((s) => s.schema)
@@ -625,6 +635,19 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
   }
   // Old sessions may remember a removed Code or AI tab; fall back cleanly.
   const activePageTab = pageTabs.some(([id]) => id === pageTab) ? pageTab : pageTabs[0][0]
+
+  // One pair of accessors for both worlds: schema fields for a component page,
+  // the parsed document for an uploaded one.
+  const documentPage = htmlMode ? (htmlPageSettings || {}) : null
+  const pageSetting = (key, fallback = '') => (
+    documentPage ? (documentPage[key] ?? fallback) : (page[key] ?? fallback)
+  )
+  const writePageSetting = (patch) => (
+    documentPage ? onHtmlPageSettings?.(patch) : setPageSettings(page.id, patch)
+  )
+  const writePageMeta = (patch) => (
+    documentPage ? onHtmlPageSettings?.(patch) : setPageMeta(page.id, patch)
+  )
 
   const isMobile = viewport === 'mobile'
   const isFlow = !!page.flowMode
@@ -826,23 +849,29 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
                 placeholder={t('e.g. Marketing')}
               />
             )}
-            <LabeledColor
-              label={t('Page background (PC)')}
-              value={page.background || '#ffffff'}
-              onChange={(v) => setPageSettings(page.id, { background: v })}
-            />
-            <LabeledColor
-              label={t('Page background (Mobile)')}
-              value={page.backgroundMobile || page.background || '#ffffff'}
-              onChange={(v) => setPageSettings(page.id, { backgroundMobile: v })}
-            />
-            <button
-              type="button"
-              onClick={() => setPageSettings(page.id, { backgroundMobile: page.background || '#ffffff' })}
-              className="w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-control)] px-2 py-1.5 text-xs font-medium text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
-            >
-              {t('Use PC background on mobile')}
-            </button>
+            {/* Canvas-only: an uploaded page paints its own background in its
+                own CSS, so these would be three controls that change nothing. */}
+            {!htmlMode && (
+              <>
+                <LabeledColor
+                  label={t('Page background (PC)')}
+                  value={page.background || '#ffffff'}
+                  onChange={(v) => setPageSettings(page.id, { background: v })}
+                />
+                <LabeledColor
+                  label={t('Page background (Mobile)')}
+                  value={page.backgroundMobile || page.background || '#ffffff'}
+                  onChange={(v) => setPageSettings(page.id, { backgroundMobile: v })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPageSettings(page.id, { backgroundMobile: page.background || '#ffffff' })}
+                  className="w-full rounded-lg border border-[var(--studio-border)] bg-[var(--studio-control)] px-2 py-1.5 text-xs font-medium text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
+                >
+                  {t('Use PC background on mobile')}
+                </button>
+              </>
+            )}
             {isMobile && !isFlow && (
               <button
                 type="button"
@@ -854,40 +883,44 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             )}
         </PanelGroup>
         <PanelGroup id="page-browser" title={t('Browser & accessibility')} defaultOpen>
-          <LabeledCheckbox
-            label={t('Show scroll indicator in mobile preview')}
-            checked={page.showScrollIndicator !== false}
-            onChange={(v) => setPageSettings(page.id, { showScrollIndicator: v })}
-          />
+          {/* Preview chrome for the component canvas; the HTML workspace has
+              no such indicator. */}
+          {!htmlMode && (
+            <LabeledCheckbox
+              label={t('Show scroll indicator in mobile preview')}
+              checked={page.showScrollIndicator !== false}
+              onChange={(v) => setPageSettings(page.id, { showScrollIndicator: v })}
+            />
+          )}
           <LabeledSelect
             label={t('Page language')}
-            value={page.language || 'en'}
-            onChange={(v) => setPageSettings(page.id, { language: v })}
+            value={pageSetting('language', 'en') || 'en'}
+            onChange={(v) => writePageSetting({ language: v })}
             options={LANGUAGES}
           />
           <LabeledSelect
             label={t('Text direction')}
-            value={page.direction || ''}
-            onChange={(v) => setPageSettings(page.id, { direction: v })}
+            value={pageSetting('direction')}
+            onChange={(v) => writePageSetting({ direction: v })}
             options={[['', t('Follow the language')], ['ltr', t('Left to right')], ['rtl', t('Right to left')]]}
           />
           <LabeledCheckbox
             label={t('Smooth scrolling for in-page links')}
-            checked={!!page.smoothScroll}
-            onChange={(v) => setPageSettings(page.id, { smoothScroll: v })}
+            checked={!!pageSetting('smoothScroll', false)}
+            onChange={(v) => writePageSetting({ smoothScroll: v })}
           />
           <LabeledColor
             label={t('Browser theme color')}
-            value={page.themeColor || page.background || '#ffffff'}
-            onChange={(v) => setPageSettings(page.id, { themeColor: v })}
+            value={pageSetting('themeColor') || page.background || '#ffffff'}
+            onChange={(v) => writePageSetting({ themeColor: v })}
           />
           <p className="text-[11px] leading-snug text-[var(--studio-text-faint)]">
             {t('Tints the browser bar around your page on phones.')}
           </p>
           <LabeledText
             label={t('Canonical URL')}
-            value={page.canonicalUrl || ''}
-            onChange={(v) => setPageSettings(page.id, { canonicalUrl: v })}
+            value={pageSetting('canonicalUrl')}
+            onChange={(v) => writePageSetting({ canonicalUrl: v })}
             placeholder="https://example.com/page"
           />
           <p className="text-[11px] leading-snug text-[var(--studio-text-faint)]">
@@ -895,30 +928,30 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
           </p>
           <LabeledCheckbox
             label={t('Hide this page from search engines')}
-            checked={!!page.noIndex}
-            onChange={(v) => setPageSettings(page.id, { noIndex: v })}
+            checked={!!pageSetting('noIndex', false)}
+            onChange={(v) => writePageSetting({ noIndex: v })}
           />
         </PanelGroup>
         <PanelGroup id="page-seo" title={t('SEO & sharing')} defaultOpen>
           <LabeledText
             label={t('Search title')}
-            value={page.seoTitle || ''}
-            onChange={(v) => setPageMeta(page.id, { seoTitle: v })}
+            value={pageSetting('seoTitle')}
+            onChange={(v) => writePageMeta({ seoTitle: v })}
             placeholder={page.name}
           />
           <p className="text-[11px] leading-snug text-[#9ca3af]">
-            {t('{count}/60 characters', { count: (page.seoTitle || page.name || '').length })}
+            {t('{count}/60 characters', { count: (pageSetting('seoTitle') || page.name || '').length })}
           </p>
           <LabeledTextarea
             label={t('Search description')}
-            value={page.seoDescription || ''}
-            onChange={(v) => setPageMeta(page.id, { seoDescription: v })}
+            value={pageSetting('seoDescription')}
+            onChange={(v) => writePageMeta({ seoDescription: v })}
             rows={3}
             placeholder={t('One or two sentences describing this page.')}
           />
           <p className="text-[11px] leading-snug text-[#9ca3af]">
             {t('{count}/160 characters — search engines cut off longer descriptions.', {
-              count: (page.seoDescription || '').length,
+              count: (pageSetting('seoDescription') || '').length,
             })}
           </p>
           <LabeledImage

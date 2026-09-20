@@ -23,6 +23,7 @@ import {
   FileCodeIcon,
   FileIcon,
   FolderIcon,
+  WarningIcon,
 } from '../icons.jsx'
 
 const ICON = { html: 'HTML', css: 'CSS', js: 'JS', json: '{ }' }
@@ -554,6 +555,15 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
               </button>
             </div>
           </div>
+
+          {/* Applying hands the document to the HTML editor — a one-way door
+              for the canvas, and it used to happen without a word. */}
+          {file?.editableKind === 'html' && file.content !== file.generatedContent && (
+            <div className="flex items-start gap-2 border-b border-white/10 bg-[#202631] px-4 py-2 text-[11px] leading-snug text-amber-200/90">
+              <WarningIcon size={13} className="mt-0.5 shrink-0" />
+              <span>{t('Applying moves this page to the HTML editor. Its component design is kept — “Remove HTML” brings it back.')}</span>
+            </div>
+          )}
 
           {/* Positioned so the jumped-to line can be lit over the field. */}
           <div className="relative flex min-h-0 flex-1 flex-col">

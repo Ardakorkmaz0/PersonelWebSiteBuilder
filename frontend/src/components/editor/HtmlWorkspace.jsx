@@ -542,6 +542,7 @@ function HtmlWorkspace({
   const sourceRef = useRef(null)
   const [pendingReveal, setPendingReveal] = useState(null)
   const [glowLine, setGlowLine] = useState(null)
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const clearGlow = useCallback(() => setGlowLine(null), [])
   const sourceDraftDirty = hasUnsavedSourceDraft(mode, sourceDraft, html)
   useEffect(() => {
@@ -1690,6 +1691,31 @@ function HtmlWorkspace({
                 <span className="hidden xl:inline">{t('Browser')}</span>
             </button>
           )}
+          {/* Workspace tools, next to the device chrome rather than inside the
+              editing-tool picker: they belong to the workspace, and they were
+              unreachable in View and in Simple mode where that picker is gone. */}
+          {liveCodeControls && mode !== 'source' && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setWorkspaceMenuOpen((open) => !open)}
+                title={t('Canvas tools')}
+                aria-label={t('Canvas tools')}
+                aria-expanded={workspaceMenuOpen}
+                className={`studio-icon-btn ${workspaceMenuOpen ? 'bg-[var(--studio-control-hover)] text-[var(--studio-text)]' : ''}`}
+              >
+                <MoreHorizontalIcon size={16} />
+              </button>
+              {workspaceMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setWorkspaceMenuOpen(false)} />
+                  <div className="studio-menu absolute right-0 top-[calc(100%+6px)] z-40 w-72 p-2">
+                    {liveCodeControls}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {/* Said out loud only when it is actually doing something. "Why is my
               page half empty / why does nothing animate" is answered here, next
               to the one click that plays it for real. */}
@@ -1755,9 +1781,6 @@ function HtmlWorkspace({
                   <ToolIcon size={13} /> {t(label)}
                 </button>
                     ))}
-                    {liveCodeControls && (
-                      <div className="mt-1.5 border-t border-[var(--studio-border)] pt-1.5">{liveCodeControls}</div>
-                    )}
                   </div>
                 </>
               )}

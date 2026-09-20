@@ -1,6 +1,6 @@
 // The Page panel only owns visual page and theme settings. Project code lives
 // in Source and AI lives in its dedicated workspace.
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import LanguageProvider from '../../i18n/LanguageProvider.jsx'
 import UiThemeProvider from '../../ui/UiThemeProvider.jsx'
@@ -128,5 +128,60 @@ describe('Page panel tabs', () => {
     expect(theme.buttonRadius).toBe('8px')
     expect(theme.shadow).toContain('0 18px 45px')
     expect(screen.getByLabelText('Theme preview')).toBeInTheDocument()
+  })
+})
+
+// An uploaded page has no schema to edit: the document IS the page. These
+// controls used to write into the schema, where nothing published them — so a
+// language picked here changed nothing at all.
+describe('Page panel on an uploaded HTML page', () => {
+  const settings = {
+    language: 'de',
+    direction: 'rtl',
+    themeColor: '#0f172a',
+    smoothScroll: true,
+    noIndex: true,
+    canonicalUrl: 'https://example.com/about',
+    seoTitle: 'About us',
+    seoDescription: 'Who we are',
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    emptyPageNoSelection()
+  })
+
+  it('shows what the document says, not what the schema holds', () => {
+    renderPanel({ htmlMode: true, htmlPageSettings: settings, onHtmlPageSettings: () => {} })
+
+    expect(screen.getByLabelText('Page language')).toHaveValue('de')
+    expect(screen.getByLabelText('Text direction')).toHaveValue('rtl')
+    expect(screen.getByLabelText('Smooth scrolling for in-page links')).toBeChecked()
+    expect(screen.getByLabelText('Hide this page from search engines')).toBeChecked()
+    expect(screen.getByLabelText('Canonical URL')).toHaveValue('https://example.com/about')
+    expect(screen.getByLabelText('Search title')).toHaveValue('About us')
+    // The schema page is still 'en' — the panel is reading the document.
+    expect(useEditorStore.getState().schema.pages[0].language).toBe('en')
+  })
+
+  it('writes every change back to the document instead of the schema', () => {
+    const onHtmlPageSettings = vi.fn()
+    renderPanel({ htmlMode: true, htmlPageSettings: settings, onHtmlPageSettings })
+
+    fireEvent.change(screen.getByLabelText('Page language'), { target: { value: 'ja' } })
+    fireEvent.click(screen.getByLabelText('Hide this page from search engines'))
+    fireEvent.change(screen.getByLabelText('Search description'), { target: { value: 'New words' } })
+
+    expect(onHtmlPageSettings).toHaveBeenNthCalledWith(1, { language: 'ja' })
+    expect(onHtmlPageSettings).toHaveBeenNthCalledWith(2, { noIndex: false })
+    expect(onHtmlPageSettings).toHaveBeenNthCalledWith(3, { seoDescription: 'New words' })
+    expect(useEditorStore.getState().schema.pages[0].language).toBe('en')
+  })
+
+  it('leaves out the controls that only act on the component canvas', () => {
+    renderPanel({ htmlMode: true, htmlPageSettings: settings, onHtmlPageSettings: () => {} })
+
+    expect(screen.queryByLabelText('Page background (PC)')).toBeNull()
+    expect(screen.queryByLabelText('Show scroll indicator in mobile preview')).toBeNull()
   })
 })

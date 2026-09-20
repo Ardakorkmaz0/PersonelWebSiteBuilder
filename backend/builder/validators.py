@@ -47,6 +47,12 @@ ALLOWED_STYLE_KEYS = {
 
 ALLOWED_URL_SCHEMES = ('http://', 'https://', 'mailto:', 'tel:')
 BLOCKED_URL_SCHEMES = ('javascript:', 'vbscript:', 'data:', 'file:')
+# Browsers silently strip C0 controls before interpreting a scheme, so
+# java\nscript: becomes javascript: after this check. Reject early.
+_URL_CONTROL_CHARS = re.compile(r'[\x00-\x1f\x7f]')
+# Detects any scheme at all: a letter followed by letters/digits/+/./- then :.
+_HAS_SCHEME = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.\-]*:')
+
 
 DEFAULT_THEME = {
     'primaryColor': '#0071e3',
@@ -99,17 +105,24 @@ def sanitize_url(value):
     v = _str(value).strip()
     if not v:
         return ''
+    # Browsers strip C0 control characters before interpreting a URL, so
+    # java\nscript: would bypass a naive blocklist. Reject them outright.
+    if _URL_CONTROL_CHARS.search(v):
+        return ''
     # Anchors and relative/absolute paths are safe.
     if v.startswith('#') or v.startswith('/'):
         return v
     low = v.lower()
-    for bad in BLOCKED_URL_SCHEMES:
-        if low.startswith(bad):
-            return ''
+    # Allow-listed schemes pass through.
     for ok in ALLOWED_URL_SCHEMES:
         if low.startswith(ok):
             return v
-    # No scheme at all -> treat as a relative path; an unknown scheme is dropped.
+    # If the URL has any scheme at all and it was not allow-listed, drop it.
+    # This catches javascript:, data:, vbscript:, custom:, ftp:, etc.
+    if _HAS_SCHEME.match(v):
+        return ''
+    # No scheme at all -> treat as a relative path (e.g. "page.html",
+    # "./about", "search?q=site:example.com").
     return v if '://' not in low else ''
 
 

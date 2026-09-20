@@ -30,8 +30,21 @@ def _google_claims(claims):
             setattr(modules[parent], child, module)
     modules['google.auth.transport.requests'].Request = Mock()
     modules['google.oauth2.id_token'].verify_oauth2_token = Mock(return_value=claims)
-    with patch.dict(sys.modules, modules):
+    # Only these names go in and out. patch.dict would restore a SNAPSHOT of
+    # sys.modules, unloading everything imported while the block ran — the
+    # first request of the process loads Django's middleware and DRF's
+    # exception handler in here, and dropping those left the next test with a
+    # half-wired error path (a throttled response that never got rendered).
+    previous = {name: sys.modules.get(name) for name in modules}
+    sys.modules.update(modules)
+    try:
         yield
+    finally:
+        for name, module in previous.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
 
 
 @pytest.mark.parametrize('url', [

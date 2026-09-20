@@ -184,7 +184,16 @@ class GoogleLoginView(APIView):
         email = (info.get('email') or '').strip().lower()
         if not email:
             return error_response('google_email_missing', 'Google account has no email.')
+        # Google can return email_verified as missing, False, or even the
+        # string "true".  Only the boolean True is trustworthy.
+        if info.get('email_verified') is not True:
+            return error_response('google_email_unverified', 'Email address is not verified.', status.HTTP_400_BAD_REQUEST)
         user = self._get_or_create_user(email, info)
+        if not user.is_active:
+            return Response(
+                {'detail': 'Account suspended.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         token, _ = Token.objects.get_or_create(user=user)
         return Response(
             {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
@@ -202,6 +211,9 @@ class GoogleLoginView(APIView):
             user = User.objects.create_user(username=username, email=email)
             user.set_unusable_password()
             user.save()
+        # Do not touch the profile of a suspended account.
+        if not user.is_active:
+            return user
         prof, _ = Profile.objects.get_or_create(user=user)
         name = info.get('name')
         if name and not prof.display_name:
@@ -1404,6 +1416,7 @@ class SharedComponentListView(ListAPIView):
         else:
             qs = (SharedComponent.objects
                   .filter(status='published', visibility='public')
+                  .filter(Q(author__is_active=True) | Q(author__isnull=True))
                   .select_related('author')
                   .order_by('-hot_score'))
         category = (self.request.query_params.get('category') or '').strip()
@@ -1425,6 +1438,10 @@ def _visible_component(user, component_id):
                  .filter(pk=component_id, status='published')
                  .first())
     if not component:
+        return None
+    # A suspended author's blocks are invisible to everyone.
+    # A deleted author (author=None) does not hide the block.
+    if component.author_id is not None and not component.author.is_active:
         return None
     if component.visibility == 'public':
         return component
@@ -1455,6 +1472,7 @@ class ShareComponentView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'share'
 
     def post(self, request):
@@ -1582,8 +1600,13 @@ class SharedComponentViewCountView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, component_id):
+        # A suspended author's blocks are not on show, so nothing about them is
+        # being viewed either — the counter must not keep climbing behind a
+        # door that is closed.
         SharedComponent.objects.filter(
             pk=component_id, status='published', visibility='public',
+        ).filter(
+            Q(author__is_active=True) | Q(author__isnull=True),
         ).update(view_count=F('view_count') + 1)
         component = SharedComponent.objects.filter(pk=component_id).first()
         if component:
@@ -1595,9 +1618,9 @@ class ReportSharedComponentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, component_id):
-        component = SharedComponent.objects.filter(
-            pk=component_id, status='published', visibility='public',
-        ).first()
+        # Through the same door as every other read: a block you cannot see is
+        # a block you cannot report.
+        component = _visible_component(request.user, component_id)
         if not component:
             return error_response('component_not_found', 'Component not found.', status.HTTP_404_NOT_FOUND)
         reason = str(request.data.get('reason') or 'other').strip()

@@ -30,6 +30,7 @@ import {
   CogIcon,
   EyeIcon,
   KeyboardIcon,
+  LightbulbIcon,
   LinkIcon,
   MonitorIcon,
   MoonIcon,
@@ -44,6 +45,8 @@ import {
 } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
 import CodeActivityOverlay from '../components/editor/CodeActivityOverlay.jsx'
+import EditorTour from '../components/editor/EditorTour.jsx'
+import { tourWasSeen } from '../utils/editorTour.js'
 import { applyHtmlPageSettings, readHtmlPageSettings } from '../utils/htmlPageSettings.js'
 import CanvasZoomControl from '../components/editor/CanvasZoomControl.jsx'
 import useFullscreenEditing from '../components/editor/useFullscreenEditing.js'
@@ -431,6 +434,7 @@ export default function EditorPage() {
   const [aiOpen, setAiOpen] = useState(false)
   const [aiPanelLayout, setAiPanelLayout] = useState(readAiPanelLayout)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -1270,6 +1274,15 @@ export default function EditorPage() {
     importHtmlIntoPage(pageId, html)
   }
 
+  // The walkthrough runs itself once, on a first visit to the editor, and
+  // only after the site is on screen — a tour pointing at a spinner teaches
+  // nothing. Afterwards it lives in the ⋯ menu.
+  useEffect(() => {
+    if (loading || tourWasSeen()) return undefined
+    const timer = window.setTimeout(() => setTourOpen(true), 700)
+    return () => window.clearTimeout(timer)
+  }, [loading])
+
   // An uploaded page's settings ARE its document: the panel reads the head and
   // writes back into it, so a hand edit in Source shows up in the controls and
   // a control actually changes the published page.
@@ -1914,7 +1927,7 @@ export default function EditorPage() {
           <button type="button" onClick={() => save()} disabled={saving} className="studio-btn studio-btn-secondary">
             <SaveIcon size={14} /> <span className="hidden xl:inline">{t('Save')}</span>
           </button>
-          <button type="button" onClick={() => save(!published)} disabled={saving} className={published ? 'studio-btn studio-btn-secondary' : 'studio-btn studio-btn-primary'} title={published ? t('Unpublish') : t('Publish')}>
+          <button type="button" data-tour="publish" onClick={() => save(!published)} disabled={saving} className={published ? 'studio-btn studio-btn-secondary' : 'studio-btn studio-btn-primary'} title={published ? t('Unpublish') : t('Publish')}>
             {published ? t('Published') : t('Publish')}
           </button>
 
@@ -1923,6 +1936,7 @@ export default function EditorPage() {
               ref={moreBtnRef}
               type="button"
               onClick={() => { anchorMenu('more', moreBtnRef); setAccountOpen(false); setMoreOpen((open) => !open) }}
+              data-tour="more"
               title={t('More actions')}
               aria-label={t('More actions')}
               className={`studio-icon-btn ${moreOpen ? 'bg-[var(--studio-control-hover)] text-[var(--studio-text)]' : ''}`}
@@ -1967,6 +1981,7 @@ export default function EditorPage() {
                   </div>
                   <div className="studio-divider my-1 border-t" />
                   <button type="button" onClick={() => { setMoreOpen(false); setHistoryOpen(true) }} disabled={saving} className="studio-menu-item disabled:opacity-40"><ClockIcon size={15} /> {t('History')}</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); setTourOpen(true) }} className="studio-menu-item"><LightbulbIcon size={15} /> {t('Take the tour')}</button>
                   <button type="button" onClick={() => { setMoreOpen(false); setShortcutsOpen(true) }} className="studio-menu-item"><KeyboardIcon size={15} /> {t('Shortcuts')}</button>
                   <button type="button" onClick={() => { setMoreOpen(false); setNotesOpen(true) }} className="studio-menu-item"><NoteIcon size={15} /> {t('Notes')}</button>
                 </div>
@@ -2592,7 +2607,7 @@ export default function EditorPage() {
                 onOpen={() => setRail('right', true)}
                 onClose={() => setRail('right', false)}
               >
-                <div className="studio-panel flex w-72 min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l">
+                <div data-tour="properties" className="studio-panel flex w-72 min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l">
                   <div className="flex items-center justify-between border-b border-[var(--studio-border)] px-3 py-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-[var(--studio-text-muted)]">
                       {t('Properties')}
@@ -2691,7 +2706,7 @@ export default function EditorPage() {
                   `relative` anchors the live code ticker to the canvas. */}
               <div className="relative flex min-w-0 flex-1 flex-col">
                 <div className="studio-toolbar relative flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
-                  <div className="studio-segment shrink-0">
+                  <div data-tour="canvas-modes" className="studio-segment shrink-0">
                     {[['view', 'View'], ['edit', 'Edit'], ['source', 'Source']].map(([id, label]) => (
                       <button
                         key={id}
@@ -2708,7 +2723,7 @@ export default function EditorPage() {
                   </div>
                   {/* Device controls — moved out of the app header so it stays
                       one row; they act on the canvas this bar belongs to. */}
-                  <div className="studio-segment shrink-0">
+                  <div data-tour="devices" className="studio-segment shrink-0">
                     <button
                       onClick={() => chooseViewport('pc')}
                       className={
@@ -2896,6 +2911,7 @@ export default function EditorPage() {
                     <button
                       type="button"
                       onClick={() => setCanvasToolsOpen((open) => !open)}
+                      data-tour="canvas-tools"
                       title={t('Canvas tools')}
                       aria-label={t('Canvas tools')}
                       className={`studio-icon-btn ${canvasToolsOpen ? 'bg-[var(--studio-control-hover)] text-[var(--studio-text)]' : ''}`}
@@ -3085,7 +3101,7 @@ export default function EditorPage() {
                 onOpen={() => setRail('right', true)}
                 onClose={() => setRail('right', false)}
               >
-              <div className="studio-panel flex w-72 min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l">
+              <div data-tour="properties" className="studio-panel flex w-72 min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-l">
                 <div className="flex shrink-0 items-center justify-between border-b border-[var(--studio-border)] px-3 py-2">
                   <span className="text-xs font-semibold uppercase tracking-wide text-[var(--studio-text-muted)]">
                     {t('Properties')}
@@ -3200,6 +3216,7 @@ export default function EditorPage() {
       )}
 
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
+      <EditorTour open={tourOpen} onClose={() => setTourOpen(false)} />
 
       {historyOpen && (
         <Suspense fallback={null}>

@@ -573,7 +573,7 @@ export default function Sidebar({ onPickComponent, onArmPlacement, onCollapse, f
   const [libraryOpen, setLibraryOpen] = useState(false)
   const theme = useEditorStore((s) => s.schema.theme)
   return (
-    <aside className="studio-panel flex w-60 shrink-0 flex-col overflow-hidden border-r">
+    <aside data-tour="rail-left" className="studio-panel flex w-60 shrink-0 flex-col overflow-hidden border-r">
       <div className="studio-panel flex shrink-0 items-center border-b">
         {filesPanel ? (
           <RailTabs tab={tab} setTab={setTab} />

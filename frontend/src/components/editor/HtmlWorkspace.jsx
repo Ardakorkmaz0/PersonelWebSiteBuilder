@@ -1660,7 +1660,7 @@ function HtmlWorkspace({
           the workspace itself is just the toolbar + stage. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="studio-toolbar flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
-          <div className="studio-segment shrink-0">
+          <div data-tour="canvas-modes" className="studio-segment shrink-0">
             <button onClick={() => switchMode('view')} className={toggleBtn(mode === 'view')}>
               {t('View')}
             </button>
@@ -1722,6 +1722,7 @@ function HtmlWorkspace({
               <button
                 type="button"
                 onClick={() => setWorkspaceMenuOpen((open) => !open)}
+                data-tour="canvas-tools"
                 title={t('Canvas tools')}
                 aria-label={t('Canvas tools')}
                 aria-expanded={workspaceMenuOpen}

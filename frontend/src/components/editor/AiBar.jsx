@@ -54,6 +54,7 @@ export default function AiBar({ open = false, onOpenChange }) {
     <>
       <button
         type="button"
+        data-tour="ai"
         onClick={() => onOpenChange?.(!open)}
         aria-pressed={open}
         title={hasKey ? t('Open AI assistant') : t('Set an AI provider key first')}

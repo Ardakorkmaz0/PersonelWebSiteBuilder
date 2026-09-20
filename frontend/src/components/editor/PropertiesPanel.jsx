@@ -13,6 +13,7 @@ import {
   jsSnippets,
 } from '../../utils/snippets.js'
 import { htmlBaseSizeFromComponent } from '../../utils/htmlSnippetSizing.js'
+import { LANGUAGES } from '../../utils/languages.js'
 import {
   LabeledText,
   LabeledTextarea,
@@ -862,8 +863,27 @@ export default function PropertiesPanel({ htmlMode = false, onApplyThemeToHtml, 
             label={t('Page language')}
             value={page.language || 'en'}
             onChange={(v) => setPageSettings(page.id, { language: v })}
-            options={[["en", t('English')], ["tr", t('Turkish')]]}
+            options={LANGUAGES}
           />
+          <LabeledSelect
+            label={t('Text direction')}
+            value={page.direction || ''}
+            onChange={(v) => setPageSettings(page.id, { direction: v })}
+            options={[['', t('Follow the language')], ['ltr', t('Left to right')], ['rtl', t('Right to left')]]}
+          />
+          <LabeledCheckbox
+            label={t('Smooth scrolling for in-page links')}
+            checked={!!page.smoothScroll}
+            onChange={(v) => setPageSettings(page.id, { smoothScroll: v })}
+          />
+          <LabeledColor
+            label={t('Browser theme color')}
+            value={page.themeColor || page.background || '#ffffff'}
+            onChange={(v) => setPageSettings(page.id, { themeColor: v })}
+          />
+          <p className="text-[11px] leading-snug text-[var(--studio-text-faint)]">
+            {t('Tints the browser bar around your page on phones.')}
+          </p>
           <LabeledText
             label={t('Canonical URL')}
             value={page.canonicalUrl || ''}

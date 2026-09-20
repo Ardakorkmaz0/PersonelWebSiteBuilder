@@ -104,7 +104,7 @@ describe('the community grid', () => {
     await screen.findByTitle('Pricing card')
     listComponents.mockClear()
 
-    await user.type(screen.getByRole('textbox', { name: 'Search blocks…' }), 'hero')
+    await user.type(screen.getByRole('searchbox', { name: 'Search blocks…' }), 'hero')
 
     // Four keystrokes, one request — otherwise the library gets hammered.
     await waitFor(() =>

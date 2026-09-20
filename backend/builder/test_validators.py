@@ -550,3 +550,36 @@ def test_block_anchor_survives_on_a_pinned_block_too():
 def test_block_anchor_rejects_anything_but_a_slug(bad):
     # It is written into an HTML id attribute on the published page.
     assert 'anchor' not in _saved_props({'anchor': bad})
+
+
+class TestPageDocumentSettings:
+    """The save gate rebuilds pages from an explicit key list, so a setting it
+    does not know about is dropped silently — invisible until the next reload.
+    """
+
+    def _page(self, **extra):
+        page = {'id': 'p1', 'name': 'Home', 'components': []}
+        page.update(extra)
+        return validate_and_clean_schema({'pages': [page]})['pages'][0]
+
+    def test_any_well_formed_language_tag_survives(self):
+        assert self._page(language='de')['language'] == 'de'
+        assert self._page(language='pt-BR')['language'] == 'pt-BR'
+        assert self._page(language='es-419')['language'] == 'es-419'
+
+    def test_malformed_language_falls_back_to_english(self):
+        assert self._page(language='" onload="alert(1)')['language'] == 'en'
+        assert self._page(language='')['language'] == 'en'
+        assert self._page()['language'] == 'en'
+
+    def test_direction_theme_colour_and_smooth_scroll_round_trip(self):
+        page = self._page(direction='rtl', themeColor='#0f172a', smoothScroll=True)
+        assert page['direction'] == 'rtl'
+        assert page['themeColor'] == '#0f172a'
+        assert page['smoothScroll'] is True
+
+    def test_junk_direction_and_colour_are_dropped_not_stored(self):
+        page = self._page(direction='sideways', themeColor='red" onload="x', smoothScroll='yes')
+        assert page['direction'] == ''
+        assert page['themeColor'] == ''
+        assert page['smoothScroll'] is True

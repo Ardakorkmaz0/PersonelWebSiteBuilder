@@ -10,6 +10,7 @@ import { DEVICES, isMobileDevice } from '../../utils/htmlDevices.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
 import BrowserFrame from './BrowserFrame.jsx'
+import CodeActivityOverlay from './CodeActivityOverlay.jsx'
 import MobileBrowserChrome from './MobileBrowserChrome.jsx'
 import { browserFrameH, browserFrameW, mobileBrowserChromeH } from './browserFrameMetrics.js'
 import {
@@ -60,6 +61,8 @@ import BrushControls from './BrushControls.jsx'
 import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon, SparklesIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { shouldForwardIframeShortcut } from '../../utils/editorLeave.js'
+import { revealLine } from '../../utils/revealCodeLine.js'
+import CodeLineGlow from './CodeLineGlow.jsx'
 
 // Editable, pixel-perfect HTML/JS workspace embedded in the site editor.
 // - View: real document in a sandboxed iframe with scripts enabled.
@@ -470,6 +473,12 @@ function HtmlWorkspace({
   onDraftDirtyChange,
   onElementSelect,
   onSpotlight,
+  // Types out the lines an edit just changed over the stage. Off in Source,
+  // where the document is already on screen. The controls come from the editor
+  // (one preference, both workspaces) and live in this toolbar's ⋯ menu.
+  liveCode = false,
+  liveCodeHold,
+  liveCodeControls = null,
   onShare,
   onLinkArmedChange,
   onStartBlank,
@@ -530,6 +539,10 @@ function HtmlWorkspace({
   const [nonce, setNonce] = useState(0)
   const [editSeed, setEditSeed] = useState(html)
   const [sourceDraft, setSourceDraft] = useState(html)
+  const sourceRef = useRef(null)
+  const [pendingReveal, setPendingReveal] = useState(null)
+  const [glowLine, setGlowLine] = useState(null)
+  const clearGlow = useCallback(() => setGlowLine(null), [])
   const sourceDraftDirty = hasUnsavedSourceDraft(mode, sourceDraft, html)
   useEffect(() => {
     onDraftDirtyChange?.(sourceDraftDirty)
@@ -999,8 +1012,24 @@ function HtmlWorkspace({
     // view mode: srcDoc derives from the html prop — nothing to reseed.
   }, [clearSelection, mode])
 
+  // Runs once Source is actually showing, so the field holds the document.
+  useEffect(() => {
+    if (!pendingReveal || mode !== 'source') return undefined
+    const timer = window.setTimeout(() => {
+      const index = revealLine(sourceRef.current, sourceDraft, pendingReveal)
+      setPendingReveal(null)
+      setGlowLine(index >= 0 ? index + 1 : null)
+    }, 30)
+    return () => window.clearTimeout(timer)
+  }, [pendingReveal, mode, sourceDraft])
+
   useImperativeHandle(ref, () => ({
     getHtml: readHtml,
+    // The live code ticker: open Source and put that line on screen.
+    revealSource: (target) => {
+      switchMode('source')
+      setPendingReveal(target && { ...target, at: Date.now() })
+    },
     prepareFrameChange: prepareForFrameChange,
     showEdit: () => switchMode('edit'),
     // Which CSS rules (in the given [{ path, content }] files) style the
@@ -1594,7 +1623,15 @@ function HtmlWorkspace({
     `studio-segment-btn ${active ? 'studio-segment-btn-active' : ''}`
 
   return (
-    <div className="studio-theme-surface flex min-h-0 min-w-0 flex-1">
+    <div className="studio-theme-surface relative flex min-h-0 min-w-0 flex-1">
+      {liveCode && mode !== 'source' && (
+        <CodeActivityOverlay
+          document={html}
+          fileName={fileName}
+          holdMs={liveCodeHold}
+          onOpenSource={(target) => { switchMode('source'); setPendingReveal({ ...target, at: Date.now() }) }}
+        />
+      )}
       {/* The page/file list lives in the editor's left rail (Files tab) —
           the workspace itself is just the toolbar + stage. */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -1718,6 +1755,9 @@ function HtmlWorkspace({
                   <ToolIcon size={13} /> {t(label)}
                 </button>
                     ))}
+                    {liveCodeControls && (
+                      <div className="mt-1.5 border-t border-[var(--studio-border)] pt-1.5">{liveCodeControls}</div>
+                    )}
                   </div>
                 </>
               )}
@@ -1858,12 +1898,14 @@ function HtmlWorkspace({
               {fileName}
             </div>
             <textarea
+              ref={sourceRef}
               value={sourceDraft}
-              onChange={(e) => setSourceDraft(e.target.value)}
+              onChange={(e) => { setGlowLine(null); setSourceDraft(e.target.value) }}
               spellCheck={false}
               placeholder={t('This page has no HTML yet — paste or write a full document here, then Apply & Save.')}
               className="min-h-0 flex-1 resize-none bg-[#1e1e1e] p-4 font-mono text-sm leading-relaxed text-gray-100 outline-none placeholder:text-gray-500"
             />
+            <CodeLineGlow targetRef={sourceRef} line={glowLine} onClear={clearGlow} />
           </main>
         ) : !String(html || '').trim() ? (
           /* Empty page: keep the full workspace chrome (toolbar, device bar)

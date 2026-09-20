@@ -25,6 +25,7 @@ const CodeProjectPage = lazy(() => import('./pages/CodeProjectPage.jsx'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
 const PublicProfilePage = lazy(() => import('./pages/PublicProfilePage.jsx'))
 const FavoritesPage = lazy(() => import('./pages/FavoritesPage.jsx'))
+const SearchPage = lazy(() => import('./pages/SearchPage.jsx'))
 const CommunityPage = lazy(() => import('./pages/CommunityPage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
@@ -74,6 +75,10 @@ export default function App() {
                 <ThemedPage><ExplorePage /></ThemedPage>
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/search"
+            element={<ProtectedRoute><ThemedPage><SearchPage /></ThemedPage></ProtectedRoute>}
           />
           <Route
             path="/editor/:id"

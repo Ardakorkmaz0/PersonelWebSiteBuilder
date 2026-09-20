@@ -204,6 +204,13 @@ export default function AnimationPanel({ html = null }) {
     if (htmlMode) html.onApply?.({ animHover: hover })
     else updateProps(storeSelectedId, { animHover: hover })
   }
+  const hasMotion = !!selectedId && (motion.animIn !== 'none' || motion.animHover !== 'none')
+  const clearMotion = () => {
+    if (!hasMotion) return
+    const patch = { animIn: 'none', animHover: 'none' }
+    if (htmlMode) html.onApply?.(patch)
+    else updateProps(storeSelectedId, patch)
+  }
 
   const styleRef = useRef(null)
   return (
@@ -314,6 +321,28 @@ export default function AnimationPanel({ html = null }) {
           {t('Hover a swatch to preview; click to apply or remove.')}
         </p>
       </div>
+
+      {/* A hover effect could always be switched off by clicking it again, but
+          an entrance could only ever be REPLACED — there was no way back to a
+          still element. */}
+      {hasMotion && (
+        <div className="border-t border-[#e5e7eb] pt-3">
+          <button
+            type="button"
+            onClick={clearMotion}
+            className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm font-medium text-[#374151] transition hover:border-[var(--studio-danger)] hover:text-[var(--studio-danger)]"
+          >
+            {t('Remove animation')}
+          </button>
+          <p className="mt-1.5 text-[11px] leading-snug text-[#9ca3af]">
+            {motion.animIn !== 'none' && motion.animHover !== 'none'
+              ? t('Clears both the entrance and the hover effect on this element.')
+              : motion.animIn !== 'none'
+                ? t('Clears the entrance on this element.')
+                : t('Clears the hover effect on this element.')}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

@@ -30,7 +30,7 @@ export default function AuthShell({ title, description, onSubmit, children, foot
         </header>
 
         <div className="grid flex-1 items-start gap-8 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(25rem,29rem)] lg:items-center lg:gap-12 lg:py-10">
-          <aside className="relative hidden min-h-[34rem] overflow-hidden rounded-3xl border border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_78%,var(--studio-accent-soft))] p-8 shadow-[var(--studio-shadow)] lg:flex lg:flex-col lg:justify-between xl:p-10">
+          <aside className="studio-auth-showcase relative hidden min-h-[34rem] overflow-hidden rounded-3xl border border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_78%,var(--studio-accent-soft))] p-8 shadow-[var(--studio-shadow)] lg:flex lg:flex-col lg:justify-between xl:p-10">
             <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[color-mix(in_srgb,var(--studio-accent)_18%,transparent)] blur-3xl" />
             <div className="pointer-events-none absolute -bottom-28 -left-24 h-64 w-64 rounded-full bg-[color-mix(in_srgb,var(--studio-info)_12%,transparent)] blur-3xl" />
 
@@ -86,7 +86,7 @@ export default function AuthShell({ title, description, onSubmit, children, foot
             <Surface
               {...surfaceProps}
               aria-labelledby="auth-page-title"
-              className="rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-6 shadow-[var(--studio-shadow)] min-[360px]:px-5 sm:p-8"
+              className="studio-auth-card rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-3 py-6 shadow-[var(--studio-shadow)] min-[360px]:px-5 sm:p-8"
             >
               <div>
                 <h1 id="auth-page-title" className="text-xl font-bold tracking-tight text-[var(--studio-text)] sm:text-2xl">

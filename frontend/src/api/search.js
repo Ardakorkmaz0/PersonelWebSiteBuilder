@@ -1,4 +1,4 @@
 import client from './client.js'
 
-export const searchDashboard = (query) =>
-  client.get('/search/', { params: { q: query } }).then((response) => response.data)
+export const searchDashboard = (query, options = {}) =>
+  client.get('/search/', { params: { ...options, q: query } }).then((response) => response.data)

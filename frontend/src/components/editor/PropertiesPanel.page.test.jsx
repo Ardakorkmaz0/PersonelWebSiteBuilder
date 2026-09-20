@@ -86,6 +86,31 @@ describe('Page panel tabs', () => {
     expect(screen.getByLabelText('Search result preview')).toHaveTextContent('example.com/work')
   })
 
+  it('publishes in any of the offered languages, not just two', () => {
+    renderPanel()
+    const select = screen.getByLabelText('Page language')
+    const codes = Array.from(select.options).map((option) => option.value)
+
+    expect(codes.length).toBeGreaterThan(40)
+    expect(codes).toEqual(expect.arrayContaining(['en', 'tr', 'de', 'ja', 'ar', 'pt-BR']))
+    expect(select.options[codes.indexOf('tr')].textContent).toBe('Türkçe')
+
+    fireEvent.change(select, { target: { value: 'ja' } })
+    expect(useEditorStore.getState().schema.pages[0].language).toBe('ja')
+  })
+
+  it('edits reading direction, smooth scrolling and the browser theme colour', () => {
+    renderPanel()
+    fireEvent.change(screen.getByLabelText('Text direction'), { target: { value: 'rtl' } })
+    fireEvent.click(screen.getByLabelText('Smooth scrolling for in-page links'))
+    fireEvent.change(screen.getByLabelText('Browser theme color'), { target: { value: '#0f172a' } })
+
+    const page = useEditorStore.getState().schema.pages[0]
+    expect(page.direction).toBe('rtl')
+    expect(page.smoothScroll).toBe(true)
+    expect(page.themeColor).toBe('#0f172a')
+  })
+
   it('offers richer typography, shape and shadow theme controls', () => {
     renderPanel()
     fireEvent.click(screen.getByRole('tab', { name: 'Theme' }))

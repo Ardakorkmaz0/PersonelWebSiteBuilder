@@ -9,8 +9,10 @@ import {
 } from 'react'
 import { useEditorStore } from '../../store/editorStore.js'
 import { inlineProjectHtml, minifyGeneratedHtml } from '../../utils/exportFiles.js'
-import { schemaToFiles, schemaToSingleHtml } from '../../utils/schemaToFiles.js'
-import { schemaToResponsiveHtml } from '../../utils/responsiveHtml.js'
+import { schemaToFiles } from '../../utils/schemaToFiles.js'
+import { pageToResponsiveHtml } from '../../utils/pageCode.js'
+import { revealLine } from '../../utils/revealCodeLine.js'
+import CodeLineGlow from './CodeLineGlow.jsx'
 import { appendSnippet, cssSnippets, groupSnippets, jsSnippets } from '../../utils/snippets.js'
 import { zipFiles } from '../../utils/zip.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
@@ -22,13 +24,6 @@ import {
   FileIcon,
   FolderIcon,
 } from '../icons.jsx'
-
-function pageToResponsiveHtml(page, title, schema = {}) {
-  const pageSchema = { ...schema, pages: [page] }
-  return page?.flowMode
-    ? schemaToSingleHtml(pageSchema, title)
-    : schemaToResponsiveHtml(pageSchema, title)
-}
 
 const ICON = { html: 'HTML', css: 'CSS', js: 'JS', json: '{ }' }
 const MIME = {
@@ -151,6 +146,10 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
     name: null,
   })
   const [copied, setCopied] = useState(false)
+  const [pendingReveal, setPendingReveal] = useState(null)
+  const [glowLine, setGlowLine] = useState(null)
+  const clearGlow = useCallback(() => setGlowLine(null), [])
+  const codeBodyRef = useRef(null)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const exportMenuRef = useRef(null)
 
@@ -161,7 +160,8 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
   const active = activeSelection.pageId === currentPageId
     ? activeSelection.name || currentPageFileName || 'index.html'
     : currentPageFileName || 'index.html'
-  const selectFile = (name) => setActiveSelection({ pageId: currentPageId, name })
+  // A different file, or an edit, and the highlight no longer points anywhere.
+  const selectFile = (name) => { setGlowLine(null); setActiveSelection({ pageId: currentPageId, name }) }
   const file = files.find((item) => item.name === active) || files[0]
   const lines = file?.content ? file.content.split('\n').length : 1
   const dirtyHtmlFiles = generatedFiles.filter((item) => (
@@ -204,7 +204,24 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
   useImperativeHandle(ref, () => ({
     applyPendingHtml,
     hasPendingHtml: () => dirtyHtmlFiles.length > 0,
-  }), [applyPendingHtml, dirtyHtmlFiles.length])
+    // The live code ticker sends the change it just showed; open the page's own
+    // file and put that line on screen.
+    revealCode: (target) => {
+      setActiveSelection({ pageId: currentPageId, name: currentPageFileName || 'index.html' })
+      setPendingReveal(target && { ...target, at: Date.now() })
+    },
+  }), [applyPendingHtml, currentPageFileName, currentPageId, dirtyHtmlFiles.length])
+
+  // Runs after the file above has rendered, so the element holds its content.
+  useEffect(() => {
+    if (!pendingReveal) return undefined
+    const timer = window.setTimeout(() => {
+      const index = revealLine(codeBodyRef.current, file?.content || '', pendingReveal)
+      setPendingReveal(null)
+      setGlowLine(index >= 0 ? index + 1 : null)
+    }, 30)
+    return () => window.clearTimeout(timer)
+  }, [pendingReveal, file?.content])
 
   const FileButton = ({ item, indent = false }) => (
     <button
@@ -288,6 +305,7 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
   }
 
   function updateFile(value) {
+    setGlowLine(null)
     if (file?.editableKind === 'html') {
       setHtmlDrafts((drafts) => ({ ...drafts, [file.name]: value }))
     }
@@ -537,8 +555,11 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
             </div>
           </div>
 
+          {/* Positioned so the jumped-to line can be lit over the field. */}
+          <div className="relative flex min-h-0 flex-1 flex-col">
           {file?.editable ? (
             <textarea
+              ref={codeBodyRef}
               aria-label={t(
                 file.editableKind === 'html'
                   ? 'HTML source editor'
@@ -558,12 +579,15 @@ function CodePanel({ currentPageId, onApplyHtml, onDraftDirtyChange }, ref) {
             />
           ) : (
             <pre
+              ref={codeBodyRef}
               aria-label={t('Generated source preview')}
               className="min-h-0 flex-1 overflow-auto bg-[#0d1117] p-5 font-mono text-[13px] leading-6 text-gray-100"
             >
               <code>{file?.content}</code>
             </pre>
           )}
+          <CodeLineGlow targetRef={codeBodyRef} line={glowLine} onClear={clearGlow} />
+          </div>
 
           <div className="flex shrink-0 items-center gap-3 border-t border-white/10 bg-[#151a23] px-3 py-1.5 text-[10px] text-gray-500">
             <span>{String(file?.lang || '').toUpperCase()}</span>

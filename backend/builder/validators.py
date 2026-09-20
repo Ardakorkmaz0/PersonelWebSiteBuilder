@@ -512,6 +512,21 @@ def sanitize_component(comp, depth=0):
     return clean
 
 
+_LANGUAGE_TAG = re.compile(r'^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$')
+
+
+def sanitize_language(value, default='en'):
+    """A BCP 47 language tag, or the default when the shape is not one."""
+    tag = _str(value).strip()
+    return tag if _LANGUAGE_TAG.match(tag) else default
+
+
+def sanitize_hex_color(value, default=''):
+    """A #rgb/#rrggbb(aa) value — used where the colour goes into an attribute."""
+    v = _str(value).strip()
+    return v if re.match(r'^#[0-9a-fA-F]{3,8}$', v) else default
+
+
 def sanitize_color(value, default='#ffffff'):
     """A CSS color string with dangerous values stripped."""
     v = _str(value).strip()
@@ -603,7 +618,14 @@ def validate_and_clean_schema(schema):
             'seoTitle': _str(page.get('seoTitle'))[:70],
             'seoDescription': _str(page.get('seoDescription'))[:200],
             'seoImage': sanitize_image_src(page.get('seoImage')),
-            'language': 'tr' if page.get('language') == 'tr' else 'en',
+            # Any well-formed BCP 47 tag, not a fixed pair: the editor offers a
+            # long list and a site may legitimately carry one we never listed.
+            # Shape is what matters — the value lands in lang="".
+            'language': sanitize_language(page.get('language')),
+            # '' means "follow the language"; the writers resolve it.
+            'direction': page.get('direction') if page.get('direction') in ('ltr', 'rtl') else '',
+            'themeColor': sanitize_hex_color(page.get('themeColor')),
+            'smoothScroll': bool(page.get('smoothScroll')),
             'canonicalUrl': sanitize_url(page.get('canonicalUrl'))[:500],
             'noIndex': bool(page.get('noIndex')),
             # Editor preview chrome: preserved independently from published

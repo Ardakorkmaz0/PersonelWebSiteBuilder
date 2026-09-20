@@ -122,3 +122,53 @@ describe('the component canvas is untouched', () => {
     expect(updateProps).toHaveBeenCalledWith('c1', { animIn: 'blur', animSpeed: 'normal' })
   })
 })
+
+// An entrance could only ever be replaced by another entrance: nothing in the
+// panel took an element back to still.
+describe('taking the animation back off', () => {
+  it('is not offered for an element that has none', () => {
+    useEditorStore.setState({
+      selectedId: 'c1',
+      schema: { theme: {}, pages: [{ id: 'p1', name: 'Home', components: [{ id: 'c1', type: 'text', props: {} }] }] },
+      currentPageId: 'p1',
+    })
+    renderPanel()
+
+    expect(screen.queryByRole('button', { name: 'Remove animation' })).toBeNull()
+  })
+
+  it('clears the entrance and the hover of a component in one go', async () => {
+    const user = userEvent.setup()
+    const updateProps = vi.fn()
+    useEditorStore.setState({
+      selectedId: 'c1',
+      updateProps,
+      schema: {
+        theme: {},
+        pages: [{
+          id: 'p1',
+          name: 'Home',
+          components: [{ id: 'c1', type: 'text', props: { animIn: 'fade-up', animHover: 'lift' } }],
+        }],
+      },
+      currentPageId: 'p1',
+    })
+    renderPanel()
+
+    expect(screen.getByText('Clears both the entrance and the hover effect on this element.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove animation' }))
+
+    expect(updateProps).toHaveBeenCalledWith('c1', { animIn: 'none', animHover: 'none' })
+  })
+
+  it('clears an HTML element through the same apply channel', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn()
+    renderPanel({ html: { info: { tag: 'h1', motion: { animIn: 'fade-up', animHover: 'none', animSpeed: 'normal' } }, onApply } })
+
+    expect(screen.getByText('Clears the entrance on this element.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove animation' }))
+
+    expect(onApply).toHaveBeenCalledWith({ animIn: 'none', animHover: 'none' })
+  })
+})

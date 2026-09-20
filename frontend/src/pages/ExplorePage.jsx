@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
 import { useScrollRestore } from '../utils/useScrollRestore.js'
-import ExploreCard, { ExploreCardSkeleton } from '../components/dashboard/ExploreCard.jsx'
+import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 import CreateSiteWizard from '../components/dashboard/CreateSiteWizard.jsx'
 import DashboardHeader from '../components/dashboard/DashboardHeader.jsx'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
@@ -55,6 +55,7 @@ export default function ExplorePage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [createOrigin, setCreateOrigin] = useState(null)
   const [remixingId, setRemixingId] = useState(null)
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
@@ -69,6 +70,13 @@ export default function ExplorePage() {
     favorites: ownSites.reduce((sum, site) => sum + (site.favorite_count || 0), 0),
   }), [ownSites])
   const displayName = user?.display_name || user?.username || t('Creator')
+
+  function openCreate(event) {
+    const trigger = event.currentTarget
+    const { left, top, width, height } = trigger.getBoundingClientRect()
+    setCreateOrigin({ left, top, width, height, trigger })
+    setCreateOpen(true)
+  }
 
   useEffect(() => {
     if (data.category === category) return undefined
@@ -171,7 +179,7 @@ export default function ExplorePage() {
                 {t('Continue your latest project or start with a fresh idea.')}
               </p>
               <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                <button type="button" onClick={() => setCreateOpen(true)} className="studio-btn studio-btn-primary relative z-10 min-h-11 px-4">
+                <button type="button" onClick={openCreate} aria-haspopup="dialog" aria-expanded={createOpen} className="studio-btn studio-btn-primary studio-create-trigger relative z-10 min-h-11 px-4">
                   <PlusIcon size={16} /> {t('Create new site')}
                 </button>
                 <Link to="/code" className="studio-btn studio-btn-secondary relative z-10 min-h-11 px-4">
@@ -247,7 +255,7 @@ export default function ExplorePage() {
               <p className="dashboard-kicker mt-5">{t('Start something new')}</p>
               <h2 className="mt-1 text-xl font-bold text-[var(--studio-text)]">{t('Create your first project')}</h2>
               <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--studio-text-muted)]">{t('Choose a template, use AI, or bring your own HTML.')}</p>
-              <button type="button" onClick={() => setCreateOpen(true)} className="studio-btn studio-btn-accent mt-5 min-h-10 px-4">
+              <button type="button" onClick={openCreate} aria-haspopup="dialog" aria-expanded={createOpen} className="studio-btn studio-btn-accent studio-create-trigger mt-5 min-h-10 px-4">
                 <PlusIcon size={15} /> {t('Create new site')}
               </button>
             </div>
@@ -267,27 +275,27 @@ export default function ExplorePage() {
               <h2 id="discover-heading" className="mt-1 text-xl font-bold tracking-tight text-[var(--studio-text)] sm:text-2xl">{t('Discover ideas')}</h2>
               <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Explore published work from the community.')}</p>
             </div>
-          </div>
-          <div className="explore-rail mb-5" role="group" aria-label={t('Site categories')}>
-            {CATEGORIES.map(([id, label]) => (
-              <button
-                key={id || 'all'}
-                type="button"
-                onClick={() => selectCategory(id)}
-                aria-pressed={category === id}
-                className="explore-chip"
-              >
-                {t(label)}
-              </button>
-            ))}
+            <div className="dashboard-filter-rail flex max-w-full gap-1.5 overflow-x-auto" aria-label={t('Site categories')}>
+              {CATEGORIES.map(([id, label]) => (
+                <button
+                  key={id || 'all'}
+                  type="button"
+                  onClick={() => selectCategory(id)}
+                  aria-pressed={category === id}
+                  className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                    category === id
+                      ? 'border-[var(--studio-accent)] bg-[var(--studio-accent)] text-white'
+                      : 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
+                  }`}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading ? (
-            // Cards in the shape that is about to arrive, so the page does not
-            // jump — the text "Loading…" used to sit alone in an empty feed.
-            <div className="explore-grid" role="status" aria-label={t('Loading…')}>
-              {Array.from({ length: 6 }, (_, i) => <ExploreCardSkeleton key={i} featured={i === 0 && !category} />)}
-            </div>
+            <p role="status" className="text-sm text-[var(--studio-text-muted)]">{t('Loading…')}</p>
           ) : items.length === 0 ? (
             <div className="dashboard-section-card border-dashed py-16 text-center">
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]"><GlobeIcon size={24} /></div>
@@ -300,18 +308,9 @@ export default function ExplorePage() {
             </div>
           ) : (
             <>
-              <div className="explore-grid">
-                {items.map((site, index) => (
-                  <ExploreCard
-                    key={site.id}
-                    site={site}
-                    // The feed's top site leads as a wide card — on "All" only,
-                    // and only with enough sites around it to fill the rows.
-                    featured={index === 0 && !category && items.length >= 4}
-                    onToggleFav={onToggleFav}
-                    onRemix={onRemix}
-                    remixing={remixingId === site.id}
-                  />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {items.map((site) => (
+                  <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} />
                 ))}
               </div>
               {data.hasMore && (
@@ -329,6 +328,7 @@ export default function ExplorePage() {
 
       <CreateSiteWizard
         open={createOpen}
+        origin={createOrigin}
         onClose={() => setCreateOpen(false)}
         onCreated={(site) => navigate(`/editor/${site.id}`)}
       />

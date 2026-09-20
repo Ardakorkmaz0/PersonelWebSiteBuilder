@@ -26,6 +26,7 @@ import ShortcutsHelp from '../components/editor/ShortcutsHelp.jsx'
 import {
   ArrowLeftIcon,
   ClockIcon,
+  CodeIcon,
   CogIcon,
   EyeIcon,
   KeyboardIcon,
@@ -42,6 +43,7 @@ import {
   UndoIcon,
 } from '../components/icons.jsx'
 import Canvas from '../components/editor/Canvas.jsx'
+import CodeActivityOverlay from '../components/editor/CodeActivityOverlay.jsx'
 import CanvasZoomControl from '../components/editor/CanvasZoomControl.jsx'
 import useFullscreenEditing from '../components/editor/useFullscreenEditing.js'
 import { readZoom, writeZoom } from '../components/editor/canvasZoom.js'
@@ -119,6 +121,11 @@ const AiWizard = lazy(() => import('../components/editor/AiWizard.jsx'))
 const LAST_VIEWPORT_KEY = 'pwb_default_editor_viewport'
 const AI_PANEL_LAYOUT_KEY = 'pwb_ai_panel_layout'
 const BROWSER_FRAME_KEY = 'pwb_browser_frame'
+const LIVE_CODE_KEY = 'pwb_live_code'
+const LIVE_CODE_HOLD_KEY = 'pwb_live_code_hold'
+// How long a written-out card stays before it fades. 0 = until it is dismissed
+// or the next edit replaces it.
+const LIVE_CODE_HOLDS = [[1500, '1.5s'], [3000, '3s'], [6000, '6s'], [0, 'Until dismissed']]
 const CANVAS_ZOOM_KEY = 'pwb_canvas_zoom'
 const HTML_DEVICE_KEYS = {
   pc: 'pwb_last_html_pc_device',
@@ -138,6 +145,18 @@ function readAiPanelLayout() {
 function readBrowserFramePreference() {
   try { return localStorage.getItem(BROWSER_FRAME_KEY) !== '0' }
   catch { return true }
+}
+
+function readLiveCodePreference() {
+  try { return localStorage.getItem(LIVE_CODE_KEY) !== '0' }
+  catch { return true }
+}
+
+function readLiveCodeHold() {
+  try {
+    const saved = Number(localStorage.getItem(LIVE_CODE_HOLD_KEY))
+    return LIVE_CODE_HOLDS.some(([ms]) => ms === saved) ? saved : LIVE_CODE_HOLDS[0][0]
+  } catch { return LIVE_CODE_HOLDS[0][0] }
 }
 
 function readHtmlDevice(viewport) {
@@ -453,6 +472,8 @@ export default function EditorPage() {
   }) // 'view' | 'edit' | 'source'
   const [canvasToolsOpen, setCanvasToolsOpen] = useState(false)
   const [browserFrameEnabled, setBrowserFrameEnabled] = useState(readBrowserFramePreference)
+  const [liveCodeEnabled, setLiveCodeEnabled] = useState(readLiveCodePreference)
+  const [liveCodeHold, setLiveCodeHold] = useState(readLiveCodeHold)
   const [brushMode, setBrushMode] = useState(false)
   const [brushColor, setBrushColor] = useState(() => {
     try { return normalizeBrushColor(localStorage.getItem('pwb_brushcolor_' + id)) || theme?.primaryColor || '#4f46e5' } catch { return '#4f46e5' }
@@ -1738,6 +1759,67 @@ export default function EditorPage() {
     })
   }
 
+  function toggleLiveCode() {
+    setLiveCodeEnabled((enabled) => {
+      const next = !enabled
+      try { localStorage.setItem(LIVE_CODE_KEY, next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }
+
+  function changeLiveCodeHold(ms) {
+    setLiveCodeHold(ms)
+    try { localStorage.setItem(LIVE_CODE_HOLD_KEY, String(ms)) } catch { /* ignore */ }
+  }
+
+  // Clicking a ticker card: open the file it was read from and put the changed
+  // line on screen. The line is found by its TEXT first — the Source panel and
+  // the ticker read the same document, but a redraw in between could shift a
+  // number, and landing on the wrong line is worse than not scrolling.
+  function openLiveCodeSource(target) {
+    if (currentPageIsHtml) {
+      workspaceRef.current?.revealSource?.(target)
+      return
+    }
+    switchCanvasMode('source')
+    window.setTimeout(() => codePanelRef.current?.revealCode?.(target), 60)
+  }
+
+  const liveCodeControls = (
+    <div className="space-y-1">
+      <button
+        type="button"
+        aria-pressed={liveCodeEnabled}
+        onClick={toggleLiveCode}
+        className={`studio-menu-item ${liveCodeEnabled ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
+      >
+        <CodeIcon size={13} /> {t('Live code')}
+        <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide opacity-70">
+          {liveCodeEnabled ? t('On') : t('Off')}
+        </span>
+      </button>
+      {liveCodeEnabled && (
+        <>
+          <label className="flex items-center gap-2 px-1.5 text-[11px] text-[var(--studio-text-muted)]">
+            <span className="shrink-0">{t('Show for')}</span>
+            <select
+              value={liveCodeHold}
+              onChange={(event) => changeLiveCodeHold(Number(event.target.value))}
+              className="studio-input min-w-0 flex-1 px-2 py-1 text-xs"
+            >
+              {LIVE_CODE_HOLDS.map(([ms, label]) => (
+                <option key={ms} value={ms}>{ms ? label : t(label)}</option>
+              ))}
+            </select>
+          </label>
+          <p className="px-1.5 text-[10px] leading-snug text-[var(--studio-text-faint)]">
+            {t('Click a card to open that line in Source; × closes it.')}
+          </p>
+        </>
+      )}
+    </div>
+  )
+
   function applyCustomCanvasResolution() {
     const widthInput = resolutionWidthRef.current
     const heightInput = resolutionHeightRef.current
@@ -2403,6 +2485,9 @@ export default function EditorPage() {
                   ref={workspaceRef}
                   persistKey={id}
                   html={siteHtml}
+                  liveCode={liveCodeEnabled}
+                  liveCodeHold={liveCodeHold}
+                  liveCodeControls={liveCodeControls}
                   deviceId={htmlDevice}
                   landscape={htmlLandscape}
                   fullscreen={fullscreen}
@@ -2582,8 +2667,9 @@ export default function EditorPage() {
                 />
               </RailSlot>}
               {/* Canvas column with the same View/Edit/Source bar the HTML
-                  workspace has — identical chrome in both editor modes. */}
-              <div className="flex min-w-0 flex-1 flex-col">
+                  workspace has — identical chrome in both editor modes.
+                  `relative` anchors the live code ticker to the canvas. */}
+              <div className="relative flex min-w-0 flex-1 flex-col">
                 <div className="studio-toolbar relative flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
                   <div className="studio-segment shrink-0">
                     {[['view', 'View'], ['edit', 'Edit'], ['source', 'Source']].map(([id, label]) => (
@@ -2827,6 +2913,9 @@ export default function EditorPage() {
                               <button type="button" onClick={() => { const next = !brushMode; setBrushMode(next); if (next) setLinkMode(false); setCanvasToolsOpen(false) }} className={`studio-menu-item ${brushMode ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}><PaletteIcon size={13} /> {t('Brush')}</button>
                             </div>
                           )}
+                          {canvasMode !== 'source' && (
+                            <div className="mt-2 border-t border-[var(--studio-border)] pt-2">{liveCodeControls}</div>
+                          )}
                         </div>
                       </>
                     )}
@@ -2956,6 +3045,17 @@ export default function EditorPage() {
                   componentId={spotlightComponentId}
                   onClose={() => setSpotlightComponentId(null)}
                 />
+                {/* What that last edit did to the page's code, typed out over
+                    the canvas. Off in Source mode, where the file is already
+                    on screen. */}
+                {liveCodeEnabled && canvasMode !== 'source' && !spotlightComponentId && (
+                  <CodeActivityOverlay
+                    pageId={currentPageId}
+                    title={title}
+                    holdMs={liveCodeHold}
+                    onOpenSource={openLiveCodeSource}
+                  />
+                )}
               </div>
               {!aiWorkspaceOpen && canvasMode !== 'source' && <RailSlot
                 side="right"

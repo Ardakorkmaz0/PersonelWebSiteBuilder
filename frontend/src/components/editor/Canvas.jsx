@@ -24,6 +24,7 @@ import PreviewScrollIndicator from './PreviewScrollIndicator.jsx'
 import CanvasSelectionActions from './CanvasSelectionActions.jsx'
 import { selectionActionsPosition } from './canvasSelectionActionsLayout.js'
 import { chromeBadgeStyle, chromeMetrics } from './selectionChrome.js'
+import { pageDirection, pageLanguage } from '../../utils/seoTags.js'
 
 // One editable free canvas, rendered at the active breakpoint's chosen artboard
 // width. PC edits each component's `layout`; Mobile edits its `mobileLayout` on a
@@ -397,6 +398,10 @@ export default function Canvas({
       data-builder-canvas-scale={canvasScale}
       ref={setCanvasRef}
       onPointerDown={startMarquee}
+      // The artboard reads the way the published page will: an Arabic or Hebrew
+      // page is right-to-left while you design it, not only after export.
+      dir={pageDirection(page)}
+      lang={pageLanguage(page)}
       style={{
         position: 'relative',
         width: canvasW,

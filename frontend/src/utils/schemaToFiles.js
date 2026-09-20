@@ -44,7 +44,7 @@ import {
   navbarPlacement,
 } from './navbarLayout.js'
 import { motionClassSuffix, motionCssVars, motionHeadTags, motionRevealAttr } from './motion.js'
-import { pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
+import { pageBehaviourStyleTag, pageDirAttr, pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
 import { elementIdFor } from './anchors.js'
 
 // Widths at or below this get the phone layout on the published site.
@@ -615,12 +615,12 @@ function pageHtml(
     ? '<script src="custom.js"></script>'
     : `${builderInteractiveTags()}\n    ${customJsBlock(customJs)}`
   return `<!DOCTYPE html>
-<html lang="${pageLanguage(page)}">
+<html lang="${pageLanguage(page)}"${pageDirAttr(page)}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(pageSeoTitle(page, fileTitle))}</title>
-    ${seoHeadTags(page, fileTitle)}
+    ${seoHeadTags(page, fileTitle)}${pageBehaviourStyleTag(page)}
     <link rel="stylesheet" href="${cssHref}" />${customStyleLink}
     ${googleFontLinkTag(theme)}
     ${runtimeHead}
@@ -900,12 +900,12 @@ function schemaToScaledHtml(page, title = 'My Site', schema = {}, options = {}) 
   const fixedBody = pageBody(page, { fixed: 'only' })
 
   return `<!DOCTYPE html>
-<html lang="${pageLanguage(page)}">
+<html lang="${pageLanguage(page)}"${pageDirAttr(page)}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(pageSeoTitle(page, title))}</title>
-    ${seoHeadTags(page, title)}
+    ${seoHeadTags(page, title)}${pageBehaviourStyleTag(page)}
     ${googleFontLinkTag(schema?.theme)}
     ${motionHeadTags()}
     <style>

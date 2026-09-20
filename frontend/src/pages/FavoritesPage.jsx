@@ -78,30 +78,31 @@ export default function FavoritesPage() {
       </a>
       <DashboardHeader current="favorites" />
 
-      <main id="favorites-main" className="mx-auto max-w-[1400px] px-3 py-5 sm:px-6 sm:py-8">
-        <section className="dashboard-welcome mb-7 p-5 sm:p-7" aria-labelledby="favorites-heading">
-          <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-center gap-4">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--studio-warning)_28%,var(--studio-border))] bg-[var(--studio-warning-soft)] text-[var(--studio-warning)] shadow-sm">
-                <StarIcon size={22} filled />
-              </span>
-              <div className="min-w-0">
-                <p className="dashboard-kicker">{t('Library')}</p>
-                <h1 id="favorites-heading" className="mt-1 text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)] sm:text-3xl">
+      {/* The same section chrome Explore and Blocks use — a library page is a
+          library page, whichever one you are on. */}
+      <main id="favorites-main" className="dashboard-container">
+        <section aria-labelledby="favorites-heading">
+          <div className="dashboard-section-heading">
+            <div className="min-w-0">
+              <p className="dashboard-kicker">{t('Library')}</p>
+              <div className="mt-1 flex min-w-0 items-center gap-2.5">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[color-mix(in_srgb,var(--studio-warning)_28%,var(--studio-border))] bg-[var(--studio-warning-soft)] text-[var(--studio-warning)]">
+                  <StarIcon size={18} filled />
+                </span>
+                <h1 id="favorites-heading" className="truncate text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)] sm:text-3xl">
                   {t('Favorites')}
                 </h1>
-                <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Sites you starred on Explore.')}</p>
               </div>
+              <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Sites you starred on Explore.')}</p>
             </div>
             <DashboardSearch
               value={searchQuery}
               onChange={setSearchQuery}
               label={t('Search favorites')}
               placeholder={t('Search your favorites…')}
-              className="w-full lg:w-[24rem]"
+              className="w-full lg:w-[22rem]"
             />
           </div>
-        </section>
 
         {error && (
           <div role="alert" className="studio-status-danger mb-5 rounded-xl border px-4 py-3 text-sm">
@@ -110,12 +111,14 @@ export default function FavoritesPage() {
         )}
 
         {items === null ? (
-          <div role="status" className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label={t('Loading…')}>
+          <div role="status" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label={t('Loading…')}>
             {[0, 1, 2, 3].map((item) => (
-              <div key={item} className="h-72 animate-pulse rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-2">
-                <div className="h-36 rounded-xl bg-[var(--studio-control)]" />
-                <div className="mx-3 mt-4 h-4 w-2/3 rounded bg-[var(--studio-control)]" />
-                <div className="mx-3 mt-3 h-3 w-1/2 rounded bg-[var(--studio-control)]" />
+              <div key={item} className="dashboard-site-card animate-pulse">
+                <div className="dashboard-site-card-media"><div className="h-44 rounded-xl bg-[var(--studio-control)]" /></div>
+                <div className="dashboard-site-card-body">
+                  <div className="h-4 w-2/3 rounded bg-[var(--studio-control)]" />
+                  <div className="mt-3 h-3 w-1/2 rounded bg-[var(--studio-control)]" />
+                </div>
               </div>
             ))}
           </div>
@@ -136,12 +139,13 @@ export default function FavoritesPage() {
             <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Try a different site or creator name.')}</p>
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((site) => (
               <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} />
             ))}
           </div>
         )}
+        </section>
       </main>
     </div>
   )

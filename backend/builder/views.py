@@ -991,21 +991,28 @@ class ExploreView(ListAPIView):
 
 
 class GlobalSearchView(APIView):
-    """Small combined search for the persistent dashboard header.
-
-    Results are deliberately capped because this is a quick navigation
-    surface, not another directory page. Drafts and suspended accounts never
-    leak through it.
-    """
+    """Quick header suggestions and paginated people/site search results."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         query = request.GET.get('q', '').strip()[:80]
-        if len(query) < 2:
-            return Response({'query': query, 'sites': [], 'users': []})
+        result_type = request.GET.get('type', 'all')
+        if result_type not in ('all', 'users', 'sites'):
+            result_type = 'all'
+        full_results = request.GET.get('mode') == 'results'
+        try:
+            page = max(1, int(request.GET.get('page', '1')))
+        except (TypeError, ValueError):
+            page = 1
 
-        sites = list(
+        response = {'query': query, 'sites': [], 'users': []}
+        if full_results:
+            response.update(counts={'users': 0, 'sites': 0}, page=page, has_more=False)
+        if len(query) < 2:
+            return Response(response)
+
+        sites = (
             public_sites()
             .filter(
                 Q(title__icontains=query)
@@ -1014,9 +1021,9 @@ class GlobalSearchView(APIView):
             )
             .select_related('owner', 'owner__profile')
             .annotate(favorite_count=Count('favorited_by'))
-            .order_by('-hot_score', '-updated_at')[:6]
+            .order_by('-hot_score', '-updated_at', 'pk')
         )
-        users = list(
+        users = (
             User.objects.filter(is_active=True)
             .filter(
                 Q(username__icontains=query)
@@ -1031,14 +1038,30 @@ class GlobalSearchView(APIView):
                     distinct=True,
                 ),
             )
-            .order_by('-published_site_count', 'username')[:5]
+            .order_by('-published_site_count', 'username', 'pk')
         )
-        context = {'request': request, 'favorited_ids': _favorited_ids(request.user)}
-        return Response({
-            'query': query,
-            'sites': ExploreSiteSerializer(sites, many=True, context=context).data,
-            'users': SearchUserSerializer(users, many=True, context={'request': request}).data,
-        })
+        offset = 0
+        if full_results:
+            counts = {'users': users.count(), 'sites': sites.count()}
+            offset = (page - 1) * 12
+            selected_count = max(counts.values()) if result_type == 'all' else counts[result_type]
+            response.update(counts=counts, has_more=offset + 12 < selected_count)
+            # Avoid sending arbitrarily large offsets to the database, including
+            # when a bookmarked page is now past the end of the search results.
+            if offset >= selected_count:
+                return Response(response)
+
+        if result_type in ('all', 'sites'):
+            context = {'request': request, 'favorited_ids': _favorited_ids(request.user)}
+            response['sites'] = ExploreSiteSerializer(
+                sites[offset:offset + (12 if full_results else 6)], many=True, context=context,
+            ).data
+        if result_type in ('all', 'users'):
+            response['users'] = SearchUserSerializer(
+                users[offset:offset + (12 if full_results else 5)],
+                many=True, context={'request': request},
+            ).data
+        return Response(response)
 
 
 class FavoritesView(APIView):

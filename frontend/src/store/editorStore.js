@@ -11,6 +11,7 @@ import { recolorHtml } from '../utils/htmlRecolor.js'
 import { regionContentWidth } from '../utils/regionLayout.js'
 import { anchorOf, anchorProblem, elementIdFor, retargetLinks, slugifyAnchor } from '../utils/anchors.js'
 import { splitPageHtml } from '../utils/projectSnapshot.js'
+import { normalizeLanguageTag } from '../utils/languages.js'
 
 const HISTORY_LIMIT = 60
 // Gap between two same-key edits that still counts as one gesture.
@@ -41,7 +42,11 @@ function blankPage(name = 'New Page', folder = '', id, mode = 'empty', language 
     components: [],
     background: '#ffffff',
     backgroundMobile: '#ffffff',
-    language: language === 'tr' ? 'tr' : 'en',
+    language: normalizeLanguageTag(language),
+    // '' = follow the language (Arabic and Hebrew run right-to-left on their own).
+    direction: '',
+    themeColor: '',
+    smoothScroll: false,
     canonicalUrl: '',
     noIndex: false,
     // Preview chrome only: keeps a slim non-layout scroll cue on phone View.
@@ -1022,7 +1027,10 @@ function normalizePage(page) {
     components,
     background: page.background || '#ffffff',
     backgroundMobile: page.backgroundMobile || page.background || '#ffffff',
-    language: page.language === 'tr' ? 'tr' : 'en',
+    language: normalizeLanguageTag(page.language),
+    direction: page.direction === 'rtl' || page.direction === 'ltr' ? page.direction : '',
+    themeColor: typeof page.themeColor === 'string' ? page.themeColor : '',
+    smoothScroll: !!page.smoothScroll,
     canonicalUrl: typeof page.canonicalUrl === 'string' ? page.canonicalUrl : '',
     noIndex: !!page.noIndex,
     showScrollIndicator: page.showScrollIndicator !== false,
@@ -1288,7 +1296,10 @@ export const useEditorStore = create((set, get) => ({
   },
 
   setPageSettings: (id, patch) => {
-    const allowed = ['background', 'backgroundMobile', 'language', 'canonicalUrl', 'noIndex', 'showScrollIndicator']
+    const allowed = [
+      'background', 'backgroundMobile', 'language', 'direction', 'themeColor',
+      'smoothScroll', 'canonicalUrl', 'noIndex', 'showScrollIndicator',
+    ]
     const next = Object.fromEntries(
       Object.entries(patch || {}).filter(([key]) => allowed.includes(key)),
     )

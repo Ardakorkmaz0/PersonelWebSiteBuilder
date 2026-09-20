@@ -39,7 +39,9 @@ const NAV_ITEMS = [
   { id: 'favorites', label: 'Favorites', to: '/favorites', icon: StarIcon },
 ]
 
-export default function DashboardHeader({ current = '' }) {
+// `showSearch` is off on the search page itself, which carries its own search
+// field — two identical bars on one screen only make the user pick one.
+export default function DashboardHeader({ current = '', showSearch = true }) {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
@@ -83,9 +85,13 @@ export default function DashboardHeader({ current = '' }) {
           </span>
         </Link>
 
-        <div className="hidden min-w-[14rem] flex-1 md:block">
-          <DashboardGlobalSearch />
-        </div>
+        {showSearch ? (
+          <div className="hidden min-w-[14rem] flex-1 md:block">
+            <DashboardGlobalSearch />
+          </div>
+        ) : (
+          <div className="hidden flex-1 md:block" />
+        )}
 
         <nav aria-label={t('Navigation')} className="dashboard-primary-nav hidden items-center gap-1 xl:flex">
           {NAV_ITEMS.map(({ id, label, to, icon: NavIcon }) => (
@@ -157,9 +163,11 @@ export default function DashboardHeader({ current = '' }) {
 
       {mobileOpen && (
         <div className="dashboard-mobile-menu xl:hidden">
-          <div className="mb-3 md:hidden">
-            <DashboardGlobalSearch mobile onNavigate={() => setMobileOpen(false)} />
-          </div>
+          {showSearch && (
+            <div className="mb-3 md:hidden">
+              <DashboardGlobalSearch mobile onNavigate={() => setMobileOpen(false)} />
+            </div>
+          )}
           <nav aria-label={t('Mobile navigation')} className="grid gap-1">
             {NAV_ITEMS.map(({ id, label, to, icon: NavIcon }) => (
               <Link

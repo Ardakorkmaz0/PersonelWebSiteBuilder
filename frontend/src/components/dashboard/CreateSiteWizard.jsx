@@ -6,6 +6,7 @@ import { localizeTemplateHtml } from '../../utils/templateLocalization.js'
 import { DEFAULT_THEME } from '../../utils/theme.js'
 import { apiError } from '../../utils/errors.js'
 import { CheckIcon, FileCodeIcon, LayersIcon, SparklesIcon } from '../icons.jsx'
+import { useDialogMotion } from '../../ui/useDialogMotion.js'
 
 const LEGACY_CATEGORY_MAP = {
   other: 'other',
@@ -62,9 +63,10 @@ function MiniPreview({ html, title }) {
   )
 }
 
-export default function CreateSiteWizard({ open, onClose, onCreated }) {
+export default function CreateSiteWizard({ open, origin, onClose, onCreated }) {
   const { t } = useLanguage()
   const [step, setStep] = useState(0)
+  const [stepDirection, setStepDirection] = useState('forward')
   const [title, setTitle] = useState('')
   const [categoryId, setCategoryId] = useState('portfolio')
   const [contentLanguage, setContentLanguage] = useState('tr')
@@ -76,6 +78,17 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
+  const { dialogRef, backdropRef, requestClose, onKeyDown } = useDialogMotion({
+    open,
+    origin,
+    disabled: creating,
+    onClose: () => {
+      setStep(0)
+      setStepDirection('forward')
+      setError('')
+      onClose?.()
+    },
+  })
 
   const category =
     categoryId === 'other'
@@ -103,10 +116,12 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
   if (!open) return null
 
   function close() {
-    if (creating) return
-    setStep(0)
-    setError('')
-    onClose?.()
+    requestClose()
+  }
+
+  function changeStep(next) {
+    setStepDirection(next > step ? 'forward' : 'backward')
+    setStep(next)
   }
 
   function loadHtmlFile(file) {
@@ -170,12 +185,14 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
   const stepLabels = [t('Site title'), t('Starting point'), t('Ready to create')]
 
   return (
-    <div className="studio-theme-surface studio-overlay fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4" onClick={close}>
+    <div ref={backdropRef} className="studio-theme-surface studio-overlay studio-create-overlay fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4" onClick={close} onKeyDown={onKeyDown}>
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-site-title"
-        className="flex h-[min(46rem,calc(100dvh-1rem))] w-full max-w-5xl flex-col overflow-hidden rounded-[var(--studio-radius-2xl)] border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text)] shadow-[var(--studio-shadow-lg)] sm:h-[min(46rem,calc(100dvh-2rem))]"
+        className="studio-create-dialog flex h-[min(46rem,calc(100dvh-1rem))] w-full max-w-5xl flex-col overflow-hidden rounded-[var(--studio-radius-2xl)] border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text)] shadow-[var(--studio-shadow-lg)] sm:h-[min(46rem,calc(100dvh-2rem))]"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="border-b border-[var(--studio-border)] px-4 py-3.5 sm:px-6">
@@ -192,14 +209,14 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
           <div className="mt-3 grid grid-cols-3 gap-1.5" aria-hidden="true">
             {stepLabels.map((label, index) => (
               <div key={label} className="min-w-0">
-                <span className={`block h-1 rounded-full ${index <= step ? 'bg-[var(--studio-accent)]' : 'bg-[var(--studio-border)]'}`} />
+                <span className="studio-create-progress"><span data-complete={index <= step} /></span>
                 <span className={`mt-1.5 hidden truncate text-[10px] font-semibold sm:block ${index === step ? 'text-[var(--studio-text)]' : 'text-[var(--studio-text-faint)]'}`}>{label}</span>
               </div>
             ))}
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <div key={step} data-direction={stepDirection} className="studio-create-step min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {step === 0 && (
             <div className="space-y-5">
               <label className="block">
@@ -219,7 +236,7 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
                         if (!item.variants.length && startMode === 'template') setStartMode('blank')
                       }}
                       aria-pressed={categoryId === item.id}
-                      className={`relative flex min-h-20 items-center gap-3 rounded-xl border p-3 text-left transition ${categoryId === item.id ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] shadow-sm' : 'border-[var(--studio-border)] bg-[var(--studio-panel-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)]'}`}
+                      className={`studio-create-choice relative flex min-h-20 items-center gap-3 rounded-xl border p-3 text-left transition ${categoryId === item.id ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] shadow-sm' : 'border-[var(--studio-border)] bg-[var(--studio-panel-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)]'}`}
                     >
                       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--studio-panel-raised)] text-xl shadow-sm">{item.icon}</span>
                       <span className="min-w-0 pr-5"><strong className="block text-sm text-[var(--studio-text)]">{t(item.name)}</strong><span className="mt-0.5 line-clamp-2 text-xs leading-4 text-[var(--studio-text-muted)]">{t(item.desc)}</span></span>
@@ -245,7 +262,7 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
                         type="button"
                         onClick={() => setStartMode(mode.id)}
                         aria-pressed={selected}
-                        className={`relative flex min-h-28 flex-col gap-3 rounded-xl border p-3.5 text-left transition ${selected ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] shadow-sm' : 'border-[var(--studio-border)] bg-[var(--studio-panel-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)]'}`}
+                        className={`studio-create-choice relative flex min-h-28 flex-col gap-3 rounded-xl border p-3.5 text-left transition ${selected ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] shadow-sm' : 'border-[var(--studio-border)] bg-[var(--studio-panel-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-control-hover)]'}`}
                       >
                         <span className={`grid h-9 w-9 place-items-center rounded-xl ${selected ? 'bg-[var(--studio-accent)] text-white' : 'bg-[var(--studio-control)] text-[var(--studio-text-muted)]'}`} aria-hidden><ModeIcon size={17} /></span>
                         <span className="min-w-0"><strong className="block text-sm text-[var(--studio-text)]">{t(mode.name)}</strong><span className="mt-1 block text-xs leading-4 text-[var(--studio-text-muted)]">{t(mode.desc)}</span></span>
@@ -272,7 +289,7 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
                         const selected = item.id === selectedTemplate.id
                         const sample = localizeTemplateHtml(item.build(previewTitle), contentLanguage)
                         return (
-                          <button key={item.id} type="button" onClick={() => setTemplateId(item.id)} aria-pressed={selected} className={`overflow-hidden rounded-xl border bg-[var(--studio-panel-muted)] text-left transition ${selected ? 'border-[var(--studio-accent)] ring-2 ring-[var(--studio-focus-ring)]' : 'border-[var(--studio-border)] hover:border-[var(--studio-border-strong)]'}`}>
+                          <button key={item.id} type="button" onClick={() => setTemplateId(item.id)} aria-pressed={selected} className={`studio-create-choice overflow-hidden rounded-xl border bg-[var(--studio-panel-muted)] text-left transition ${selected ? 'border-[var(--studio-accent)] ring-2 ring-[var(--studio-focus-ring)]' : 'border-[var(--studio-border)] hover:border-[var(--studio-border-strong)]'}`}>
                             <MiniPreview html={sample} title={t('{name} preview', { name: t(item.name) })} />
                             <span className="flex items-center justify-between gap-2 p-3 text-sm font-semibold text-[var(--studio-text)]">{t(item.name)}{selected && <CheckIcon size={14} className="text-[var(--studio-accent-hover)]" />}</span>
                           </button>
@@ -367,11 +384,11 @@ export default function CreateSiteWizard({ open, onClose, onCreated }) {
         </div>
 
         <footer className="flex items-center justify-between gap-3 border-t border-[var(--studio-border)] bg-[var(--studio-panel-muted)] px-4 py-3.5 sm:px-6">
-          <button type="button" onClick={step === 0 ? close : () => setStep((value) => value - 1)} disabled={creating} className="studio-btn studio-btn-secondary min-h-10 px-4">{step === 0 ? t('Cancel') : t('Back')}</button>
+          <button type="button" onClick={step === 0 ? close : () => changeStep(step - 1)} disabled={creating} className="studio-btn studio-btn-secondary min-h-10 px-4">{step === 0 ? t('Cancel') : t('Back')}</button>
           {step < 2 ? (
             <button
               type="button"
-              onClick={() => setStep((value) => value + 1)}
+              onClick={() => changeStep(step + 1)}
               disabled={(step === 0 && !title.trim()) || (step === 1 && !canLeaveStartStep)}
               className="studio-btn studio-btn-primary min-h-10 px-5"
             >

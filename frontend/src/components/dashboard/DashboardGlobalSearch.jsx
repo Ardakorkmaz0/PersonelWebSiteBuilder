@@ -1,63 +1,53 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { searchDashboard } from '../../api/search.js'
-import { FileIcon, SearchIcon, UserIcon } from '../icons.jsx'
+import { SearchIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import SearchPeople from './SearchPeople.jsx'
+import SitePreview from './SitePreview.jsx'
 
-const EMPTY_RESULTS = { sites: [], users: [] }
+// How many matching sites ride along under the people row. Each one renders a
+// live thumbnail, so the list stays short on purpose.
+const SUGGESTED_SITES = 3
 
-function ResultAvatar({ result }) {
-  if (result.avatar_url) {
-    return <img src={result.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" />
-  }
-  return (
-    <span className="dashboard-avatar h-9 w-9 text-xs">
-      {(result.display_name || result.username || '?').trim().charAt(0).toUpperCase()}
-    </span>
-  )
-}
-
-export default function DashboardGlobalSearch({ mobile = false, onNavigate }) {
+export default function DashboardGlobalSearch({ mobile = false, onNavigate, initialQuery = '', resultType = 'all', label, formLabel }) {
   const { t } = useLanguage()
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState(EMPTY_RESULTS)
-  const [loading, setLoading] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const navigate = useNavigate()
+  const [query, setQuery] = useState(initialQuery)
+  const [results, setResults] = useState({ query: '', users: [], sites: [], failed: false })
   const [focused, setFocused] = useState(false)
   const rootRef = useRef(null)
   const inputRef = useRef(null)
+  const suggestionsId = useId()
+  const normalized = query.trim().slice(0, 80)
+  const inputLabel = label || t('Search sites and creators')
 
   useEffect(() => {
-    const normalized = query.trim()
     if (normalized.length < 2) return undefined
     let alive = true
     const timer = window.setTimeout(() => {
-      setLoading(true)
-      setFailed(false)
-      searchDashboard(normalized)
+      searchDashboard(normalized, { type: 'all' })
         .then((data) => {
-          if (alive) setResults({ sites: data.sites || [], users: data.users || [] })
+          if (alive) setResults({ query: normalized, users: data.users || [], sites: data.sites || [], failed: false })
         })
         .catch(() => {
-          if (alive) {
-            setResults(EMPTY_RESULTS)
-            setFailed(true)
-          }
+          if (alive) setResults({ query: normalized, users: [], sites: [], failed: true })
         })
-        .finally(() => alive && setLoading(false))
     }, 220)
     return () => {
       alive = false
       window.clearTimeout(timer)
     }
-  }, [query])
+  }, [normalized])
 
   useEffect(() => {
     const closeOutside = (event) => {
       if (!rootRef.current?.contains(event.target)) setFocused(false)
     }
     const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setFocused(false)
+      if (event.key !== 'Escape') return
+      if (rootRef.current?.contains(document.activeElement)) inputRef.current?.focus()
+      setFocused(false)
     }
     document.addEventListener('pointerdown', closeOutside)
     document.addEventListener('keydown', closeOnEscape)
@@ -87,101 +77,124 @@ export default function DashboardGlobalSearch({ mobile = false, onNavigate }) {
     return () => document.removeEventListener('keydown', focusSearch)
   }, [mobile])
 
-  const normalized = query.trim()
   const open = focused && normalized.length > 0
-  const hasResults = results.sites.length > 0 || results.users.length > 0
+  const canSearch = normalized.length >= 2
+  const loading = canSearch && results.query !== normalized
+  const resultsUrl = `/search?${new URLSearchParams({ q: normalized, type: resultType })}`
   const finishNavigation = () => {
     setFocused(false)
     onNavigate?.()
   }
+  const submitSearch = (event) => {
+    event.preventDefault()
+    if (!canSearch) return
+    finishNavigation()
+    navigate(resultsUrl)
+  }
 
   return (
-    <div ref={rootRef} className={`relative min-w-0 ${mobile ? 'w-full' : 'w-full max-w-xl'}`} role="search">
-      <label className="dashboard-search min-h-10 w-full">
+    <form
+      ref={rootRef}
+      className={`relative flex min-w-0 items-center gap-2 ${mobile ? 'w-full' : 'w-full max-w-xl'}`}
+      role="search"
+      aria-label={formLabel}
+      onSubmit={submitSearch}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false)
+      }}
+    >
+      <label className="dashboard-search min-h-10 min-w-0 flex-1">
         <SearchIcon size={16} className="dashboard-search-icon" />
-        <span className="sr-only">{t('Search sites and creators')}</span>
+        <span className="sr-only">{inputLabel}</span>
         <input
           ref={inputRef}
           type="search"
           autoComplete="off"
+          maxLength={80}
           value={query}
           onFocus={() => setFocused(true)}
           onChange={(event) => {
-            const nextQuery = event.target.value
-            setQuery(nextQuery)
+            setQuery(event.target.value)
             setFocused(true)
-            if (nextQuery.trim().length < 2) {
-              setResults(EMPTY_RESULTS)
-              setLoading(false)
-              setFailed(false)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowDown' || !open) return
+            const firstResult = document.getElementById(suggestionsId)?.querySelector('a[href]')
+            if (firstResult) {
+              event.preventDefault()
+              firstResult.focus()
             }
           }}
-          aria-label={t('Search sites and creators')}
+          aria-label={inputLabel}
+          aria-controls={open ? suggestionsId : undefined}
           aria-expanded={open}
           placeholder={t('Search sites or creators…')}
-          className="pr-9"
         />
         {query && (
-          <button type="button" onClick={() => { setQuery(''); setResults(EMPTY_RESULTS); setLoading(false); setFailed(false) }} aria-label={t('Clear search')} className="absolute right-2 grid h-7 w-7 place-items-center rounded-lg text-sm text-[var(--studio-text-faint)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]">
+          <button
+            type="button"
+            onClick={() => { setQuery(''); inputRef.current?.focus() }}
+            aria-label={t('Clear search')}
+            className="absolute right-2 grid h-7 w-7 place-items-center rounded-lg text-sm text-[var(--studio-text-faint)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]"
+          >
             ×
           </button>
         )}
-        {!query && !mobile && (
-          <kbd className="dashboard-search-shortcut" aria-hidden>/</kbd>
-        )}
       </label>
+      <button type="submit" disabled={!canSearch} className="studio-btn studio-btn-primary min-h-[2.65rem] shrink-0 rounded-full px-4">
+        {t('Search')}
+      </button>
 
       {open && (
-        <div className={`studio-menu absolute z-50 mt-2 max-h-[min(70vh,32rem)] overflow-y-auto p-2 shadow-[var(--studio-shadow-menu)] ${mobile ? 'left-0 right-0' : 'left-0 right-0 min-w-[28rem]'}`}>
-          {normalized.length < 2 ? (
+        <div id={suggestionsId} className="studio-menu absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(70vh,32rem)] overflow-y-auto p-2 shadow-[var(--studio-shadow-menu)]">
+          {!canSearch ? (
             <p className="px-3 py-4 text-center text-xs text-[var(--studio-text-muted)]">{t('Type at least 2 characters to search.')}</p>
           ) : loading ? (
             <p role="status" className="px-3 py-4 text-center text-xs text-[var(--studio-text-muted)]">{t('Searching…')}</p>
-          ) : failed ? (
-            <p className="px-3 py-4 text-center text-xs text-[var(--studio-danger)]">{t('Search could not be completed.')}</p>
-          ) : !hasResults ? (
-            <p className="px-3 py-5 text-center text-xs text-[var(--studio-text-muted)]">{t('No sites or creators found.')}</p>
+          ) : results.failed ? (
+            <p role="status" className="px-3 py-4 text-center text-xs text-[var(--studio-danger)]">{t('Search could not be completed.')}</p>
+          ) : !results.users.length && !results.sites.length ? (
+            <p className="px-3 py-4 text-center text-xs text-[var(--studio-text-muted)]">{t('No results found.')}</p>
           ) : (
             <>
-              {results.sites.length > 0 && (
-                <section aria-labelledby="global-site-results">
-                  <p id="global-site-results" className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--studio-text-faint)]">{t('Sites')}</p>
-                  <div className="space-y-0.5">
-                    {results.sites.map((site) => (
-                      <Link key={`site-${site.id}`} to={`/site/${site.slug}`} onClick={finishNavigation} className="studio-menu-item gap-3 px-2.5 py-2.5">
-                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]"><FileIcon size={16} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-semibold text-[var(--studio-text)]">{site.title}</span>
-                          <span className="mt-0.5 block truncate text-[10px] text-[var(--studio-text-faint)]">{t('By {name}', { name: site.owner_display_name })}</span>
-                        </span>
-                        <span className="text-[10px] capitalize text-[var(--studio-text-faint)]">{site.category && site.category !== 'other' ? t(site.category.charAt(0).toUpperCase() + site.category.slice(1)) : ''}</span>
-                      </Link>
-                    ))}
-                  </div>
+              {results.users.length > 0 && (
+                <section aria-labelledby={`${suggestionsId}-people`}>
+                  <h2 id={`${suggestionsId}-people`} className="px-2.5 pb-2 pt-1 text-xs font-semibold text-[var(--studio-text)]">{t('People')}</h2>
+                  <SearchPeople users={results.users} compact onNavigate={finishNavigation} />
                 </section>
               )}
-
-              {results.users.length > 0 && (
-                <section aria-labelledby="global-creator-results" className={results.sites.length ? 'mt-2 border-t border-[var(--studio-border)] pt-2' : ''}>
-                  <p id="global-creator-results" className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--studio-text-faint)]">{t('Creators')}</p>
-                  <div className="space-y-0.5">
-                    {results.users.map((creator) => (
-                      <Link key={`creator-${creator.id}`} to={`/u/${creator.id}`} onClick={finishNavigation} className="studio-menu-item gap-3 px-2.5 py-2.5">
-                        <ResultAvatar result={creator} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-semibold text-[var(--studio-text)]">{creator.display_name}</span>
-                          <span className="mt-0.5 block truncate text-[10px] text-[var(--studio-text-faint)]">@{creator.username}{creator.headline ? ` · ${creator.headline}` : ''}</span>
-                        </span>
-                        <span className="flex items-center gap-1 text-[10px] text-[var(--studio-text-faint)]"><UserIcon size={12} /> {creator.published_site_count}</span>
-                      </Link>
+              {results.sites.length > 0 && (
+                <section
+                  aria-labelledby={`${suggestionsId}-sites`}
+                  className={results.users.length > 0 ? 'mt-1 border-t border-[var(--studio-border)] pt-2' : ''}
+                >
+                  <h2 id={`${suggestionsId}-sites`} className="px-2.5 pb-2 pt-1 text-xs font-semibold text-[var(--studio-text)]">{t('Sites')}</h2>
+                  <ul>
+                    {results.sites.slice(0, SUGGESTED_SITES).map((site) => (
+                      <li key={site.id}>
+                        <Link to={`/site/${site.slug}`} onClick={finishNavigation} className="studio-menu-item gap-3">
+                          <span className="w-[104px] shrink-0">
+                            <SitePreview site={site} source="public" height={62} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-[var(--studio-text)]">{site.title}</span>
+                            <span className="block truncate text-xs text-[var(--studio-text-muted)]">{site.owner_display_name}</span>
+                          </span>
+                        </Link>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </section>
               )}
             </>
           )}
+          {canSearch && (
+            <Link to={resultsUrl} onClick={finishNavigation} className="studio-menu-item mt-2 justify-center border-t border-[var(--studio-border)] px-3 py-3 text-center text-xs">
+              {t('See all results')}
+            </Link>
+          )}
         </div>
       )}
-    </div>
+    </form>
   )
 }

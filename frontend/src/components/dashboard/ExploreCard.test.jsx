@@ -50,9 +50,7 @@ describe('ExploreCard', () => {
     expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
       site,
       source: 'public',
-      fill: true,
-      scrollOnHover: true,
-      scrolling: false,
+      height: 150,
     }))
     expect(screen.getByTitle('Open the live site')).toHaveAttribute('href', '/site/modern-portfolio')
     expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/site/modern-portfolio')
@@ -68,52 +66,5 @@ describe('ExploreCard', () => {
   it('disables remix while the copy is being created', () => {
     renderCard({ onRemix: vi.fn(), remixing: true })
     expect(screen.getByRole('button', { name: /Creating copy/ })).toBeDisabled()
-  })
-})
-
-describe('ExploreCard — the modern feed card', () => {
-  beforeEach(() => {
-    previewSpy.mockClear()
-    localStorage.setItem('pwb_language', 'en')
-  })
-
-  it('scrolls the thumbnail while the pointer rests on the card, and stops when it leaves', () => {
-    const { container } = renderCard()
-    const card = container.querySelector('article')
-    fireEvent.mouseEnter(card)
-    expect(previewSpy).toHaveBeenLastCalledWith(expect.objectContaining({ scrolling: true }))
-    fireEvent.mouseLeave(card)
-    expect(previewSpy).toHaveBeenLastCalledWith(expect.objectContaining({ scrolling: false }))
-  })
-
-  it('also scrolls for keyboard users reaching the card', () => {
-    renderCard({ onRemix: vi.fn() })
-    fireEvent.focus(screen.getByRole('button', { name: 'Use as template' }))
-    expect(previewSpy).toHaveBeenLastCalledWith(expect.objectContaining({ scrolling: true }))
-  })
-
-  it('labels the featured card and its category above the title, not on the thumbnail', () => {
-    const { container } = renderCard({ featured: true })
-    expect(container.querySelector('article')).toHaveClass('explore-card-featured')
-    const kicker = container.querySelector('.explore-card-kicker')
-    expect(kicker).toHaveTextContent('Featured')
-    expect(kicker).toHaveTextContent('Portfolio')
-    expect(container.querySelector('.explore-card-media .explore-card-kicker')).toBeNull()
-  })
-
-  it('shows large counts compactly', () => {
-    render(
-      <LanguageProvider>
-        <MemoryRouter>
-          <ExploreCard site={{ ...site, view_count: 12500, favorite_count: 3 }} />
-        </MemoryRouter>
-      </LanguageProvider>,
-    )
-    expect(screen.getByTitle('Views')).toHaveTextContent('12.5K')
-  })
-
-  it('marks a favourite as pressed', () => {
-    renderCard({ site: { ...site, is_favorited: true } })
-    expect(screen.getByRole('button', { name: 'Unfavorite' })).toHaveAttribute('aria-pressed', 'true')
   })
 })

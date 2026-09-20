@@ -12,8 +12,8 @@ import { htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { googleFontLinkTag } from './googleFonts.js'
 import { navLinkLabel, navbarLinkGap, navbarPlacement } from './navbarLayout.js'
 import { autoLayoutChildCss, autoLayoutContainerCss, isAutoLayout } from './autoLayout.js'
-import { motionHeadTags } from './motion.js'
-import { pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
+import { motionClassSuffix, motionCssVars, motionHeadTags, motionRevealAttr } from './motion.js'
+import { pageBehaviourStyleTag, pageDirAttr, pageLanguage, pageSeoTitle, seoHeadTags } from './seoTags.js'
 import { pinnedLayoutStyle } from '../components/renderer/layout.js'
 import { elementIdFor } from './anchors.js'
 
@@ -94,7 +94,31 @@ function tabsCssVars(props = {}) {
 function styleAttr(component, extra = '') {
   const id = elementIdFor(component)
   const idAttr = id ? ` id="${esc(id)}"` : ''
-  return idAttr + styleOnly(component, extra)
+  // Entrance motion is the reveal attribute the observer collects plus the two
+  // custom properties that give it its speed — the same contract schemaToFiles
+  // writes. This writer shipped the motion stylesheet but never marked a single
+  // element, so converting a page to HTML silently dropped every animation.
+  const vars = Object.entries(motionCssVars(component.props))
+    .map(([key, value]) => `${key}:${value}`)
+    .join(';')
+  const style = [extra, vars].filter(Boolean).join(';')
+  return idAttr + motionRevealAttr(component.props) + styleOnly(component, style)
+}
+
+// Hover motion rides on the class list, and every case below builds its own
+// class attribute — so it is folded into the element's FIRST tag on the way
+// out, rather than in a dozen template strings a new case would forget.
+function withHoverMotion(html, props) {
+  const suffix = motionClassSuffix(props)
+  if (!suffix) return html
+  return html.replace(
+    /^(<[a-zA-Z][a-zA-Z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?>)/,
+    (whole, open, attrs, close) => (
+      / class="/.test(attrs)
+        ? open + attrs.replace(/ class="([^"]*)"/, (m, value) => ` class="${value}${suffix}"`) + close
+        : `${open} class="${suffix.trim()}"${attrs}${close}`
+    ),
+  )
 }
 
 function styleOnly(component, extra = '') {
@@ -241,6 +265,10 @@ function item(c, multi, colOverride) {
 }
 
 function itemEl(c, multi, colOverride) {
+  return withHoverMotion(itemElHtml(c, multi, colOverride), c?.props)
+}
+
+function itemElHtml(c, multi, colOverride) {
   const p = c.props || {}
   const w = Math.round(c.layout?.w || 300)
   const col = colOverride || (multi ? `flex:${w} 1 0` : 'flex:1 1 100%')
@@ -434,22 +462,24 @@ export function schemaToResponsiveHtml(schema, title = 'My Site') {
       }
       flushInline()
       flush()
-      if (c.type === 'navbar') body += '\n    ' + navbar(c)
-      else if (c.type === 'section') body += '\n    ' + section(c)
-      else if (c.type === 'region') body += '\n    ' + regionBand(c)
-      else body += `\n    <hr class="rh-divider"${styleAttr(c)} />`
+      // Full-width bands never pass through itemEl, so they fold in their own
+      // hover motion — the reveal attribute already rides along in styleAttr.
+      if (c.type === 'navbar') body += '\n    ' + withHoverMotion(navbar(c), c.props)
+      else if (c.type === 'section') body += '\n    ' + withHoverMotion(section(c), c.props)
+      else if (c.type === 'region') body += '\n    ' + withHoverMotion(regionBand(c), c.props)
+      else body += `\n    ${withHoverMotion(`<hr class="rh-divider"${styleAttr(c)} />`, c.props)}`
     }
     flushInline()
   }
   flush()
 
   return `<!DOCTYPE html>
-<html lang="${pageLanguage(page)}">
+<html lang="${pageLanguage(page)}"${pageDirAttr(page)}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${esc(pageSeoTitle(page, title))}</title>
-    ${seoHeadTags(page, title)}
+    ${seoHeadTags(page, title)}${pageBehaviourStyleTag(page)}
     ${googleFontLinkTag(schema?.theme)}
     ${motionHeadTags()}
     <style>

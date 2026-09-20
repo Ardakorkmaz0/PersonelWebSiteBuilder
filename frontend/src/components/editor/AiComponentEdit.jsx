@@ -1,21 +1,18 @@
 import { useState } from 'react'
 import { aiEditComponent } from '../../utils/aiAssistant.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { SparklesIcon } from '../icons.jsx'
 
 // ✨ Ask-AI affordance for the SELECTED component. Type a prompt ("make it a
 // rounded red CTA", "rewrite this punchier") and the AI returns a patch that's
 // applied to THIS element only — styles + props — via onApply. Reuses the
 // editor's configured AI provider (BYOK), so it needs a key set on the AI
 // button. Undoable like any edit (onApply goes through the store).
+//
+// It is part of the properties panel, so it is built from the same tokens the
+// rest of the panel uses: it used to be a pale lavender card with white fields
+// hard-coded, which sat on the dark theme like a sticker.
 const SUGGESTIONS = ['Make it pop', 'Rewrite punchier', 'Rounded & bold', 'Softer / minimal']
-
-function Sparkle({ size = 14 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M12 2l2.6 6.4L21 11l-6.4 2.6L12 20l-2.6-6.4L3 11l6.4-2.6L12 2z" fill="currentColor" opacity="0.9" />
-    </svg>
-  )
-}
 
 export default function AiComponentEdit({ component, onApply }) {
   const { t } = useLanguage()
@@ -54,62 +51,83 @@ export default function AiComponentEdit({ component, onApply }) {
     setTimeout(() => setDone(false), 1500)
   }
 
+  const changeCount = pending
+    ? Object.keys(pending.styles).length + Object.keys(pending.props).length
+    : 0
+
   return (
-    <div className="mb-3 rounded-lg border border-[#c7d2fe] bg-[#eef2ff] p-2.5">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#4f46e5]">
-        <Sparkle /> {t('Ask AI to edit this')}
+    <div className="rounded-xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] p-2.5">
+      <div className="mb-2 flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[var(--studio-accent-soft)] text-[var(--studio-accent-text)]"
+        >
+          <SparklesIcon size={13} />
+        </span>
+        <span className="min-w-0 text-[11px] font-semibold text-[var(--studio-text)]">
+          {t('Ask AI to edit this')}
+        </span>
       </div>
+
       <div className="flex items-center gap-1.5">
         <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') ask() }}
           disabled={busy}
+          aria-label={t('Ask AI to edit this')}
           placeholder={t('e.g. make it a rounded red CTA')}
-          className="min-w-0 flex-1 rounded-lg border border-[#c7d2fe] bg-white px-2.5 py-1.5 text-xs text-[#111827] outline-none focus:border-[#4f46e5] disabled:opacity-60"
+          className="studio-input min-w-0 flex-1 px-2.5 py-1.5 text-xs disabled:opacity-60"
         />
         <button
           type="button"
           onClick={() => ask()}
           disabled={busy || !prompt.trim()}
-          className="shrink-0 rounded-lg bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)] disabled:opacity-50"
+          className="studio-btn studio-btn-primary shrink-0 px-3 py-1.5 text-xs"
         >
-          {busy ? '…' : t('Go')}
+          {busy ? t('Thinking…') : t('Go')}
         </button>
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-1">
+
+      <div className="mt-2 flex flex-wrap gap-1">
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
             type="button"
             disabled={busy}
             onClick={() => ask(s)}
-            className="rounded-full border border-[#c7d2fe] bg-white px-2 py-0.5 text-[10px] font-medium text-[#4f46e5] hover:bg-[#f5f5ff] disabled:opacity-50"
+            className="rounded-full border border-[var(--studio-border)] bg-[var(--studio-control)] px-2 py-0.5 text-[10px] font-medium text-[var(--studio-text-muted)] transition hover:border-[color-mix(in_srgb,var(--studio-accent)_40%,var(--studio-border))] hover:text-[var(--studio-text)] disabled:opacity-50"
           >
             {t(s)}
           </button>
         ))}
       </div>
+
       {pending && (
-        <div className="mt-2 rounded-lg border border-[#a5b4fc] bg-white p-2" role="status">
-          <p className="text-[11px] font-semibold text-[#3730a3]">{t('Review AI change')}</p>
-          <p className="mt-0.5 text-[10px] text-[#6b7280]">
-            {t('{count} fields are ready to apply.', {
-              count: Object.keys(pending.styles).length + Object.keys(pending.props).length,
-            })}
+        <div className="mt-2.5 rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-2" role="status">
+          <p className="text-[11px] font-semibold text-[var(--studio-text)]">{t('Review AI change')}</p>
+          <p className="mt-0.5 text-[10px] text-[var(--studio-text-muted)]">
+            {t('{count} fields are ready to apply.', { count: changeCount })}
           </p>
           <div className="mt-2 flex gap-1.5">
-            <button type="button" onClick={() => setPending(null)} className="flex-1 rounded-lg border border-[#d1d5db] px-2 py-1 text-[11px] font-semibold text-[#374151] hover:bg-[#f3f4f6]">
+            <button type="button" onClick={() => setPending(null)} className="studio-btn studio-btn-secondary flex-1 px-2 py-1 text-[11px]">
               {t('Reject')}
             </button>
-            <button type="button" onClick={accept} className="flex-1 rounded-lg bg-[var(--studio-accent)] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[var(--studio-accent-fill-hover)]">
+            <button type="button" onClick={accept} className="studio-btn studio-btn-primary flex-1 px-2 py-1 text-[11px]">
               {t('Accept')}
             </button>
           </div>
         </div>
       )}
-      {error && <p className="mt-1.5 text-[11px] text-red-600">{error}</p>}
-      {done && <p className="mt-1.5 text-[11px] font-medium text-[#15803d]">{t('Applied ✓ (Ctrl+Z to undo)')}</p>}
+
+      {error && (
+        <p role="alert" className="studio-status-danger mt-2 rounded-lg border px-2 py-1.5 text-[11px]">{error}</p>
+      )}
+      {done && (
+        <p role="status" className="studio-status-success mt-2 rounded-lg border px-2 py-1.5 text-[11px] font-medium">
+          {t('Applied ✓ (Ctrl+Z to undo)')}
+        </p>
+      )}
     </div>
   )
 }

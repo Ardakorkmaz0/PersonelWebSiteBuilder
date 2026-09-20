@@ -15,7 +15,8 @@ import DashboardHeader from '../components/dashboard/DashboardHeader.jsx'
 import UseComponentDialog from '../components/community/UseComponentDialog.jsx'
 import ReportComponentDialog from '../components/community/ReportComponentDialog.jsx'
 import ComponentPreviewDialog from '../components/community/ComponentPreviewDialog.jsx'
-import { FlagIcon } from '../components/icons.jsx'
+import DashboardSearch from '../components/dashboard/DashboardSearch.jsx'
+import { ArrowRightIcon, BanIcon, FlagIcon, GlobeIcon, LayersIcon, TrashIcon } from '../components/icons.jsx'
 import {
   listComponents,
   countComponentView,
@@ -48,78 +49,92 @@ function ComponentCard({ component, onUse, onWithdraw, onReport, onPreview, onVi
     if (!isPrivate) countComponentView(component.id)
   }, [component.id, isPrivate])
 
+  // Same card chrome as an Explore site card: this is a library of things to
+  // take, and it should read like the rest of the app's libraries.
   return (
-    <article className="flex flex-col overflow-hidden rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)]">
+    <article className="dashboard-site-card">
       {/* The whole preview is the button — clicking the picture is what people
           try first. The frame itself takes no pointer events, so the click
           lands here instead of disappearing into the iframe. */}
-      <div className="relative border-b border-[var(--studio-border)] bg-white">
-        <iframe
-          title={component.title}
-          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:system-ui}</style></head><body>${sharedBlockHtml(component)}</body></html>`}
-          sandbox={STATIC_HTML_SANDBOX}
-          loading="lazy"
-          className="pointer-events-none block h-48 w-full border-0"
-        />
-        <button
-          type="button"
-          onClick={() => onPreview(component)}
-          aria-label={t('Preview {title}', { title: component.title })}
-          className="absolute inset-0 border-0 bg-transparent transition hover:bg-[color-mix(in_srgb,var(--studio-accent)_10%,transparent)]"
-        />
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1 p-3">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <h3 className="truncate text-sm font-semibold text-[var(--studio-text)]">{component.title}</h3>
-          {/* Said on the card, because "is this one out there?" is the question
-              you ask about your own shelf. */}
-          {isPrivate && (
-            <span className="shrink-0 rounded-full border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--studio-text-muted)]">
-              {t('Private')}
-            </span>
-          )}
-        </div>
-        {component.description && (
-          <p className="line-clamp-2 text-xs leading-relaxed text-[var(--studio-text-muted)]">{component.description}</p>
-        )}
-        <p className="mt-auto pt-2 text-[11px] text-[var(--studio-text-faint)]">
-          {component.author_display_name || component.author_username || t('Unknown')}
-          {' · '}
-          {t('{count} uses', { count: component.use_count })}
-        </p>
-      </div>
-      <div className="flex gap-2 border-t border-[var(--studio-border)] p-2">
-        <button type="button" onClick={() => onUse(component)} className="studio-btn studio-btn-accent flex-1 px-3 py-1.5 text-xs">
-          {t('Use this')}
-        </button>
-        {mine ? (
-          <>
-            <button
-              type="button"
-              onClick={() => onVisibility(component, isPrivate ? 'public' : 'private')}
-              className="studio-btn studio-btn-secondary px-3 py-1.5 text-xs"
-            >
-              {isPrivate ? t('Make public') : t('Make private')}
-            </button>
-            <button
-              type="button"
-              onClick={() => onWithdraw(component)}
-              className="studio-btn studio-btn-secondary px-3 py-1.5 text-xs"
-            >
-              {t('Withdraw')}
-            </button>
-          </>
-        ) : (
+      <div className="dashboard-site-card-media">
+        <div className="dashboard-site-card-preview relative block overflow-hidden bg-white">
+          <iframe
+            title={component.title}
+            srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:system-ui}</style></head><body>${sharedBlockHtml(component)}</body></html>`}
+            sandbox={STATIC_HTML_SANDBOX}
+            loading="lazy"
+            className="pointer-events-none block h-44 w-full border-0"
+          />
           <button
             type="button"
-            onClick={() => onReport(component)}
-            title={t('Report this block')}
-            aria-label={t('Report this block')}
-            className="studio-btn studio-btn-secondary px-2.5 py-1.5"
-          >
-            <FlagIcon size={14} />
-          </button>
+            onClick={() => onPreview(component)}
+            aria-label={t('Preview {title}', { title: component.title })}
+            className="absolute inset-0 border-0 bg-transparent transition hover:bg-[color-mix(in_srgb,var(--studio-accent)_10%,transparent)]"
+          />
+        </div>
+        {/* Said on the card, because "is this one out there?" is the question
+            you ask about your own shelf. */}
+        {isPrivate && (
+          <span className="absolute right-3 top-3 z-[2] rounded-full border border-[var(--studio-border)] bg-[var(--studio-panel)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--studio-text-muted)] shadow-sm">
+            {t('Private')}
+          </span>
         )}
+      </div>
+
+      <div className="dashboard-site-card-body">
+        <h3 className="truncate text-base font-bold tracking-[-0.025em] text-[var(--studio-text)]">{component.title}</h3>
+        {component.description && (
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--studio-text-muted)]">{component.description}</p>
+        )}
+        <div className="dashboard-site-card-byline">
+          <span className="truncate text-xs font-medium text-[var(--studio-text-muted)]">
+            {component.author_display_name || component.author_username || t('Unknown')}
+          </span>
+          <div className="dashboard-site-card-metrics">
+            <span>{t('{count} uses', { count: component.use_count })}</span>
+          </div>
+        </div>
+
+        <div className="dashboard-site-card-actions">
+          {/* The owner's two management actions are icons: three labelled
+              buttons wrapped the row onto a second line on every card. */}
+          {mine ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onVisibility(component, isPrivate ? 'public' : 'private')}
+                title={isPrivate ? t('Make public') : t('Make private')}
+                aria-label={isPrivate ? t('Make public') : t('Make private')}
+                className="dashboard-site-card-remix"
+              >
+                {isPrivate ? <GlobeIcon size={13} /> : <BanIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => onWithdraw(component)}
+                title={t('Withdraw')}
+                aria-label={t('Withdraw')}
+                className="dashboard-site-card-remix"
+              >
+                <TrashIcon size={13} />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onReport(component)}
+              title={t('Report this block')}
+              aria-label={t('Report this block')}
+              className="dashboard-site-card-remix"
+            >
+              <FlagIcon size={13} />
+            </button>
+          )}
+          <button type="button" onClick={() => onUse(component)} className="dashboard-site-card-open">
+            <span>{t('Use this')}</span>
+            <span className="dashboard-site-card-open-icon"><ArrowRightIcon size={13} /></span>
+          </button>
+        </div>
       </div>
     </article>
   )
@@ -170,87 +185,101 @@ export default function CommunityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--studio-shell)]">
+    <div className="dashboard-page">
       <DashboardHeader current="community" />
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">
-        <header className="mb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-[var(--studio-text)]">{t('Community blocks')}</h1>
-            <span className="studio-status-warning rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-              {t('In development')}
-            </span>
+      <main className="dashboard-container">
+        <section aria-labelledby="blocks-heading">
+          <div className="dashboard-section-heading">
+            <div className="min-w-0">
+              <p className="dashboard-kicker">{t('Library')}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <h1 id="blocks-heading" className="text-2xl font-bold tracking-[-0.03em] text-[var(--studio-text)] sm:text-3xl">
+                  {t('Community blocks')}
+                </h1>
+                <span className="studio-status-warning rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                  {t('In development')}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-[var(--studio-text-muted)]">
+                {scope === 'mine'
+                  ? t('Everything you shared, public and private.')
+                  : t('Blocks other people made, ready to drop into a site of your own.')}
+              </p>
+            </div>
+            <DashboardSearch
+              value={query}
+              onChange={setQuery}
+              label={t('Search blocks…')}
+              placeholder={t('Search blocks…')}
+              className="w-full lg:w-[22rem]"
+            />
           </div>
-          <p className="mt-1 text-sm text-[var(--studio-text-muted)]">
-            {scope === 'mine'
-              ? t('Everything you shared, public and private.')
-              : t('Blocks other people made, ready to drop into a site of your own.')}
-          </p>
-        </header>
 
-        {/* Two shelves, not a filter: the community grid, and your own — where
-            a private block is the only place it can be seen. */}
-        <div className="mb-4 inline-flex rounded-lg border border-[var(--studio-border)] bg-[var(--studio-panel)] p-0.5">
-          {[['', 'Community'], ['mine', 'My blocks']].map(([value, label]) => (
-            <button
-              key={value || 'all'}
-              type="button"
-              onClick={() => setScope(value)}
-              aria-pressed={scope === value}
-              className={
-                scope === value
-                  ? 'rounded-md bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white'
-                  : 'rounded-md px-3 py-1.5 text-xs font-medium text-[var(--studio-text-muted)] hover:text-[var(--studio-text)]'
-              }
-            >
-              {t(label)}
-            </button>
-          ))}
-        </div>
-
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map(([value, label]) => (
-              <button
-                key={value || 'all'}
-                type="button"
-                onClick={() => setCategory(value)}
-                aria-pressed={category === value}
-                className={
-                  category === value
-                    ? 'rounded-full bg-[var(--studio-accent)] px-3 py-1.5 text-xs font-semibold text-white'
-                    : 'rounded-full border border-[var(--studio-border)] bg-[var(--studio-panel)] px-3 py-1.5 text-xs font-medium text-[var(--studio-text-muted)] hover:text-[var(--studio-text)]'
-                }
-              >
-                {t(label)}
-              </button>
-            ))}
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            {/* Two shelves, not a filter: the community grid, and your own —
+                where a private block is the only place it can be seen. */}
+            <div className="studio-segment shrink-0">
+              {[['', 'Community'], ['mine', 'My blocks']].map(([value, label]) => (
+                <button
+                  key={value || 'all'}
+                  type="button"
+                  onClick={() => setScope(value)}
+                  aria-pressed={scope === value}
+                  className={scope === value ? 'studio-segment-btn studio-segment-btn-active' : 'studio-segment-btn'}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+            <div className="dashboard-filter-rail flex max-w-full gap-1.5 overflow-x-auto" aria-label={t('Block categories')}>
+              {CATEGORIES.map(([value, label]) => (
+                <button
+                  key={value || 'all'}
+                  type="button"
+                  onClick={() => setCategory(value)}
+                  aria-pressed={category === value}
+                  className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                    category === value
+                      ? 'border-[var(--studio-accent)] bg-[var(--studio-accent)] text-white'
+                      : 'border-[var(--studio-border)] bg-[var(--studio-panel-raised)] text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'
+                  }`}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
           </div>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('Search blocks…')}
-            aria-label={t('Search blocks…')}
-            className="studio-input ms-auto min-w-0 flex-1 px-3 py-2 text-sm sm:max-w-xs"
-          />
-        </div>
 
         {error && <p role="alert" className="studio-status-danger mb-4 rounded-xl border px-4 py-3 text-sm">{error}</p>}
 
         {loading ? (
-          <p className="text-sm text-[var(--studio-text-muted)]">{t('Loading…')}</p>
+          <div role="status" aria-label={t('Loading…')} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="dashboard-site-card animate-pulse">
+                <div className="dashboard-site-card-media"><div className="h-44 rounded-xl bg-[var(--studio-control)]" /></div>
+                <div className="dashboard-site-card-body">
+                  <div className="h-4 w-2/3 rounded bg-[var(--studio-control)]" />
+                  <div className="mt-3 h-3 w-1/2 rounded bg-[var(--studio-control)]" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : error ? null : items.length === 0 ? (
           // Only when the library really is empty. After a failure the alert
           // above says what happened; "nothing here yet" would be a lie.
-          <div className="rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel)] p-8 text-center">
-            <p className="text-sm font-medium text-[var(--studio-text)]">{t('Nothing here yet.')}</p>
-            <p className="mt-1 text-xs text-[var(--studio-text-muted)]">
+          <div className="dashboard-section-card border-dashed py-16 text-center">
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]">
+              <LayersIcon size={24} />
+            </div>
+            <p className="font-medium text-[var(--studio-text)]">{t('Nothing here yet.')}</p>
+            <p className="mt-1 text-sm text-[var(--studio-text-muted)]">
               {scope === 'mine'
                 ? t('Blocks you share — public or private — land here.')
                 : t('Share a block from one of your own sites to start the library.')}
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {items.map((component) => (
               <ComponentCard
                 key={component.id}
@@ -266,6 +295,7 @@ export default function CommunityPage() {
             ))}
           </div>
         )}
+        </section>
       </main>
 
       {previewing && (

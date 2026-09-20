@@ -138,6 +138,108 @@ class TestGlobalSearch:
         assert hidden_results['users'] == []
         assert hidden_results['sites'] == []
 
+    def test_people_suggestions_exclude_sites_and_remain_capped(self, client, alice):
+        owner, token = alice
+        for index in range(7):
+            User.objects.create_user(username=f'maker{index}')
+            _site(owner, f'Maker project {index}')
+        _auth(client, token)
+
+        suggestions = client.get('/api/search/', {'q': 'maker', 'type': 'users'}).data
+        legacy = client.get('/api/search/', {'q': 'maker'}).data
+
+        assert len(suggestions['users']) == 5
+        assert suggestions['sites'] == []
+        assert len(legacy['sites']) == 6
+        assert len(legacy['users']) == 5
+
+    def test_result_pages_include_counts_and_stable_complete_groups(self, client, alice):
+        owner, token = alice
+        people = [User.objects.create_user(username=f'maker{index:02}') for index in range(13)]
+        sites = [_site(owner, f'Maker project {index}') for index in range(13)]
+        # Force tied ranking values to exercise the primary-key ordering.
+        Site.objects.filter(pk__in=[site.pk for site in sites]).update(
+            updated_at=sites[0].updated_at, hot_score=1,
+        )
+        _auth(client, token)
+        params = {'q': 'maker', 'mode': 'results'}
+
+        first = client.get('/api/search/', params).data
+        second = client.get('/api/search/', {**params, 'page': 2}).data
+        beyond = client.get('/api/search/', {**params, 'page': '9' * 40}).data
+
+        assert first['counts'] == second['counts'] == {'users': 13, 'sites': 13}
+        assert first['page'] == 1
+        assert first['has_more'] is True
+        assert len(first['users']) == len(first['sites']) == 12
+        assert second['page'] == 2
+        assert second['has_more'] is False
+        assert len(second['users']) == len(second['sites']) == 1
+        assert [user['id'] for user in first['users'] + second['users']] == [user.pk for user in people]
+        assert [site['id'] for site in first['sites'] + second['sites']] == [site.pk for site in sites]
+        assert beyond['users'] == beyond['sites'] == []
+        assert beyond['has_more'] is False
+
+    def test_result_filters_keep_both_counts_but_paginate_only_selected_group(self, client, alice):
+        owner, token = alice
+        for index in range(13):
+            _site(owner, f'Alice project {index}')
+        _auth(client, token)
+        params = {'q': 'alice', 'mode': 'results'}
+
+        users = client.get('/api/search/', {**params, 'type': 'users'}).data
+        sites = client.get('/api/search/', {**params, 'type': 'sites'}).data
+
+        assert users['counts'] == sites['counts'] == {'users': 1, 'sites': 13}
+        assert [person['id'] for person in users['users']] == [owner.pk]
+        assert users['sites'] == []
+        assert users['has_more'] is False
+        assert sites['users'] == []
+        assert len(sites['sites']) == 12
+        assert sites['has_more'] is True
+
+    def test_result_counts_and_profiles_do_not_expose_private_or_blocked_sites(self, client, alice, bob):
+        owner, token = alice
+        suspended, _ = bob
+        suspended.is_active = False
+        suspended.username = 'alice-suspended'
+        suspended.save(update_fields=['is_active', 'username'])
+        public = _site(owner, 'Alice public')
+        _site(owner, 'Alice draft', published=False)
+        blocked = _site(owner, 'Alice blocked')
+        Site.objects.filter(pk=blocked.pk).update(moderation_blocked=True)
+        _site(suspended, 'Alice suspended')
+        _auth(client, token)
+
+        results = client.get('/api/search/', {'q': 'alice', 'mode': 'results'}).data
+
+        assert results['counts'] == {'users': 1, 'sites': 1}
+        assert [site['id'] for site in results['sites']] == [public.pk]
+        assert results['users'][0]['published_site_count'] == 1
+
+    @pytest.mark.parametrize('page', ['invalid', '0', '-3'])
+    def test_result_page_normalizes_bad_pagination_and_short_queries(self, client, alice, page):
+        _, token = alice
+        _auth(client, token)
+
+        results = client.get('/api/search/', {'q': ' a ', 'mode': 'results', 'page': page}).data
+
+        assert results == {
+            'query': 'a', 'sites': [], 'users': [],
+            'counts': {'users': 0, 'sites': 0}, 'page': 1, 'has_more': False,
+        }
+
+    def test_unknown_options_fall_back_to_combined_suggestions(self, client, alice):
+        owner, token = alice
+        _site(owner, 'Alice portfolio')
+        _auth(client, token)
+
+        response = client.get('/api/search/', {'q': 'alice', 'mode': 'invalid', 'type': 'invalid'}).data
+
+        assert [user['id'] for user in response['users']] == [owner.pk]
+        assert len(response['sites']) == 1
+        assert 'counts' not in response
+
 
 @pytest.mark.django_db
 class TestFavorites:

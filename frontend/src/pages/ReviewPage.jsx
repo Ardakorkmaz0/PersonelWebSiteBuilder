@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getReviewSite, submitReviewComment } from '../api/sites.js'
 import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
@@ -6,6 +6,7 @@ import { useLanguage } from '../i18n/useLanguage.js'
 import { apiError } from '../utils/errors.js'
 import { HTML_ALLOW, PUBLIC_HTML_SANDBOX, withBuilderInteractiveHtml, withViewportMeta } from '../utils/htmlRuntime.js'
 import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
+import { isPreviewMessageSource, previewPageId } from '../utils/previewMessages.js'
 
 export default function ReviewPage() {
   const { token } = useParams()
@@ -16,6 +17,7 @@ export default function ReviewPage() {
   const [error, setError] = useState('')
   const [form, setForm] = useState({ author_name: '', author_email: '', body: '' })
   const [sending, setSending] = useState(false)
+  const previewFrameRef = useRef(null)
 
   useEffect(() => {
     getReviewSite(token).then((data) => {
@@ -46,8 +48,9 @@ export default function ReviewPage() {
 
   useEffect(() => {
     const onMessage = (event) => {
+      if (!isPreviewMessageSource(event, previewFrameRef.current)) return
       if (event.data?.type !== 'pwb-navigate') return
-      const id = decodeURIComponent(String(event.data.hash || '').replace(/^#/, ''))
+      const id = previewPageId(event.data.hash)
       if (pages.some((item) => item.id === id)) setActiveId(id)
     }
     window.addEventListener('message', onMessage)
@@ -75,7 +78,7 @@ export default function ReviewPage() {
           {pages.length > 1 && <select value={page.id || ''} onChange={(event) => setActiveId(event.target.value)} aria-label={t('Pages')} className="studio-input max-w-32 px-2 py-1 text-xs">{pages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
           <LanguageSwitcher />
         </div>
-        <iframe key={page.id} title={t('Previewing {page}', { page: page.name || site.title })} srcDoc={previewHtml} sandbox={PUBLIC_HTML_SANDBOX} allow={HTML_ALLOW} allowFullScreen className="h-full w-full border-0 pt-14" />
+        <iframe ref={previewFrameRef} key={page.id} title={t('Previewing {page}', { page: page.name || site.title })} srcDoc={previewHtml} sandbox={PUBLIC_HTML_SANDBOX} allow={HTML_ALLOW} allowFullScreen className="h-full w-full border-0 pt-14" />
       </section>
       <aside className="flex h-[46dvh] shrink-0 flex-col border-t border-[var(--studio-border)] bg-[var(--studio-shell)] lg:h-full lg:w-[380px] lg:border-l lg:border-t-0">
         <div className="border-b border-[var(--studio-border)] bg-[var(--studio-panel)] px-5 py-4"><h1 className="font-bold text-[var(--studio-text)]">{t('Client feedback')}</h1><p className="mt-1 text-xs text-[var(--studio-text-muted)]">{t('Comments are attached to the page currently shown.')}</p></div>

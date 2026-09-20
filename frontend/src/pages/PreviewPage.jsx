@@ -18,6 +18,7 @@ import { customCssBlock, safeCustomJs, themeVariablesCss } from '../utils/theme.
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import PublicToolbar from '../components/preview/PublicToolbar.jsx'
 import { useLanguage } from '../i18n/useLanguage.js'
+import { isPreviewMessageSource, previewPageId } from '../utils/previewMessages.js'
 
 const MOBILE_BREAKPOINT = 768
 
@@ -111,6 +112,8 @@ export default function PreviewPage() {
   const [site, setSite] = useState(null)
   const [status, setStatus] = useState('loading') // loading | ok | notfound | error
   const [activeId, setActiveId] = useState(null)
+  const previewFrameRef = useRef(null)
+  const siteCanvasRef = useRef(null)
 
   useEffect(() => {
     let active = true
@@ -223,6 +226,7 @@ export default function PreviewPage() {
       }
     }
     const onMessage = (event) => {
+      if (!isPreviewMessageSource(event, previewFrameRef.current, siteCanvasRef.current)) return
       if (event.data?.type === 'pwb-form-submit') {
         send(event.data.data || {}, event.data.page || activeId || '', event.source)
       }
@@ -308,8 +312,9 @@ export default function PreviewPage() {
   // their own document. If the hash names a real page, switch to it.
   useEffect(() => {
     const onMsg = (e) => {
+      if (!isPreviewMessageSource(e, previewFrameRef.current, siteCanvasRef.current)) return
       if (e.data?.type !== 'pwb-navigate') return
-      const id = decodeURIComponent(String(e.data.hash || '').replace(/^#/, ''))
+      const id = previewPageId(e.data.hash)
       const list = site?.schema?.pages || []
       if (id && list.some((p) => p.id === id)) {
         setActiveId(id)
@@ -451,6 +456,7 @@ export default function PreviewPage() {
         <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
         <iframe
           key={current.id}
+          ref={previewFrameRef}
           title={site.title || 'site'}
           srcDoc={iframeHtml}
           sandbox={staticMode ? STATIC_HTML_SANDBOX : PUBLIC_HTML_SANDBOX}
@@ -517,6 +523,7 @@ ${customCssBlock(site?.schema?.customCss)}`
         <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
         <iframe
           key={`${current.id}-${staticMode ? 'static' : 'live'}`}
+          ref={previewFrameRef}
           title={site.title || current.name || 'site'}
           srcDoc={iframeHtml}
           // Component sites keep allow-scripts on in BOTH modes so the internal
@@ -583,7 +590,7 @@ ${customCssBlock(site?.schema?.customCss)}`
         </>
       )}
       <style>{siteCss}</style>
-      <div data-public-site-canvas>
+      <div ref={siteCanvasRef} data-public-site-canvas>
         <ResponsiveSite key={current.id} page={current} />
       </div>
 

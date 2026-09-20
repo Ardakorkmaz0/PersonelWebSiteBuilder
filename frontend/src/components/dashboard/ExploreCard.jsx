@@ -21,7 +21,7 @@ function Avatar({ url, name, size = 20 }) {
 
 // One card on the Explore / Favorites grid: a live public thumbnail, owner
 // attribution, view + favorite counts, and a star toggle.
-export default function ExploreCard({ site, onToggleFav, onRemix, remixing = false }) {
+export default function ExploreCard({ site, onToggleFav, onRemix, remixing = false, favoriting = false }) {
   const { t } = useLanguage()
   const favoriteLabel = site.is_favorited ? t('Unfavorite') : t('Favorite')
 
@@ -38,6 +38,9 @@ export default function ExploreCard({ site, onToggleFav, onRemix, remixing = fal
         <button
           type="button"
           onClick={() => onToggleFav?.(site)}
+          disabled={favoriting}
+          aria-busy={favoriting}
+          aria-pressed={site.is_favorited}
           title={favoriteLabel}
           aria-label={favoriteLabel}
           className={`dashboard-site-card-favorite ${site.is_favorited ? 'dashboard-site-card-favorite-active' : ''}`}

@@ -117,3 +117,72 @@
     transform: none;
   }
 }
+
+/* Small, finite feedback on the product UI; the OLED shell stays pure black. */
+.dashboard-stat { --stat-color: var(--studio-accent-hover); }
+.dashboard-stat[data-tone="success"] { --stat-color: var(--studio-success); }
+.dashboard-stat[data-tone="info"] { --stat-color: var(--studio-info); }
+.dashboard-stat[data-tone="warning"] { --stat-color: var(--studio-warning); }
+.dashboard-stat .dashboard-stat-icon {
+  color: var(--stat-color);
+  background: color-mix(in srgb, var(--stat-color) 12%, var(--studio-panel-raised));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stat-color) 20%, transparent);
+}
+
+:root[data-ui-theme="dark"] .studio-auth-showcase {
+  background:
+    radial-gradient(ellipse at 90% 0%, color-mix(in srgb, var(--studio-accent) 13%, transparent), transparent 58%),
+    radial-gradient(ellipse at 0% 100%, color-mix(in srgb, var(--studio-info) 7%, transparent), transparent 52%),
+    var(--studio-panel-raised);
+}
+.studio-auth-card {
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.studio-auth-card:focus-within {
+  border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
+  box-shadow: var(--studio-shadow), 0 0 24px color-mix(in srgb, var(--studio-accent) 7%, transparent);
+}
+
+.dashboard-page .studio-btn-primary {
+  background-image: linear-gradient(145deg, color-mix(in srgb, white 10%, transparent), transparent 65%);
+}
+.dashboard-page :where(button, a):focus-visible {
+  outline: 2px solid var(--studio-accent-hover);
+  outline-offset: 3px;
+}
+.dashboard-site-card:focus-within {
+  border-color: var(--studio-accent);
+}
+.dashboard-site-card-open-icon {
+  transition: transform 180ms var(--studio-motion-ease);
+}
+.dashboard-site-card-open:is(:hover, :focus-visible) .dashboard-site-card-open-icon {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-site-card {
+    animation: studio-card-arrive 360ms cubic-bezier(.2, .8, .2, 1) backwards;
+  }
+  .dashboard-site-card:nth-child(2) { animation-delay: 35ms; }
+  .dashboard-site-card:nth-child(3) { animation-delay: 70ms; }
+  .dashboard-site-card:nth-child(4) { animation-delay: 105ms; }
+  .dashboard-site-card:nth-child(n+5) { animation-delay: 140ms; }
+  .dashboard-site-card-favorite-active > svg {
+    animation: studio-star-confirm 260ms cubic-bezier(.2, .8, .2, 1);
+  }
+}
+@keyframes studio-card-arrive {
+  from { opacity: 0; translate: 0 10px; }
+  to { opacity: 1; translate: none; }
+}
+@keyframes studio-star-confirm {
+  0% { transform: scale(.75) rotate(-12deg); }
+  65% { transform: scale(1.18) rotate(5deg); }
+  100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-auth-card,
+  .dashboard-site-card-open-icon { transition: none; }
+  .dashboard-site-card-open:is(:hover, :focus-visible) .dashboard-site-card-open-icon { transform: none; }
+}

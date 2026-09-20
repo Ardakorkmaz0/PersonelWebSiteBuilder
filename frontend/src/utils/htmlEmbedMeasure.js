@@ -1,8 +1,8 @@
 // Measures an HTML embed's REAL rendered size so its layout box can hug the
 // content instead of keeping the palette's guessed width/height (the "selection
 // frame is way bigger than the block" complaint). The snippet renders in a
-// hidden same-origin iframe — safe because every executable script is stripped
-// first; only markup + CSS participate in layout.
+// hidden same-origin iframe with scripts disabled by the sandbox. Stripping
+// top-level scripts cannot stop scripts in nested iframe srcdoc values.
 import { htmlEmbedDocument } from './htmlEmbedDocument.js'
 import { embedAspectLock, htmlEmbedDocumentOptions } from './htmlSnippetSizing.js'
 import { withoutExecutableScripts } from './htmlRuntime.js'
@@ -49,6 +49,9 @@ export function measureHtmlSnippet(component, width, { timeout = 2500 } = {}) {
         htmlEmbedDocument(component?.props?.code || '', opts),
       )
       frame = document.createElement('iframe')
+      // Keep DOM access for measurement, but never allow the snippet or any
+      // nested document to execute JavaScript under the editor's origin.
+      frame.setAttribute('sandbox', 'allow-same-origin')
       frame.setAttribute('aria-hidden', 'true')
       frame.setAttribute('tabindex', '-1')
       frame.style.cssText = [

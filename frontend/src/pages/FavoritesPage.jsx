@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listFavorites, addFavorite, removeFavorite } from '../api/explore.js'
 import { cloneSite } from '../api/sites.js'
@@ -14,6 +14,10 @@ export default function FavoritesPage() {
   const { t } = useLanguage()
   const [items, setItems] = useState(null) // null = loading
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const [favoritingIds, setFavoritingIds] = useState(new Set())
+  const pendingFavorites = useRef(new Set())
   const [searchQuery, setSearchQuery] = useState('')
   const [remixingId, setRemixingId] = useState(null)
   const navigate = useNavigate()
@@ -34,27 +38,36 @@ export default function FavoritesPage() {
     let alive = true
     listFavorites()
       .then((d) => alive && setItems(d))
-      .catch((e) => alive && setError(apiError(e)))
+      .catch((e) => {
+        if (!alive) return
+        setLoadError(apiError(e))
+        setItems([])
+      })
     return () => { alive = false }
-  }, [])
+  }, [loadAttempt])
 
-  // Toggling here un-favorites → drop the card; re-favoriting (rare) keeps it.
+  // Keep the card until the server confirms the change so a failed save is retryable.
   async function onToggleFav(site) {
+    if (pendingFavorites.current.has(site.id)) return
+    pendingFavorites.current.add(site.id)
+    setFavoritingIds(new Set(pendingFavorites.current))
+    setError('')
     const next = !site.is_favorited
-    setItems((prev) =>
-      (prev || [])
-        .map((s) =>
-          s.id === site.id
-            ? { ...s, is_favorited: next, favorite_count: s.favorite_count + (next ? 1 : -1) }
-            : s,
-        )
-        .filter((s) => !(s.id === site.id && !next)),
-    )
     try {
       if (next) await addFavorite(site.id)
       else await removeFavorite(site.id)
+      setItems((previous) => (previous || [])
+        .map((item) => item.id === site.id ? {
+          ...item,
+          is_favorited: next,
+          favorite_count: Math.max(0, (item.favorite_count || 0) + (next ? 1 : -1)),
+        } : item)
+        .filter((item) => !(item.id === site.id && !next)))
     } catch (e) {
       setError(apiError(e))
+    } finally {
+      pendingFavorites.current.delete(site.id)
+      setFavoritingIds(new Set(pendingFavorites.current))
     }
   }
 
@@ -110,7 +123,16 @@ export default function FavoritesPage() {
           </div>
         )}
 
-        {items === null ? (
+        {loadError ? (
+          <div role="alert" className="dashboard-section-card p-8 text-center">
+            <p className="mb-4 text-sm text-[var(--studio-text-muted)]">{loadError}</p>
+            <button type="button" className="studio-btn studio-btn-secondary px-4" onClick={() => {
+              setLoadError('')
+              setItems(null)
+              setLoadAttempt((attempt) => attempt + 1)
+            }}>{t('Try again')}</button>
+          </div>
+        ) : items === null ? (
           <div role="status" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label={t('Loading…')}>
             {[0, 1, 2, 3].map((item) => (
               <div key={item} className="dashboard-site-card animate-pulse">
@@ -141,7 +163,7 @@ export default function FavoritesPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((site) => (
-              <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} />
+              <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} favoriting={favoritingIds.has(site.id)} />
             ))}
           </div>
         )}

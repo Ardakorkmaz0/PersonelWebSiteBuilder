@@ -13,16 +13,20 @@ export const ALLOWED_STYLE_KEYS = new Set([
   'cursor', 'overflow',
 ])
 
-const BLOCKED_SCHEMES = ['javascript:', 'vbscript:', 'data:', 'file:']
+const URL_CONTROLS = /[\u0000-\u001f\u007f]/
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i
 
 export function sanitizeUrl(value) {
   if (typeof value !== 'string') return ''
   const v = value.trim()
   if (!v) return ''
+  // Browsers strip tabs/newlines before interpreting a scheme. Reject controls
+  // so java\nscript: cannot become executable after this check.
+  if (URL_CONTROLS.test(v)) return ''
   if (v.startsWith('#') || v.startsWith('/')) return v
   const low = v.toLowerCase()
-  if (BLOCKED_SCHEMES.some((b) => low.startsWith(b))) return ''
   if (/^(https?:|mailto:|tel:)/.test(low)) return v
+  if (URL_SCHEME.test(v)) return ''
   return low.includes('://') ? '' : v
 }
 

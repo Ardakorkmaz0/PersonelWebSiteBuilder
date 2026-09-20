@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listExplore, addFavorite, removeFavorite } from '../api/explore.js'
 import { cloneSite, listSites } from '../api/sites.js'
@@ -57,6 +57,8 @@ export default function ExplorePage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createOrigin, setCreateOrigin] = useState(null)
   const [remixingId, setRemixingId] = useState(null)
+  const [favoritingIds, setFavoritingIds] = useState(new Set())
+  const pendingFavorites = useRef(new Set())
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
 
@@ -130,20 +132,27 @@ export default function ExplorePage() {
   }
 
   async function onToggleFav(site) {
+    if (pendingFavorites.current.has(site.id)) return
+    pendingFavorites.current.add(site.id)
+    setFavoritingIds(new Set(pendingFavorites.current))
+    setError('')
     const next = !site.is_favorited
-    setData((previous) => ({
-      ...previous,
-      items: previous.items.map((item) => (
-        item.id === site.id
-          ? { ...item, is_favorited: next, favorite_count: item.favorite_count + (next ? 1 : -1) }
-          : item
-      )),
-    }))
     try {
       if (next) await addFavorite(site.id)
       else await removeFavorite(site.id)
+      setData((previous) => ({
+        ...previous,
+        items: previous.items.map((item) => item.id === site.id ? {
+          ...item,
+          is_favorited: next,
+          favorite_count: Math.max(0, (item.favorite_count || 0) + (next ? 1 : -1)),
+        } : item),
+      }))
     } catch (requestError) {
       setError(apiError(requestError))
+    } finally {
+      pendingFavorites.current.delete(site.id)
+      setFavoritingIds(new Set(pendingFavorites.current))
     }
   }
 
@@ -190,12 +199,12 @@ export default function ExplorePage() {
 
             <div className="dashboard-stat-strip relative z-10 mt-8" aria-label={t('Workspace')} aria-busy={projectsLoading}>
               {[
-                [FolderIcon, workspaceStats.total, t('Sites')],
-                [GlobeIcon, workspaceStats.published, t('Published')],
-                [EyeIcon, workspaceStats.views.toLocaleString(), t('Total views')],
-                [StarIcon, workspaceStats.favorites.toLocaleString(), t('Favorites')],
-              ].map(([StatIcon, value, label]) => (
-                <div key={label} className="dashboard-stat">
+                [FolderIcon, workspaceStats.total, t('Sites'), 'accent'],
+                [GlobeIcon, workspaceStats.published, t('Published'), 'success'],
+                [EyeIcon, workspaceStats.views.toLocaleString(), t('Total views'), 'info'],
+                [StarIcon, workspaceStats.favorites.toLocaleString(), t('Favorites'), 'warning'],
+              ].map(([StatIcon, value, label, tone]) => (
+                <div key={label} className="dashboard-stat" data-tone={tone}>
                   <span className="dashboard-stat-icon"><StatIcon size={15} /></span>
                   <span className="min-w-0">
                     <strong className="block truncate text-sm text-[var(--studio-text)]">{projectsLoading ? '—' : value}</strong>
@@ -310,7 +319,7 @@ export default function ExplorePage() {
             <>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {items.map((site) => (
-                  <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} />
+                  <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} favoriting={favoritingIds.has(site.id)} />
                 ))}
               </div>
               {data.hasMore && (

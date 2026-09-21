@@ -29,13 +29,17 @@ desktop/tablet/phone viewport presets, saved as drafts, and published to a publi
 URL.
 
 ## Screenshoots
-<img width="1280" height="800" alt="image" src="https://github.com/user-attachments/assets/7d379441-66ec-4ddb-a7b2-c6e399e8469c" />
+<img width="1280" alt="Login" src="docs/screenshots/login.png" />
 <br>
-<img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/ba3bcbee-cc5a-4c7a-bbde-0bdfb24f21c3" />
+<img width="1280" alt="Dashboard" src="docs/screenshots/dashboard.png" />
 <br>
-<img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/a2ad7319-2998-4768-9e88-67388c702a27" />
+<img width="1280" alt="Editor — Theme" src="docs/screenshots/editor-theme.png" />
 <br>
-<img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/8950f80a-4de9-442c-9ae6-d3b42b2b1033" />
+<img width="1280" alt="Editor — Blocks" src="docs/screenshots/editor-blocks.png" />
+<br>
+<img width="1280" alt="Editor — Mobile & Animations" src="docs/screenshots/editor-mobile-animation.png" />
+
+
 
 
 

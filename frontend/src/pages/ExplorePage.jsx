@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { listExplore, addFavorite, removeFavorite } from '../api/explore.js'
 import { cloneSite, listSites } from '../api/sites.js'
 import { useAuthStore } from '../store/authStore.js'
@@ -52,6 +52,9 @@ function formattedDate(value, language) {
 export default function ExplorePage() {
   const { language, t } = useLanguage()
   const user = useAuthStore((state) => state.user)
+  // Set by the sign-in pages when a guest session's work was taken over.
+  const location = useLocation()
+  const [movedNotice, setMovedNotice] = useState(location.state?.guestWorkMoved || null)
   const userId = user?.id ?? null
   const cachedFeed = userId !== null && feedCache?.userId === userId ? feedCache : null
   const [category, setCategory] = useState(cachedFeed?.category ?? '')
@@ -185,6 +188,17 @@ export default function ExplorePage() {
       <DashboardHeader current="explore" />
 
       <main id="explore-main" className="dashboard-container">
+        {/* Said once, on arrival: the drafts made before signing in are here,
+            under this account. Silence would leave the person wondering
+            whether they lost them. */}
+        {movedNotice && (
+          <div role="status" className="studio-status-success mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm">
+            <span>
+              {t('The {count} sites you made before signing in are now in this account.', { count: movedNotice.sites })}
+            </span>
+            <button type="button" onClick={() => setMovedNotice(null)} aria-label={t('Dismiss')} className="studio-icon-btn shrink-0">×</button>
+          </div>
+        )}
         <section className="dashboard-workspace-grid" aria-labelledby="workspace-heading">
           <div className="dashboard-workspace-primary">
             <div className="relative z-10 max-w-2xl">

@@ -21,6 +21,7 @@ from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -56,12 +57,14 @@ from .validators import (
     shared_component_problems,
     validate_and_clean_schema,
 )
+from .guests import GUEST_SITE_LIMIT, create_guest_user, guest_blocked, is_guest, upgrade_guest
 from .serializers import (
     AdminComponentReportSerializer,
     AdminReportSerializer,
     AdminUserSerializer,
     ExploreSiteSerializer,
     FormSubmissionSerializer,
+    GuestUpgradeSerializer,
     OwnerReviewCommentSerializer,
     ProfileSerializer,
     PublicFormSubmissionSerializer,
@@ -326,6 +329,65 @@ class PasswordResetConfirmView(APIView):
         return Response({'detail': 'Your password has been reset. You can now sign in.'})
 
 
+class GuestSessionView(APIView):
+    """"Continue without signing in" — hands out an identity, not an account.
+
+    Asking for a password before the visitor has made anything is the reason
+    most of them leave. This creates a real user row with a made-up name and
+    returns the usual token, so the whole app works for them; guests.py holds
+    what that identity may not do, and /auth/upgrade/ turns it into an account
+    without losing the work. Throttled on the same scope as the credential
+    endpoints, so it cannot be used to mint rows in bulk.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        user = create_guest_user()
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response(
+            {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class GuestUpgradeView(APIView):
+    """The guest keeps everything and gains a password.
+
+    Registering from a guest session used to mean a second account and an
+    orphaned first one — the sites made before signing up would have been
+    stranded. This writes the credentials onto the row that already owns them.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        if not is_guest(request.user):
+            return Response(
+                {'detail': 'This account is already registered.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = GuestUpgradeSerializer(data=request.data, context={'user': request.user})
+        serializer.is_valid(raise_exception=True)
+        user = upgrade_guest(
+            request.user,
+            username=serializer.validated_data['username'],
+            email=serializer.validated_data['email'],
+            password=serializer.validated_data['password'],
+        )
+        # A new password means a new token everywhere else; this session keeps
+        # working because the client is handed the replacement right here.
+        Token.objects.filter(user=user).delete()
+        token = Token.objects.create(user=user)
+        return Response(
+            {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
+        )
+
+
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -377,6 +439,16 @@ class SiteViewSet(viewsets.ModelViewSet):
         return SiteSerializer
 
     def perform_create(self, serializer):
+        # A guest identity is free to make; it is not free to accumulate. The
+        # cap is lifted the moment they turn it into an account.
+        if is_guest(self.request.user):
+            made = Site.objects.filter(owner=self.request.user).count()
+            if made >= GUEST_SITE_LIMIT:
+                raise PermissionDenied({
+                    'detail': 'Create an account to make more sites — the ones you have are kept.',
+                    'code': 'guest_forbidden',
+                    'action': 'site_limit',
+                })
         serializer.save(owner=self.request.user)
 
     def perform_update(self, serializer):
@@ -480,6 +552,8 @@ class SiteViewSet(viewsets.ModelViewSet):
     # --- Site control centre -------------------------------------------------
     @action(detail=True, methods=['get'], url_path='submissions')
     def list_submissions(self, request, pk=None):
+        if is_guest(request.user):
+            return guest_blocked('submissions')
         site = self.get_object()
         rows = FormSubmission.objects.filter(site=site)[:200]
         return Response(FormSubmissionSerializer(rows, many=True).data)
@@ -504,6 +578,8 @@ class SiteViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='analytics')
     def analytics(self, request, pk=None):
+        if is_guest(request.user):
+            return guest_blocked('analytics')
         site = self.get_object()
         since = timezone.now() - timedelta(days=29)
         visits = SiteVisit.objects.filter(site=site, created_at__gte=since)
@@ -553,6 +629,8 @@ class SiteViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get', 'post'], url_path='domain')
     def domain(self, request, pk=None):
+        if is_guest(request.user):
+            return guest_blocked('domain')
         site = self.get_object()
         if request.method == 'POST':
             raw = str(request.data.get('domain') or '').strip().lower()
@@ -1171,6 +1249,10 @@ class ReportSiteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, site_id):
+        # A report is a claim about someone else's work; it has to come from an
+        # account that can be held to it.
+        if is_guest(request.user):
+            return guest_blocked('report')
         try:
             site = public_sites().get(pk=site_id)
         except Site.DoesNotExist:
@@ -1476,6 +1558,10 @@ class ShareComponentView(APIView):
     throttle_scope = 'share'
 
     def post(self, request):
+        # Sharing puts a block in front of everyone else — the same reason
+        # publishing is closed to a guest identity.
+        if is_guest(request.user):
+            return guest_blocked('share_component')
         data = sanitize_shared_component(request.data)
         if not data['title']:
             return error_response('title_required', 'Give the component a name.', status.HTTP_400_BAD_REQUEST)
@@ -1618,6 +1704,8 @@ class ReportSharedComponentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, component_id):
+        if is_guest(request.user):
+            return guest_blocked('report')
         # Through the same door as every other read: a block you cannot see is
         # a block you cannot report.
         component = _visible_component(request.user, component_id)

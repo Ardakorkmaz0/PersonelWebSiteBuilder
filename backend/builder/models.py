@@ -459,6 +459,11 @@ class Profile(models.Model):
     avatar = models.ImageField(upload_to=_avatar_upload_path, blank=True, null=True)
     display_name = models.CharField(max_length=80, blank=True, default='')
     bio = models.CharField(max_length=300, blank=True, default='')
+    # "Continue without signing in": a real row with a made-up name, so drafts,
+    # favourites and ownership all work through the usual keys. The flag is
+    # what closes the things other people would see (see builder/guests.py),
+    # and signing up clears it on this same row — the work carries over.
+    is_guest = models.BooleanField(default=False)
     # Modern-profile meta: one-line headline ("Product designer"), where the
     # creator is based, and outbound links. The social fields accept either a
     # bare handle or a full URL — the frontend composes the canonical link.

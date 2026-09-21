@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
+from .guests import GUEST_SITE_LIMIT, GUEST_USERNAME_PREFIX, is_guest
 from .models import (
     FormSubmission,
     Profile,
@@ -91,6 +92,46 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
 
+class GuestUpgradeSerializer(serializers.Serializer):
+    """The credentials a guest picks when they decide to keep their work.
+
+    Same rules as registration — the difference is where they land: on the row
+    that already owns their sites, instead of a brand new one. Uniqueness has
+    to exclude the guest itself, whose username is about to be replaced.
+    """
+
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    def _others(self):
+        user = self.context.get('user')
+        return User.objects.exclude(pk=user.pk) if user else User.objects.all()
+
+    def validate_username(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Choose a username.')
+        if value.lower().startswith(GUEST_USERNAME_PREFIX):
+            raise serializers.ValidationError('That username is reserved.')
+        if self._others().filter(username__iexact=value).exists():
+            raise serializers.ValidationError('This username is already taken.')
+        return value
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if self._others().filter(email__iexact=value).exists():
+            raise serializers.ValidationError('An account with this email already exists.')
+        return value
+
+    def validate_password(self, value):
+        try:
+            dj_validate_password(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
+
+
 class UserSerializer(serializers.ModelSerializer):
     """The user as the frontend header/auth store sees them — now carrying the
     profile's avatar + display name so the header can show them without a
@@ -98,11 +139,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     avatar_url = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
+    is_guest = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         # `is_staff` shows the Admin link; `is_superuser` shows the Settings link.
-        fields = ('id', 'username', 'avatar_url', 'display_name', 'is_staff', 'is_superuser')
+        # `is_guest` decides what the app offers at all: a guest that is shown a
+        # Publish button it cannot use has been lied to.
+        fields = ('id', 'username', 'avatar_url', 'display_name', 'is_staff', 'is_superuser', 'is_guest')
+
+    def get_is_guest(self, obj):
+        prof = getattr(obj, 'profile', None)
+        return bool(prof and prof.is_guest)
 
     def get_avatar_url(self, obj):
         prof = getattr(obj, 'profile', None)
@@ -500,6 +548,18 @@ class SiteSerializer(serializers.ModelSerializer):
     # switch says. Refusing the value instead would fail every save — auto
     # saves included — from an editor that still shows the site as live.
     # `moderation_blocked` comes back in the response so the editor can say so.
+
+    # Publishing is the one thing a guest identity cannot do: it puts a page in
+    # front of other people, and there is nobody behind it to answer for it.
+    # Checked here rather than in the view because every path that flips the
+    # switch — PATCH, PUT, create — goes through this serializer.
+    def validate_published(self, value):
+        user = getattr(self.context.get('request'), 'user', None)
+        if value and is_guest(user):
+            raise serializers.ValidationError(
+                'Create an account to publish this site — your work is kept.',
+            )
+        return value
 
     def validate_schema(self, value):
         return validate_and_clean_schema(value)

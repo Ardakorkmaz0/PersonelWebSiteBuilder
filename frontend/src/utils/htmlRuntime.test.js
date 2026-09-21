@@ -11,6 +11,7 @@ import {
   withBuilderInteractiveHtml,
   withBuilderRuntimeHtml,
   withEditorViewportMeta,
+  withGeneratedStylesHtml,
   withViewportMeta,
 } from './htmlRuntime.js'
 
@@ -35,6 +36,36 @@ describe('withViewportMeta', () => {
 
   it('prepends to bare fragments', () => {
     expect(withViewportMeta('<div>x</div>')).toMatch(/^<meta name="viewport"/)
+  })
+})
+
+// Edit mode runs the document without scripts, so a page that builds its own
+// stylesheet in the browser arrives unstyled — the editor showed raw markup
+// where View showed the site. View measures the result and lends it over.
+describe('withGeneratedStylesHtml', () => {
+  const page = '<html><head><title>t</title></head><body><p>x</p></body></html>'
+
+  it('adds the measured css as transient editor chrome', () => {
+    const out = withGeneratedStylesHtml(page, '.p-4{padding:1rem}')
+
+    expect(out).toContain('data-pwb-generated')
+    // serializeDocument drops data-pwb-injected, so this never reaches a save.
+    expect(out).toContain('data-pwb-injected')
+    expect(out.indexOf('.p-4')).toBeLessThan(out.indexOf('</head>'))
+  })
+
+  it('leaves the document alone when there is nothing to lend', () => {
+    expect(withGeneratedStylesHtml(page, '')).toBe(page)
+    expect(withGeneratedStylesHtml(page, '   ')).toBe(page)
+  })
+
+  it('cannot be closed early by css that carries a style end tag', () => {
+    const out = withGeneratedStylesHtml(page, '.a{}</style><script>alert(1)</scr' + 'ipt>')
+
+    // One style element, so whatever came with the css stays inside it as
+    // text — a second </style> would let the rest of it become markup.
+    expect((out.match(/<\/style>/gi) || []).length).toBe(1)
+    expect(out).not.toContain('</style><script>')
   })
 })
 

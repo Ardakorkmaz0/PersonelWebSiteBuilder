@@ -493,6 +493,25 @@ export function withEditorViewportMeta(html) {
   return tag + out
 }
 
+// Edit mode renders the document WITHOUT scripts — it needs same-origin to
+// make the page editable, and same-origin plus scripts would hand the page
+// this app's session. A page that builds its own stylesheet in the browser
+// (a CSS framework loaded from a CDN is the usual case) is therefore unstyled
+// there: View showed the site, Edit showed a heap of raw markup.
+//
+// View cannot lend Edit its scripts. It can lend it the result — the CSS those
+// scripts produced, as text. Preview-only: the tag carries data-pwb-injected,
+// which serializeDocument strips, so nothing of this reaches the saved file.
+export function withGeneratedStylesHtml(html, css) {
+  const out = String(html || '')
+  const text = String(css || '').replace(/<\/style/gi, '')
+  if (!text.trim()) return out
+  const tag = `<style data-pwb-injected data-pwb-generated>${text}</style>`
+  return insertBeforeClosingTag(out, 'head', tag)
+    ?? insertBeforeClosingTag(out, 'body', tag)
+    ?? tag + out
+}
+
 export function withoutExecutableScripts(html) {
   if (typeof DOMParser === 'undefined') {
     return String(html || '')

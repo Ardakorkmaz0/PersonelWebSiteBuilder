@@ -4,6 +4,7 @@ import {
   HTML_VIEW_SANDBOX,
   withBuilderRuntimeHtml,
   withEditorViewportMeta,
+  withGeneratedStylesHtml,
   withViewportMeta,
 } from '../../utils/htmlRuntime.js'
 import { insertBeforeClosingTag } from '../../utils/htmlInsert.js'
@@ -437,11 +438,60 @@ export function installSelectionResizeChrome(
   updateSelectionResizeChrome(doc, el)
 }
 
+// The other half of withGeneratedStylesHtml: View runs the page's scripts, so
+// it is the only place that can see the CSS they build. It posts that text up
+// to the editor, which lends it to Edit mode — where scripts never run.
+// Builder-injected stylesheets are skipped; Edit gets its own copies.
+const STYLE_REPORTER_SCRIPT = `<script data-pwb-style-reporter>(function () {
+  var SKIP = '[data-builder-runtime-style],[data-builder-motion-style],[data-builder-interactive-style],[data-pwb-injected]'
+  var last = ''
+  function collect() {
+    var out = []
+    var total = 0
+    var styles = document.querySelectorAll('style')
+    for (var i = 0; i < styles.length; i++) {
+      var el = styles[i]
+      if (el.matches && el.matches(SKIP)) continue
+      var text = el.textContent || ''
+      if (!text || total + text.length > 900000) continue
+      total += text.length
+      out.push(text)
+    }
+    var joined = out.join('\\n')
+    if (joined === last) return
+    last = joined
+    parent.postMessage({ type: 'pwb-generated-css', styles: out }, '*')
+  }
+  var timer = null
+  function schedule() {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(collect, 350)
+  }
+  window.addEventListener('load', schedule)
+  schedule()
+  // A framework that builds its stylesheet in the browser keeps rebuilding it
+  // as the DOM changes, so watch for that instead of reading once.
+  try {
+    new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, characterData: true })
+  } catch (e) {}
+})()</scr` + `ipt>`
+
 function withViewExtras(html, scrollIndex) {
-  let inject = ANCHOR_REPORTER_SCRIPT
+  let inject = ANCHOR_REPORTER_SCRIPT + STYLE_REPORTER_SCRIPT
   if (scrollIndex != null && scrollIndex >= 0) inject += scrollOnceScript(scrollIndex)
   const out = String(html || '')
   return insertBeforeClosingTag(out, 'body', inject) ?? out + inject
+}
+
+// What the document already carries in its own markup — those stylesheets are
+// in Edit mode anyway, and a second copy would only bloat the preview.
+function authoredStyleText(source) {
+  try {
+    const doc = new DOMParser().parseFromString(String(source || ''), 'text/html')
+    return new Set([...doc.querySelectorAll('style')].map((el) => el.textContent || ''))
+  } catch {
+    return new Set()
+  }
 }
 
 function HtmlWorkspace({
@@ -816,10 +866,22 @@ function HtmlWorkspace({
     viewAnchorRef.current = null
   }, [html])
 
+  // CSS the page's own scripts built, reported by the view iframe. Kept with
+  // the document it came from so a stale stylesheet never styles a different
+  // page — compared at render time rather than cleared by an effect.
+  const [generated, setGenerated] = useState(null)
+
   useEffect(() => {
     const onMessage = (e) => {
-      if (e.data?.type !== 'pwb-visible-anchor') return
       if (e.source !== iframeRef.current?.contentWindow) return
+      if (e.data?.type === 'pwb-generated-css') {
+        const styles = Array.isArray(e.data.styles) ? e.data.styles.filter((s) => typeof s === 'string') : []
+        const authored = authoredStyleText(htmlRef.current)
+        const css = styles.filter((text) => !authored.has(text)).join('\n')
+        setGenerated({ html: htmlRef.current, css })
+        return
+      }
+      if (e.data?.type !== 'pwb-visible-anchor') return
       const idx = Number(e.data.index)
       viewAnchorRef.current = Number.isInteger(idx) && idx >= 0 ? idx : null
     }
@@ -1613,10 +1675,13 @@ function HtmlWorkspace({
   // In code-project mode the View renders the assembled (linked-CSS/JS-resolved)
   // document; otherwise the html prop is already self-contained.
   const viewHtml = assemble ? assembledView : html
+  // Only for the document it was measured on: a page that styles itself with a
+  // script looks unstyled in Edit otherwise (scripts never run there).
+  const generatedCss = generated?.html === html ? generated.css : ''
   const srcDoc =
     mode === 'view'
       ? withViewExtras(withBuilderRuntimeHtml(withViewportMeta(viewHtml)), viewScrollIndex)
-      : withEditorViewportMeta(editSeed)
+      : withGeneratedStylesHtml(withEditorViewportMeta(editSeed), generatedCss)
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
   // The preview iframe — rendered into either the CSS-filled responsive frame

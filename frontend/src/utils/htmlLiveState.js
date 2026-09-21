@@ -49,33 +49,78 @@ function attributeChanges(authored, live) {
   return out
 }
 
+// Nothing a script leaves behind that is ours, or that could run.
+const SKIP_ADDED = 'script,link,[data-pwb-injected],[data-pwb-chrome],[data-builder-runtime-style],[data-builder-motion-style],[data-builder-interactive-style]'
+
+// How far ahead to look for the authored child again after a script inserted
+// something before it. A page appends; it does not usually interleave.
+const LOOK_AHEAD = 8
+
+// Content a script built rather than the author. It renders in Edit, marked so
+// that the editor treats it as furniture and a save drops it — the alternative
+// is an editor that shows an empty box where the running page shows a page.
+const MAX_ADDED = 120
+const MAX_ADDED_BYTES = 400000
+
 // Where an element sits, as child indices from <html>. Both documents come
 // from the same file, so the path lines up — and every step re-checks the tag
-// name, so a script that inserted a node somewhere stops the walk there
-// instead of dressing the wrong element.
+// name, so a script that inserted a node somewhere is recognised as an
+// insertion instead of shifting everything after it onto the wrong element.
 export function liveStateDiff(authoredHtml, liveHtml) {
   // No report is not the same as "the page dropped every attribute": the
   // reporter sends nothing when the document is too big to carry.
-  if (!String(liveHtml || '').trim()) return []
+  if (!String(liveHtml || '').trim()) return { attrs: [], added: [] }
   const authored = parse(authoredHtml)?.documentElement
   const live = parse(liveHtml)?.documentElement
-  if (!authored || !live || authored.tagName !== live.tagName) return []
+  if (!authored || !live || authored.tagName !== live.tagName) return { attrs: [], added: [] }
 
-  const out = []
+  const attrs = []
+  const added = []
+  let addedBytes = 0
+
+  const carry = (node, path, index) => {
+    if (added.length >= MAX_ADDED || addedBytes >= MAX_ADDED_BYTES) return
+    if (node.matches?.(SKIP_ADDED)) return
+    const html = node.outerHTML || ''
+    if (!html || html.length > MAX_ADDED_BYTES) return
+    addedBytes += html.length
+    added.push({ path, index, html })
+  }
+
   const visit = (a, b, path) => {
-    if (out.length >= MAX_ENTRIES) return
-    const attrs = attributeChanges(a, b)
-    if (Object.keys(attrs).length) out.push({ path, attrs })
+    if (attrs.length >= MAX_ENTRIES) return
+    const changes = attributeChanges(a, b)
+    if (Object.keys(changes).length) attrs.push({ path, attrs: changes })
+
     const aKids = a.children
     const bKids = b.children
-    const shared = Math.min(aKids.length, bKids.length)
-    for (let i = 0; i < shared; i += 1) {
-      if (aKids[i].tagName !== bKids[i].tagName) break
-      visit(aKids[i], bKids[i], [...path, i])
+    let ai = 0
+    let bi = 0
+    while (ai < aKids.length && bi < bKids.length) {
+      if (aKids[ai].tagName === bKids[bi].tagName) {
+        visit(aKids[ai], bKids[bi], [...path, ai])
+        ai += 1
+        bi += 1
+        continue
+      }
+      // The live child is not the authored one: either the script inserted it,
+      // or the two documents have genuinely parted ways.
+      let found = -1
+      for (let look = bi + 1; look < Math.min(bKids.length, bi + 1 + LOOK_AHEAD); look += 1) {
+        if (bKids[look].tagName === aKids[ai].tagName) {
+          found = look
+          break
+        }
+      }
+      if (found === -1) return
+      for (; bi < found; bi += 1) carry(bKids[bi], path, bi)
     }
+    // Whatever the running page has after the author's last child.
+    for (; bi < bKids.length; bi += 1) carry(bKids[bi], path, bi)
   }
+
   visit(authored, live, [])
-  return out
+  return { attrs, added }
 }
 
 function elementAt(root, path) {
@@ -91,12 +136,16 @@ function elementAt(root, path) {
 // both what was there and what we put in its place, so a save can put the
 // first back — and can tell whether the author has since changed it by hand.
 export function withLiveState(html, diff) {
-  if (!Array.isArray(diff) || !diff.length) return String(html || '')
+  const attrChanges = Array.isArray(diff?.attrs) ? diff.attrs : []
+  const additions = Array.isArray(diff?.added) ? diff.added : []
+  if (!attrChanges.length && !additions.length) return String(html || '')
   const doc = parse(html)
   if (!doc?.documentElement) return String(html || '')
 
   let touched = 0
-  for (const { path, attrs } of diff) {
+  // Attributes first: the paths were measured on the document as it is, and an
+  // insertion would move everything after it.
+  for (const { path, attrs } of attrChanges) {
     const el = elementAt(doc.documentElement, path)
     if (!el) continue
     const was = {}
@@ -112,6 +161,29 @@ export function withLiveState(html, diff) {
     el.setAttribute('data-pwb-state', JSON.stringify({ was, now }))
     touched += 1
   }
+
+  // Then the content the page built for itself, in document order so each
+  // insertion lands where it did in the running page.
+  const ordered = [...additions].sort((a, b) => (a.path.length - b.path.length) || (a.index - b.index))
+  for (const { path, index, html: markup } of ordered) {
+    const parent = elementAt(doc.documentElement, path)
+    if (!parent) continue
+    const holder = doc.createElement('div')
+    holder.innerHTML = String(markup || '')
+    const node = holder.firstElementChild
+    if (!node) continue
+    // data-pwb-injected: a save drops it. data-pwb-chrome: the editor skips it
+    // when selecting. contenteditable=false: the edit document is in
+    // designMode, and without this the caret would still land in content that
+    // a save is going to drop — typing into it would vanish silently.
+    node.setAttribute('data-pwb-injected', 'live-state')
+    node.setAttribute('data-pwb-chrome', '')
+    node.setAttribute('contenteditable', 'false')
+    const before = parent.children[index] || null
+    parent.insertBefore(node, before)
+    touched += 1
+  }
+
   if (!touched) return String(html || '')
   return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`
 }

@@ -57,11 +57,11 @@ import { componentToHtml } from '../../utils/componentToHtml.js'
 import { matchingCssRules } from '../../utils/htmlFiles.js'
 import { brushElementPatch } from '../../utils/htmlRecolor.js'
 import { hasUnsavedSourceDraft } from '../../utils/htmlSourceDraft.js'
-import { applyElementMotion, applyMotionRest, clearMotionRest } from '../../utils/htmlMotion.js'
+import { applyElementMotion, applyMotionRest } from '../../utils/htmlMotion.js'
 import CanvasZoomControl from './CanvasZoomControl.jsx'
 import { readZoom, writeZoom, zoomScale } from './canvasZoom.js'
 import BrushControls from './BrushControls.jsx'
-import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon, SparklesIcon } from '../icons.jsx'
+import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { shouldForwardIframeShortcut } from '../../utils/editorLeave.js'
 import { revealLine } from '../../utils/revealCodeLine.js'
@@ -495,6 +495,13 @@ function withViewExtras(html, scrollIndex) {
   return insertBeforeClosingTag(out, 'body', inject) ?? out + inject
 }
 
+// Enough of the document to tell one page from another without being upset by
+// an edit: a snapshot measured before a paragraph was retyped is still the
+// right snapshot for this page.
+function documentKey(html) {
+  return String(html || '').slice(0, 1500)
+}
+
 // What the document already carries in its own markup — those stylesheets are
 // in Edit mode anyway, and a second copy would only bloat the preview.
 function authoredStyleText(source) {
@@ -631,23 +638,22 @@ function HtmlWorkspace({
   // you set was never the size you saw.
   const [zoom, setZoomState] = useState(() => readZoom(HTML_ZOOM_KEY))
   const setZoom = (next) => { setZoomState(next); writeZoom(HTML_ZOOM_KEY, next) }
-  // Show content whose reveal never ran at its resting state. On by default:
-  // an uploaded page that hides half of itself for a scroll animation is
-  // otherwise half-missing in the editor, and you cannot edit what is not
-  // there. Turning it off shows the file's raw truth instead.
-  const [motionRest, setMotionRest] = useState(true)
-  const [restedCount, setRestedCount] = useState(0)
+  // Show content whose reveal never ran at its resting state: an uploaded page
+  // that hides half of itself for a scroll animation is otherwise half-missing
+  // in the editor, and you cannot edit what is not there. Always on — the
+  // toggle that used to sit in the toolbar only offered a worse view.
   const linkSourceRef = useRef(null) // chosen <a> awaiting a target (link tool)
 
   const iframeRef = useRef(null)
+  // Off-screen twin that reads a page the editor has no reading for yet.
+  const measureRef = useRef(null)
   // Toggling rest acts on the document that is already loaded — reseeding it
   // would throw away whatever has been typed since.
   useEffect(() => {
     const doc = iframeRef.current?.contentDocument
     if (!doc || mode !== 'edit') return
-    if (motionRest) setRestedCount(applyMotionRest(doc))
-    else { clearMotionRest(doc); setRestedCount(0) }
-  }, [motionRest, mode, loadTick])
+    applyMotionRest(doc)
+  }, [mode, loadTick])
 
   const [stage, setStage] = useState({ w: 0, h: 0 })
   const placing = !!pendingType
@@ -897,15 +903,18 @@ function HtmlWorkspace({
 
   useEffect(() => {
     const onMessage = (e) => {
-      if (e.source !== iframeRef.current?.contentWindow) return
+      const fromStage = e.source === iframeRef.current?.contentWindow
+      const fromMeasure = e.source === measureRef.current?.contentWindow
+      if (!fromStage && !fromMeasure) return
       if (e.data?.type === 'pwb-live-state') {
         const styles = Array.isArray(e.data.styles) ? e.data.styles.filter((s) => typeof s === 'string') : []
         const authored = authoredStyleText(htmlRef.current)
         const css = styles.filter((text) => !authored.has(text)).join('\n')
         const live = typeof e.data.html === 'string' ? e.data.html : ''
-        setGenerated({ html: htmlRef.current, css, live })
+        setGenerated({ key: documentKey(htmlRef.current), css, live })
         return
       }
+      if (fromMeasure) return
       if (e.data?.type !== 'pwb-visible-anchor') return
       const idx = Number(e.data.index)
       viewAnchorRef.current = Number.isInteger(idx) && idx >= 0 ? idx : null
@@ -1698,7 +1707,7 @@ function HtmlWorkspace({
   // document, and this runs on every keystroke of the inspector.
   const editDocument = useMemo(() => {
     const seeded = withEditorViewportMeta(editSeed)
-    const live = generated?.html === html ? generated.live : ''
+    const live = generated?.key === documentKey(html) ? generated.live : ''
     if (!live) return seeded
     return withLiveState(seeded, liveStateDiff(html, live))
   }, [editSeed, generated, html])
@@ -1712,13 +1721,42 @@ function HtmlWorkspace({
   const viewHtml = assemble ? assembledView : html
   // Only for the document it was measured on: a page that styles itself with a
   // script looks unstyled in Edit otherwise (scripts never run there).
-  const forThisDocument = generated?.html === html ? generated : null
+  const forThisDocument = generated?.key === documentKey(html) ? generated : null
   const generatedCss = forThisDocument?.css || ''
   const srcDoc =
     mode === 'view'
       ? withViewExtras(withBuilderRuntimeHtml(withViewportMeta(viewHtml)), viewScrollIndex)
       : withGeneratedStylesHtml(editDocument, generatedCss)
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
+
+  // Opening a page straight into Edit used to show it cold: no CSS from its
+  // framework, no content its script builds — the "why does my page look like
+  // that" first impression. So when Edit has no reading for this document, one
+  // is taken off-screen, in the same sandbox View uses (scripts, opaque
+  // origin, no access to this app). It unmounts the moment it has reported.
+  const measuring = mode === 'edit' && !forThisDocument && !!String(html || '').trim()
+  const measureIframe = measuring ? (
+    <iframe
+      key={`measure-${nonce}`}
+      ref={measureRef}
+      title={t('Reading the page')}
+      aria-hidden="true"
+      tabIndex={-1}
+      srcDoc={withViewExtras(withBuilderRuntimeHtml(withViewportMeta(viewHtml)), null)}
+      sandbox={HTML_VIEW_SANDBOX}
+      allow={HTML_ALLOW}
+      style={{
+        position: 'absolute',
+        left: '-20000px',
+        top: 0,
+        width: '1280px',
+        height: '900px',
+        border: 'none',
+        opacity: 0,
+        pointerEvents: 'none',
+      }}
+    />
+  ) : null
 
   // The preview iframe — rendered into either the CSS-filled responsive frame
   // or the scaled fixed-device frame below. One definition keeps its key/ref
@@ -1749,6 +1787,7 @@ function HtmlWorkspace({
 
   return (
     <div className="studio-theme-surface relative flex min-h-0 min-w-0 flex-1">
+      {measureIframe}
       {liveCode && mode !== 'source' && (
         <CodeActivityOverlay
           document={tickerDocument}
@@ -1841,35 +1880,18 @@ function HtmlWorkspace({
               )}
             </div>
           )}
-          {/* Said out loud only when it is actually doing something. "Why is my
-              page half empty / why does nothing animate" is answered here, next
-              to the one click that plays it for real. */}
-          {mode === 'edit' && restedCount > 0 && (
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setMotionRest((on) => !on)}
-                aria-pressed={motionRest}
-                title={t('{count} elements are revealed by the page’s own script, which does not run while editing. They are shown at their finished state.', { count: restedCount })}
-                className={`studio-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs ${
-                  motionRest
-                    ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
-                    : 'studio-btn-secondary'
-                }`}
-              >
-                <SparklesIcon size={14} />
-                <span className="hidden xl:inline">{t('Motion at rest')}</span>
-                <span className="rounded-full bg-[var(--studio-panel)] px-1.5 text-[10px] font-semibold">{restedCount}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode('view')}
-                title={t('Play the animations in View')}
-                className="studio-btn studio-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs"
-              >
-                ▶ <span className="hidden xl:inline">{t('Play')}</span>
-              </button>
-            </div>
+          {/* Editing runs the page without its scripts, so everything behind a
+              click is out of reach here. This is the way to it: run the page,
+              open what you need, come back — Edit picks the state back up. */}
+          {mode === 'edit' && !!String(html || '').trim() && (
+            <button
+              type="button"
+              onClick={() => switchMode('view')}
+              title={t('Run the page: click through it in View, then come back — Edit shows it the way you left it.')}
+              className="studio-btn studio-btn-secondary inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs"
+            >
+              ▶ <span className="hidden xl:inline">{t('Run')}</span>
+            </button>
           )}
           {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
               empty page: there's no document to act on, so the starter card is

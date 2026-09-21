@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import AuthShell, { AuthWidgetFrame } from '../components/auth/AuthShell.jsx'
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
+import GuestEntry from '../components/auth/GuestEntry.jsx'
 import { useLanguage } from '../i18n/useLanguage.js'
 
 export default function LoginPage() {
@@ -117,6 +118,8 @@ export default function LoginPage() {
       <AuthWidgetFrame>
         <GoogleSignInButton onCredential={onGoogle} onError={setError} />
       </AuthWidgetFrame>
+
+      <GuestEntry onError={setError} />
     </AuthShell>
   )
 }

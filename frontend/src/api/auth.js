@@ -35,3 +35,19 @@ export async function fetchMe() {
   const { data } = await client.get('/auth/me/')
   return data
 }
+
+// "Continue without signing in": the server mints an identity with a made-up
+// name and hands back the usual token, so everything that needs an owner
+// (drafts, favourites) works. What it may not do lives on the server; the UI
+// reads user.is_guest to stop offering those things in the first place.
+export async function continueAsGuest() {
+  const { data } = await client.post('/auth/guest/', {})
+  return data // { token, user }
+}
+
+// The same person, now with a password — on the same row, so the sites they
+// made as a guest are still theirs. Returns a fresh token for this session.
+export async function upgradeGuest(username, email, password) {
+  const { data } = await client.post('/auth/upgrade/', { username, email, password })
+  return data // { token, user }
+}

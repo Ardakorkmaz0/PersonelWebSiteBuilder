@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { register, googleLogin } from '../api/auth.js'
-import { useAuthStore } from '../store/authStore.js'
+import { register, googleLogin, upgradeGuest } from '../api/auth.js'
+import { useAuthStore, useIsGuest } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { passwordStrength } from '../utils/passwordStrength.js'
 import AuthShell, { AuthWidgetFrame } from '../components/auth/AuthShell.jsx'
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
 import Recaptcha from '../components/auth/Recaptcha.jsx'
+import GuestEntry from '../components/auth/GuestEntry.jsx'
 import { usePublicConfig } from '../utils/usePublicConfig.js'
 import { useLanguage } from '../i18n/useLanguage.js'
 
@@ -25,6 +26,10 @@ export default function RegisterPage() {
   const [remember, setRemember] = useState(true)
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
+  // Someone who came in through "continue without signing in" is not
+  // registering a second time — they are putting a password on the identity
+  // that already owns their sites. Same form, different endpoint.
+  const upgrading = useIsGuest()
   const cfg = usePublicConfig()
   const recaptchaOn = !!(cfg?.recaptcha_site_key || ENV_RECAPTCHA)
 
@@ -32,14 +37,18 @@ export default function RegisterPage() {
 
   async function onSubmit(e) {
     e.preventDefault()
-    if (recaptchaOn && !captcha) {
+    // The upgrade endpoint is behind the guest's own token, so the captcha
+    // (which guards anonymous signup spam) has nothing to add there.
+    if (recaptchaOn && !upgrading && !captcha) {
       setError(t('Please confirm you are not a robot.'))
       return
     }
     setError('')
     setLoading(true)
     try {
-      const { token, user } = await register(username, email, password, captcha)
+      const { token, user } = upgrading
+        ? await upgradeGuest(username, email, password)
+        : await register(username, email, password, captcha)
       setAuth(token, user, remember)
       navigate('/')
     } catch (err) {
@@ -62,8 +71,10 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      title={t('Create your account')}
-      description={t('Build and publish your first site in minutes.')}
+      title={upgrading ? t('Keep what you have made') : t('Create your account')}
+      description={upgrading
+        ? t('Pick a name and a password. The sites you made as a guest stay yours.')
+        : t('Build and publish your first site in minutes.')}
       onSubmit={onSubmit}
       footer={(
         <>
@@ -138,18 +149,25 @@ export default function RegisterPage() {
       </label>
 
       {/* reCAPTCHA renders only when a runtime or build-time site key exists. */}
-      <AuthWidgetFrame>
-        <Recaptcha onChange={setCaptcha} />
-      </AuthWidgetFrame>
+      {!upgrading && (
+        <AuthWidgetFrame>
+          <Recaptcha onChange={setCaptcha} />
+        </AuthWidgetFrame>
+      )}
 
       <button type="submit" disabled={loading} className="ms-btn ms-btn-primary w-full py-2.5">
-        {loading ? t('Creating…') : t('Create account')}
+        {loading
+          ? t('Creating…')
+          : upgrading ? t('Create my account') : t('Create account')}
       </button>
 
       {/* Google sign-in renders only when a client id exists. */}
-      <AuthWidgetFrame>
-        <GoogleSignInButton onCredential={onGoogle} onError={setError} />
-      </AuthWidgetFrame>
+      {!upgrading && (
+        <AuthWidgetFrame>
+          <GoogleSignInButton onCredential={onGoogle} onError={setError} />
+        </AuthWidgetFrame>
+      )}
+      {!upgrading && <GuestEntry onError={setError} />}
     </AuthShell>
   )
 }

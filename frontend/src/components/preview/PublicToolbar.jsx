@@ -16,6 +16,7 @@ import {
 } from '../icons.jsx'
 import LanguageSwitcher from '../LanguageSwitcher.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { useGuestGate } from '../../utils/useGuestGate.jsx'
 
 // Below this the bar has no room for the two segments next to the page tabs,
 // so they move into the ⋯ menu — one copy of each either way.
@@ -109,6 +110,7 @@ export default function PublicToolbar({
   const navigate = useNavigate()
   const goBack = useGoBack('/')
   const token = useAuthStore((s) => s.token)
+  const { gate: guestGate, dialog: guestDialog } = useGuestGate()
   const narrow = useMediaQuery(NARROW_BAR_QUERY)
 
   async function onUse() {
@@ -130,6 +132,9 @@ export default function PublicToolbar({
       navigate('/login')
       return
     }
+    // A report is a claim about someone else's work: it comes from an account,
+    // not from a made-up name.
+    if (guestGate('report')) return
     setReported(false)
     setReportError('')
     setShowReport(true)
@@ -180,6 +185,7 @@ export default function PublicToolbar({
 
   return (
     <>
+      {guestDialog}
       <div className="studio-theme-surface">
         <header className="preview-topbar">
           <div className="preview-topbar-inner">

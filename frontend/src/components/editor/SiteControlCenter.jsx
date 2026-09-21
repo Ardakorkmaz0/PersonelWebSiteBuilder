@@ -15,6 +15,10 @@ import { apiError } from '../../utils/errors.js'
 import { extractSiteContent, updateHtmlContent, updateSchemaContent } from '../../utils/contentManager.js'
 import { analyzeSiteReadiness } from '../../utils/siteReadiness.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { useGuestGate } from '../../utils/useGuestGate.jsx'
+
+// Tab → why it needs an account, for the gate dialog.
+const GUEST_TABS = { inbox: 'inbox', analytics: 'analytics', domain: 'domain' }
 
 const TABS = [
   ['readiness', 'Readiness'],
@@ -41,6 +45,9 @@ export default function SiteControlCenter({
   onSchemaContentChange,
 }) {
   const { t } = useLanguage()
+  // The three tabs that are an account's own business: a form inbox, visitor
+  // numbers and a domain. A guest opening them would only meet a 403.
+  const { isGuest, gate: guestGate, dialog: guestDialog } = useGuestGate()
   const [tab, setTab] = useState('readiness')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -165,9 +172,10 @@ export default function SiteControlCenter({
         </header>
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-2 md:px-6" aria-label={t('Site tools')}>
           {TABS.map(([id, label]) => (
-            <button key={id} type="button" onClick={() => { setBusy(['inbox', 'analytics', 'feedback', 'domain'].includes(id)); setError(''); setTab(id) }} aria-pressed={tab === id} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === id ? 'bg-[var(--studio-accent)] text-white' : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'}`}>{t(label)}</button>
+            <button key={id} type="button" onClick={() => { if (GUEST_TABS[id] && guestGate(GUEST_TABS[id])) return; setBusy(['inbox', 'analytics', 'feedback', 'domain'].includes(id)); setError(''); setTab(id) }} aria-pressed={tab === id} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === id ? 'bg-[var(--studio-accent)] text-white' : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'}`}>{t(label)}{isGuest && GUEST_TABS[id] ? <span aria-label={t('Needs an account')} title={t('Needs an account')} className="ml-1 opacity-70">⚿</span> : null}</button>
           ))}
         </nav>
+        {guestDialog}
         {error && <div role="alert" className="border-b border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{error}</div>}
         <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
           {busy && <div role="status" className="mb-4 text-sm text-[#6b7280]">{t('Loading…')}</div>}

@@ -26,6 +26,9 @@ vi.mock('../store/authStore.js', () => ({
     user: { id: 1, username: 'tester', display_name: 'Test User', is_staff: false },
     logout: vi.fn(),
   }), { subscribe: () => () => {} }),
+  // A signed-in account in these guards: the guest chrome is covered by its
+  // own tests.
+  useIsGuest: () => false,
 }))
 
 vi.mock('../api/sites.js', () => ({

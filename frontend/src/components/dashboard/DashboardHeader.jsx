@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../../store/authStore.js'
+import { useAuthStore, useIsGuest } from '../../store/authStore.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import LanguageSwitcher from '../LanguageSwitcher.jsx'
 import DashboardGlobalSearch from './DashboardGlobalSearch.jsx'
@@ -46,10 +46,14 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
+  const isGuest = useIsGuest()
   const logout = useAuthStore((state) => state.logout)
   const [accountOpen, setAccountOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const accountRef = useRef(null)
+  const accountTriggerRef = useRef(null)
+  const mobileMenuRef = useRef(null)
+  const mobileTriggerRef = useRef(null)
   const displayName = user?.display_name || user?.username || t('Account')
 
   useEffect(() => {
@@ -58,6 +62,9 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
     }
     const closeOnEscape = (event) => {
       if (event.key === 'Escape') {
+        const focused = document.activeElement
+        if (accountRef.current?.contains(focused)) accountTriggerRef.current?.focus()
+        else if (mobileMenuRef.current?.contains(focused)) mobileTriggerRef.current?.focus()
         setAccountOpen(false)
         setMobileOpen(false)
       }
@@ -114,10 +121,23 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
         </nav>
 
         <div className="flex min-w-0 items-center justify-end gap-2">
+          {/* Said once, where the account lives, and only to someone who has
+              not made one: their work is real and it is one step from being
+              safe. Not a banner across the page — a nudge, not a nag. */}
+          {isGuest && (
+            <Link
+              to="/register"
+              className="hidden shrink-0 items-center gap-1.5 rounded-full border border-[var(--studio-warning)] bg-[color-mix(in_srgb,var(--studio-warning)_12%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--studio-text)] sm:inline-flex"
+              title={t('You are browsing as a guest. Create an account to publish and to keep your work safe.')}
+            >
+              {t('Guest')} · {t('Create my account')}
+            </Link>
+          )}
           <LanguageSwitcher className="hidden sm:flex" />
 
           <div ref={accountRef} className="relative hidden md:block">
             <button
+              ref={accountTriggerRef}
               type="button"
               className="dashboard-account-trigger"
               aria-label={t('Account menu')}
@@ -156,6 +176,7 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
           </div>
 
           <button
+            ref={mobileTriggerRef}
             type="button"
             aria-label={t('Open menu')}
             aria-expanded={mobileOpen}
@@ -168,7 +189,7 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
       </div>
 
       {mobileOpen && (
-        <div className="dashboard-mobile-menu xl:hidden">
+        <div ref={mobileMenuRef} className="dashboard-mobile-menu xl:hidden">
           {showSearch && (
             <div className="mb-3 flex items-center gap-2 md:hidden">
               <div className="min-w-0 flex-1">

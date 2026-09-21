@@ -51,3 +51,11 @@ export const useAuthStore = create((set) => ({
     set({ token: null, user: null })
   },
 }))
+
+// "Continue without signing in" hands out a real identity with a made-up name.
+// The app reads this to stop offering what that identity cannot do, rather
+// than letting the server refuse it after the click — a Publish button that
+// always fails is worse than no Publish button.
+export function useIsGuest() {
+  return useAuthStore((s) => !!s.user?.is_guest)
+}

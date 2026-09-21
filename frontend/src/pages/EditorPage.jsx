@@ -13,6 +13,7 @@ import {
 import { getSite, updateSite } from '../api/sites.js'
 import { useEditorStore, selectCurrentPage } from '../store/editorStore.js'
 import { useAuthStore } from '../store/authStore.js'
+import { useGuestGate } from '../utils/useGuestGate.jsx'
 import { lastPageOutside } from '../utils/lastVisited.js'
 import {
   registry,
@@ -326,6 +327,9 @@ export default function EditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { language, setLanguage, t } = useLanguage()
+  // A guest identity can build here; what it cannot do is put the result in
+  // front of other people. The gate answers that once, in one place.
+  const { gate: guestGate, dialog: guestDialog } = useGuestGate()
   const { preference: uiThemePreference, setPreference: setUiThemePreference } = useUiTheme()
 
   const loadSchema = useEditorStore((s) => s.loadSchema)
@@ -1892,6 +1896,7 @@ export default function EditorPage() {
   return (
     <div className="studio-shell flex h-screen flex-col">
       {leaveDialog}
+      {guestDialog}
       <header className="studio-topbar relative z-30 flex h-[52px] shrink-0 items-center gap-2 border-b px-3">
         <button
           type="button"
@@ -1938,7 +1943,7 @@ export default function EditorPage() {
           <button type="button" onClick={() => save()} disabled={saving} className="studio-btn studio-btn-secondary">
             <SaveIcon size={14} /> <span className="hidden xl:inline">{t('Save')}</span>
           </button>
-          <button type="button" data-tour="publish" onClick={() => save(!published)} disabled={saving} className={published ? 'studio-btn studio-btn-secondary' : 'studio-btn studio-btn-primary'} title={published ? t('Unpublish') : t('Publish')}>
+          <button type="button" data-tour="publish" onClick={() => { if (!published && guestGate('publish')) return; save(!published) }} disabled={saving} className={published ? 'studio-btn studio-btn-secondary' : 'studio-btn studio-btn-primary'} title={published ? t('Unpublish') : t('Publish')}>
             {published ? t('Published') : t('Publish')}
           </button>
 
@@ -2591,7 +2596,7 @@ export default function EditorPage() {
                   onDraftDirtyChange={setWorkspaceDirty}
                   onElementSelect={setHtmlSelection}
                   onSpotlight={(el) => setSpotlightElement((current) => toggleSpotlightTarget(current, el))}
-                  onShare={(el) => setShareElement(el)}
+                  onShare={(el) => { if (guestGate('share')) return; setShareElement(el) }}
                   onLinkArmedChange={setLinkArmed}
                   onStartBlank={startBlankHtml}
                   onOpenTemplates={() => setTemplateOpen(true)}

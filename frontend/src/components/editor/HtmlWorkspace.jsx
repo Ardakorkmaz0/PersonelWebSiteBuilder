@@ -61,7 +61,7 @@ import { applyElementMotion, applyMotionRest } from '../../utils/htmlMotion.js'
 import CanvasZoomControl from './CanvasZoomControl.jsx'
 import { readZoom, writeZoom, zoomScale } from './canvasZoom.js'
 import BrushControls from './BrushControls.jsx'
-import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon } from '../icons.jsx'
+import { EditIcon, MoveIcon, LinkIcon, PinIcon, LightbulbIcon, FileCodeIcon, WarningIcon, PaletteIcon, MoreHorizontalIcon, MonitorIcon, ChevronDownIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import { shouldForwardIframeShortcut } from '../../utils/editorLeave.js'
 import { revealLine } from '../../utils/revealCodeLine.js'
@@ -1799,6 +1799,10 @@ function HtmlWorkspace({
       {/* The page/file list lives in the editor's left rail (Files tab) —
           the workspace itself is just the toolbar + stage. */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Three groups, in the order the work happens: which mode you are in,
+            what you do in that mode, and how you are looking at the page. They
+            used to be one flat row, so "Run" and the tool you are holding sat
+            past the zoom control, and two different ⋯ buttons sat side by side. */}
         <div className="studio-toolbar flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
           <div data-tour="canvas-modes" className="studio-segment shrink-0">
             <button onClick={() => switchMode('view')} className={toggleBtn(mode === 'view')}>
@@ -1822,41 +1826,129 @@ function HtmlWorkspace({
               </button>
             )}
           </div>
-          {deviceControls}
-          {mode !== 'source' && mode !== 'live' && (
-            <CanvasZoomControl
-              zoom={zoom}
-              fitScale={fitScale}
-              onZoom={changeZoom}
-              fullscreen={fullscreen}
-              onToggleFullscreen={onToggleFullscreen}
-            />
+
+          {/* What the mode does. Edit holds a tool and can run the page;
+              Source has one action, and it is the important one. Hidden on an
+              empty page: there's no document to act on, so the starter card is
+              the single clear action instead of dead chips. */}
+          {mode === 'edit' && !!String(html || '').trim() && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              {!simpleMode && !placing && (
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setToolMenuOpen((open) => !open)}
+                    aria-expanded={toolMenuOpen}
+                    className="studio-btn studio-btn-secondary"
+                    title={t('Editing tools')}
+                  >
+                    {editTool === 'text' ? <EditIcon size={13} /> : editTool === 'rearrange' ? <MoveIcon size={13} /> : editTool === 'link' ? <LinkIcon size={13} /> : <PaletteIcon size={13} />}
+                    <span className="hidden xl:inline">{t(editTool === 'text' ? 'Text' : editTool === 'rearrange' ? 'Move' : editTool === 'link' ? 'Link' : 'Brush')}</span>
+                    <ChevronDownIcon size={13} />
+                  </button>
+                  {toolMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setToolMenuOpen(false)} />
+                      <div className="studio-menu absolute left-0 top-[calc(100%+6px)] z-40 w-56 p-1.5">
+                        {[
+                          ['text', EditIcon, 'Text', 'Click any text and type'],
+                          ['rearrange', MoveIcon, 'Move', 'Drag a block to reorder it'],
+                          ['link', LinkIcon, 'Link', 'Click a link, then click where it should go'],
+                          ['brush', PaletteIcon, 'Brush', 'Click any element to paint its color'],
+                        ].map(([id, ToolIcon, label, title]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            title={t(title)}
+                            onClick={() => { setEditTool(id); setToolMenuOpen(false); setLinkHint(id === 'link' ? t('Click a LINK (nav item / button-link), then click its target.') : null) }}
+                            className={`studio-menu-item ${editTool === id ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
+                          >
+                            <ToolIcon size={13} /> {t(label)}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {/* Editing runs the page without its scripts, so everything behind
+                  a click is out of reach here. This is the way to it: run the
+                  page, open what you need, come back — Edit picks the state up. */}
+              <button
+                type="button"
+                onClick={() => switchMode('view')}
+                title={t('Run the page: click through it in View, then come back — Edit shows it the way you left it.')}
+                className="studio-btn studio-btn-secondary inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs"
+              >
+                ▶ <span className="hidden xl:inline">{t('Run')}</span>
+              </button>
+            </div>
           )}
-          {/* Phones get the frame too — a browser runs there as well, and its
-              chrome is exactly what decides how much page fits on screen. Only
-              a landscape phone is left out: there is no bezel to put it in. */}
-          {(!mobileDevice || framedPhone) && mode !== 'source' && mode !== 'live' && onBrowserFrameToggle && (
+
+          {mode === 'source' && (
             <button
               type="button"
               onClick={() => {
-                prepareForFrameChange()
-                onBrowserFrameToggle()
+                // Apply = commit to the editor AND persist to the server, so
+                // edited source survives a refresh without a separate Save.
+                onCommit?.(sourceDraft)
+                setMode('view')
+                setNonce((n) => n + 1)
+                onRequestSave?.()
               }}
-              aria-pressed={browserFrame}
-              title={t(browserFrame ? 'Hide browser frame' : 'Show browser frame')}
-              className={`studio-btn inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs ${
-                browserFrame
-                  ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
-                  : 'studio-btn-secondary'
-              }`}
-              >
-                <MonitorIcon size={14} />
-                <span className="hidden xl:inline">{t('Browser')}</span>
+              title={t('Apply the source code and save — to the server AND the linked local file (the disk chip in the toolbar)')}
+              className="studio-btn studio-btn-primary shrink-0"
+            >
+              {t('Apply & Save')}
             </button>
           )}
-          {/* Workspace tools, next to the device chrome rather than inside the
-              editing-tool picker: they belong to the workspace, and they were
-              unreachable in View and in Simple mode where that picker is gone. */}
+
+          {/* How you are looking at the page. Nothing here means anything in
+              Source, which is text, so the whole group steps aside there. */}
+          {mode !== 'source' && (
+            <>
+              <span aria-hidden="true" className="studio-toolbar-sep" />
+              <div className="flex min-w-0 items-center gap-2">
+                {deviceControls}
+                {mode !== 'live' && (
+                  <CanvasZoomControl
+                    zoom={zoom}
+                    fitScale={fitScale}
+                    onZoom={changeZoom}
+                    fullscreen={fullscreen}
+                    onToggleFullscreen={onToggleFullscreen}
+                  />
+                )}
+                {/* Phones get the frame too — a browser runs there as well, and
+                    its chrome is exactly what decides how much page fits on
+                    screen. Only a landscape phone is left out: there is no
+                    bezel to put it in. */}
+                {(!mobileDevice || framedPhone) && mode !== 'live' && onBrowserFrameToggle && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      prepareForFrameChange()
+                      onBrowserFrameToggle()
+                    }}
+                    aria-pressed={browserFrame}
+                    title={t(browserFrame ? 'Hide browser frame' : 'Show browser frame')}
+                    className={`studio-btn inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs ${
+                      browserFrame
+                        ? 'border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]'
+                        : 'studio-btn-secondary'
+                    }`}
+                  >
+                    <MonitorIcon size={14} />
+                    <span className="hidden xl:inline">{t('Browser')}</span>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Everything else about the canvas, in one menu rather than loose in
+              the row: it belongs to the workspace, not to the editing tools,
+              and it has to be reachable in View and in Simple mode too. */}
           {liveCodeControls && mode !== 'source' && (
             <div className="relative shrink-0">
               <button
@@ -1880,76 +1972,7 @@ function HtmlWorkspace({
               )}
             </div>
           )}
-          {/* Editing runs the page without its scripts, so everything behind a
-              click is out of reach here. This is the way to it: run the page,
-              open what you need, come back — Edit picks the state back up. */}
-          {mode === 'edit' && !!String(html || '').trim() && (
-            <button
-              type="button"
-              onClick={() => switchMode('view')}
-              title={t('Run the page: click through it in View, then come back — Edit shows it the way you left it.')}
-              className="studio-btn studio-btn-secondary inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs"
-            >
-              ▶ <span className="hidden xl:inline">{t('Run')}</span>
-            </button>
-          )}
-          {/* Edit sub-tools — sit right next to View/Edit/Source. Hidden on an
-              empty page: there's no document to act on, so the starter card is
-              the single clear action instead of dead chips. */}
-          {!simpleMode && mode === 'edit' && !placing && !!String(html || '').trim() && (
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setToolMenuOpen((open) => !open)}
-                className="studio-btn studio-btn-secondary"
-                title={t('Editing tools')}
-              >
-                {editTool === 'text' ? <EditIcon size={13} /> : editTool === 'rearrange' ? <MoveIcon size={13} /> : editTool === 'link' ? <LinkIcon size={13} /> : <PaletteIcon size={13} />}
-                <span className="hidden xl:inline">{t(editTool === 'text' ? 'Text' : editTool === 'rearrange' ? 'Move' : editTool === 'link' ? 'Link' : 'Brush')}</span>
-                <MoreHorizontalIcon size={14} />
-              </button>
-              {toolMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setToolMenuOpen(false)} />
-                  <div className="studio-menu absolute left-0 top-[calc(100%+6px)] z-40 w-56 p-1.5">
-                    {[
-                ['text', EditIcon, 'Text', 'Click any text and type'],
-                ['rearrange', MoveIcon, 'Move', 'Drag a block to reorder it'],
-                ['link', LinkIcon, 'Link', 'Click a link, then click where it should go'],
-                ['brush', PaletteIcon, 'Brush', 'Click any element to paint its color'],
-              ].map(([id, ToolIcon, label, title]) => (
-                <button
-                  key={id}
-                  type="button"
-                  title={t(title)}
-                  onClick={() => { setEditTool(id); setToolMenuOpen(false); setLinkHint(id === 'link' ? t('Click a LINK (nav item / button-link), then click its target.') : null) }}
-                  className={`studio-menu-item ${editTool === id ? 'bg-[var(--studio-accent-soft)] text-[var(--studio-accent-hover)]' : ''}`}
-                >
-                  <ToolIcon size={13} /> {t(label)}
-                </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-          {mode === 'source' && (
-            <button
-              type="button"
-              onClick={() => {
-                // Apply = commit to the editor AND persist to the server, so
-                // edited source survives a refresh without a separate Save.
-                onCommit?.(sourceDraft)
-                setMode('view')
-                setNonce((n) => n + 1)
-                onRequestSave?.()
-              }}
-              title={t('Apply the source code and save — to the server AND the linked local file (the disk chip in the toolbar)')}
-              className="studio-btn studio-btn-primary"
-            >
-              {t('Apply & Save')}
-            </button>
-          )}
+
           {mode === 'live' && liveUrl ? (
             <div className="ml-auto flex items-center gap-1.5">
               <span className="text-xs text-[#6b7280]">{t('Real running dev server')}</span>

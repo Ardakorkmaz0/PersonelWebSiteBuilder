@@ -632,6 +632,14 @@ button:not(:disabled),
   .studio-divider {
     border-color: var(--studio-border);
   }
+  /* Between toolbar groups: enough to say "different job", not enough to be
+     furniture of its own. */
+  .studio-toolbar-sep {
+    flex: none;
+    width: 1px;
+    height: 1.35rem;
+    background: var(--studio-border);
+  }
   .studio-segment {
     display: inline-flex;
     align-items: center;

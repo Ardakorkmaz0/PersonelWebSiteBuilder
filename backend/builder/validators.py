@@ -771,3 +771,72 @@ def sanitize_shared_component(payload):
         # its author meant to offer.
         'visibility': 'private' if _str(data.get('visibility')) == 'private' else 'public',
     }
+
+
+# ---------------------------------------------------------------------------
+# Published documents
+# ---------------------------------------------------------------------------
+
+# One page's rendered document. The writers produce far smaller pages than this
+# even with inlined images; the cap is here so a single save cannot fill the
+# table, not because a real page ever approaches it.
+MAX_PUBLISHED_PAGES = 40
+MAX_PUBLISHED_PAGE_BYTES = 1_500_000
+MAX_PUBLISHED_TOTAL_BYTES = 10_000_000
+_PUBLISHED_PATH_RE = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
+
+
+def _published_path(value, taken):
+    """A URL segment for one page: lowercase slug, or '' for the home page."""
+    path = _str(value).strip().strip('/').lower()[:140]
+    path = re.sub(r'[^a-z0-9-]+', '-', path).strip('-')
+    if path and not _PUBLISHED_PATH_RE.match(path):
+        path = ''
+    # Two pages cannot share an address; the later one gets a suffix rather
+    # than overwriting a page the user can see in their own site.
+    if path in taken:
+        base, index = path or 'page', 2
+        while f'{base}-{index}' in taken:
+            index += 1
+        path = f'{base}-{index}'
+    return path
+
+
+def clean_published_pages(value):
+    """The rendered documents a publish is asking us to serve.
+
+    The HTML is authored content and is stored as sent — it is served under a
+    sandbox CSP and never with the app's origin privileges, the same contract
+    the HTML-site iframe has always had. What is checked here is shape and
+    size, so one save cannot bloat the database or claim another page's URL.
+    """
+    if value in (None, ''):
+        return []
+    if not isinstance(value, list):
+        raise serializers.ValidationError('published_pages must be a list.')
+    if len(value) > MAX_PUBLISHED_PAGES:
+        raise serializers.ValidationError(
+            f'Too many pages to publish (max {MAX_PUBLISHED_PAGES}).')
+
+    cleaned, taken, total = [], set(), 0
+    for position, page in enumerate(value):
+        if not isinstance(page, dict):
+            raise serializers.ValidationError('Each published page must be an object.')
+        html = page.get('html')
+        if not isinstance(html, str):
+            html = ''
+        if len(html) > MAX_PUBLISHED_PAGE_BYTES:
+            raise serializers.ValidationError('A published page is too large (max ~1.5MB).')
+        total += len(html)
+        if total > MAX_PUBLISHED_TOTAL_BYTES:
+            raise serializers.ValidationError('The published site is too large (max ~10MB).')
+        path = _published_path(page.get('path'), taken)
+        taken.add(path)
+        cleaned.append({
+            'path': path,
+            'title': _str(page.get('title'))[:200],
+            'html': html,
+            'no_index': bool(page.get('noIndex') or page.get('no_index')),
+            'position': position,
+        })
+    return cleaned

@@ -165,6 +165,41 @@ class Site(models.Model):
         return slug
 
 
+class PublishedPage(models.Model):
+    """One page of a published site, rendered to a real HTML document.
+
+    The editor renders every page with the same writer the public viewer uses
+    and sends the result when the site is published; this is what a visitor —
+    and a crawler, and a link-preview scraper — actually receives. Before this
+    existed a published site was the SPA shell, whose <head> says "Sitebuilder"
+    and nothing about the page, and whose sub-pages lived behind a `#fragment`
+    the server never sees.
+
+    Rows are replaced wholesale on publish and deleted on unpublish, so the
+    table never outlives what the site currently says. The document is authored
+    content: it is served under a sandbox CSP, never from the app's origin
+    privileges (see views.serve_published_page).
+    """
+
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='published_pages')
+    # '' is the home page; otherwise the slug that follows /site/<slug>/.
+    path = models.SlugField(max_length=140, blank=True, default='')
+    title = models.CharField(max_length=200, blank=True, default='')
+    html = models.TextField(blank=True, default='')
+    # Mirrors the page's "hide this page from search engines" setting, so the
+    # sitemap can leave it out without re-parsing the document.
+    no_index = models.BooleanField(default=False)
+    position = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('site', 'path')
+        ordering = ['position', 'pk']
+
+    def __str__(self):
+        return f'{self.site.slug}/{self.path}'
+
+
 class FormSubmission(models.Model):
     """A form payload received from a hosted public site.
 

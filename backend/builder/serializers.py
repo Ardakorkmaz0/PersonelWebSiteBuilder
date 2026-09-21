@@ -8,6 +8,7 @@ from .models import (
     FormSubmission,
     Profile,
     Report,
+    PublishedPage,
     ReviewComment,
     SharedComponent,
     SharedComponentReport,
@@ -16,7 +17,20 @@ from .models import (
     SiteVersion,
     UploadedImage,
 )
-from .validators import validate_and_clean_schema
+from .validators import clean_published_pages, validate_and_clean_schema
+
+
+def replace_published_pages(site, pages):
+    """Swap in the documents this publish rendered.
+
+    Wholesale rather than a merge: the set of pages IS the site, so a page the
+    owner deleted has to stop answering, and a stale row would keep serving
+    content the editor no longer shows.
+    """
+    site.published_pages.all().delete()
+    PublishedPage.objects.bulk_create([
+        PublishedPage(site=site, **page) for page in pages
+    ])
 
 
 def _absolute_image_url(image_field, context):
@@ -456,9 +470,17 @@ class SiteListSerializer(serializers.ModelSerializer):
 
 
 class SiteSerializer(serializers.ModelSerializer):
+    # The rendered documents to serve at /site/<slug>/… . Write-only: the
+    # editor sends them with a publish, and nothing reads them back through
+    # this serializer (the public URLs serve the stored HTML directly).
+    published_pages = serializers.ListField(
+        child=serializers.DictField(), write_only=True, required=False,
+    )
+
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'schema', 'html', 'published',
+                  'published_pages',
                   'category', 'tags', 'site_options', 'review_token',
                   'custom_domain', 'domain_status', 'domain_verification_token',
                   'moderation_blocked', 'view_count', 'created_at', 'updated_at')
@@ -490,6 +512,27 @@ class SiteSerializer(serializers.ModelSerializer):
         if len(value) > 2_000_000:
             raise serializers.ValidationError('HTML is too large (max ~2MB).')
         return value
+
+    def validate_published_pages(self, value):
+        return clean_published_pages(value)
+
+    def update(self, instance, validated_data):
+        pages = validated_data.pop('published_pages', None)
+        site = super().update(instance, validated_data)
+        # Unpublishing takes the documents down with the switch: nothing should
+        # keep answering at a URL the owner has turned off.
+        if not site.published:
+            site.published_pages.all().delete()
+        elif pages is not None:
+            replace_published_pages(site, pages)
+        return site
+
+    def create(self, validated_data):
+        pages = validated_data.pop('published_pages', None)
+        site = super().create(validated_data)
+        if site.published and pages:
+            replace_published_pages(site, pages)
+        return site
 
 
 class PublicSiteSerializer(serializers.ModelSerializer):

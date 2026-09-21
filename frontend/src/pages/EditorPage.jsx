@@ -48,6 +48,7 @@ import CodeActivityOverlay from '../components/editor/CodeActivityOverlay.jsx'
 import EditorTour from '../components/editor/EditorTour.jsx'
 import { tourWasSeen } from '../utils/editorTour.js'
 import { applyHtmlPageSettings, readHtmlPageSettings } from '../utils/htmlPageSettings.js'
+import { publishedPagesFor } from '../utils/publishedPages.js'
 import CanvasZoomControl from '../components/editor/CanvasZoomControl.jsx'
 import useFullscreenEditing from '../components/editor/useFullscreenEditing.js'
 import { readZoom, writeZoom } from '../components/editor/canvasZoom.js'
@@ -1383,9 +1384,19 @@ export default function EditorPage() {
           fileError = e?.message || String(e)
         }
       }
+      // A published site ships its pages as documents: what a visitor, a
+      // crawler and a link-preview scraper receive is the page itself, not the
+      // app shell with the title written in afterwards. Only while published —
+      // rendering every page on a draft's auto-save would be work nobody reads.
+      const publishedPages = nextPublished
+        ? publishedPagesFor(schema, map, safeTitle, slug)
+        : undefined
       const data = await updateSite(
         id,
-        { title: safeTitle, schema, html, published: nextPublished, category, tags },
+        {
+          title: safeTitle, schema, html, published: nextPublished, category, tags,
+          ...(publishedPages ? { published_pages: publishedPages } : {}),
+        },
         { saveSource: versionSource || (auto ? 'auto' : 'manual') },
       )
       setPublished(data.published)

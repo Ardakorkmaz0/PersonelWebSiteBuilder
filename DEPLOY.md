@@ -268,6 +268,32 @@ npm run build        # outputs the static site to frontend/dist/
 After it's live, the frontend origin (`https://app.example.com`) **must** be in
 the backend's `DJANGO_CORS_ORIGINS`, or the browser will block API calls.
 
+### 6.4 Published sites: route `/s/` to the backend
+
+A published site is **served by the backend**, not by the SPA: the editor
+renders every page when the site is published and Django returns that document
+at `/s/<slug>/` (and `/s/<slug>/<page>/`). That is what a visitor, a search
+engine and a link-preview scraper read — the SPA shell carries one fixed title
+and no meta tags, and scrapers never run JavaScript.
+
+If the frontend and backend share a domain behind a proxy, send that one path to
+the backend **before** the SPA fallback:
+
+```nginx
+location /s/ { proxy_pass http://127.0.0.1:8000; }
+location /   { try_files $uri $uri/ /index.html; }
+```
+
+On a split setup (`app.example.com` static + `api.example.com` backend) the
+sites answer on the API domain (`https://api.example.com/s/<slug>/`) unless you
+add the same rule at your CDN. Either works — the documents carry their own
+`<link rel="canonical">`, so pick one and stay with it.
+
+Each response is sandboxed by CSP (`sandbox allow-scripts allow-forms …`, never
+`allow-same-origin`): a site's own scripts still run, but with an opaque origin,
+so they cannot reach the app's cookies, storage or session. **Do not strip that
+header at the proxy.**
+
 ---
 
 ## 7. Required + recommended environment variables

@@ -13,6 +13,9 @@ export const ALLOWED_STYLE_KEYS = new Set([
   'cursor', 'overflow',
 ])
 
+// The control characters are the point: a url that carries one is the attack
+// (a newline inside a "java...script:" scheme slips past a naive check).
+// eslint-disable-next-line no-control-regex
 const URL_CONTROLS = /[\u0000-\u001f\u007f]/
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i
 

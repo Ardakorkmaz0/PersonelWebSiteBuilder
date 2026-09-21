@@ -4,6 +4,7 @@
 // round-trip, no risk of the model rewriting content. Returns null when no
 // known variable is found, so callers can fall back to an AI restyle prompt.
 import { googleFontLinkTag } from './googleFonts.js'
+import { insertBeforeClosingTag } from './htmlInsert.js'
 
 // Variable names seen across our templates + typical AI output.
 const PRIMARY_VARS = ['accent', 'accent-color', 'primary', 'primary-color', 'brand', 'brand-color', 'main-color']
@@ -135,7 +136,8 @@ export function injectThemeFont(html, fontFamily, headingFontFamily = fontFamily
   const safeHeadingFont = String(headingFontFamily || fontFamily).replace(/[<{}]/g, '')
   const style = `<style ${FONT_MARK}>:root{--site-font:${safeFont};--site-heading-font:${safeHeadingFont}}body{font-family:${safeFont}}h1,h2,h3,h4,h5,h6{font-family:${safeHeadingFont}}</style>`
   const inject = link + style
-  if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, inject + '</head>')
+  const headed = insertBeforeClosingTag(out, 'head', inject)
+  if (headed) return headed
   if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, (m) => m + inject)
   return inject + out
 }

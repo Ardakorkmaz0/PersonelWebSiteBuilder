@@ -259,6 +259,24 @@ describe('splicing the runtime into a document', () => {
     expect(out).not.toContain('</head>\'')
     expect(out).toContain('data-builder-motion')
   })
+
+  // A real uploaded page: its "export" button builds a whole document in a
+  // template literal, so the file's FIRST `</body>` is inside its script. The
+  // runtime used to land there, and since the parser ends a <script> at the
+  // first `</script`, the author's code was cut mid-literal and threw — the
+  // page's theme toggle, menu and accordion all stopped responding in View.
+  const AUTHORED = '<!DOCTYPE html><html><head><title>t</title></head><body><h1>Hi</h1>'
+    + '<script>const OUT = `<html><head></head><body><p>x</p></body></html>`;'
+    + 'document.addEventListener("click", () => {});</scr' + 'ipt></body></html>'
+
+  it('splices after a script that writes a document of its own', () => {
+    for (const out of [withBuilderRuntimeHtml(AUTHORED), withBuilderInteractiveHtml(AUTHORED)]) {
+      // The author's literal survives whole.
+      expect(out).toContain('`<html><head></head><body><p>x</p></body></html>`')
+      // And the runtime went in after their script closed, not inside it.
+      expect(out.indexOf('data-builder-motion>')).toBeGreaterThan(out.indexOf('addEventListener("click"'))
+    }
+  })
 })
 
 // The bug that made "apply an animation" do nothing on a real site: every page

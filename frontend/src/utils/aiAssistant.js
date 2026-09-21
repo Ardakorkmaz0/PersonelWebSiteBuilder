@@ -35,6 +35,7 @@ import {
   setModel,
   setProvider,
 } from './aiProviders.js'
+import { insertBeforeClosingTag } from './htmlInsert.js'
 import { HOVER_TYPES, REVEAL_TYPES, SPEED_TYPES } from './motion.js'
 import { TEMPLATES } from './aiTemplates.js'
 import { SYSTEM_PROMPT } from './aiSystemPrompt.js'
@@ -2005,9 +2006,8 @@ export function coerceToHtmlDocument(generated, { currentHtml = '', title = 'My 
   if (/<html[\s>]/i.test(s)) return { html: s, coerced: false, grafted: false }
   if (!/<([a-z][a-z0-9-]*)(\s[^>]*)?>/i.test(s)) return null
   const cur = String(currentHtml || '')
-  if (/<\/body>/i.test(cur)) {
-    return { html: cur.replace(/<\/body>/i, `${s}\n</body>`), coerced: true, grafted: true }
-  }
+  const grafted = insertBeforeClosingTag(cur, 'body', `${s}\n`)
+  if (grafted) return { html: grafted, coerced: true, grafted: true }
   const esc = String(title).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const html = `<!DOCTYPE html>
 <html lang="en">

@@ -1,3 +1,4 @@
+import { insertBeforeClosingTag } from './htmlInsert.js'
 import { MOTION_ARM_JS, MOTION_CSS, MOTION_OBSERVER_JS } from './motion.js'
 
 const RUNTIME_STYLE = `
@@ -260,15 +261,28 @@ const RUNTIME_SCRIPT = `
     function editableFromEvent(event) {
       return event.target && event.target.closest && event.target.closest('[contenteditable]');
     }
-    function lockEditableContent() {
-      try { document.designMode = 'off'; } catch (e) {}
-      document.querySelectorAll('[contenteditable]').forEach(function (el) {
-        if (!el.hasAttribute('data-builder-contenteditable')) {
-          el.setAttribute('data-builder-contenteditable', el.getAttribute('contenteditable') || '');
-        }
-        if (el.getAttribute('contenteditable') !== 'false') el.setAttribute('contenteditable', 'false');
-        try { el.contentEditable = 'false'; } catch (e) {}
-      });
+    // Writes only when something would actually change. Setting a reflected
+    // property queues a mutation record even when the value is identical, and
+    // this runs FROM a mutation observer: an unconditional
+    // \`el.contentEditable = 'false'\` fed itself and locked up any page with a
+    // contenteditable element on it — the tab never painted again.
+    function lockElement(el) {
+      if (!el.hasAttribute('data-builder-contenteditable')) {
+        el.setAttribute('data-builder-contenteditable', el.getAttribute('contenteditable') || '');
+      }
+      if (el.getAttribute('contenteditable') === 'false') return;
+      el.setAttribute('contenteditable', 'false');
+      try { el.contentEditable = 'false'; } catch (e) {}
+    }
+    // Scoped to what actually changed. Re-locking the WHOLE document on every
+    // mutation is what froze pages whose own script animates something: a
+    // counter rewriting its text every 30ms turned into a full-document
+    // querySelectorAll each tick, and with a CDN that rebuilds its stylesheet
+    // on the same mutations the tab stopped responding.
+    function lockEditableContent(root) {
+      var scope = root && root.querySelectorAll ? root : document;
+      if (scope.matches && scope.matches('[contenteditable]')) lockElement(scope);
+      scope.querySelectorAll('[contenteditable]').forEach(lockElement);
     }
     function findHashTarget(hash) {
       var id = decodeURIComponent(String(hash || '').replace(/^#/, ''));
@@ -286,6 +300,7 @@ const RUNTIME_SCRIPT = `
       return null;
     }
     function install() {
+      try { document.designMode = 'off'; } catch (e) {}
       lockEditableContent();
       ['beforeinput', 'input', 'paste', 'drop', 'cut'].forEach(function (type) {
         document.addEventListener(type, function (event) {
@@ -320,7 +335,20 @@ const RUNTIME_SCRIPT = `
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, true);
       try {
-        new MutationObserver(lockEditableContent).observe(document.documentElement, {
+        new MutationObserver(function (records) {
+          for (var i = 0; i < records.length; i++) {
+            var record = records[i];
+            if (record.type === 'attributes') {
+              if (record.target.nodeType === 1) lockElement(record.target);
+              continue;
+            }
+            // Only the nodes that arrived: text rewritten by the page's own
+            // script adds text nodes, which carry nothing to lock.
+            for (var j = 0; j < record.addedNodes.length; j++) {
+              if (record.addedNodes[j].nodeType === 1) lockEditableContent(record.addedNodes[j]);
+            }
+          }
+        }).observe(document.documentElement, {
           subtree: true,
           childList: true,
           attributes: true,
@@ -359,12 +387,11 @@ const RUNTIME_SCRIPT_TAG = `<script data-builder-runtime-script>${RUNTIME_SCRIPT
 const INTERACTIVE_TAG = `<script data-builder-interactive>${INTERACTIVE_SCRIPT}${SCRIPT_END}`
 const MOTION_OBSERVER_TAG = `<script data-builder-motion>${MOTION_OBSERVER_JS}${SCRIPT_END}`
 
-// String.prototype.replace expands `$&`, `$1`, "$'" and friends INSIDE the
-// replacement string. The runtime scripts contain `$&` (an escaping helper), so
-// passing them as a replacement string silently rewrote them — measured: the
-// helper's `'\\$&'` came out as `'\\</head>'`. A function replacer is taken
-// literally, which is the only safe way to splice code into markup.
-const literal = (text) => () => text
+// Every injection below goes through insertBeforeClosingTag, which splices by
+// index. That keeps two old hazards away at once: String.replace would expand
+// `$&` inside the replacement (the runtime scripts contain one), and it would
+// take the FIRST closing tag in the string — which on a page whose own script
+// writes a document is inside that script.
 
 // The interactive shim alone (style + script) for static HTML exports that do
 // not need the editor's readonly enforcement — only the runtime behaviours that
@@ -410,12 +437,13 @@ export function withBuilderInteractiveHtml(html) {
   // second shim would double-bind every handler it installs.
   const inject = (shim ? '' : INTERACTIVE_STYLE_TAG + INTERACTIVE_TAG)
     + (motion ? '' : MOTION_STYLE_TAG + MOTION_OBSERVER_TAG)
-  if (/<style[^>]*data-pwb-embed-reset/i.test(out) && /<\/head>/i.test(out)) {
-    return out.replace(/<\/head>/i, literal(inject + '</head>'))
+  if (/<style[^>]*data-pwb-embed-reset/i.test(out)) {
+    const head = insertBeforeClosingTag(out, 'head', inject)
+    if (head) return head
   }
-  if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, literal(inject + '</body>'))
-  if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, literal(inject + '</head>'))
-  return out + inject
+  return insertBeforeClosingTag(out, 'body', inject)
+    ?? insertBeforeClosingTag(out, 'head', inject)
+    ?? out + inject
 }
 
 export function withBuilderRuntimeHtml(html) {
@@ -431,12 +459,12 @@ export function withBuilderRuntimeHtml(html) {
   const body = RUNTIME_SCRIPT_TAG
     + (shim ? '' : INTERACTIVE_TAG)
     + (motion ? '' : MOTION_OBSERVER_TAG)
-  if (/<\/head>/i.test(out)) out = out.replace(/<\/head>/i, literal(head + '</head>'))
+  const headed = insertBeforeClosingTag(out, 'head', head)
+  if (headed) out = headed
   else if (/<head[^>]*>/i.test(out)) out = out.replace(/<head[^>]*>/i, (m) => m + head)
   else out = head + out
   // End of body, where everything the scripts look for already exists.
-  if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, literal(body + '</body>'))
-  return out + body
+  return insertBeforeClosingTag(out, 'body', body) ?? out + body
 }
 
 // Ensure the document declares a mobile viewport. Without one, phones render
@@ -522,25 +550,28 @@ function editableFromEvent(event) {
   return target?.closest?.('[contenteditable]')
 }
 
-function lockEditableContent(doc) {
+// Same shape as the injected runtime's twin, and for the same reason: writing
+// an attribute that already holds the value queues a mutation record, and the
+// observer below would hand it straight back.
+function lockElement(el) {
+  if (!el.hasAttribute('data-builder-contenteditable')) {
+    el.setAttribute('data-builder-contenteditable', el.getAttribute('contenteditable') || '')
+  }
+  if (el.getAttribute('contenteditable') === 'false') return
+  el.setAttribute('contenteditable', 'false')
   try {
-    doc.designMode = 'off'
+    el.contentEditable = 'false'
   } catch {
     /* ignore */
   }
-  doc.querySelectorAll('[contenteditable]').forEach((el) => {
-    if (!el.hasAttribute('data-builder-contenteditable')) {
-      el.setAttribute('data-builder-contenteditable', el.getAttribute('contenteditable') || '')
-    }
-    if (el.getAttribute('contenteditable') !== 'false') {
-      el.setAttribute('contenteditable', 'false')
-    }
-    try {
-      el.contentEditable = 'false'
-    } catch {
-      /* ignore */
-    }
-  })
+}
+
+// Scoped like the injected runtime's twin: a subtree when one arrived, the
+// whole document only on install.
+function lockEditableContent(scope) {
+  if (!scope?.querySelectorAll) return
+  if (scope.matches?.('[contenteditable]')) lockElement(scope)
+  scope.querySelectorAll('[contenteditable]').forEach(lockElement)
 }
 
 function ensureRuntimeStyle(doc) {
@@ -624,9 +655,24 @@ export function installBuilderRuntime(iframe) {
       true,
     )
 
+    try {
+      doc.designMode = 'off'
+    } catch {
+      /* ignore */
+    }
     lockEditableContent(doc)
     try {
-      new win.MutationObserver(() => lockEditableContent(doc)).observe(doc.documentElement, {
+      new win.MutationObserver((records) => {
+        for (const record of records) {
+          if (record.type === 'attributes') {
+            if (record.target.nodeType === 1) lockElement(record.target)
+            continue
+          }
+          for (const node of record.addedNodes) {
+            if (node.nodeType === 1) lockEditableContent(node)
+          }
+        }
+      }).observe(doc.documentElement, {
         subtree: true,
         childList: true,
         attributes: true,

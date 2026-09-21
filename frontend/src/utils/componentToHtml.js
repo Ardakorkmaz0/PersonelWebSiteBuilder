@@ -4,6 +4,7 @@
 // hand-typing the tag tree. The snippets are intentionally minimal and use
 // only inline styles + classes that already exist in the AI HTML-mode output
 // (.btn, .card, …) — keeps them composable with an AI-generated document.
+import { insertBeforeClosingTag } from './htmlInsert.js'
 
 const PALETTE_HTML = {
   navbar: `<nav style="display:flex;justify-content:space-between;align-items:center;padding:14px 28px;background:#111;color:#fff;flex-wrap:wrap;gap:12px;">
@@ -75,6 +76,5 @@ export function appendComponentToHtml(currentHtml, type) {
   const snippet = componentToHtml(type)
   const wrapped = `<!-- added: ${type} -->\n${snippet}\n`
   const html = String(currentHtml || '')
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${wrapped}</body>`)
-  return html + wrapped
+  return insertBeforeClosingTag(html, 'body', wrapped) ?? html + wrapped
 }

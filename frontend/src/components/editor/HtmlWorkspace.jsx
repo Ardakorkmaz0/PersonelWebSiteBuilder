@@ -6,6 +6,7 @@ import {
   withEditorViewportMeta,
   withViewportMeta,
 } from '../../utils/htmlRuntime.js'
+import { insertBeforeClosingTag } from '../../utils/htmlInsert.js'
 import { DEVICES, isMobileDevice } from '../../utils/htmlDevices.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
@@ -440,8 +441,7 @@ function withViewExtras(html, scrollIndex) {
   let inject = ANCHOR_REPORTER_SCRIPT
   if (scrollIndex != null && scrollIndex >= 0) inject += scrollOnceScript(scrollIndex)
   const out = String(html || '')
-  if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, inject + '</body>')
-  return out + inject
+  return insertBeforeClosingTag(out, 'body', inject) ?? out + inject
 }
 
 function HtmlWorkspace({

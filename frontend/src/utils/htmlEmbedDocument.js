@@ -1,3 +1,5 @@
+import { closingTagIndex, insertBeforeClosingTag } from './htmlInsert.js'
+
 const HTML_EMBED_RESET_CSS = [
   'html,body{margin:0!important;padding:0!important;background:transparent;font-family:inherit;color:inherit;width:100%;height:100%;min-height:100%;overflow:hidden!important;}',
   '*,*::before,*::after{box-sizing:border-box;scrollbar-width:none;}',
@@ -109,13 +111,12 @@ function wrapBodyForOptions(html, options = {}) {
   const scale = cleanScale(options.scale)
   const fill = fillAttr(options.fill)
   if (!scale && !fill) return html
-  if (/<body(\s[^>]*)?>/i.test(html) && /<\/body>/i.test(html)) {
+  if (/<body(\s[^>]*)?>/i.test(html) && closingTagIndex(html, 'body') !== -1) {
     const bodyAttrs = `${scale ? ' data-pwb-embed-scaled="true"' : ''}${fill}`
     const open = scale ? '<div data-pwb-embed-scale-root>' : ''
     const close = scale ? '</div>' : ''
-    return html
-      .replace(/<body([^>]*)>/i, `<body$1${bodyAttrs}>${open}`)
-      .replace(/<\/body>/i, `${close}</body>`)
+    const opened = html.replace(/<body([^>]*)>/i, `<body$1${bodyAttrs}>${open}`)
+    return close ? insertBeforeClosingTag(opened, 'body', close) ?? opened : opened
   }
   return html
 }
@@ -124,10 +125,11 @@ function injectReset(html, options = {}) {
   const extra = `${scaleTag(options.scale)}${tweaksTag(options.tweaks)}`
   const tags = `${hasReset(html) ? '' : resetTag}${extra}`
   if (!tags && !fillAttr(options.fill)) return html
-  if (hasReset(html)) return wrapBodyForOptions(html.replace(/<\/head>/i, `${extra}</head>`), options)
-  if (/<\/head>/i.test(html)) {
-    return wrapBodyForOptions(html.replace(/<\/head>/i, `${tags}</head>`), options)
+  if (hasReset(html)) {
+    return wrapBodyForOptions(insertBeforeClosingTag(html, 'head', extra) ?? html, options)
   }
+  const headed = insertBeforeClosingTag(html, 'head', tags)
+  if (headed) return wrapBodyForOptions(headed, options)
   if (/<head(\s[^>]*)?>/i.test(html)) {
     return wrapBodyForOptions(html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}${tags}`), options)
   }

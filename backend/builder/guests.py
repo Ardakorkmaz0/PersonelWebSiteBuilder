@@ -87,3 +87,32 @@ def upgrade_guest(user, *, username, email, password):
     profile.is_guest = False
     profile.save(update_fields=['is_guest'])
     return user
+
+
+@transaction.atomic
+def adopt_guest_work(guest, account):
+    """Move everything a guest made into an account they just signed into.
+
+    Upgrading covers the person who signs UP from a guest session — same row,
+    nothing to move. This covers the other half: someone who already had an
+    account, looked around as a guest first, and then signed in. Without it
+    their drafts stay on an identity they can no longer reach, which is the
+    same as losing them.
+
+    Possession of the guest token is the proof: it is the only way into that
+    identity, and it came from this browser.
+    """
+    from .models import Favorite, Site, UploadedImage
+
+    moved = {
+        'sites': Site.objects.filter(owner=guest).update(owner=account),
+        'images': UploadedImage.objects.filter(owner=guest).update(owner=account),
+    }
+    # A favourite is a (user, site) pair: keep the ones the account does not
+    # already have, drop the duplicates with the guest row.
+    already = set(Favorite.objects.filter(user=account).values_list('site_id', flat=True))
+    keep = Favorite.objects.filter(user=guest).exclude(site_id__in=already)
+    moved['favorites'] = keep.update(user=account)
+    # The identity has nothing left to own, and its token should stop working.
+    guest.delete()
+    return moved

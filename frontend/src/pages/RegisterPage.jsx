@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { register, googleLogin, upgradeGuest } from '../api/auth.js'
 import { useAuthStore, useIsGuest } from '../store/authStore.js'
+import { keepGuestWork } from '../utils/keepGuestWork.js'
 import { apiError } from '../utils/errors.js'
 import { passwordStrength } from '../utils/passwordStrength.js'
 import AuthShell, { AuthWidgetFrame } from '../components/auth/AuthShell.jsx'
@@ -30,6 +31,10 @@ export default function RegisterPage() {
   // registering a second time — they are putting a password on the identity
   // that already owns their sites. Same form, different endpoint.
   const upgrading = useIsGuest()
+  // Field by field: a selector that builds an object is a new snapshot every
+  // render, and zustand re-renders forever on it.
+  const previousToken = useAuthStore((s) => s.token)
+  const previousUser = useAuthStore((s) => s.user)
   const cfg = usePublicConfig()
   const recaptchaOn = !!(cfg?.recaptcha_site_key || ENV_RECAPTCHA)
 
@@ -50,7 +55,10 @@ export default function RegisterPage() {
         ? await upgradeGuest(username, email, password)
         : await register(username, email, password, captcha)
       setAuth(token, user, remember)
-      navigate('/')
+      // Upgrading keeps the same row; this only has something to do when the
+      // form went the ordinary register route with a guest session open.
+      const moved = await keepGuestWork({ token: previousToken, user: previousUser, nextUserId: user.id })
+      navigate('/', moved ? { state: { guestWorkMoved: moved } } : undefined)
     } catch (err) {
       setError(apiError(err, t('Registration failed.')))
     } finally {
@@ -63,7 +71,8 @@ export default function RegisterPage() {
     try {
       const { token, user } = await googleLogin(credential)
       setAuth(token, user, remember)
-      navigate('/')
+      const moved = await keepGuestWork({ token: previousToken, user: previousUser, nextUserId: user.id })
+      navigate('/', moved ? { state: { guestWorkMoved: moved } } : undefined)
     } catch (err) {
       setError(apiError(err, t('Google sign-in failed.')))
     }

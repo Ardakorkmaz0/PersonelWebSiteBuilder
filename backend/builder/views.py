@@ -57,7 +57,14 @@ from .validators import (
     shared_component_problems,
     validate_and_clean_schema,
 )
-from .guests import GUEST_SITE_LIMIT, create_guest_user, guest_blocked, is_guest, upgrade_guest
+from .guests import (
+    GUEST_SITE_LIMIT,
+    adopt_guest_work,
+    create_guest_user,
+    guest_blocked,
+    is_guest,
+    upgrade_guest,
+)
 from .serializers import (
     AdminComponentReportSerializer,
     AdminReportSerializer,
@@ -386,6 +393,37 @@ class GuestUpgradeView(APIView):
         return Response(
             {'token': token.key, 'user': UserSerializer(user, context={'request': request}).data},
         )
+
+
+class GuestAdoptView(APIView):
+    """Take the work made as a guest into the account that just signed in.
+
+    Signing UP from a guest session keeps everything by writing credentials
+    onto the same row. Signing IN is the other half: that person already had an
+    account, and without this their drafts would sit on an identity they can no
+    longer reach — which they would rightly call losing them.
+
+    The proof is the guest token itself: it is the only way into that identity
+    and it came from this browser. A token that is not a guest's, or is the
+    caller's own, moves nothing.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        key = str(request.data.get('guest_token') or '').strip()
+        if not key:
+            return error_response('guest_token_required', 'No guest session to take over.')
+        try:
+            guest = Token.objects.select_related('user').get(key=key).user
+        except Token.DoesNotExist:
+            return error_response('guest_token_invalid', 'That guest session no longer exists.')
+        if guest.pk == request.user.pk or not is_guest(guest):
+            return error_response('guest_token_invalid', 'That is not a guest session.')
+        moved = adopt_guest_work(guest, request.user)
+        return Response({'moved': moved})
 
 
 class MeView(APIView):

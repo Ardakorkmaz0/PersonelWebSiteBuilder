@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { login, googleLogin } from '../api/auth.js'
 import { useAuthStore } from '../store/authStore.js'
+import { keepGuestWork } from '../utils/keepGuestWork.js'
 import { apiError } from '../utils/errors.js'
 import AuthShell, { AuthWidgetFrame } from '../components/auth/AuthShell.jsx'
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.jsx'
@@ -17,6 +18,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
+  // Whoever was here a second ago. If it was a guest, their sites follow them
+  // into the account they are signing into. Selected field by field: a
+  // selector that builds an object hands zustand a new snapshot on every
+  // render, which is an infinite re-render — caught by the register test.
+  const previousToken = useAuthStore((s) => s.token)
+  const previousUser = useAuthStore((s) => s.user)
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -25,7 +32,8 @@ export default function LoginPage() {
     try {
       const { token, user } = await login(username, password)
       setAuth(token, user, remember)
-      navigate('/')
+      const moved = await keepGuestWork({ token: previousToken, user: previousUser, nextUserId: user.id })
+      navigate('/', moved ? { state: { guestWorkMoved: moved } } : undefined)
     } catch (err) {
       setError(apiError(err, t('Invalid username or password.')))
     } finally {
@@ -38,7 +46,8 @@ export default function LoginPage() {
     try {
       const { token, user } = await googleLogin(credential)
       setAuth(token, user, remember)
-      navigate('/')
+      const moved = await keepGuestWork({ token: previousToken, user: previousUser, nextUserId: user.id })
+      navigate('/', moved ? { state: { guestWorkMoved: moved } } : undefined)
     } catch (err) {
       setError(apiError(err, t('Google sign-in failed.')))
     }

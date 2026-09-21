@@ -181,6 +181,64 @@ class TestKeepingTheWork:
         assert response.status_code == 400
 
 
+class TestSigningIntoAnAccountYouAlreadyHad:
+    """The other half of keeping the work.
+
+    Upgrading covers the person who signs UP from a guest session. Someone who
+    already had an account looks around as a guest first and then signs IN —
+    and their drafts would otherwise stay on an identity they can never reach
+    again. Measured on the dev database: a guest with a site, an account made
+    two minutes later, and the site still on the guest.
+    """
+
+    @pytest.fixture
+    def account(self, db):
+        user = User.objects.create_user('ada', 'ada@example.com', 'secret123')
+        api = APIClient()
+        token = api.post('/api/auth/login/', {'username': 'ada', 'password': 'secret123'}, format='json').data['token']
+        api.credentials(HTTP_AUTHORIZATION=f'Token {token}')
+        return api, user
+
+    def test_the_sites_follow_the_person(self, guest, account):
+        guest_api, guest_data = guest
+        guest_api.post('/api/sites/', {'title': 'Made before signing in'}, format='json')
+        api, user = account
+
+        response = api.post('/api/auth/adopt/', {'guest_token': guest_data['token']}, format='json')
+
+        assert response.status_code == 200
+        assert response.data['moved']['sites'] == 1
+        assert [s.title for s in user.sites.all()] == ['Made before signing in']
+
+    def test_the_guest_identity_is_gone_afterwards(self, guest, account):
+        _, guest_data = guest
+        api, _ = account
+
+        api.post('/api/auth/adopt/', {'guest_token': guest_data['token']}, format='json')
+
+        assert not User.objects.filter(pk=guest_data['user']['id']).exists()
+        stale = APIClient()
+        stale.credentials(HTTP_AUTHORIZATION=f'Token {guest_data["token"]}')
+        assert stale.get('/api/auth/me/').status_code == 401
+
+    def test_a_token_that_is_not_a_guest_moves_nothing(self, db, account):
+        victim = User.objects.create_user('bob', 'bob@example.com', 'secret123')
+        Site.objects.create(owner=victim, title='Not yours')
+        stolen = APIClient().post('/api/auth/login/', {'username': 'bob', 'password': 'secret123'}, format='json').data['token']
+        api, user = account
+
+        response = api.post('/api/auth/adopt/', {'guest_token': stolen}, format='json')
+
+        assert response.status_code == 400
+        assert user.sites.count() == 0
+        assert victim.sites.count() == 1
+
+    def test_a_made_up_token_is_refused(self, account):
+        api, _ = account
+        assert api.post('/api/auth/adopt/', {'guest_token': 'nope'}, format='json').status_code == 400
+        assert api.post('/api/auth/adopt/', {}, format='json').status_code == 400
+
+
 class TestPurging:
     def test_it_takes_the_empty_ones_and_leaves_the_rest(self, db, guest):
         api, data = guest

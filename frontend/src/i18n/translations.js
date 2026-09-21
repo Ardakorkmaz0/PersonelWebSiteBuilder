@@ -1628,6 +1628,8 @@ export const TURKISH_TRANSLATIONS = {
   'Please try again later.': 'Lütfen daha sonra tekrar deneyin.',
   'Go to the builder': 'Site oluşturucuya git',
   'Static preview': 'Statik önizleme',
+  'Signing out of a guest session cannot be undone — there is no password to come back with, and what you made stays behind. Create an account first?': 'Misafir oturumundan çıkmak geri alınamaz; geri dönmek için parola yok ve yaptıkların geride kalır. Önce hesap oluşturmak ister misin?',
+  'The {count} sites you made before signing in are now in this account.': 'Giriş yapmadan önce yaptığın {count} site artık bu hesapta.',
   'An account is needed': 'Hesap gerekiyor',
   'Build right away. Publishing needs an account — and signing up later keeps everything you made.': 'Hemen kurmaya başla. Yayınlamak için hesap gerekir; sonradan hesap açarsan yaptıkların aynen kalır.',
   'Continue without signing in': 'Giriş yapmadan devam et',

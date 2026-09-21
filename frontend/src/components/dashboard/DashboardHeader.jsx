@@ -78,6 +78,12 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
   }, [])
 
   function onLogout() {
+    // A guest has no password to come back with: signing out throws the
+    // identity away, and every draft on it with no way to reach them again.
+    // So it is a question here, not a button.
+    if (isGuest && !window.confirm(t('Signing out of a guest session cannot be undone — there is no password to come back with, and what you made stays behind. Create an account first?'))) {
+      return
+    }
     logout()
     navigate('/login')
   }

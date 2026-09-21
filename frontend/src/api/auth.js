@@ -51,3 +51,11 @@ export async function upgradeGuest(username, email, password) {
   const { data } = await client.post('/auth/upgrade/', { username, email, password })
   return data // { token, user }
 }
+
+// Take the work made in a guest session into the account that just signed in.
+// The guest token is the proof of that identity; the call is made with the
+// NEW account's token, so both sides are established.
+export async function adoptGuestWork(guestToken) {
+  const { data } = await client.post('/auth/adopt/', { guest_token: guestToken })
+  return data // { moved: { sites, images, favorites } }
+}

@@ -4,6 +4,7 @@ import { continueAsGuest } from '../../api/auth.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { apiError } from '../../utils/errors.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { RISK_MESSAGE, useStorageRisk } from '../../utils/storageRisk.js'
 
 // The way in for someone who has not decided yet.
 //
@@ -16,6 +17,10 @@ export default function GuestEntry({ onError }) {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
+  // Some browsers clear site data on their own. A guest identity lives in
+  // exactly that storage, so here the offer comes with a caveat instead of a
+  // pleasant sentence that turns out not to be true.
+  const risk = useStorageRisk()
 
   async function start() {
     setLoading(true)
@@ -46,9 +51,15 @@ export default function GuestEntry({ onError }) {
       >
         {loading ? t('Starting…') : t('Continue without signing in')}
       </button>
-      <p className="text-center text-xs text-[var(--studio-text-muted)]">
-        {t('Build right away. Your work is kept in this browser; publishing needs an account — and signing up later keeps everything you made.')}
-      </p>
+      {risk.risky ? (
+        <p role="note" className="studio-status-warning rounded-lg border px-3 py-2 text-xs">
+          {t(RISK_MESSAGE[risk.reason])}
+        </p>
+      ) : (
+        <p className="text-center text-xs text-[var(--studio-text-muted)]">
+          {t('Build right away. Your work is kept in this browser; publishing needs an account — and signing up later keeps everything you made.')}
+        </p>
+      )}
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 import CreateSiteWizard from '../components/dashboard/CreateSiteWizard.jsx'
 import DashboardHeader from '../components/dashboard/DashboardHeader.jsx'
+import GuestStorageWarning from '../components/auth/GuestStorageWarning.jsx'
 import SitePreview from '../components/dashboard/SitePreview.jsx'
 import {
   ArrowRightIcon,
@@ -188,6 +189,7 @@ export default function ExplorePage() {
       <DashboardHeader current="explore" />
 
       <main id="explore-main" className="dashboard-container">
+        <GuestStorageWarning />
         {/* Said once, on arrival: the drafts made before signing in are here,
             under this account. Silence would leave the person wondering
             whether they lost them. */}

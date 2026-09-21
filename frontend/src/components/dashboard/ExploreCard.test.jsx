@@ -63,6 +63,17 @@ describe('ExploreCard', () => {
     expect(onRemix).toHaveBeenCalledWith(site)
   })
 
+  it('disables the favorite action during a pending save and exposes its current state', () => {
+    const onToggleFav = vi.fn()
+    renderCard({ onToggleFav, favoriting: true })
+    const button = screen.getByRole('button', { name: 'Favorite' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('aria-busy', 'true')
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(button)
+    expect(onToggleFav).not.toHaveBeenCalled()
+  })
+
   it('disables remix while the copy is being created', () => {
     renderCard({ onRemix: vi.fn(), remixing: true })
     expect(screen.getByRole('button', { name: /Creating copy/ })).toBeDisabled()

@@ -138,7 +138,8 @@
 .studio-auth-card {
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
-.studio-auth-card:focus-within {
+.studio-auth-card:focus-within,
+:root[data-ui-theme="dark"] .studio-auth-card:focus-within {
   border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
   box-shadow: var(--studio-shadow), 0 0 24px color-mix(in srgb, var(--studio-accent) 7%, transparent);
 }

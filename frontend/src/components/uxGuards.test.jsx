@@ -22,10 +22,10 @@ vi.mock('../api/explore.js', () => ({
 }))
 
 vi.mock('../store/authStore.js', () => ({
-  useAuthStore: (selector) => selector({
-    user: { username: 'tester', display_name: 'Test User', is_staff: false },
+  useAuthStore: Object.assign((selector) => selector({
+    user: { id: 1, username: 'tester', display_name: 'Test User', is_staff: false },
     logout: vi.fn(),
-  }),
+  }), { subscribe: () => () => {} }),
 }))
 
 vi.mock('../api/sites.js', () => ({

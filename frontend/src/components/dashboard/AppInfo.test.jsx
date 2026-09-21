@@ -1,88 +1,88 @@
-// The ⓘ beside the search answers "what is this place?" — three ways in, each
-// with the details that decide whether it is the one for you. The local-project
-// caveat is part of the answer, not a footnote: it is early, and it only runs
-// in a Chromium browser.
 import { describe, expect, it, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import LanguageProvider from '../../i18n/LanguageProvider.jsx'
 import UiThemeProvider from '../../ui/UiThemeProvider.jsx'
 import AppInfo from './AppInfo.jsx'
 import { APP_FEATURES } from '../../utils/appFeatures.js'
 
 function renderInfo() {
-  return render(
-    <UiThemeProvider>
-      <LanguageProvider>
-        <AppInfo />
-      </LanguageProvider>
-    </UiThemeProvider>,
-  )
+  return render(<UiThemeProvider><LanguageProvider><header><AppInfo /></header></LanguageProvider></UiThemeProvider>)
 }
 
-const trigger = () => screen.getByRole('button', { name: 'What you can build here' })
+const trigger = () => screen.getByRole('button', { name: 'Quick guide' })
 
-describe('AppInfo', () => {
+describe('AppInfo starting guide', () => {
   beforeEach(() => {
     localStorage.clear()
     localStorage.setItem('pwb_language', 'en')
   })
 
-  it('says nothing until it is asked', () => {
+  it('has a named trigger and reveals exactly three clear starting options in a modal outside the header', async () => {
+    const user = userEvent.setup()
     renderInfo()
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(trigger()).toHaveAttribute('aria-expanded', 'false')
-  })
-
-  it('opens with the three ways in, each with its own points', () => {
-    renderInfo()
-    fireEvent.click(trigger())
-
-    const panel = screen.getByRole('dialog', { name: 'What you can build here' })
-    expect(panel).toBeInTheDocument()
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(3)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger()).toHaveAttribute('aria-haspopup', 'dialog')
+    await user.click(trigger())
+    const dialog = screen.getByRole('dialog', { name: 'Your website starts here' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(trigger()).toHaveAttribute('aria-controls', dialog.id)
+    expect(screen.getByRole('banner')).not.toContainElement(dialog)
+    expect(within(dialog).getAllByRole('heading', { level: 3 })).toHaveLength(3)
     for (const feature of APP_FEATURES) {
-      expect(screen.getByText(feature.title)).toBeInTheDocument()
-      expect(screen.getByText(feature.summary)).toBeInTheDocument()
-      for (const point of feature.points) expect(screen.getByText(point)).toBeInTheDocument()
+      expect(within(dialog).getByRole('heading', { name: feature.title })).toBeInTheDocument()
+      expect(within(dialog).getByText(feature.summary)).toBeInTheDocument()
+      for (const point of feature.points) expect(within(dialog).getByText(point)).toBeInTheDocument()
     }
+    expect(within(dialog).getByText(/Early version/)).toHaveTextContent('Chrome or Edge')
   })
 
-  it('warns that the local project is early and needs a Chromium browser', () => {
+  it('keeps keyboard focus inside, locks background scrolling and restores both on Escape', async () => {
+    const user = userEvent.setup()
     renderInfo()
-    fireEvent.click(trigger())
-
-    const caveat = screen.getByText(/Early version/)
-    expect(caveat).toHaveTextContent('not recommended')
-    expect(caveat).toHaveTextContent('Chromium')
-    expect(caveat).toHaveTextContent(/Chrome or Edge/)
-    // Only the local project carries one.
-    expect(document.querySelectorAll('.app-info-caveat')).toHaveLength(1)
+    const initialOverflow = document.body.style.overflow
+    await user.click(trigger())
+    const close = screen.getByRole('button', { name: 'Close' })
+    const done = screen.getByRole('button', { name: 'Got it' })
+    expect(close).toHaveFocus()
+    expect(document.body.style.overflow).toBe('hidden')
+    await user.tab({ shift: true })
+    expect(done).toHaveFocus()
+    await user.tab()
+    expect(close).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger()).toHaveFocus()
+    expect(document.body.style.overflow).toBe(initialOverflow)
   })
 
-  it('staggers the cards so the list arrives in order', () => {
+  it.each(['Close', 'Got it'])('closes with %s and returns focus to the guide button', async (label) => {
+    const user = userEvent.setup()
     renderInfo()
-    fireEvent.click(trigger())
-
-    const delays = [...document.querySelectorAll('.app-info-card')]
-      .map((card) => card.style.getPropertyValue('--app-info-delay'))
-    expect(delays).toEqual(['0ms', '90ms', '180ms'])
-    // Points come in after the card they belong to.
-    const firstPoint = document.querySelector('.app-info-points li')
-    expect(Number.parseInt(firstPoint.style.getPropertyValue('--app-info-delay'), 10)).toBeGreaterThan(0)
+    await user.click(trigger())
+    await user.click(screen.getByRole('button', { name: label }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger()).toHaveFocus()
   })
 
-  it.each([
-    ['the ×', () => fireEvent.click(screen.getByRole('button', { name: 'Close' }))],
-    ['Escape', () => fireEvent.keyDown(document, { key: 'Escape' })],
-    ['a click outside', () => fireEvent.pointerDown(document.body)],
-    ['the button again', () => fireEvent.click(trigger())],
-  ])('closes from %s', (_label, leave) => {
+  it('ignores clicks on its content and closes only when the backdrop itself is clicked', async () => {
+    const user = userEvent.setup()
     renderInfo()
-    fireEvent.click(trigger())
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.click(trigger())
+    const dialog = screen.getByRole('dialog')
+    fireEvent.pointerDown(within(dialog).getByRole('heading', { name: 'Design from scratch' }))
+    expect(dialog).toBeInTheDocument()
+    fireEvent.pointerDown(dialog.parentElement)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
 
-    leave()
-
-    expect(screen.queryByRole('dialog')).toBeNull()
+  it('explains all three options in Turkish', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('pwb_language', 'tr')
+    renderInfo()
+    await user.click(screen.getByRole('button', { name: 'Rehber' }))
+    for (const name of ['Sıfırdan tasarla', 'HTML dosyanı yükle', 'Yerel projeni aç']) {
+      expect(screen.getByRole('heading', { name })).toBeInTheDocument()
+    }
   })
 })

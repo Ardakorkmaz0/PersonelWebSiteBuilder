@@ -22,9 +22,12 @@ import {
 } from '../components/icons.jsx'
 import { useLanguage } from '../i18n/useLanguage.js'
 
-// Module-level cache of the last feed state ({category, search, items, page, hasMore}),
-// kept across mounts so navigating into a site and back restores the full feed.
+// Keep the feed across navigation within one account, including its favorite state.
 let feedCache = null
+const unsubscribeFeedCache = useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id !== previous.user?.id || state.token !== previous.token) feedCache = null
+})
+if (import.meta.hot) import.meta.hot.dispose(unsubscribeFeedCache)
 
 const CATEGORIES = [
   ['', 'All'],
@@ -48,8 +51,11 @@ function formattedDate(value, language) {
 
 export default function ExplorePage() {
   const { language, t } = useLanguage()
-  const [category, setCategory] = useState(feedCache?.category ?? '')
-  const [data, setData] = useState(feedCache ?? { category: null, items: [], page: 1, hasMore: false })
+  const user = useAuthStore((state) => state.user)
+  const userId = user?.id ?? null
+  const cachedFeed = userId !== null && feedCache?.userId === userId ? feedCache : null
+  const [category, setCategory] = useState(cachedFeed?.category ?? '')
+  const [data, setData] = useState(cachedFeed ?? { userId, category: null, items: [], page: 1, hasMore: false })
   const [ownSites, setOwnSites] = useState([])
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -60,10 +66,10 @@ export default function ExplorePage() {
   const [favoritingIds, setFavoritingIds] = useState(new Set())
   const pendingFavorites = useRef(new Set())
   const navigate = useNavigate()
-  const user = useAuthStore((state) => state.user)
 
-  const items = data.category === category ? data.items : []
-  const loading = data.category !== category && !error
+  const feedIsCurrent = data.userId === userId && data.category === category
+  const items = feedIsCurrent ? data.items : []
+  const loading = !feedIsCurrent && !error
   const latestSite = useMemo(() => orderSites(ownSites)[0] || null, [ownSites])
   const workspaceStats = useMemo(() => ({
     total: ownSites.length,
@@ -81,13 +87,13 @@ export default function ExplorePage() {
   }
 
   useEffect(() => {
-    if (data.category === category) return undefined
+    if (userId === null || (data.userId === userId && data.category === category)) return undefined
     let alive = true
     listExplore({ category, search: '', page: 1 })
-      .then((result) => alive && setData({ category, items: result.results, page: 1, hasMore: !!result.next }))
+      .then((result) => alive && setData({ userId, category, items: result.results, page: 1, hasMore: !!result.next }))
       .catch((requestError) => alive && setError(apiError(requestError)))
     return () => { alive = false }
-  }, [category, data.category])
+  }, [category, data.category, data.userId, userId])
 
   useEffect(() => {
     let alive = true
@@ -98,7 +104,9 @@ export default function ExplorePage() {
     return () => { alive = false }
   }, [])
 
-  useEffect(() => { feedCache = data }, [data])
+  useEffect(() => {
+    feedCache = userId !== null && data.userId === userId ? data : null
+  }, [data, userId])
   useScrollRestore(items.length > 0)
 
   const selectCategory = (nextCategory) => {

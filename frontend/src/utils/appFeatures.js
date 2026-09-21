@@ -1,43 +1,34 @@
-// The three ways to start a site here, as the ⓘ panel in the header tells them.
-//
-// Kept as data rather than markup so the panel stays a layout and the wording
-// stays reviewable — and so a feature can be added without touching the
-// animation. Strings are English sources; the panel runs them through t().
-
+// Plain-language descriptions for the three starting paths in the guide.
 export const APP_FEATURES = [
   {
-    id: 'empty',
-    icon: 'page',
-    title: 'Start from an empty page',
-    summary: 'A blank canvas and a block library — no template to fight.',
+    id: 'empty', icon: 'page', tone: 'accent', tag: 'No coding needed',
+    title: 'Design from scratch',
+    summary: 'Build your first website by placing ready-made blocks on an empty page.',
     points: [
-      'Drag blocks in, or let AI draft the first version',
-      'Separate phone layout, so mobile is designed, not squeezed',
-      'Publish to your address in one click',
+      'Add text, images and buttons with drag and drop',
+      'Adjust the design for phones and computers',
+      'Save your work and publish when you are ready',
     ],
   },
   {
-    id: 'upload',
-    icon: 'upload',
-    title: 'Bring your own HTML',
-    summary: 'Upload a page you already have and keep editing it here.',
+    id: 'upload', icon: 'upload', tone: 'info', tag: 'For an existing page',
+    title: 'Upload your HTML',
+    summary: 'Bring a page you already have and keep working on it in the editor.',
     points: [
-      'Click any text to rewrite it, drag blocks to reorder',
-      'Your markup stays yours — nothing is regenerated behind your back',
-      'Source view is the real file, always one click away',
+      'Upload an HTML file or paste its code',
+      'Edit the page visually or open its source code',
+      'Try buttons and interactions in live view',
     ],
   },
   {
-    id: 'local',
-    icon: 'folder',
-    title: 'Open a local project',
-    summary: 'Edit HTML, CSS and JS straight from a folder on your computer.',
+    id: 'local', icon: 'folder', tone: 'success', tag: 'For a project folder',
+    title: 'Open your local project',
+    summary: 'Choose a folder on your computer and work with its HTML, CSS and JavaScript files.',
     points: [
-      'Changes are written back to the files themselves',
-      'Linked CSS and JS resolve, so the preview is the real page',
+      'Open your existing files together',
+      'Preview the page with its styles and scripts',
+      'Save changes directly to your project files',
     ],
-    // Said plainly rather than discovered the hard way: this one is new, it
-    // needs an API only Chromium browsers ship, and it can still surprise you.
-    caveat: 'Early version — not recommended for important work yet. Needs a Chromium browser (Chrome or Edge).',
+    caveat: 'Early version. Use Chrome or Edge and keep a backup of important projects.',
   },
 ]

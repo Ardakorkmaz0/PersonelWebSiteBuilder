@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { clearGuestCookie, readGuestCookie, writeGuestCookie } from '../utils/guestSession.js'
 
 const TOKEN_KEY = 'pwb_token'
 const USER_KEY = 'pwb_user'
@@ -18,13 +19,29 @@ function readUser() {
   }
 }
 
+// A guest has no password to sign back in with, so a cleared localStorage
+// would strand their drafts on an identity nobody can reach. The cookie copy
+// is the second chance: whichever survived rebuilds the session.
+function restoreSession() {
+  const token = read(TOKEN_KEY)
+  const user = readUser()
+  if (token && user) return { token, user }
+  const kept = readGuestCookie()
+  if (!kept) return { token: null, user: null }
+  localStorage.setItem(TOKEN_KEY, kept.token)
+  localStorage.setItem(USER_KEY, JSON.stringify(kept.user))
+  return kept
+}
+
+const restored = restoreSession()
+
 function activeStore() {
   return localStorage.getItem(TOKEN_KEY) != null ? localStorage : sessionStorage
 }
 
 export const useAuthStore = create((set) => ({
-  token: read(TOKEN_KEY) || null,
-  user: readUser(),
+  token: restored.token,
+  user: restored.user,
 
   setAuth: (token, user, remember = true) => {
     const store = remember ? localStorage : sessionStorage
@@ -33,6 +50,10 @@ export const useAuthStore = create((set) => ({
     store.setItem(USER_KEY, JSON.stringify(user))
     other.removeItem(TOKEN_KEY)
     other.removeItem(USER_KEY)
+    // Only a guest gets the second copy: an account can always sign in again,
+    // and a spare copy of its token is exposure with nothing to buy.
+    if (user?.is_guest) writeGuestCookie(token, user)
+    else clearGuestCookie()
     set({ token, user })
   },
 
@@ -40,6 +61,8 @@ export const useAuthStore = create((set) => ({
   // whichever store currently holds the session.
   setUser: (user) => {
     activeStore().setItem(USER_KEY, JSON.stringify(user))
+    if (user?.is_guest) writeGuestCookie(read(TOKEN_KEY), user)
+    else clearGuestCookie()
     set({ user })
   },
 
@@ -48,6 +71,7 @@ export const useAuthStore = create((set) => ({
       s.removeItem(TOKEN_KEY)
       s.removeItem(USER_KEY)
     }
+    clearGuestCookie()
     set({ token: null, user: null })
   },
 }))

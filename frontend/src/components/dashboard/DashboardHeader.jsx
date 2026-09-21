@@ -134,7 +134,7 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
             <Link
               to="/register"
               className="hidden shrink-0 items-center gap-1.5 rounded-full border border-[var(--studio-warning)] bg-[color-mix(in_srgb,var(--studio-warning)_12%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--studio-text)] sm:inline-flex"
-              title={t('You are browsing as a guest. Create an account to publish and to keep your work safe.')}
+              title={t('You are browsing as a guest: your work lives in this browser only. Create an account to publish it — and to reach it from anywhere.')}
             >
               {t('Guest')} · {t('Create my account')}
             </Link>

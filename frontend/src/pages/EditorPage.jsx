@@ -2566,7 +2566,7 @@ export default function EditorPage() {
                         value={htmlDevice}
                         onChange={(e) => chooseHtmlDevice(e.target.value)}
                         title={t('Screen / device width')}
-                        className="studio-input hidden max-w-[150px] truncate px-2 py-1.5 text-xs font-medium md:block"
+                        className="studio-input hidden max-w-[150px] shrink-0 truncate px-2 py-1.5 text-xs font-medium @[980px]:block"
                       >
                         {DEVICES.map((d) => (
                           <option key={d.id} value={d.id}>

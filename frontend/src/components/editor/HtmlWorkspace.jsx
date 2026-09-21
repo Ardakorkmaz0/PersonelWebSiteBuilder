@@ -1803,7 +1803,7 @@ function HtmlWorkspace({
             what you do in that mode, and how you are looking at the page. They
             used to be one flat row, so "Run" and the tool you are holding sat
             past the zoom control, and two different ⋯ buttons sat side by side. */}
-        <div className="studio-toolbar flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
+        <div className="studio-toolbar @container flex min-w-0 items-center gap-2 border-b px-3 py-1.5">
           <div data-tour="canvas-modes" className="studio-segment shrink-0">
             <button onClick={() => switchMode('view')} className={toggleBtn(mode === 'view')}>
               {t('View')}
@@ -1843,7 +1843,7 @@ function HtmlWorkspace({
                     title={t('Editing tools')}
                   >
                     {editTool === 'text' ? <EditIcon size={13} /> : editTool === 'rearrange' ? <MoveIcon size={13} /> : editTool === 'link' ? <LinkIcon size={13} /> : <PaletteIcon size={13} />}
-                    <span className="hidden xl:inline">{t(editTool === 'text' ? 'Text' : editTool === 'rearrange' ? 'Move' : editTool === 'link' ? 'Link' : 'Brush')}</span>
+                    <span className="hidden @[860px]:inline">{t(editTool === 'text' ? 'Text' : editTool === 'rearrange' ? 'Move' : editTool === 'link' ? 'Link' : 'Brush')}</span>
                     <ChevronDownIcon size={13} />
                   </button>
                   {toolMenuOpen && (
@@ -1880,7 +1880,7 @@ function HtmlWorkspace({
                 title={t('Run the page: click through it in View, then come back — Edit shows it the way you left it.')}
                 className="studio-btn studio-btn-secondary inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs"
               >
-                ▶ <span className="hidden xl:inline">{t('Run')}</span>
+                ▶ <span className="hidden @[900px]:inline">{t('Run')}</span>
               </button>
             </div>
           )}
@@ -1908,7 +1908,10 @@ function HtmlWorkspace({
           {mode !== 'source' && (
             <>
               <span aria-hidden="true" className="studio-toolbar-sep" />
-              <div className="flex min-w-0 items-center gap-2">
+              {/* Never narrower than the controls inside it: with min-w-0 the
+                  group shrank below its content and the Browser button was
+                  painted over the hint text next to it. */}
+              <div className="flex shrink-0 items-center gap-2">
                 {deviceControls}
                 {mode !== 'live' && (
                   <CanvasZoomControl
@@ -1939,7 +1942,7 @@ function HtmlWorkspace({
                     }`}
                   >
                     <MonitorIcon size={14} />
-                    <span className="hidden xl:inline">{t('Browser')}</span>
+                    <span className="hidden @[1000px]:inline">{t('Browser')}</span>
                   </button>
                 )}
               </div>
@@ -1994,7 +1997,10 @@ function HtmlWorkspace({
               </button>
             </div>
           ) : (
-            <span className="ml-auto hidden min-w-0 truncate text-xs text-[var(--studio-text-muted)] 2xl:block">
+            /* The one thing in the row that gives: it takes what is left and
+               truncates, so a cramped toolbar loses the hint rather than
+               stacking it on top of a button. */
+            <span className="ml-auto hidden min-w-0 flex-1 truncate pl-1 text-xs text-[var(--studio-text-muted)] @[1180px]:block">
               {mode === 'view'
                 ? t('Live preview: JavaScript, links, forms, and scrolling are enabled')
                 : mode === 'source'

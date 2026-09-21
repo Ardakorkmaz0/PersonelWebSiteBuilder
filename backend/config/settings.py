@@ -12,6 +12,7 @@ Recognised env vars (see .env.example for a starter file):
   DJANGO_ALLOWED_HOSTS       comma-separated host list (e.g. "example.com,www.example.com")
   DATABASE_URL               e.g. postgres://user:pass@host:5432/dbname
   DJANGO_CORS_ORIGINS        comma-separated allow-list (default: localhost:5173)
+  DJANGO_TRUSTED_PROXY_COUNT trusted forwarding hops for rate limits (default: 0)
   DJANGO_CSP_REPORT_ONLY     "True" to log violations instead of blocking
   SENTRY_DSN                 enables sentry-sdk if set
 """
@@ -204,8 +205,16 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Only trust forwarding headers when deployment explicitly declares a trusted
+# proxy chain. DRF's None default includes arbitrary client-supplied XFF, which
+# lets a caller change its rate-limit key on every login attempt.
+_TRUSTED_PROXY_COUNT = int(os.getenv('DJANGO_TRUSTED_PROXY_COUNT', '0'))
+if _TRUSTED_PROXY_COUNT < 0:
+    raise ValueError('DJANGO_TRUSTED_PROXY_COUNT must be a non-negative integer.')
+
 # Django REST Framework
 REST_FRAMEWORK = {
+    'NUM_PROXIES': _TRUSTED_PROXY_COUNT,
     'EXCEPTION_HANDLER': 'builder.api_errors.structured_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',

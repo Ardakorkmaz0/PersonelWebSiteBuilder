@@ -119,14 +119,14 @@
 }
 
 /* Small, finite feedback on the product UI; the OLED shell stays pure black. */
-.dashboard-stat { --stat-color: var(--studio-accent-hover); }
+.dashboard-stat { --stat-color: var(--studio-text-muted); }
+.dashboard-stat[data-tone="accent"]  { --stat-color: var(--studio-accent-hover); }
 .dashboard-stat[data-tone="success"] { --stat-color: var(--studio-success); }
-.dashboard-stat[data-tone="info"] { --stat-color: var(--studio-info); }
+.dashboard-stat[data-tone="info"]    { --stat-color: var(--studio-info); }
 .dashboard-stat[data-tone="warning"] { --stat-color: var(--studio-warning); }
 .dashboard-stat .dashboard-stat-icon {
   color: var(--stat-color);
-  background: color-mix(in srgb, var(--stat-color) 12%, var(--studio-panel-raised));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stat-color) 20%, transparent);
+  background: color-mix(in srgb, var(--stat-color) 10%, var(--studio-panel-raised));
 }
 
 :root[data-ui-theme="dark"] .studio-auth-showcase {

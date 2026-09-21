@@ -64,6 +64,8 @@ export default function ExplorePage() {
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [feedError, setFeedError] = useState('')
+  const [feedAttempt, setFeedAttempt] = useState(0)
   const [createOpen, setCreateOpen] = useState(false)
   const [createOrigin, setCreateOrigin] = useState(null)
   const [remixingId, setRemixingId] = useState(null)
@@ -73,7 +75,7 @@ export default function ExplorePage() {
 
   const feedIsCurrent = data.userId === userId && data.category === category
   const items = feedIsCurrent ? data.items : []
-  const loading = !feedIsCurrent && !error
+  const loading = !feedIsCurrent && !feedError
   const latestSite = useMemo(() => orderSites(ownSites)[0] || null, [ownSites])
   const workspaceStats = useMemo(() => ({
     total: ownSites.length,
@@ -95,9 +97,9 @@ export default function ExplorePage() {
     let alive = true
     listExplore({ category, search: '', page: 1 })
       .then((result) => alive && setData({ userId, category, items: result.results, page: 1, hasMore: !!result.next }))
-      .catch((requestError) => alive && setError(apiError(requestError)))
+      .catch((requestError) => alive && setFeedError(apiError(requestError)))
     return () => { alive = false }
-  }, [category, data.category, data.userId, userId])
+  }, [category, data.category, data.userId, userId, feedAttempt])
 
   useEffect(() => {
     let alive = true
@@ -113,8 +115,15 @@ export default function ExplorePage() {
   }, [data, userId])
   useScrollRestore(items.length > 0)
 
+  const retryFeed = () => {
+    setFeedError('')
+    setFeedAttempt((attempt) => attempt + 1)
+  }
+
   const selectCategory = (nextCategory) => {
     setError('')
+    if (nextCategory === category && feedError) retryFeed()
+    else setFeedError('')
     setCategory(nextCategory)
   }
 
@@ -229,10 +238,10 @@ export default function ExplorePage() {
                 [StarIcon, workspaceStats.favorites.toLocaleString(), t('Favorites'), 'warning'],
               ].map(([StatIcon, value, label, tone]) => (
                 <div key={label} className="dashboard-stat" data-tone={tone}>
-                  <span className="dashboard-stat-icon"><StatIcon size={15} /></span>
+                  <span className="dashboard-stat-icon"><StatIcon size={16} /></span>
                   <span className="min-w-0">
-                    <strong className="block truncate text-sm text-[var(--studio-text)]">{projectsLoading ? '—' : value}</strong>
-                    <span className="block truncate text-[10px] font-semibold text-[var(--studio-text-faint)]">{label}</span>
+                    <strong className="block truncate text-base font-bold tracking-tight text-[var(--studio-text)]">{projectsLoading ? '—' : value}</strong>
+                    <span className="block truncate text-[11px] font-medium text-[var(--studio-text-faint)]">{label}</span>
                   </span>
                 </div>
               ))}
@@ -327,7 +336,12 @@ export default function ExplorePage() {
             </div>
           </div>
 
-          {loading ? (
+          {feedError ? (
+            <div role="alert" className="dashboard-section-card p-8 text-center">
+              <p className="mb-4 text-sm text-[var(--studio-text-muted)]">{feedError}</p>
+              <button type="button" onClick={retryFeed} className="studio-btn studio-btn-secondary px-4">{t('Try again')}</button>
+            </div>
+          ) : loading ? (
             <p role="status" className="text-sm text-[var(--studio-text-muted)]">{t('Loading…')}</p>
           ) : items.length === 0 ? (
             <div className="dashboard-section-card border-dashed py-16 text-center">

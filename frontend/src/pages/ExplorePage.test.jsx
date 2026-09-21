@@ -20,6 +20,7 @@ const site = {
 
 beforeEach(() => {
   localStorage.setItem('pwb_language', 'en')
+  useAuthStore.getState().logout()
   useAuthStore.setState({ user: { id: 100, username: 'ada' }, token: 'test-session' })
   vi.mocked(listExplore).mockReset().mockResolvedValue({ results: [site], next: null })
   vi.mocked(listSites).mockReset().mockResolvedValue([])
@@ -81,5 +82,33 @@ describe('ExplorePage favorite saves', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(addFavorite).toHaveBeenCalledTimes(2)
     expect(removeFavorite).toHaveBeenCalledTimes(2)
+  })
+})
+
+
+describe('ExplorePage feed recovery', () => {
+  it.each(['All', 'Try again'])('retries the failed feed using %s and settles loading after success', async (buttonName) => {
+    let resolveRetry
+    vi.mocked(listExplore)
+      .mockRejectedValueOnce(new Error('Feed unavailable'))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveRetry = resolve }))
+    render(<LanguageProvider><MemoryRouter><ExplorePage /></MemoryRouter></LanguageProvider>)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Feed unavailable')
+    fireEvent.click(screen.getByRole('button', { name: buttonName, exact: true }))
+    await waitFor(() => expect(listExplore).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…')
+    await act(async () => resolveRetry({ results: [site], next: null }))
+    expect(screen.getByRole('link', { name: 'Explore site' })).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nothing here yet')).not.toBeInTheDocument()
+  })
+
+  it('does not present a feed failure as an empty community', async () => {
+    vi.mocked(listExplore).mockRejectedValueOnce(new Error('Feed unavailable'))
+    render(<LanguageProvider><MemoryRouter><ExplorePage /></MemoryRouter></LanguageProvider>)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Feed unavailable')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nothing here yet')).not.toBeInTheDocument()
   })
 })

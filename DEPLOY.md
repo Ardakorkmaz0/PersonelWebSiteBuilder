@@ -314,11 +314,25 @@ header at the proxy.**
 | `DJANGO_SERVE_MEDIA` | **yes, one of** | `True` | Django serves uploaded images from `MEDIA_ROOT`. Defaults to `DJANGO_DEBUG`, so a production process serves **nothing** under `/media/` unless this is on **or** a proxy/bucket does it (§8a) — uploads then succeed but every image URL 404s. |
 | `DJANGO_HSTS_SECONDS` | optional | `31536000` | HSTS lifetime (1 year default). |
 | `DJANGO_THROTTLE_AUTH` | optional | `10/min` | Brute-force cap on login/register/google. |
+| `DJANGO_TRUSTED_PROXY_COUNT` | behind a proxy | `1` | Defaults to `0`: rate limits use the socket peer and ignore `X-Forwarded-For`. Set only for the trusted chain described below. |
 | `DJANGO_CSP_REPORT_ONLY` | optional | `True` | Log CSP violations instead of blocking (while testing). |
 
 Behind a TLS-terminating proxy/LB, prod automatically trusts the
 `X-Forwarded-Proto: https` header (`SECURE_PROXY_SSL_HEADER`), so make sure your
-proxy sets it.
+proxy sets it and cannot be bypassed by a direct public connection to gunicorn.
+
+Rate limits ignore `X-Forwarded-For` by default (`DJANGO_TRUSTED_PROXY_COUNT=0`).
+For the single reverse proxy in §8, set `DJANGO_TRUSTED_PROXY_COUNT=1` only after
+ensuring the proxy overwrites the incoming forwarding header and the backend
+port is reachable only by that proxy. With a longer trusted proxy chain, use
+its exact hop count and strip client-supplied forwarding headers at the edge.
+Leaving `0` behind a proxy groups its visitors under the proxy's shared limit;
+trusting a publicly supplied header lets callers evade the limit.
+
+For a host-based proxy in front of Compose, publish the backend on loopback
+(`127.0.0.1:8000:8000`) instead of all interfaces, or enforce equivalent firewall
+isolation. These settings affect throttle identity; keep `REDIS_URL` configured
+so multiple workers share the same counters.
 
 ### 7b. Make yourself an admin (moderation panel)
 Create a superuser (`createsuperuser`), **or** promote an existing account to

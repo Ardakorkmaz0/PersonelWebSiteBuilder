@@ -267,6 +267,20 @@ export const NoteIcon = (p) => (
   </Icon>
 )
 
+export const UploadIcon = (p) => (
+  <Icon {...p}>
+    <path d="M12 16V4" />
+    <path d="m7.5 8.5 4.5-4.5 4.5 4.5" />
+    <path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16" />
+  </Icon>
+)
+export const InfoIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5" />
+    <path d="M12 7.6v.2" />
+  </Icon>
+)
 export const LightbulbIcon = (p) => (
   <Icon {...p}>
     <path d="M9 18h6" />

@@ -2077,3 +2077,147 @@ button:not(:disabled),
 .editor-tour-skip:hover {
   color: var(--studio-text-muted);
 }
+
+/* The ⓘ panel beside the header search: three ways into the app, each with the
+   few details that decide whether it is the one for you. Cards and their lines
+   rise in sequence (--app-info-delay), so the eye is walked down the list once
+   instead of meeting a wall of text. */
+.app-info {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  width: min(23rem, calc(100vw - 1.5rem));
+  max-height: min(34rem, calc(100vh - 6rem));
+  overflow-y: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-panel-raised);
+  padding: 0.9rem;
+  box-shadow: var(--studio-shadow-menu);
+  animation: app-info-open 180ms ease-out both;
+}
+.app-info-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.app-info-title {
+  margin: 0.15rem 0 0;
+  color: var(--studio-text);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.app-info-close {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  place-items: center;
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text-faint);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.app-info-close:hover {
+  background: var(--studio-control-hover);
+  color: var(--studio-text);
+}
+.app-info-list {
+  display: grid;
+  gap: 0.55rem;
+}
+.app-info-card {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-control) 55%, var(--studio-panel));
+  padding: 0.7rem 0.75rem;
+  animation: app-info-rise 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--app-info-delay, 0ms);
+}
+.app-info-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+.app-info-glyph {
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: none;
+  place-items: center;
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent-text);
+}
+.app-info-card-title {
+  margin: 0;
+  color: var(--studio-text);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.app-info-card-summary {
+  margin: 0.1rem 0 0;
+  color: var(--studio-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.app-info-points {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.app-info-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  color: var(--studio-text-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  animation: app-info-rise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--app-info-delay, 0ms);
+}
+.app-info-dot {
+  width: 0.3rem;
+  height: 0.3rem;
+  margin-top: 0.42rem;
+  flex: none;
+  border-radius: 999px;
+  background: var(--studio-accent);
+}
+.app-info-caveat {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  border-radius: var(--studio-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 40%, var(--studio-border));
+  background: var(--studio-warning-soft);
+  padding: 0.4rem 0.5rem;
+  color: var(--studio-warning);
+  font-size: 0.71rem;
+  line-height: 1.45;
+  animation: app-info-rise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--app-info-delay, 0ms);
+}
+@keyframes app-info-open {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes app-info-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-info,
+  .app-info-card,
+  .app-info-points li,
+  .app-info-caveat {
+    animation: none;
+  }
+}

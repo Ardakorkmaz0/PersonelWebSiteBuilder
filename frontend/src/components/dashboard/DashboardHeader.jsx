@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/authStore.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import LanguageSwitcher from '../LanguageSwitcher.jsx'
 import DashboardGlobalSearch from './DashboardGlobalSearch.jsx'
+import AppInfo from './AppInfo.jsx'
 import {
   ChevronDownIcon,
   FolderIcon,
@@ -86,11 +87,16 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
         </Link>
 
         {showSearch ? (
-          <div className="hidden min-w-[14rem] flex-1 md:block">
-            <DashboardGlobalSearch />
+          <div className="hidden min-w-[14rem] flex-1 items-center gap-2 md:flex">
+            <div className="min-w-0 flex-1"><DashboardGlobalSearch /></div>
+            {/* Beside the search because that is where someone looks when they
+                are still working out what this place is. */}
+            <AppInfo />
           </div>
         ) : (
-          <div className="hidden flex-1 md:block" />
+          <div className="hidden flex-1 items-center justify-end md:flex">
+            <AppInfo />
+          </div>
         )}
 
         <nav aria-label={t('Navigation')} className="dashboard-primary-nav hidden items-center gap-1 xl:flex">
@@ -164,8 +170,11 @@ export default function DashboardHeader({ current = '', showSearch = true }) {
       {mobileOpen && (
         <div className="dashboard-mobile-menu xl:hidden">
           {showSearch && (
-            <div className="mb-3 md:hidden">
-              <DashboardGlobalSearch mobile onNavigate={() => setMobileOpen(false)} />
+            <div className="mb-3 flex items-center gap-2 md:hidden">
+              <div className="min-w-0 flex-1">
+                <DashboardGlobalSearch mobile onNavigate={() => setMobileOpen(false)} />
+              </div>
+              <AppInfo />
             </div>
           )}
           <nav aria-label={t('Mobile navigation')} className="grid gap-1">

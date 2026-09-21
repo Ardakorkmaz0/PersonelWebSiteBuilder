@@ -1333,22 +1333,25 @@ button:not(:disabled),
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 0.65rem;
-    border: 1px solid color-mix(in srgb, var(--studio-border) 82%, transparent);
+    gap: 0.75rem;
     border-radius: var(--studio-radius-lg);
-    background: color-mix(in srgb, var(--studio-panel-raised) 72%, transparent);
-    padding: 0.72rem 0.8rem;
-    backdrop-filter: blur(10px);
+    background: var(--studio-panel-raised);
+    padding: 0.85rem 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px color-mix(in srgb, var(--studio-border) 50%, transparent);
+    transition: box-shadow 0.15s ease;
+  }
+  .dashboard-stat:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 0 0 1px color-mix(in srgb, var(--studio-border) 70%, transparent);
   }
   .dashboard-stat-icon {
     display: grid;
-    width: 2rem;
-    height: 2rem;
+    width: 2.25rem;
+    height: 2.25rem;
     flex: none;
     place-items: center;
-    border-radius: 0.65rem;
-    background: var(--studio-accent-soft);
-    color: var(--studio-accent-hover);
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--stat-color, var(--studio-text-muted)) 10%, var(--studio-panel-raised));
+    color: var(--stat-color, var(--studio-text-muted));
   }
   .dashboard-section-heading {
     display: flex;
@@ -1418,7 +1421,7 @@ button:not(:disabled),
     color: var(--studio-text-faint);
   }
   .dashboard-kicker {
-    color: var(--studio-accent-hover);
+    color: var(--studio-text-faint);
     font-size: 0.7rem;
     font-weight: 750;
     letter-spacing: 0.16em;
@@ -1672,6 +1675,32 @@ button:not(:disabled),
   }
   .preview-menu-item:hover {
     background: var(--studio-control-hover);
+  }
+  /* The view controls sit next to the toolbar buttons, so they carry the
+     toolbar's height rather than the (shorter) editor sidebar one. */
+  .preview-topbar-actions .studio-segment {
+    min-height: 2.15rem;
+  }
+  /* The stage a device-sized preview stands on: the site keeps its own
+     scrolling inside the frame, the shell around it is the app's. */
+  .preview-stage {
+    position: fixed;
+    inset: 4rem 0 0;
+    display: flex;
+    justify-content: center;
+    overflow: auto;
+    padding: 1rem;
+    background: var(--studio-shell);
+  }
+  .preview-stage-device {
+    flex: none;
+    max-width: 100%;
+    height: 100%;
+    overflow: auto;
+    border: 1px solid var(--studio-border);
+    border-radius: 1.15rem;
+    background: #fff;
+    box-shadow: var(--studio-shadow-lg);
   }
   @media (max-width: 767px) {
     .preview-topbar-inner {

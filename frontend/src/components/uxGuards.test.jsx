@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import LanguageProvider from '../i18n/LanguageProvider.jsx'
 import UiThemeProvider from '../ui/UiThemeProvider.jsx'
@@ -198,6 +198,43 @@ describe('responsive and accessibility guards', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
     expect(screen.getByRole('menuitem', { name: 'Report this site' })).toBeInTheDocument()
+  })
+
+  // The device widths and the script switch used to float over the site's own
+  // footer, where they covered its content and read as part of the site.
+  it('keeps the preview view controls in the top bar', () => {
+    const onDeviceChange = vi.fn()
+    const onScriptModeChange = vi.fn()
+    renderWithShell(
+      <PublicToolbar
+        site={{ id: 1, slug: 'demo', title: 'Demo site' }}
+        pages={[{ id: 'home', name: 'Home' }]}
+        activePageId="home"
+        onNavigate={vi.fn()}
+        device="pc"
+        onDeviceChange={onDeviceChange}
+        scriptMode="live"
+        onScriptModeChange={onScriptModeChange}
+      />,
+    )
+
+    const widths = screen.getByRole('group', { name: 'Preview width' })
+    expect(within(widths).getByRole('button', { name: 'PC' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(widths).getByRole('button', { name: 'Mobile' }))
+    expect(onDeviceChange).toHaveBeenCalledWith('mobile')
+
+    const scripts = screen.getByRole('group', { name: 'Scripts' })
+    expect(within(scripts).getByRole('button', { name: 'JavaScript' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(scripts).getByRole('button', { name: 'Static' }))
+    expect(onScriptModeChange).toHaveBeenCalledWith('static')
+  })
+
+  it('leaves the view controls out when the page has nothing to switch', () => {
+    renderWithShell(
+      <PublicToolbar site={{ id: 1, slug: 'demo', title: 'Demo site' }} pages={[]} onNavigate={vi.fn()} />,
+    )
+    expect(screen.queryByRole('group', { name: 'Preview width' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Scripts' })).not.toBeInTheDocument()
   })
 
   it('keeps phone editing preview-first and moves secondary actions into sheets', async () => {

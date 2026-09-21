@@ -4,6 +4,8 @@ import { cloneSite, reportSite } from '../../api/sites.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { apiError } from '../../utils/errors.js'
 import { useGoBack } from '../../utils/useGoBack.js'
+import { useMediaQuery } from '../../utils/useMediaQuery.js'
+import { PREVIEW_DEVICES } from '../../utils/previewDevices.js'
 import { schemaToSingleHtml } from '../../utils/schemaToFiles.js'
 import {
   ArrowLeftIcon,
@@ -14,6 +16,10 @@ import {
 } from '../icons.jsx'
 import LanguageSwitcher from '../LanguageSwitcher.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+
+// Below this the bar has no room for the two segments next to the page tabs,
+// so they move into the ⋯ menu — one copy of each either way.
+const NARROW_BAR_QUERY = '(max-width: 767.98px)'
 
 const REPORT_REASONS = [
   ['spam', 'Spam or misleading'],
@@ -50,9 +56,45 @@ function CreatorAvatar({ url, name }) {
   )
 }
 
+// One studio segment — the same control the editor's canvas bar uses for its
+// devices, so switching between the two reads the same way.
+function Segment({ label, options, value, onChange, className = '' }) {
+  return (
+    <div role="group" aria-label={label} className={`studio-segment shrink-0 ${className}`}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          title={option.title}
+          onClick={() => onChange(option.id)}
+          aria-pressed={value === option.id}
+          className={
+            value === option.id
+              ? 'studio-segment-btn studio-segment-btn-active'
+              : 'studio-segment-btn'
+          }
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // Floating toolbar on a public site page: view the code, or "Use this" to clone
-// the site into your own account and edit it.
-export default function PublicToolbar({ site, pages = [], activePageId, onNavigate }) {
+// the site into your own account and edit it. The view controls (device width,
+// and whether the page's scripts run) live here too — they belong to the same
+// bar as the page tabs, not to a box floating over the site's own footer.
+export default function PublicToolbar({
+  site,
+  pages = [],
+  activePageId,
+  onNavigate,
+  device,
+  onDeviceChange,
+  scriptMode,
+  onScriptModeChange,
+}) {
   const { t } = useLanguage()
   const [showCode, setShowCode] = useState(false)
   const [cloning, setCloning] = useState(false)
@@ -67,6 +109,7 @@ export default function PublicToolbar({ site, pages = [], activePageId, onNaviga
   const navigate = useNavigate()
   const goBack = useGoBack('/')
   const token = useAuthStore((s) => s.token)
+  const narrow = useMediaQuery(NARROW_BAR_QUERY)
 
   async function onUse() {
     if (!token) {
@@ -108,6 +151,32 @@ export default function PublicToolbar({ site, pages = [], activePageId, onNaviga
 
   const code = showCode ? sourceOf(site) : ''
   const ownerName = site?.owner_display_name || site?.owner_username || ''
+
+  const deviceOptions = PREVIEW_DEVICES.map(({ id, label }) => ({
+    id,
+    label: t(label),
+    title: t('See this site at {device} width', { device: t(label) }),
+  }))
+  const scriptOptions = [
+    { id: 'static', label: t('Static'), title: t('Static preview') },
+    { id: 'live', label: t('JavaScript'), title: t('Run JavaScript') },
+  ]
+  const deviceSegment = onDeviceChange && (
+    <Segment
+      label={t('Preview width')}
+      options={deviceOptions}
+      value={device}
+      onChange={onDeviceChange}
+    />
+  )
+  const scriptSegment = onScriptModeChange && (
+    <Segment
+      label={t('Scripts')}
+      options={scriptOptions}
+      value={scriptMode}
+      onChange={onScriptModeChange}
+    />
+  )
 
   return (
     <>
@@ -153,6 +222,8 @@ export default function PublicToolbar({ site, pages = [], activePageId, onNaviga
             </nav>
 
             <div className="preview-topbar-actions">
+              {!narrow && deviceSegment}
+              {!narrow && scriptSegment}
               <button
                 type="button"
                 onClick={() => setShowCode(true)}
@@ -189,6 +260,12 @@ export default function PublicToolbar({ site, pages = [], activePageId, onNaviga
           <>
             <button type="button" aria-label={t('Close menu')} className="fixed inset-0 z-[131] cursor-default" onClick={() => setMoreOpen(false)} />
             <div role="menu" className="preview-actions-menu">
+              {narrow && (deviceSegment || scriptSegment) && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--studio-border)] px-2.5 py-2.5">
+                  {deviceSegment}
+                  {scriptSegment}
+                </div>
+              )}
               <button
                 type="button"
                 role="menuitem"

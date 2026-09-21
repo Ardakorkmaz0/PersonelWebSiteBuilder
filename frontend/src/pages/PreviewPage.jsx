@@ -14,6 +14,7 @@ import {
 } from '../utils/htmlRuntime.js'
 import { schemaToSingleHtml } from '../utils/schemaToFiles.js'
 import { pageHasMotion } from '../utils/motion.js'
+import { previewDeviceWidth } from '../utils/previewDevices.js'
 import { customCssBlock, safeCustomJs, themeVariablesCss } from '../utils/theme.js'
 import { googleFontHrefForTheme } from '../utils/googleFonts.js'
 import PublicToolbar from '../components/preview/PublicToolbar.jsx'
@@ -105,6 +106,39 @@ function ResponsiveSite({ page }) {
   )
 }
 
+// The stage a preview is shown on. "PC" is the browser window itself, so the
+// page fills it as it always did; a device hands the site that device's width
+// and lets it lay itself out for it — the mobile design comes from the site's
+// own breakpoints, nothing here is scaled.
+function PreviewStage({ device, children }) {
+  const width = previewDeviceWidth(device)
+  if (!width) return children
+  return (
+    <div className="preview-stage">
+      <div className="preview-stage-device" style={{ width }}>{children}</div>
+    </div>
+  )
+}
+
+// A full-bleed preview pins its iframe under the top bar; inside a device it
+// simply fills the frame it was given.
+function stageFrameStyle(device) {
+  if (previewDeviceWidth(device)) {
+    return { display: 'block', width: '100%', height: '100%', border: 'none' }
+  }
+  return {
+    position: 'fixed',
+    top: '64px',
+    right: 0,
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: 'calc(100% - 64px)',
+    border: 'none',
+    boxSizing: 'border-box',
+  }
+}
+
 export default function PreviewPage() {
   const { t } = useLanguage()
   const { slug } = useParams()
@@ -112,6 +146,7 @@ export default function PreviewPage() {
   const [site, setSite] = useState(null)
   const [status, setStatus] = useState('loading') // loading | ok | notfound | error
   const [activeId, setActiveId] = useState(null)
+  const [device, setDevice] = useState('pc')
   const previewFrameRef = useRef(null)
   const siteCanvasRef = useRef(null)
 
@@ -453,51 +488,28 @@ export default function PreviewPage() {
     }
     return (
       <>
-        <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
-        <iframe
-          key={current.id}
-          ref={previewFrameRef}
-          title={site.title || 'site'}
-          srcDoc={iframeHtml}
-          sandbox={staticMode ? STATIC_HTML_SANDBOX : PUBLIC_HTML_SANDBOX}
-          allow={HTML_ALLOW}
-          allowFullScreen
-          style={{
-            position: 'fixed',
-            top: '64px',
-            right: 0,
-            bottom: 0,
-            left: 0,
-            width: '100%',
-            height: 'calc(100% - 64px)',
-            border: 'none',
-            boxSizing: 'border-box',
-          }}
+        <PublicToolbar
+          site={site}
+          pages={pages}
+          activePageId={current.id}
+          onNavigate={go}
+          device={device}
+          onDeviceChange={setDevice}
+          scriptMode={staticMode ? 'static' : 'live'}
+          onScriptModeChange={setHtmlPreviewMode}
         />
-        {/* Bottom-right, clear of the (possibly multi-row) top page nav, so
-            the Static/Run-JS toggle is always visible and clickable. */}
-        <div
-          className="fixed bottom-4 right-4 z-[120] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg"
-        >
-          <button
-            type="button"
-            onClick={() => setHtmlPreviewMode('static')}
-            className={`px-3 py-2 ${
-              staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
-            }`}
-          >
-            {t('Static preview')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setHtmlPreviewMode('live')}
-            className={`px-3 py-2 ${
-              !staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
-            }`}
-          >
-            {t('Run JavaScript')}
-          </button>
-        </div>
+        <PreviewStage device={device}>
+          <iframe
+            key={current.id}
+            ref={previewFrameRef}
+            title={site.title || 'site'}
+            srcDoc={iframeHtml}
+            sandbox={staticMode ? STATIC_HTML_SANDBOX : PUBLIC_HTML_SANDBOX}
+            allow={HTML_ALLOW}
+            allowFullScreen
+            style={stageFrameStyle(device)}
+          />
+        </PreviewStage>
         {site.published === false && (
           <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
             {t('Draft preview — this site is not published yet, only you can see it.')}
@@ -520,51 +532,34 @@ ${customCssBlock(site?.schema?.customCss)}`
     }
     return (
       <>
-        <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
-        <iframe
-          key={`${current.id}-${staticMode ? 'static' : 'live'}`}
-          ref={previewFrameRef}
-          title={site.title || current.name || 'site'}
-          srcDoc={iframeHtml}
-          // Component sites keep allow-scripts on in BOTH modes so the internal
-          // runtime (responsive scale for non-flow pages, tabs handler, anchor
-          // smooth-scroll) always works. Static mode just strips the user's
-          // customJs from the emitted HTML (handled in the useMemo above), so
-          // layout/clicks stay sane and only user effects disappear.
-          sandbox={PUBLIC_HTML_SANDBOX}
-          allow={HTML_ALLOW}
-          allowFullScreen
-          style={{
-            position: 'fixed',
-            top: '64px',
-            right: 0,
-            bottom: 0,
-            left: 0,
-            width: '100%',
-            height: 'calc(100% - 64px)',
-            border: 'none',
-          }}
+        <PublicToolbar
+          site={site}
+          pages={pages}
+          activePageId={current.id}
+          onNavigate={go}
+          device={device}
+          onDeviceChange={setDevice}
+          scriptMode={staticMode ? 'static' : 'live'}
+          onScriptModeChange={setComponentPreviewMode}
         />
-        <div className="fixed bottom-4 right-4 z-[120] flex overflow-hidden rounded-lg border border-[#d1d5db] bg-white text-xs font-semibold shadow-lg">
-          <button
-            type="button"
-            onClick={() => setComponentPreviewMode('static')}
-            className={`px-3 py-2 ${
-              staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
-            }`}
-          >
-            {t('Static preview')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setComponentPreviewMode('live')}
-            className={`px-3 py-2 ${
-              !staticMode ? 'bg-[#4f46e5] text-white' : 'text-[#374151] hover:bg-[#f3f4f6]'
-            }`}
-          >
-            {t('Run JavaScript')}
-          </button>
-        </div>
+        <PreviewStage device={device}>
+          <iframe
+            key={`${current.id}-${staticMode ? 'static' : 'live'}`}
+            ref={previewFrameRef}
+            title={site.title || current.name || 'site'}
+            srcDoc={iframeHtml}
+            // Component sites keep allow-scripts on in BOTH modes so the
+            // internal runtime (responsive scale for non-flow pages, tabs
+            // handler, anchor smooth-scroll) always works. Static mode just
+            // strips the user's customJs from the emitted HTML (handled in the
+            // useMemo above), so layout/clicks stay sane and only user effects
+            // disappear.
+            sandbox={PUBLIC_HTML_SANDBOX}
+            allow={HTML_ALLOW}
+            allowFullScreen
+            style={stageFrameStyle(device)}
+          />
+        </PreviewStage>
         {site.published === false && (
           <div className="fixed bottom-4 left-1/2 z-[120] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">
             {t('Draft preview — this site is not published yet, only you can see it.')}
@@ -581,7 +576,14 @@ ${customCssBlock(site?.schema?.customCss)}`
   const fontHref = googleFontHrefForTheme(site?.schema?.theme)
   return (
     <div className="min-h-screen pt-16">
-      <PublicToolbar site={site} pages={pages} activePageId={current.id} onNavigate={go} />
+      <PublicToolbar
+        site={site}
+        pages={pages}
+        activePageId={current.id}
+        onNavigate={go}
+        device={device}
+        onDeviceChange={setDevice}
+      />
       {fontHref && (
         <>
           <link rel="preconnect" href="https://fonts.googleapis.com" crossOrigin="anonymous" />
@@ -590,9 +592,11 @@ ${customCssBlock(site?.schema?.customCss)}`
         </>
       )}
       <style>{siteCss}</style>
-      <div ref={siteCanvasRef} data-public-site-canvas>
-        <ResponsiveSite key={current.id} page={current} />
-      </div>
+      <PreviewStage device={device}>
+        <div ref={siteCanvasRef} data-public-site-canvas>
+          <ResponsiveSite key={current.id} page={current} />
+        </div>
+      </PreviewStage>
 
       {site && site.published === false && (
         <div className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-[#d1d5db] bg-[#fff4ce] px-4 py-2 text-xs font-medium text-[#5d4a06] shadow-lg">

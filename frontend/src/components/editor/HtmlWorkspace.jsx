@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import {
   HTML_ALLOW,
   HTML_VIEW_SANDBOX,
@@ -8,6 +8,7 @@ import {
   withViewportMeta,
 } from '../../utils/htmlRuntime.js'
 import { insertBeforeClosingTag } from '../../utils/htmlInsert.js'
+import { liveStateDiff, withLiveState } from '../../utils/htmlLiveState.js'
 import { DEVICES, isMobileDevice } from '../../utils/htmlDevices.js'
 import PhoneFrame from './PhoneFrame.jsx'
 import { phoneFrameH, phoneFrameW, phoneModel } from './phoneFrameMetrics.js'
@@ -438,13 +439,15 @@ export function installSelectionResizeChrome(
   updateSelectionResizeChrome(doc, el)
 }
 
-// The other half of withGeneratedStylesHtml: View runs the page's scripts, so
-// it is the only place that can see the CSS they build. It posts that text up
-// to the editor, which lends it to Edit mode — where scripts never run.
-// Builder-injected stylesheets are skipped; Edit gets its own copies.
-const STYLE_REPORTER_SCRIPT = `<script data-pwb-style-reporter>(function () {
+// View is the only mode that runs the page's own scripts, so it is the only
+// place that can see what they do: the CSS a CDN framework builds, and the
+// state an interaction leaves behind (a dark class, an opened accordion). It
+// reports both to the editor, which lends them to Edit mode — where scripts
+// never run. Builder-injected stylesheets are skipped; Edit has its own.
+const STATE_REPORTER_SCRIPT = `<script data-pwb-state-reporter>(function () {
   var SKIP = '[data-builder-runtime-style],[data-builder-motion-style],[data-builder-interactive-style],[data-pwb-injected]'
-  var last = ''
+  var lastCss = ''
+  var lastHtml = ''
   function collect() {
     var out = []
     var total = 0
@@ -457,10 +460,16 @@ const STYLE_REPORTER_SCRIPT = `<script data-pwb-style-reporter>(function () {
       total += text.length
       out.push(text)
     }
-    var joined = out.join('\\n')
-    if (joined === last) return
-    last = joined
-    parent.postMessage({ type: 'pwb-generated-css', styles: out }, '*')
+    var css = out.join('\\n')
+    var html = ''
+    try {
+      html = document.documentElement.outerHTML || ''
+    } catch (e) {}
+    if (html.length > 2000000) html = ''
+    if (css === lastCss && html === lastHtml) return
+    lastCss = css
+    lastHtml = html
+    parent.postMessage({ type: 'pwb-live-state', styles: out, html: html }, '*')
   }
   var timer = null
   function schedule() {
@@ -470,14 +479,17 @@ const STYLE_REPORTER_SCRIPT = `<script data-pwb-style-reporter>(function () {
   window.addEventListener('load', schedule)
   schedule()
   // A framework that builds its stylesheet in the browser keeps rebuilding it
-  // as the DOM changes, so watch for that instead of reading once.
+  // as the DOM changes, and an interaction is a DOM change too — so watch
+  // instead of reading once.
   try {
-    new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, characterData: true })
+    new MutationObserver(schedule).observe(document.documentElement, {
+      childList: true, subtree: true, attributes: true, characterData: true,
+    })
   } catch (e) {}
 })()</scr` + `ipt>`
 
 function withViewExtras(html, scrollIndex) {
-  let inject = ANCHOR_REPORTER_SCRIPT + STYLE_REPORTER_SCRIPT
+  let inject = ANCHOR_REPORTER_SCRIPT + STATE_REPORTER_SCRIPT
   if (scrollIndex != null && scrollIndex >= 0) inject += scrollOnceScript(scrollIndex)
   const out = String(html || '')
   return insertBeforeClosingTag(out, 'body', inject) ?? out + inject
@@ -771,6 +783,17 @@ function HtmlWorkspace({
       onElementSelect?.(describeElement(el))
     }
 
+    // The handle keeps the pointer for the whole drag. Without this the first
+    // move that lands on another element (the page's own content, the
+    // selection toolbar) retargets the events and the drag dies mid-gesture —
+    // which reads as "the handles don't pull".
+    try {
+      e.currentTarget?.setPointerCapture?.(e.pointerId)
+    } catch {
+      /* a mouse without a pointerId, or a browser that refuses: plain
+         window listeners below still carry the drag. */
+    }
+
     win.addEventListener('pointermove', onMove)
     win.addEventListener('pointerup', onUp)
     win.addEventListener('pointercancel', onUp)
@@ -866,19 +889,21 @@ function HtmlWorkspace({
     viewAnchorRef.current = null
   }, [html])
 
-  // CSS the page's own scripts built, reported by the view iframe. Kept with
-  // the document it came from so a stale stylesheet never styles a different
-  // page — compared at render time rather than cleared by an effect.
+  // What View's scripts produced: the CSS they built and the document they are
+  // actually showing. Kept with the document it came from so a stale stylesheet
+  // or a stale open-accordion never lands on a different page — compared at
+  // render time rather than cleared by an effect.
   const [generated, setGenerated] = useState(null)
 
   useEffect(() => {
     const onMessage = (e) => {
       if (e.source !== iframeRef.current?.contentWindow) return
-      if (e.data?.type === 'pwb-generated-css') {
+      if (e.data?.type === 'pwb-live-state') {
         const styles = Array.isArray(e.data.styles) ? e.data.styles.filter((s) => typeof s === 'string') : []
         const authored = authoredStyleText(htmlRef.current)
         const css = styles.filter((text) => !authored.has(text)).join('\n')
-        setGenerated({ html: htmlRef.current, css })
+        const live = typeof e.data.html === 'string' ? e.data.html : ''
+        setGenerated({ html: htmlRef.current, css, live })
         return
       }
       if (e.data?.type !== 'pwb-visible-anchor') return
@@ -1668,6 +1693,16 @@ function HtmlWorkspace({
     if (selectRefreshTimer.current) window.clearTimeout(selectRefreshTimer.current)
   }, [])
 
+  // Edit renders the document in the state View left it in. Computed here
+  // rather than inside the srcDoc expression because it parses the whole
+  // document, and this runs on every keystroke of the inspector.
+  const editDocument = useMemo(() => {
+    const seeded = withEditorViewportMeta(editSeed)
+    const live = generated?.html === html ? generated.live : ''
+    if (!live) return seeded
+    return withLiveState(seeded, liveStateDiff(html, live))
+  }, [editSeed, generated, html])
+
   const viewScrollIndex = scrollOnce && scrollOnce.html === html ? scrollOnce.index : null
   // View mode always gets a viewport meta when the document lacks one, so the
   // phone-size device frames preview what a real phone will actually render —
@@ -1677,11 +1712,12 @@ function HtmlWorkspace({
   const viewHtml = assemble ? assembledView : html
   // Only for the document it was measured on: a page that styles itself with a
   // script looks unstyled in Edit otherwise (scripts never run there).
-  const generatedCss = generated?.html === html ? generated.css : ''
+  const forThisDocument = generated?.html === html ? generated : null
+  const generatedCss = forThisDocument?.css || ''
   const srcDoc =
     mode === 'view'
       ? withViewExtras(withBuilderRuntimeHtml(withViewportMeta(viewHtml)), viewScrollIndex)
-      : withGeneratedStylesHtml(withEditorViewportMeta(editSeed), generatedCss)
+      : withGeneratedStylesHtml(editDocument, generatedCss)
   const sandbox = mode === 'view' ? HTML_VIEW_SANDBOX : 'allow-same-origin'
 
   // The preview iframe — rendered into either the CSS-filled responsive frame

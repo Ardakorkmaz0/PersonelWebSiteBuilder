@@ -6,6 +6,8 @@
 // Kept here (not inline in the component) so the tree-walk logic is unit
 // testable under jsdom without spinning up an iframe.
 
+import { restoreAuthoredState } from './htmlLiveState.js'
+
 // MIME-ish key the palette uses on native drag so a stray text drag can't be
 // mistaken for a component drop. Lives here (a tiny leaf module) so Sidebar
 // can import it without statically pulling in the heavy HtmlWorkspace chunk.
@@ -391,6 +393,10 @@ export function serializeDocument(doc) {
   // Unwrap the Code-project EDIT template-tag chips back to their exact text, so
   // the saved file keeps `{% … %}` / `{{ … }}` byte-for-byte.
   root.querySelectorAll('[data-pwb-tt]').forEach((el) => el.replaceWith(el.textContent))
+  // Edit mode may be showing the state View's scripts put the page in (a dark
+  // class, an opened accordion). That is borrowed, not authored: put the
+  // author's own attributes back.
+  restoreAuthoredState(root)
   return '<!DOCTYPE html>\n' + root.outerHTML
 }
 

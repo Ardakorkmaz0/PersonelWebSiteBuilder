@@ -15,6 +15,7 @@ import { apiError } from '../../utils/errors.js'
 import { extractSiteContent, updateHtmlContent, updateSchemaContent } from '../../utils/contentManager.js'
 import { analyzeSiteReadiness } from '../../utils/siteReadiness.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import SharePanel from './SharePanel.jsx'
 import { useGuestGate } from '../../utils/useGuestGate.jsx'
 
 // Tab → why it needs an account, for the gate dialog.
@@ -239,7 +240,11 @@ export default function SiteControlCenter({
 
           {tab === 'feedback' && (
             <div className="space-y-5">
-              <div className="rounded-3xl border border-[#e5e7eb] bg-white p-5"><h3 className="font-bold">{t('Client review link')}</h3><p className="mt-1 text-sm text-[#6b7280]">{t('Anyone with this private link can preview the draft and leave comments.')}</p><div className="mt-4 flex gap-2"><input readOnly value={reviewUrl} className="ms-input min-w-0 flex-1" /><button type="button" onClick={() => copy(reviewUrl, 'review')} className="ms-btn ms-btn-primary shrink-0 px-4">{t(copied === 'review' ? 'Copied' : 'Copy')}</button></div><button type="button" onClick={resetReviewLink} className="mt-3 text-xs font-semibold text-red-600">{t('Replace review link')}</button></div>
+              {/* The link, and who it lets in — one panel, because they are
+                  one decision. Replacing the address stays here as the last
+                  resort for a link that leaked. */}
+              <SharePanel siteId={site.id} reviewUrl={reviewUrl} onCopy={copy} copied={copied} />
+              <button type="button" onClick={resetReviewLink} className="text-xs font-semibold text-[var(--studio-danger)]">{t('Replace the link (the old one stops working)')}</button>
               {!comments.length ? <EmptyState>{t('No client comments yet.')}</EmptyState> : comments.map((row) => <article key={row.id} className={`rounded-2xl border bg-white p-4 ${row.resolved ? 'opacity-60' : ''}`}><div className="flex justify-between gap-3"><div><strong className="text-sm">{row.author_name}</strong><div className="text-xs text-[#9ca3af]">{row.author_email} · {row.page_id || t('General')}</div></div><button type="button" onClick={() => toggleComment(row)} className="text-xs font-semibold text-[#4f46e5]">{t(row.resolved ? 'Reopen' : 'Resolve')}</button></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#374151]">{row.body}</p></article>)}
             </div>
           )}

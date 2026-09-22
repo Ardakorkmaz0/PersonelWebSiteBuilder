@@ -19,12 +19,24 @@ export default function ReviewPage() {
   const [sending, setSending] = useState(false)
   const previewFrameRef = useRef(null)
 
+  const [refusal, setRefusal] = useState(null)
+
   useEffect(() => {
     getReviewSite(token).then((data) => {
       setPayload(data)
       setActiveId(data.site?.schema?.pages?.[0]?.id || '')
       setStatus('ok')
-    }).catch(() => setStatus('error'))
+    }).catch((err) => {
+      // "Made private" is a different fact from "no such link", and it is the
+      // one the visitor can do something about: ask the owner to add them.
+      const body = err?.response?.data
+      if (body?.code === 'share_private') {
+        setRefusal(body)
+        setStatus('private')
+        return
+      }
+      setStatus('error')
+    })
   }, [token])
 
   const site = payload?.site
@@ -68,6 +80,27 @@ export default function ReviewPage() {
   }
 
   if (status === 'loading') return <div className="grid min-h-screen place-items-center bg-[var(--studio-shell)] text-sm text-[var(--studio-text-muted)]">{t('Loading…')}</div>
+  if (status === 'private') return (
+    <div className="grid min-h-screen place-items-center bg-[var(--studio-shell)] p-6 text-center text-[var(--studio-text)]">
+      <div className="max-w-md space-y-3">
+        <h1 className="text-xl font-bold">{t('This project is private now')}</h1>
+        <p className="text-sm text-[var(--studio-text-muted)]">
+          {t('{owner} changed this project from public to private. Ask them to add your account to open it.', { owner: refusal?.owner || '' })}
+        </p>
+        {!refusal?.signed_in && (
+          <p className="text-sm text-[var(--studio-text-muted)]">
+            {t('If you were invited, sign in with the account they named.')}
+          </p>
+        )}
+        {!refusal?.signed_in && (
+          <a href={`/login?next=${encodeURIComponent(window.location.pathname)}`} className="ms-btn ms-btn-primary inline-flex px-4 py-2">
+            {t('Sign in')}
+          </a>
+        )}
+      </div>
+    </div>
+  )
+
   if (status === 'error') return <div className="grid min-h-screen place-items-center bg-[var(--studio-shell)] p-6 text-center text-[var(--studio-text)]"><div><h1 className="text-xl font-bold">{t('Review link not available')}</h1><p className="mt-2 text-sm text-[var(--studio-text-muted)]">{t('Ask the site owner for a new review link.')}</p></div></div>
 
   return (

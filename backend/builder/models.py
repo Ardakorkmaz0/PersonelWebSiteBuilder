@@ -99,6 +99,18 @@ class Site(models.Model):
     # Tokenised review links allow a client to comment on a draft without
     # receiving an editor account or access to the owner's dashboard.
     review_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    # Who the share link lets in. The link itself has always existed; what was
+    # missing is the owner's say over it. "link" is what it has always done —
+    # anyone holding it gets in — and stays the default so links already sent
+    # keep working. "people" narrows it to named accounts, and "off" closes it
+    # without changing the address, so turning sharing back on does not force
+    # everyone to be sent a new link.
+    SHARE_CHOICES = (
+        ('off', 'Not shared'),
+        ('link', 'Anyone with the link'),
+        ('people', 'Only invited people'),
+    )
+    share_mode = models.CharField(max_length=8, choices=SHARE_CHOICES, default='link')
     custom_domain = models.CharField(max_length=253, blank=True, default='', db_index=True)
     domain_status = models.CharField(
         max_length=16,
@@ -163,6 +175,32 @@ class Site(models.Model):
             slug = f'{base}-{counter}'
             counter += 1
         return slug
+
+
+class SiteViewer(models.Model):
+    """Someone the owner named, so a private project knows them by account.
+
+    A share link on its own is a secret anyone can forward. When the owner
+    picks "only these people", the link stops being the credential and the
+    account becomes one: the viewer has to be signed in as somebody on this
+    list. Same idea as naming people on a document, and the same consequence —
+    taking a name off closes the project for them immediately.
+    """
+
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='viewers')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='shared_with_me',
+    )
+    invited_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('site', 'user')
+        ordering = ['invited_at']
+
+    def __str__(self):
+        return f'{self.user} on {self.site}'
 
 
 class PublishedPage(models.Model):

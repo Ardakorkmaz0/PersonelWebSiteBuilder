@@ -36,7 +36,7 @@ from django.db.models.functions import TruncDate
 
 from . import runtime_config
 from .api_errors import error_response
-from .access import is_public, is_reachable, public_sites
+from .access import SHARE_OPEN, SHARE_PRIVATE, is_public, is_reachable, public_sites, share_access
 from .models import (
     Favorite,
     FormSubmission,
@@ -48,6 +48,7 @@ from .models import (
     Site,
     SiteSettings,
     SiteVersion,
+    SiteViewer,
     SiteVisit,
     UploadedImage,
 )
@@ -665,6 +666,56 @@ class SiteViewSet(viewsets.ModelViewSet):
         site.save(update_fields=['review_token', 'updated_at'])
         return Response({'review_token': str(site.review_token)})
 
+    # --- Sharing --------------------------------------------------------
+    @action(detail=True, methods=['get', 'post'], url_path='share')
+    def share(self, request, pk=None):
+        """Who may open this project's link.
+
+        A link on its own is a secret that can be forwarded; naming people
+        makes the account the credential instead. Both live behind the same
+        address, so narrowing or closing sharing never means sending everyone
+        a new link.
+        """
+        if is_guest(request.user):
+            return guest_blocked('share_link')
+        site = self.get_object()
+
+        if request.method == 'POST':
+            mode = str(request.data.get('mode') or '').strip()
+            if mode:
+                if mode not in dict(Site.SHARE_CHOICES):
+                    return error_response('invalid_share_mode', 'Unknown sharing mode.')
+                site.share_mode = mode
+                site.save(update_fields=['share_mode', 'updated_at'])
+
+            add = str(request.data.get('add') or '').strip()
+            if add:
+                person = User.objects.filter(username__iexact=add, is_active=True).first()
+                if person is None:
+                    return error_response('user_not_found', 'No account with that username.')
+                if person.pk == site.owner_id:
+                    return error_response('already_owner', 'That is the owner of this project.')
+                if is_guest(person):
+                    return error_response('user_not_found', 'No account with that username.')
+                SiteViewer.objects.get_or_create(site=site, user=person)
+
+            remove = request.data.get('remove')
+            if remove:
+                SiteViewer.objects.filter(site=site, user_id=remove).delete()
+
+        return Response(self._share_state(site, request))
+
+    def _share_state(self, site, request):
+        people = [
+            SearchUserSerializer(row.user, context={'request': request}).data
+            for row in site.viewers.select_related('user', 'user__profile')
+        ]
+        return {
+            'mode': site.share_mode,
+            'review_token': str(site.review_token),
+            'people': people,
+        }
+
     @action(detail=True, methods=['get', 'post'], url_path='domain')
     def domain(self, request, pk=None):
         if is_guest(request.user):
@@ -998,12 +1049,38 @@ class PublicReviewView(APIView):
             site = Site.objects.select_related('owner').get(review_token=token)
         except (Site.DoesNotExist, ValueError):
             return None
-        return site if is_reachable(site) else None
+        return site
+
+    def _refusal(self, site, request):
+        """None when they may look; the response that says why when they may not.
+
+        "This project is private now" and "this link does not exist" are
+        different facts, and only the first one is worth acting on — the person
+        can ask the owner to add them. Saying 404 for both leaves them guessing
+        whether they mistyped the address.
+        """
+        access = share_access(site, request.user)
+        if access == SHARE_OPEN:
+            return None
+        if access == SHARE_PRIVATE:
+            return Response(
+                {
+                    'detail': 'This project was made private. Ask its owner to add you.',
+                    'code': 'share_private',
+                    'owner': site.owner.username,
+                    'signed_in': bool(getattr(request.user, 'is_authenticated', False)),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return error_response('review_link_not_found', 'Review link not found.', status.HTTP_404_NOT_FOUND)
 
     def get(self, request, token):
         site = self._site(token)
         if site is None:
             return error_response('review_link_not_found', 'Review link not found.', status.HTTP_404_NOT_FOUND)
+        refused = self._refusal(site, request)
+        if refused is not None:
+            return refused
         comments = PublicReviewCommentSerializer(site.review_comments.all()[:200], many=True).data
         return Response({
             'site': PublicSiteSerializer(site, context={'request': request}).data,
@@ -1014,6 +1091,9 @@ class PublicReviewView(APIView):
         site = self._site(token)
         if site is None:
             return error_response('review_link_not_found', 'Review link not found.', status.HTTP_404_NOT_FOUND)
+        refused = self._refusal(site, request)
+        if refused is not None:
+            return refused
         serializer = PublicReviewCommentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         row = serializer.save(site=site)

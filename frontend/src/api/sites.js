@@ -55,6 +55,15 @@ export const resolveSiteComment = (siteId, commentId, resolved = true) =>
 export const regenerateReviewLink = (siteId) =>
   client.post(`/sites/${siteId}/review-link/regenerate/`).then((r) => r.data)
 
+// Who may open this project's link: read it, change the mode, add or remove a
+// named person. One address either way — narrowing sharing never means
+// sending everyone a new link.
+export const getShareState = (siteId) =>
+  client.get(`/sites/${siteId}/share/`).then((r) => r.data)
+
+export const setShareState = (siteId, payload) =>
+  client.post(`/sites/${siteId}/share/`, payload).then((r) => r.data)
+
 export const getDomainSetup = (siteId) =>
   client.get(`/sites/${siteId}/domain/`).then((r) => r.data)
 

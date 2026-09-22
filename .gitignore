@@ -49,6 +49,8 @@ build/
 .env.*
 !.env.example
 !backend/.env.example
+# Production compose values (secret key, DB password) live here on the server.
+docker-compose.override.yml
 
 # IDEs and editors
 .vscode/

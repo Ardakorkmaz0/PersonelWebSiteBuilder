@@ -14,6 +14,7 @@ import {
   TrashIcon,
 } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
+import { siteAddress } from '../../utils/siteAddress.js'
 
 function HealthPill({ complete, children }) {
   return (
@@ -38,6 +39,7 @@ export default function OwnerSiteCard({
   busyAction,
 }) {
   const { t } = useLanguage()
+  const address = siteAddress(site)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
   const health = site.project_health || {
@@ -79,7 +81,12 @@ export default function OwnerSiteCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="truncate text-[0.95rem] font-bold tracking-[-0.01em] text-[var(--studio-text)]">{site.title}</h3>
-            <p className="mt-0.5 truncate text-[11px] text-[var(--studio-text-faint)]">/site/{site.slug}</p>
+            {/* The address worth sharing: the site's own domain when one is
+                connected, else the served page. `/site/<slug>` is the showcase
+                page, not the site. */}
+            <p className="mt-0.5 truncate text-[11px] text-[var(--studio-text-faint)]">
+              {site.published ? address?.label : `/site/${site.slug}`}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <span className={`dashboard-status ${site.published ? 'dashboard-status-live' : ''}`}>
@@ -141,10 +148,16 @@ export default function OwnerSiteCard({
           <Link to={`/editor/${site.id}`} className="studio-btn studio-btn-accent min-h-9 flex-1 px-3">
             {t('Continue editing')} <ArrowRightIcon size={14} />
           </Link>
-          {site.published && (
-            <Link to={`/site/${site.slug}`} title={t('View live site')} className="studio-icon-btn studio-btn-secondary h-9 w-9">
+          {site.published && address && (
+            <a
+              href={address.href}
+              target="_blank"
+              rel="noreferrer"
+              title={t('Open the live site at {address}', { address: address.label })}
+              className="studio-icon-btn studio-btn-secondary h-9 w-9"
+            >
               <GlobeIcon size={15} />
-            </Link>
+            </a>
           )}
         </div>
       </div>

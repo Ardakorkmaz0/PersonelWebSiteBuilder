@@ -1629,6 +1629,8 @@ export const TURKISH_TRANSLATIONS = {
   'Go to the builder': 'Site oluşturucuya git',
   'Static preview': 'Statik önizleme',
   'Share this project': 'Bu projeyi paylaş',
+  'Live at': 'Yayında',
+  'Open the live site at {address}': 'Siteyi {address} adresinde aç',
   '1. Enter your domain': '1. Alan adını yaz',
   'Without http:// and without a path — for example www.your-domain.com': 'http:// olmadan ve yol olmadan; örneğin www.alanadin.com',
   'Your domain': 'Alan adın',

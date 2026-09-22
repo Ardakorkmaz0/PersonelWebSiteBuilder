@@ -30,6 +30,7 @@ from django.views.decorators.http import require_safe
 from io import StringIO
 
 from .access import public_sites
+from .visits import record_served_view
 
 # allow-same-origin is deliberately absent and must stay absent.
 PUBLISHED_CSP = (
@@ -67,9 +68,14 @@ def _harden(response, sandbox=True):
 def serve_published_page(request, slug, path=''):
     """The page itself, exactly as the editor rendered it."""
     site = _published_site(slug)
-    page = site.published_pages.filter(path=(path or '').strip('/')).first()
+    wanted = (path or '').strip('/')
+    page = site.published_pages.filter(path=wanted).first()
     if page is None:
         raise Http404('Page not found.')
+    # The showcase page counts its visits from the browser; a served document
+    # has no app JavaScript to do that, so the address people actually share
+    # was the one nobody counted.
+    record_served_view(site, request, wanted)
     return _harden(HttpResponse(page.html, content_type='text/html; charset=utf-8'))
 
 
@@ -120,7 +126,7 @@ def site_for_host(host):
     return public_sites().filter(custom_domain=name, domain_status='connected').first()
 
 
-def serve_for_host(site, path):
+def serve_for_host(site, path, request=None):
     """One page of that site, addressed as the site's own URL."""
     wanted = (path or '').strip('/')
     if wanted == 'sitemap.xml':
@@ -128,6 +134,8 @@ def serve_for_host(site, path):
     page = site.published_pages.filter(path=wanted).first()
     if page is None:
         raise Http404('Page not found.')
+    if request is not None:
+        record_served_view(site, request, wanted)
     return _harden(
         HttpResponse(page.html, content_type='text/html; charset=utf-8'),
         sandbox=False,

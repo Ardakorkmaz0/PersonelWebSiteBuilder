@@ -15,6 +15,7 @@ import { analyzeSiteReadiness } from '../../utils/siteReadiness.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import SharePanel from './SharePanel.jsx'
 import DomainPanel from './DomainPanel.jsx'
+import { siteAddress, siteAddressUrl } from '../../utils/siteAddress.js'
 import { useGuestGate } from '../../utils/useGuestGate.jsx'
 
 // Tab → why it needs an account, for the gate dialog.
@@ -99,6 +100,8 @@ export default function SiteControlCenter({
   }), [pageHtmlMap, schema.pages, seo, site.site_options, site.title])
   const contentEntries = useMemo(() => extractSiteContent(schema, pageHtmlMap), [schema, pageHtmlMap])
   const reviewUrl = site.review_token ? `${window.location.origin}/review/${site.review_token}` : ''
+  const liveAddress = siteAddress(site)
+  const liveAddressUrl = siteAddressUrl(site)
 
   if (!open) return null
 
@@ -170,6 +173,21 @@ export default function SiteControlCenter({
           {busy && <div role="status" className="mb-4 text-sm text-[#6b7280]">{t('Loading…')}</div>}
 
           {tab === 'readiness' && (
+            <div className="space-y-5">
+            {/* The link to give people, at the top of the first tab. The app
+                used to offer `/site/<slug>` everywhere — that is the showcase
+                page with our chrome on it, not the site. */}
+            {site.published && liveAddress && (
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--studio-border)] bg-[var(--studio-panel-raised)] px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--studio-text-faint)]">{t('Live at')}</span>
+                <a href={liveAddress.href} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--studio-accent-hover)] underline">
+                  {liveAddress.label}
+                </a>
+                <button type="button" onClick={() => copy(liveAddressUrl, 'address')} className="ms-btn ms-btn-secondary px-3 py-1.5 text-xs">
+                  {t(copied === 'address' ? 'Copied' : 'Copy')}
+                </button>
+              </div>
+            )}
             <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
               <div className="rounded-3xl bg-[#111827] p-6 text-white">
                 <div className="text-sm text-white/65">{t('Site health score')}</div>
@@ -195,6 +213,7 @@ export default function SiteControlCenter({
                 </div>
                 <button type="button" disabled={busy} onClick={saveSeo} className="ms-btn ms-btn-primary px-5 py-2.5">{t('Save SEO settings')}</button>
               </div>
+            </div>
             </div>
           )}
 

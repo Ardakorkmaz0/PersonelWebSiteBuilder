@@ -196,3 +196,53 @@ class TestCertificates:
     def test_a_taken_down_site_loses_its_certificate_too(self, connected):
         Site.objects.filter(pk=connected.pk).update(moderation_blocked=True)
         assert Client().get('/api/public/domain-allowed/?host=ada.example').status_code == 404
+
+
+class TestCounting:
+    """The address people actually share was the one whose visits nobody
+    counted: the showcase page counts from the browser, and a served document
+    has no app JavaScript to do that."""
+
+    BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+
+    def test_a_visit_to_the_served_page_counts(self, connected):
+        Client().get('/', HTTP_HOST='ada.example', HTTP_USER_AGENT=self.BROWSER)
+
+        connected.refresh_from_db()
+        assert connected.view_count == 1
+        assert connected.visits.count() == 1
+
+    def test_the_shared_path_counts_too(self, site):
+        Client().get(f'/s/{site.slug}/', HTTP_USER_AGENT=self.BROWSER)
+
+        site.refresh_from_db()
+        assert site.view_count == 1
+
+    def test_which_page_was_seen_is_recorded(self, connected):
+        Client().get('/about/', HTTP_HOST='ada.example', HTTP_USER_AGENT=self.BROWSER)
+
+        assert connected.visits.get().path == 'about'
+
+    @pytest.mark.parametrize('agent', [
+        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'facebookexternalhit/1.1',
+        'Slackbot-LinkExpanding 1.0',
+        'curl/8.4.0',
+        '',
+    ])
+    def test_machines_do_not_count_as_visitors(self, connected, agent):
+        # A link preview is not a reader. The ones that say what they are get
+        # filtered; a count nobody can verify is better honest than inflated.
+        Client().get('/', HTTP_HOST='ada.example', HTTP_USER_AGENT=agent)
+
+        connected.refresh_from_db()
+        assert connected.view_count == 0
+
+    def test_counting_never_takes_the_page_down(self, connected, monkeypatch):
+        from . import visits
+
+        monkeypatch.setattr(visits.SiteVisit.objects, 'create', lambda **kw: 1 / 0)
+
+        response = Client().get('/', HTTP_HOST='ada.example', HTTP_USER_AGENT=self.BROWSER)
+
+        assert response.status_code == 200

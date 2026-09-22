@@ -124,6 +124,6 @@ class CustomDomainMiddleware:
         if request.method not in ('GET', 'HEAD'):
             return HttpResponseNotFound('Not found')
         try:
-            return serve_for_host(site, request.path)
+            return serve_for_host(site, request.path, request)
         except Http404:
             return HttpResponseNotFound('Not found')

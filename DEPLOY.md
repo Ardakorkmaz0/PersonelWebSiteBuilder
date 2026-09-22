@@ -492,9 +492,11 @@ env edits, no restart, takes effect immediately. Secrets there are write-only.
   separately, so the real limit is `workers ×` what you configured.
 - **Email / password reset:** set `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
   `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL`, and
-  `DJANGO_FRONTEND_URL` (Gmail app password / SendGrid / SES). With no
-  `EMAIL_HOST`, reset links are printed to the server log instead — handy for
-  testing.
+  `DJANGO_FRONTEND_URL` (Gmail app password / SendGrid / SES). Port 587 is
+  STARTTLS (`EMAIL_USE_TLS=True`); port **465** is implicit SSL and needs
+  `EMAIL_USE_SSL=True` with `EMAIL_USE_TLS=False`, or the connection hangs.
+  With no `EMAIL_HOST`, reset links are printed to the server log instead —
+  handy for testing.
 - **Google sign-in:** create an OAuth 2.0 **Web** client at
   <https://console.cloud.google.com/apis/credentials>, add your frontend origin
   to *Authorized JavaScript origins*, then put the **same** client id in

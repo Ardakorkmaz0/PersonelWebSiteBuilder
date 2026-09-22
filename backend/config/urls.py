@@ -6,7 +6,9 @@ from builder.media import serve_media
 from builder.published import published_sitemap, serve_published_page
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # settings.ADMIN_PATH, not 'admin/': the SPA's own admin panel lives at
+    # /admin and would be shadowed by this one behind a single-domain proxy.
+    path(settings.ADMIN_PATH, admin.site.urls),
     path('api/', include('builder.urls')),
     # Published sites. Not under /api/ because these are the sites themselves:
     # the address a visitor sees, a crawler indexes and a scraper reads. The

@@ -284,6 +284,12 @@ location /s/ { proxy_pass http://127.0.0.1:8000; }
 location /   { try_files $uri $uri/ /index.html; }
 ```
 
+The same applies to `/api/`, `/media/`, `/static/` and whatever you set
+`DJANGO_ADMIN_PATH` to — all backend. **`/admin` is not**: that is the app's own
+admin panel and Settings page, served by the SPA. Sending `/admin` to Django
+puts its login form where the Settings page should be, and a superuser then has
+nowhere to set the reCAPTCHA and SMTP keys.
+
 On a split setup (`app.example.com` static + `api.example.com` backend) the
 sites answer on the API domain (`https://api.example.com/s/<slug>/`) unless you
 add the same rule at your CDN. Either works — the documents carry their own
@@ -311,6 +317,7 @@ header at the proxy.**
 | `DJANGO_SSL_REDIRECT` | recommended | `True` | Default `True` in prod; set `False` only if nothing terminates TLS yet. |
 | `SENTRY_DSN` | recommended | `https://…@sentry.io/…` | Error monitoring; off when unset. |
 | `DJANGO_FRONTEND_URL` | if using email | `https://app.example.com` | Builds the password-reset link. |
+| `DJANGO_ADMIN_PATH` | recommended | `django-admin` | Where Django's own admin lives. Not `admin`: the SPA serves its admin panel and Settings page at `/admin` and `/admin/settings`, and on a single domain the proxy can only give that path to one of them. Pick something only you know. |
 | `DJANGO_SERVE_MEDIA` | **yes, one of** | `True` | Django serves uploaded images from `MEDIA_ROOT`. Defaults to `DJANGO_DEBUG`, so a production process serves **nothing** under `/media/` unless this is on **or** a proxy/bucket does it (§8a) — uploads then succeed but every image URL 404s. |
 | `DJANGO_HSTS_SECONDS` | optional | `31536000` | HSTS lifetime (1 year default). |
 | `DJANGO_THROTTLE_AUTH` | optional | `10/min` | Brute-force cap on login/register/google. |

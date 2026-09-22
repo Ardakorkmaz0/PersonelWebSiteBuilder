@@ -155,6 +155,13 @@ RECAPTCHA_SECRET_KEY = os.getenv('RECAPTCHA_SECRET_KEY', '').strip()
 # (served to the SPA via /api/public/config/). Safe to expose.
 RECAPTCHA_SITE_KEY = os.getenv('RECAPTCHA_SITE_KEY', '').strip()
 
+# Where Django's own admin answers. NOT '/admin/': the SPA owns that path (its
+# in-app admin panel and runtime Settings page live at /admin and
+# /admin/settings), and on a single-domain deploy whichever one the proxy sends
+# there shadows the other. A non-default path also keeps the endless bot
+# scanning of /admin/ off the real login form. Must end with a slash.
+ADMIN_PATH = (os.getenv('DJANGO_ADMIN_PATH', 'django-admin').strip().strip('/') + '/')
+
 # Email — used by the password-reset flow. Env-gated: set EMAIL_HOST (any SMTP:
 # Gmail app password, SendGrid, SES…) to send real mail. With no host, dev prints
 # the email to the console (so you can copy the reset link locally) and the
@@ -287,7 +294,7 @@ CORS_ALLOW_HEADERS = (*default_headers, 'x-site-save-source')
 # Published sites embedded inside the editor preview iframe carry their own
 # strict sandbox attribute so they can't reach these origins.
 CONTENT_SECURITY_POLICY = {
-    'EXCLUDE_URL_PREFIXES': ('/admin', '/media'),
+    'EXCLUDE_URL_PREFIXES': (f'/{ADMIN_PATH.rstrip("/")}', '/media'),
     'DIRECTIVES': {
         'default-src': ("'self'",),
         'connect-src': (

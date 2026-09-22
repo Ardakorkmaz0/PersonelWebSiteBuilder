@@ -1095,6 +1095,55 @@ button:not(:disabled),
     background: color-mix(in srgb, var(--studio-warning-soft) 88%, var(--studio-panel-raised));
     color: var(--studio-warning);
   }
+  /* Pin control — superuser only, so it sits beside the star rather than
+     replacing it, and stays out of the way until someone looks for it. */
+  .dashboard-site-card-pin {
+    position: absolute;
+    z-index: 2;
+    top: 1rem;
+    right: 3.75rem;
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--studio-border-strong) 76%, transparent);
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--studio-panel-raised) 88%, transparent);
+    color: var(--studio-text-muted);
+    box-shadow: 0 8px 24px rgba(14, 18, 28, 0.14);
+    backdrop-filter: blur(12px) saturate(1.3);
+    transition: 140ms ease;
+    transition-property: color, border-color, background-color, transform;
+  }
+  .dashboard-site-card-pin:hover {
+    border-color: color-mix(in srgb, var(--studio-accent) 36%, var(--studio-border));
+    background: var(--studio-panel-raised);
+    color: var(--studio-accent-text);
+    transform: translateY(-1px);
+  }
+  .dashboard-site-card-pin-active {
+    border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
+    background: color-mix(in srgb, var(--studio-accent-soft) 88%, var(--studio-panel-raised));
+    color: var(--studio-accent-text);
+  }
+  /* Shown to everyone: a site above the ranking should say why it is there. */
+  .dashboard-site-card-pinned-badge {
+    position: absolute;
+    z-index: 2;
+    top: 1rem;
+    left: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--studio-accent) 92%, transparent);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    box-shadow: 0 8px 24px rgba(14, 18, 28, 0.2);
+  }
   .dashboard-site-card-body {
     display: flex;
     min-width: 0;

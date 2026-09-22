@@ -409,6 +409,10 @@ export const TURKISH_TRANSLATIONS = {
   'Open the live site': 'Canlı siteyi aç',
   'Favorite': 'Favorilere ekle',
   'Unfavorite': 'Favorilerden çıkar',
+  // 'Pinned' already exists further down (pinned projects) and reads the same
+  // on this badge — one key, one translation.
+  'Pin to the home page': 'Ana sayfaya sabitle',
+  'Unpin from the home page': 'Ana sayfa sabitlemesini kaldır',
   'Views': 'Görüntülenme',
   'View →': 'Görüntüle →',
   'Sites you starred on Explore.': 'Keşfet sayfasında favorilere eklediğiniz siteler.',

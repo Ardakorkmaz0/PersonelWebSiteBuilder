@@ -7,7 +7,44 @@ through them. A moderator's takedown only flipped `published`, which the owner
 could flip straight back. Every public way in now asks this module instead of
 writing its own filter.
 """
+from django.utils import timezone
+
 from .models import Site
+
+# --- How much of the internet one account may open in a day ----------------
+#
+# Publishing is the moment a page stops being the owner's business and starts
+# being everyone's. Nothing capped it, so one account could open an unlimited
+# number of public pages in a minute — which is what a spam run looks like.
+#
+# The cap counts SITES made public today, not flips of the switch. Somebody who
+# publishes a page, spots a typo, unpublishes it and publishes it again has
+# done one thing, not three, and the rule should agree with them.
+DAILY_PUBLISH_LIMIT = 5
+
+
+def sites_published_today(user, today=None):
+    """The ids of this account's sites that went public today."""
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return set()
+    day = today or timezone.localdate()
+    return set(
+        Site.objects.filter(owner=user, last_published_at__date=day)
+        .values_list('pk', flat=True),
+    )
+
+
+def publish_blocked(user, site=None, today=None):
+    """Would publishing `site` now go over the daily cap?
+
+    `site` is None when the site does not exist yet (publishing straight from
+    create), in which case it can only be a new slot. A site that already used
+    a slot today is free to republish for the rest of the day.
+    """
+    used = sites_published_today(user, today)
+    if site is not None and site.pk in used:
+        return False
+    return len(used) >= DAILY_PUBLISH_LIMIT
 
 
 def public_sites():

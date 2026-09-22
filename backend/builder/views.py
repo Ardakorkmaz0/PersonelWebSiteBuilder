@@ -1233,11 +1233,14 @@ class ExploreView(ListAPIView):
         # its work off the platform, and the profile page and the header search
         # already behave that way. Without it the feed — the most visible
         # surface of all — kept showing a suspended creator's sites.
+        # Pinned sites ride above the ranking; everything else keeps the
+        # hot_score order. nulls_last matters — without it every unpinned site
+        # (pinned_at IS NULL) would sort to the top on a descending order.
         qs = (
             public_sites()
             .select_related('owner', 'owner__profile')
             .annotate(favorite_count=Count('favorited_by'))
-            .order_by('-hot_score', '-updated_at')
+            .order_by(F('pinned_at').desc(nulls_last=True), '-hot_score', '-updated_at')
         )
         category = self.request.GET.get('category')
         if category:
@@ -1636,6 +1639,42 @@ class AdminSiteModerateView(APIView):
         # Resolve any open reports on a taken-down site.
         Report.objects.filter(site=site, status='open').update(status='resolved', resolved_at=timezone.now())
         return Response({'detail': 'Site unpublished.', 'published': False, 'moderation_blocked': True})
+
+
+class AdminSitePinView(APIView):
+    """Lift a site to the top of the home feed, or let it back down.
+
+    Superuser-only rather than staff-only: the home page is the first thing
+    every visitor sees, so deciding what sits there is editorial control over
+    the whole platform, not day-to-day moderation.
+
+    Only a site that is actually public can be pinned. Pinning a draft or a
+    taken-down site would put a row in the database that the feed can never
+    show — `public_sites()` filters it out — and leave a superuser wondering
+    why nothing happened.
+    """
+
+    permission_classes = [IsSuperUser]
+
+    def post(self, request, site_id):
+        pinned = request.data.get('pinned')
+        if not isinstance(pinned, bool):
+            return error_response('invalid_pin', 'pinned must be true or false.')
+        try:
+            site = Site.objects.select_related('owner').get(pk=site_id)
+        except Site.DoesNotExist:
+            return error_response('site_not_found', 'Site not found.', status.HTTP_404_NOT_FOUND)
+        if pinned and not is_public(site):
+            return error_response(
+                'site_not_public',
+                'Only a published site can be pinned to the home page.',
+            )
+        site.pinned_at = timezone.now() if pinned else None
+        site.save(update_fields=['pinned_at'])
+        return Response({
+            'detail': 'Site pinned to the home page.' if pinned else 'Site unpinned.',
+            'pinned': pinned,
+        })
 
 
 # ---------------------------------------------------------------------------

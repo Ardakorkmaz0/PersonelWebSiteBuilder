@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import SitePreview from './SitePreview.jsx'
-import { ArrowRightIcon, CopyIcon, StarIcon, EyeIcon } from '../icons.jsx'
+import { ArrowRightIcon, CopyIcon, StarIcon, EyeIcon, PinIcon } from '../icons.jsx'
 import { useLanguage } from '../../i18n/useLanguage.js'
 
 function Avatar({ url, name, size = 20 }) {
@@ -21,9 +21,18 @@ function Avatar({ url, name, size = 20 }) {
 
 // One card on the Explore / Favorites grid: a live public thumbnail, owner
 // attribution, view + favorite counts, and a star toggle.
-export default function ExploreCard({ site, onToggleFav, onRemix, remixing = false, favoriting = false }) {
+//
+// `onTogglePin` is passed only for a superuser (the server refuses anyone
+// else); without it the card renders exactly as it always did. The "Pinned"
+// badge is shown to everybody, because a site sitting above the ranking should
+// say why it is there rather than look like the most popular thing today.
+export default function ExploreCard({
+  site, onToggleFav, onRemix, onTogglePin,
+  remixing = false, favoriting = false, pinning = false,
+}) {
   const { t } = useLanguage()
   const favoriteLabel = site.is_favorited ? t('Unfavorite') : t('Favorite')
+  const pinLabel = site.pinned ? t('Unpin from the home page') : t('Pin to the home page')
 
   return (
     <article className="dashboard-site-card group">
@@ -47,6 +56,25 @@ export default function ExploreCard({ site, onToggleFav, onRemix, remixing = fal
         >
           <StarIcon size={17} filled={site.is_favorited} />
         </button>
+        {onTogglePin && (
+          <button
+            type="button"
+            onClick={() => onTogglePin(site)}
+            disabled={pinning}
+            aria-busy={pinning}
+            aria-pressed={!!site.pinned}
+            title={pinLabel}
+            aria-label={pinLabel}
+            className={`dashboard-site-card-pin ${site.pinned ? 'dashboard-site-card-pin-active' : ''}`}
+          >
+            <PinIcon size={16} />
+          </button>
+        )}
+        {site.pinned && (
+          <span className="dashboard-site-card-pinned-badge">
+            <PinIcon size={12} /> {t('Pinned')}
+          </span>
+        )}
       </div>
 
       <div className="dashboard-site-card-body">

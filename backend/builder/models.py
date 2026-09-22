@@ -91,6 +91,15 @@ class Site(models.Model):
     # iframe so their JavaScript runs isolated from the app/visitor session).
     html = models.TextField(blank=True, default='')
     published = models.BooleanField(default=False)
+    # When this site was last switched from draft to public. It exists for the
+    # daily publishing cap (see access.publish_blocked): the cap counts SITES an
+    # account made public today, not switch flips, so a stamp on the site is
+    # enough — unpublishing and republishing the same one reuses its slot.
+    last_published_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Set by a superuser to lift a site to the top of the home feed; null means
+    # not pinned. A timestamp rather than a flag so several pinned sites keep a
+    # stable order (newest pin first) and so we can see when it happened.
+    pinned_at = models.DateTimeField(null=True, blank=True, db_index=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     tags = models.JSONField(default=list, blank=True)
     # Product-level settings that do not belong to the visual schema. Keeping

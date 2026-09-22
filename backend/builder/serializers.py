@@ -1,9 +1,11 @@
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password as dj_validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
+from .access import DAILY_PUBLISH_LIMIT, publish_blocked
 from .guests import GUEST_SITE_LIMIT, GUEST_USERNAME_PREFIX, is_guest
 from .models import (
     FormSubmission,
@@ -376,12 +378,19 @@ class ExploreSiteSerializer(serializers.ModelSerializer):
     owner_avatar_url = serializers.SerializerMethodField()
     favorite_count = serializers.IntegerField(read_only=True)
     is_favorited = serializers.SerializerMethodField()
+    # A flag, not the timestamp: the feed only needs to know whether to draw
+    # the badge, and when a superuser pinned something is nobody else's read.
+    pinned = serializers.SerializerMethodField()
 
     class Meta:
         model = Site
         fields = ('id', 'title', 'slug', 'owner_id', 'owner_username',
                   'owner_display_name', 'owner_avatar_url', 'category', 'tags',
-                  'view_count', 'favorite_count', 'is_favorited', 'updated_at')
+                  'view_count', 'favorite_count', 'is_favorited', 'pinned',
+                  'updated_at')
+
+    def get_pinned(self, obj):
+        return obj.pinned_at is not None
 
     def _profile(self, obj):
         return getattr(obj.owner, 'profile', None)
@@ -559,6 +568,16 @@ class SiteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 'Create an account to publish this site — your work is kept.',
             )
+        # Only a move INTO public is capped. Saving an already-public site, and
+        # unpublishing, are untouched — otherwise editing a live page would
+        # eat the owner's allowance.
+        going_public = value and not (self.instance and self.instance.published)
+        if going_public and publish_blocked(user, self.instance):
+            raise serializers.ValidationError(
+                f'You can make {DAILY_PUBLISH_LIMIT} sites public a day. '
+                'Try again tomorrow — a site you already published today can '
+                'still be unpublished and published again.',
+            )
         return value
 
     def validate_schema(self, value):
@@ -578,7 +597,12 @@ class SiteSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         pages = validated_data.pop('published_pages', None)
+        # Read before the update: afterwards `instance` already carries the new
+        # value, and the stamp has to mark the crossing, not the state.
+        was_published = instance.published
         site = super().update(instance, validated_data)
+        if site.published and not was_published:
+            self._stamp_published(site)
         # Unpublishing takes the documents down with the switch: nothing should
         # keep answering at a URL the owner has turned off.
         if not site.published:
@@ -590,9 +614,17 @@ class SiteSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         pages = validated_data.pop('published_pages', None)
         site = super().create(validated_data)
+        if site.published:
+            self._stamp_published(site)
         if site.published and pages:
             replace_published_pages(site, pages)
         return site
+
+    @staticmethod
+    def _stamp_published(site):
+        """Record that this site went public, for the daily cap."""
+        site.last_published_at = timezone.now()
+        site.save(update_fields=['last_published_at'])
 
 
 class PublicSiteSerializer(serializers.ModelSerializer):

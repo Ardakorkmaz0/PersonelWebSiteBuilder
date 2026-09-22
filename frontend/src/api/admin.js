@@ -25,6 +25,12 @@ export const suspendUser = (userId, suspend) =>
 export const moderateSite = (siteId, action) =>
   client.post(`/admin/sites/${siteId}/moderate/`, { action }).then((r) => r.data)
 
+// Lift a site above the ranking on the home feed, or let it back down.
+// Superuser-only, and only a published site can be pinned — see
+// AdminSitePinView. Returns { detail, pinned }.
+export const pinSite = (siteId, pinned) =>
+  client.post(`/admin/sites/${siteId}/pin/`, { pinned }).then((r) => r.data)
+
 // Flagged community blocks. Its own queue: a site gets unpublished, a block
 // gets pulled out of a library it has already been copied out of.
 export const listComponentReports = (status = 'open', page = 1) =>

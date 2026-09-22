@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { listExplore, addFavorite, removeFavorite } from '../api/explore.js'
 import { cloneSite, listSites } from '../api/sites.js'
+import { pinSite } from '../api/admin.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
@@ -66,6 +67,7 @@ export default function ExplorePage() {
   const [error, setError] = useState('')
   const [feedError, setFeedError] = useState('')
   const [feedAttempt, setFeedAttempt] = useState(0)
+  const [pinningId, setPinningId] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createOrigin, setCreateOrigin] = useState(null)
   const [remixingId, setRemixingId] = useState(null)
@@ -187,6 +189,30 @@ export default function ExplorePage() {
     } catch (requestError) {
       setError(apiError(requestError))
       setRemixingId(null)
+    }
+  }
+
+  // Superuser-only: the server refuses anybody else, and the button is not
+  // rendered for them either. The card is updated in place rather than
+  // refetching, so the badge appears immediately; the new position in the
+  // ranking shows on the next load, which is when the feed is re-sorted.
+  async function onTogglePin(site) {
+    if (pinningId) return
+    setPinningId(site.id)
+    setError('')
+    const next = !site.pinned
+    try {
+      await pinSite(site.id, next)
+      setData((previous) => ({
+        ...previous,
+        items: previous.items.map((item) => (
+          item.id === site.id ? { ...item, pinned: next } : item
+        )),
+      }))
+    } catch (requestError) {
+      setError(apiError(requestError))
+    } finally {
+      setPinningId(null)
     }
   }
 
@@ -357,7 +383,10 @@ export default function ExplorePage() {
             <>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {items.map((site) => (
-                  <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix} remixing={remixingId === site.id} favoriting={favoritingIds.has(site.id)} />
+                  <ExploreCard key={site.id} site={site} onToggleFav={onToggleFav} onRemix={onRemix}
+                    onTogglePin={user?.is_superuser ? onTogglePin : undefined}
+                    remixing={remixingId === site.id} favoriting={favoritingIds.has(site.id)}
+                    pinning={pinningId === site.id} />
                 ))}
               </div>
               {data.hasMore && (

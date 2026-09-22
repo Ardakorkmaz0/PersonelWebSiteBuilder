@@ -363,6 +363,32 @@ If TLS is **not** in place yet on a first bring-up, set `DJANGO_SSL_REDIRECT=Fal
 temporarily so you're not redirected to a non-existent HTTPS endpoint — then turn
 it back on once certs are live.
 
+### 8a. Uploaded images (`/media/`)
+
+Something has to answer `/media/…`, or uploads succeed and their URLs 404.
+Pick one:
+
+- **One server (the Compose stack):** `DJANGO_SERVE_MEDIA=True` — Django serves
+  the `media` volume (`builder/media.py`). Simple and fine at this scale.
+- **A proxy in front:** let it serve the folder and set
+  `DJANGO_SERVE_MEDIA=False`. Uploads may be **SVG**, which runs scripts when
+  opened directly — send the same sandboxing headers Django sends:
+  ```
+  api.example.com {
+      handle_path /media/* {
+          root * /srv/builder/media
+          header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox"
+          header X-Content-Type-Options nosniff
+          file_server
+      }
+      reverse_proxy 127.0.0.1:8000
+  }
+  ```
+- **Several instances:** a local folder is not shared between them — use object
+  storage (§11) and set `DJANGO_SERVE_MEDIA=False`.
+
+---
+
 ## 8b. Customer domains (`www.their-company.com`)
 
 A site owner can connect their own domain in the editor: **Share is where the
@@ -418,32 +444,6 @@ owner stops certificate renewal along with everything else.
 the two it is ("does not resolve yet" vs "resolves somewhere else"), because
 those need different fixes.
 
-### 8a. Uploaded images (`/media/`)
-
-Something has to answer `/media/…`, or uploads succeed and their URLs 404.
-Pick one:
-
-- **One server (the Compose stack):** `DJANGO_SERVE_MEDIA=True` — Django serves
-  the `media` volume (`builder/media.py`). Simple and fine at this scale.
-- **A proxy in front:** let it serve the folder and set
-  `DJANGO_SERVE_MEDIA=False`. Uploads may be **SVG**, which runs scripts when
-  opened directly — send the same sandboxing headers Django sends:
-  ```
-  api.example.com {
-      handle_path /media/* {
-          root * /srv/builder/media
-          header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox"
-          header X-Content-Type-Options nosniff
-          file_server
-      }
-      reverse_proxy 127.0.0.1:8000
-  }
-  ```
-- **Several instances:** a local folder is not shared between them — use object
-  storage (§11) and set `DJANGO_SERVE_MEDIA=False`.
-
----
-
 ## 9. Post-deploy smoke test (do this before sharing the link)
 
 1. **Frontend loads** at `https://app.example.com` with no console errors.
@@ -463,6 +463,23 @@ Pick one:
    given (`…/media/images/…`) in a new tab — it must load, not 404 (§8a).
 
 ---
+
+## 9b. Housekeeping (one scheduled job)
+
+"Continue without signing in" creates a real user row per visitor who takes it
+up, and most of those are a look around and nothing else. One job clears the
+ones that are old **and** empty — no site, no image, no favourite. A guest who
+made something keeps it: they may still come back and sign up.
+
+```bash
+# Docker Compose
+docker compose exec backend python manage.py purge_guests --days 30
+# Manual deploy (inside the virtualenv)
+python manage.py purge_guests --days 30
+```
+
+Schedule it daily (cron, systemd timer, or your platform's scheduler). Add
+`--dry-run` first if you want to see the count before anything is deleted.
 
 ## 10. Optional integrations
 

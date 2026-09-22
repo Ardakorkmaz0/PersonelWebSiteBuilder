@@ -282,9 +282,13 @@ function UsersTab() {
               </div>
             </div>
 
+            {/* overflow-x-auto, not overflow-hidden: the row of site actions is
+                wider than a phone screen, and hiding it put View / Suspend /
+                Delete out of reach with no way to get at them. Scrolling keeps
+                every control usable without a mobile redesign. */}
             {u.sites.length > 0 && (
-              <div className="mt-4 overflow-hidden rounded-lg border border-[#eef0f3]">
-                <table className="w-full text-sm">
+              <div className="mt-4 overflow-x-auto rounded-lg border border-[#eef0f3]">
+                <table className="w-full min-w-[26rem] text-sm">
                   <tbody>
                     {u.sites.map((s) => (
                       <tr key={s.id} className="border-b border-[#f3f4f6] last:border-0">
@@ -704,14 +708,17 @@ export default function AdminPage() {
   return (
     <div className="studio-theme-surface studio-brand-backdrop min-h-screen bg-[var(--studio-shell)] text-[var(--studio-text)]">
       <header className="sticky top-0 z-10 border-b border-[var(--studio-border)] bg-[color-mix(in_srgb,var(--studio-panel-raised)_92%,transparent)] backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+        {/* flex-wrap + a narrower gutter below `sm`: on a phone this row was
+            wider than the screen, so the Admin badge and part of the Settings
+            link sat outside it — clipped, not scrollable, so unreachable. */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
             <Link to="/" title={t('Sitebuilder home')} className="brand-mark">S</Link>
             <button type="button" onClick={goBack} className="text-sm font-medium text-[#374151] hover:text-[#111827]">
               &larr; {t('Back')}
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
             <LanguageSwitcher />
             {isSuperuser && (
               <Link
@@ -729,7 +736,7 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-10">
+      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         <h1 className="text-2xl font-bold tracking-tight text-[#111827]">{t('Moderation')}</h1>
 
         <div className="mb-8 mt-4 flex gap-2 border-b border-[#e5e7eb]">

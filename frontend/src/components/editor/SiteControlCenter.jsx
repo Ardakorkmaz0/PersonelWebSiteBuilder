@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  configureDomain,
   deleteSiteSubmission,
-  getDomainSetup,
   getSiteAnalytics,
   listSiteComments,
   listSiteSubmissions,
@@ -16,6 +14,7 @@ import { extractSiteContent, updateHtmlContent, updateSchemaContent } from '../.
 import { analyzeSiteReadiness } from '../../utils/siteReadiness.js'
 import { useLanguage } from '../../i18n/useLanguage.js'
 import SharePanel from './SharePanel.jsx'
+import DomainPanel from './DomainPanel.jsx'
 import { useGuestGate } from '../../utils/useGuestGate.jsx'
 
 // Tab → why it needs an account, for the gate dialog.
@@ -56,8 +55,6 @@ export default function SiteControlCenter({
   const [submissions, setSubmissions] = useState([])
   const [analytics, setAnalytics] = useState(null)
   const [comments, setComments] = useState([])
-  const [domainSetup, setDomainSetup] = useState(null)
-  const [domain, setDomain] = useState(site.custom_domain || '')
   const [copied, setCopied] = useState('')
   const faviconInputRef = useRef(null)
   const [seo, setSeo] = useState({
@@ -65,22 +62,21 @@ export default function SiteControlCenter({
     ...(site.site_options?.seo || {}),
   })
 
+  // The domain tab fetches its own state (DomainPanel does it), so it is not
+  // in this list any more.
   useEffect(() => {
-    if (!open || !site.id || !['inbox', 'analytics', 'feedback', 'domain'].includes(tab)) return
+    if (!open || !site.id || !['inbox', 'analytics', 'feedback'].includes(tab)) return
     let active = true
     const request = tab === 'inbox'
       ? listSiteSubmissions(site.id)
       : tab === 'analytics'
         ? getSiteAnalytics(site.id)
-        : tab === 'feedback'
-          ? listSiteComments(site.id)
-          : getDomainSetup(site.id)
+        : listSiteComments(site.id)
     request.then((data) => {
       if (!active) return
       if (tab === 'inbox') setSubmissions(data)
       if (tab === 'analytics') setAnalytics(data)
       if (tab === 'feedback') setComments(data)
-      if (tab === 'domain') { setDomainSetup(data); setDomain(data.domain || '') }
     }).catch((err) => active && setError(apiError(err))).finally(() => active && setBusy(false))
     return () => { active = false }
   }, [open, site.id, tab])
@@ -143,15 +139,6 @@ export default function SiteControlCenter({
     onSitePatch({ ...site, review_token: data.review_token })
   }
 
-  async function saveDomain() {
-    setBusy(true); setError('')
-    try {
-      const data = await configureDomain(site.id, domain)
-      setDomainSetup(data)
-      onSitePatch({ ...site, custom_domain: data.domain, domain_status: data.status })
-    } catch (err) { setError(apiError(err)) } finally { setBusy(false) }
-  }
-
   function editContent(entry, value) {
     if (entry.source === 'html') {
       const page = schema.pages.find((item) => item.id === entry.pageId)
@@ -174,7 +161,7 @@ export default function SiteControlCenter({
         </header>
         <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e5e7eb] bg-white px-3 py-2 md:px-6" aria-label={t('Site tools')}>
           {TABS.map(([id, label]) => (
-            <button key={id} type="button" onClick={() => { if (GUEST_TABS[id] && guestGate(GUEST_TABS[id])) return; setBusy(['inbox', 'analytics', 'feedback', 'domain'].includes(id)); setError(''); setTab(id) }} aria-pressed={tab === id} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === id ? 'bg-[var(--studio-accent)] text-white' : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'}`}>{t(label)}{isGuest && GUEST_TABS[id] ? <span aria-label={t('Needs an account')} title={t('Needs an account')} className="ml-1 opacity-70">⚿</span> : null}</button>
+            <button key={id} type="button" onClick={() => { if (GUEST_TABS[id] && guestGate(GUEST_TABS[id])) return; setBusy(['inbox', 'analytics', 'feedback'].includes(id)); setError(''); setTab(id) }} aria-pressed={tab === id} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === id ? 'bg-[var(--studio-accent)] text-white' : 'text-[var(--studio-text-muted)] hover:bg-[var(--studio-control-hover)] hover:text-[var(--studio-text)]'}`}>{t(label)}{isGuest && GUEST_TABS[id] ? <span aria-label={t('Needs an account')} title={t('Needs an account')} className="ml-1 opacity-70">⚿</span> : null}</button>
           ))}
         </nav>
         {guestDialog}
@@ -252,8 +239,13 @@ export default function SiteControlCenter({
 
           {tab === 'domain' && (
             <div className="mx-auto max-w-3xl space-y-5">
-              <div className="rounded-3xl border border-[#e5e7eb] bg-white p-5"><h3 className="font-bold">{t('Connect a custom domain')}</h3><p className="mt-1 text-sm text-[#6b7280]">{t('Enter the domain without http:// or a path.')}</p><div className="mt-4 flex flex-col gap-2 sm:flex-row"><input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="www.example.com" className="ms-input flex-1" /><button type="button" disabled={busy} onClick={saveDomain} className="ms-btn ms-btn-primary px-5">{t(domain ? 'Save domain' : 'Disconnect domain')}</button></div></div>
-              {domainSetup?.domain && <div className="rounded-3xl border border-[#e5e7eb] bg-white p-5"><div className="flex items-center justify-between"><h3 className="font-bold">{t('DNS records')}</h3><span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{t(domainSetup.status === 'connected' ? 'Connected' : 'Waiting for DNS')}</span></div><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-[#9ca3af]"><tr><th className="py-2">{t('Type')}</th><th>{t('Name')}</th><th>{t('Value')}</th></tr></thead><tbody>{domainSetup.records.map((record) => <tr key={`${record.type}-${record.name}`} className="border-t border-[#e5e7eb]"><td className="py-3 font-bold">{record.type}</td><td>{record.name}</td><td className="font-mono text-xs">{record.value}</td></tr>)}</tbody></table></div><div className="mt-4 rounded-xl bg-[#f3f4f6] p-3 text-xs text-[#4b5563]">{t('SSL will be provisioned automatically after DNS ownership is verified by the hosting provider.')}</div></div>}
+              {/* One walkthrough, in the order it is actually done: domain,
+                  DNS, check, live. It used to be a box and a table with no
+                  check at the end, so the status never left "waiting". */}
+              <DomainPanel
+                siteId={site.id}
+                onStatus={(data) => onSitePatch({ ...site, custom_domain: data.domain, domain_status: data.status })}
+              />
             </div>
           )}
         </div>

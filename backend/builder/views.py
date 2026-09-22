@@ -13,6 +13,7 @@ from django.contrib.auth.password_validation import validate_password as dj_vali
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -58,6 +59,7 @@ from .validators import (
     shared_component_problems,
     validate_and_clean_schema,
 )
+from .domains import check_domain, dns_records, domain_allowed
 from .guests import (
     GUEST_SITE_LIMIT,
     adopt_guest_work,
@@ -729,20 +731,77 @@ class SiteViewSet(viewsets.ModelViewSet):
                 return error_response('invalid_domain', 'Enter a valid domain name.')
             if domain and Site.objects.exclude(pk=site.pk).filter(custom_domain=domain).exists():
                 return error_response('domain_in_use', 'This domain is already connected to another site.')
+            # Never let a site claim a name this platform answers on: the
+            # custom-domain middleware runs before host validation, so a site
+            # holding our own hostname would be serving the app's address.
+            if domain and domain in _platform_hosts():
+                return error_response('domain_reserved', 'That domain belongs to this platform.')
             site.custom_domain = domain
             site.domain_status = 'pending' if domain else 'not_connected'
             site.save(update_fields=['custom_domain', 'domain_status', 'updated_at'])
-        target = getattr(settings, 'CUSTOM_DOMAIN_TARGET', 'sites.example.com')
-        return Response({
+        return Response(self._domain_state(site))
+
+    def _domain_state(self, site, checked=None):
+        return {
             'domain': site.custom_domain,
             'status': site.domain_status,
-            'verification_token': site.domain_verification_token,
-            'records': [
-                {'type': 'CNAME', 'name': 'www', 'value': target},
-                {'type': 'TXT', 'name': '_sitebuilder', 'value': site.domain_verification_token},
-            ],
+            # What to put in the DNS panel. Both shapes, because `www` takes a
+            # CNAME and an apex domain cannot.
+            'records': dns_records(site) if site.custom_domain else [],
             'ssl_status': 'active' if site.domain_status == 'connected' else 'waiting_for_dns',
-        })
+            # Why the last check said no, when it did.
+            'checked': checked,
+        }
+
+    @action(detail=True, methods=['post'], url_path='domain/verify')
+    def verify_domain(self, request, pk=None):
+        """Does the domain point at us yet?
+
+        Nothing used to ask this, so the status said "waiting for DNS" forever
+        and a correctly configured domain still served nothing. DNS pointing
+        here is itself the proof of control — only the holder of a domain can
+        do it — so this is both the check and the permission to serve.
+        """
+        if is_guest(request.user):
+            return guest_blocked('domain')
+        site = self.get_object()
+        if not site.custom_domain:
+            return error_response('no_domain', 'Add a domain first.')
+        ok, detail = check_domain(site.custom_domain)
+        site.domain_status = 'connected' if ok else 'pending'
+        site.save(update_fields=['domain_status', 'updated_at'])
+        return Response(self._domain_state(site, checked=detail))
+
+
+def _platform_hosts():
+    """Every hostname this platform answers on itself."""
+    hosts = {str(h).strip().lower().lstrip('.') for h in getattr(settings, 'ALLOWED_HOSTS', []) if h and h != '*'}
+    frontend = urllib.parse.urlparse(getattr(settings, 'FRONTEND_URL', '') or '').hostname
+    if frontend:
+        hosts.add(frontend.lower())
+    for name in ('CUSTOM_DOMAIN_TARGET',):
+        value = (getattr(settings, name, '') or '').strip().lower()
+        if value:
+            hosts.add(value)
+    return hosts
+
+
+class DomainAllowedView(APIView):
+    """What a TLS layer asks before it issues a certificate for a host.
+
+    Caddy's on-demand TLS calls this first. Without it, anyone could point a
+    name at this server and have us ask a certificate authority for it —
+    spending the CA's rate limits on names we have nothing to do with. 200
+    only for a domain that is verified AND still allowed to be public.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        host = request.query_params.get('host') or request.query_params.get('domain') or ''
+        if domain_allowed(host):
+            return HttpResponse('ok', content_type='text/plain')
+        return HttpResponse('unknown host', content_type='text/plain', status=404)
 
 
 class UploadedImageViewSet(viewsets.ModelViewSet):

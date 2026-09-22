@@ -31,6 +31,7 @@ from .views import (
     LocalAiProxyView,
     LocalAiStatusView,
     LoginView,
+    DomainAllowedView,
     GuestAdoptView,
     GuestSessionView,
     GuestUpgradeView,
@@ -72,6 +73,8 @@ urlpatterns = [
     path('sites/clone/<slug:slug>/', CloneSiteView.as_view(), name='site-clone'),
     path('public/profiles/<int:user_id>/', PublicProfileView.as_view(), name='public-profile'),
     path('public/config/', PublicConfigView.as_view(), name='public-config'),
+    # Asked by the TLS layer before issuing a certificate for a custom domain.
+    path('public/domain-allowed/', DomainAllowedView.as_view(), name='domain-allowed'),
     path('admin/settings/', AdminSettingsView.as_view(), name='admin-settings'),
     path('admin/stats/', AdminStatsView.as_view(), name='admin-stats'),
     path('admin/users/', AdminUsersView.as_view(), name='admin-users'),

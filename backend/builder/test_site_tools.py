@@ -95,6 +95,11 @@ class TestSiteWorkflowTools:
         domain = client.post(f'/api/sites/{site.id}/domain/', {'domain': 'www.example.com'}, format='json')
         assert domain.status_code == 200
         assert domain.data['status'] == 'pending'
-        assert {record['type'] for record in domain.data['records']} == {'CNAME', 'TXT'}
+        # The TXT record is gone on purpose: nothing ever read it, and DNS
+        # pointing here is itself the proof of control. What is offered now is
+        # what verification actually checks — a CNAME for www, an A for an
+        # apex (only when the platform publishes an IP).
+        assert {record['type'] for record in domain.data['records']} <= {'CNAME', 'A'}
+        assert 'TXT' not in {record['type'] for record in domain.data['records']}
         invalid = client.post(f'/api/sites/{site.id}/domain/', {'domain': 'not a domain'}, format='json')
         assert invalid.status_code == 400

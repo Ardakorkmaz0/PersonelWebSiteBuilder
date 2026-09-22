@@ -88,6 +88,11 @@ INSTALLED_APPS = [
 # static files before any view runs), then CORS, then everything else. CSP
 # goes at the end so it sees the final response headers.
 MIDDLEWARE = [
+    # First on purpose: a request whose Host is a customer's own domain is
+    # answered with their published page and nothing else — before Django's
+    # host validation, which cannot know about domains that live in the
+    # database. The lookup it does is the stricter allowlist of the two.
+    'builder.domains.CustomDomainMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -172,7 +177,11 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Sitebuilder <no-reply@loca
 # Where the SPA is hosted — used to build absolute links in emails (password
 # reset). Defaults to the Vite dev server; set DJANGO_FRONTEND_URL in prod.
 FRONTEND_URL = os.getenv('DJANGO_FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+# What a customer points their DNS at. The hostname is for `www` (a CNAME);
+# the IP is for the domain on its own, which cannot carry a CNAME. Verification
+# resolves the customer's domain and checks it lands on one of these.
 CUSTOM_DOMAIN_TARGET = os.getenv('CUSTOM_DOMAIN_TARGET', 'sites.example.com')
+CUSTOM_DOMAIN_IP = os.getenv('CUSTOM_DOMAIN_IP', '')
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'

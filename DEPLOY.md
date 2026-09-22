@@ -363,6 +363,61 @@ If TLS is **not** in place yet on a first bring-up, set `DJANGO_SSL_REDIRECT=Fal
 temporarily so you're not redirected to a non-existent HTTPS endpoint — then turn
 it back on once certs are live.
 
+## 8b. Customer domains (`www.their-company.com`)
+
+A site owner can connect their own domain in the editor: **Share is where the
+link lives; the domain lives in the control centre → Domain**. The app handles
+the checking and the serving; you have to give it somewhere to point at and
+something to terminate TLS.
+
+**1. Decide what they point at.** Two env vars, either or both:
+
+```env
+# Hostname for `www` records (a CNAME). Must resolve to this server.
+CUSTOM_DOMAIN_TARGET=sites.example.com
+# IP for apex domains (`their-company.com`), which cannot carry a CNAME.
+CUSTOM_DOMAIN_IP=203.0.113.9
+```
+
+Both are shown to the owner as DNS records, and **verification resolves their
+domain and checks it lands on one of them** — no TXT record to chase. Keep the
+target on a **separate registrable domain from the app** (not a subdomain of
+it): the app's cookies must never be reachable from a name a customer's page
+runs on.
+
+**2. Send the customer's domain to Django.** The custom-domain middleware runs
+before host validation and serves *only published pages* for verified domains —
+no API, no admin, no app. Your proxy needs to pass the `Host` header through
+unchanged.
+
+**3. TLS on demand, gated by the app.** Caddy asks the app before requesting a
+certificate, so nobody can point a stray name at this server and spend a
+certificate authority's rate limit:
+
+```
+{
+    on_demand_tls {
+        ask http://127.0.0.1:8000/api/public/domain-allowed/
+    }
+}
+
+https:// {
+    tls {
+        on_demand
+    }
+    reverse_proxy 127.0.0.1:8000
+}
+```
+
+`/api/public/domain-allowed/?host=…` answers 200 only for a domain that is
+verified **and** still allowed to be public — so a takedown or a suspended
+owner stops certificate renewal along with everything else.
+
+**What the owner sees**, in order: enter the domain → add the record → press
+*Check now* → the site answers on their domain. A failed check says which of
+the two it is ("does not resolve yet" vs "resolves somewhere else"), because
+those need different fixes.
+
 ### 8a. Uploaded images (`/media/`)
 
 Something has to answer `/media/…`, or uploads succeed and their URLs 404.

@@ -47,8 +47,14 @@ def _published_site(slug):
     return site
 
 
-def _harden(response):
-    response['Content-Security-Policy'] = PUBLISHED_CSP
+def _harden(response, sandbox=True):
+    # The sandbox exists because /s/<slug>/ shares THIS origin with the app: it
+    # gives the owner's HTML an opaque origin so it cannot reach the admin
+    # session or a visitor's token. On the owner's OWN domain there is nothing
+    # of ours to protect, and sandboxing there would only break their site —
+    # no localStorage, no cookies, no analytics on a page they own outright.
+    if sandbox:
+        response['Content-Security-Policy'] = PUBLISHED_CSP
     response['X-Content-Type-Options'] = 'nosniff'
     response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     # Short: a republish should show up quickly, but a burst of visitors to the
@@ -96,3 +102,54 @@ def published_page_path(slug, path=''):
     if path:
         return reverse('published-page', kwargs={'slug': slug, 'path': path})
     return reverse('published-home', kwargs={'slug': slug})
+
+
+# --- A site on the owner's own domain --------------------------------------
+#
+# Everything below answers requests whose Host is a customer's domain. Only
+# published pages live there: no API, no admin, no app. That is not tidiness,
+# it is the point — our login form on a domain somebody else controls would
+# hand them the session of anyone who used it.
+
+
+def site_for_host(host):
+    """The site a custom domain belongs to, if it is really connected."""
+    name = (host or '').split(':')[0].strip().lower().rstrip('.')
+    if not name:
+        return None
+    return public_sites().filter(custom_domain=name, domain_status='connected').first()
+
+
+def serve_for_host(site, path):
+    """One page of that site, addressed as the site's own URL."""
+    wanted = (path or '').strip('/')
+    if wanted == 'sitemap.xml':
+        return _domain_sitemap(site)
+    page = site.published_pages.filter(path=wanted).first()
+    if page is None:
+        raise Http404('Page not found.')
+    return _harden(
+        HttpResponse(page.html, content_type='text/html; charset=utf-8'),
+        sandbox=False,
+    )
+
+
+def _domain_sitemap(site):
+    """The same sitemap, written in the addresses the site actually has."""
+    base = f'https://{site.custom_domain}'
+    out = StringIO()
+    xml = SimplerXMLGenerator(out, 'utf-8')
+    xml.startDocument()
+    xml.startElement('urlset', {'xmlns': 'http://www.sitemaps.org/schemas/sitemap/0.9'})
+    for page in site.published_pages.filter(no_index=False):
+        xml.startElement('url', {})
+        xml.addQuickElement('loc', f'{base}/{page.path}/' if page.path else f'{base}/')
+        xml.addQuickElement('lastmod', page.updated_at.date().isoformat())
+        xml.endElement('url')
+    xml.endElement('urlset')
+    xml.endDocument()
+
+    response = HttpResponse(out.getvalue(), content_type='application/xml; charset=utf-8')
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'public, max-age=300'
+    return response

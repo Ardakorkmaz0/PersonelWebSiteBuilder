@@ -6,7 +6,7 @@ import { pinSite } from '../api/admin.js'
 import { useAuthStore } from '../store/authStore.js'
 import { apiError } from '../utils/errors.js'
 import { orderSites } from '../utils/siteSort.js'
-import { useScrollRestore } from '../utils/useScrollRestore.js'
+import { forgetScroll, useScrollRestore } from '../utils/useScrollRestore.js'
 import ExploreCard from '../components/dashboard/ExploreCard.jsx'
 import CreateSiteWizard from '../components/dashboard/CreateSiteWizard.jsx'
 import DashboardHeader from '../components/dashboard/DashboardHeader.jsx'
@@ -67,6 +67,8 @@ export default function ExplorePage() {
   const [error, setError] = useState('')
   const [feedError, setFeedError] = useState('')
   const [feedAttempt, setFeedAttempt] = useState(0)
+  const filterRailRef = useRef(null)
+  const filterJump = useRef(false)
   const [pinningId, setPinningId] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createOrigin, setCreateOrigin] = useState(null)
@@ -115,7 +117,7 @@ export default function ExplorePage() {
   useEffect(() => {
     feedCache = userId !== null && data.userId === userId ? data : null
   }, [data, userId])
-  useScrollRestore(items.length > 0)
+  useScrollRestore(items.length > 0, category)
 
   const retryFeed = () => {
     setFeedError('')
@@ -126,8 +128,30 @@ export default function ExplorePage() {
     setError('')
     if (nextCategory === category && feedError) retryFeed()
     else setFeedError('')
+    if (nextCategory !== category) {
+      // Two different intentions share this page. Coming BACK to the feed
+      // should land where you were; picking a filter should show the new
+      // results from the start. Forgetting the incoming category's offset
+      // stops the restore from firing, and the effect below does the
+      // positioning once the new list exists.
+      forgetScroll(location.pathname, nextCategory)
+      filterJump.current = true
+    }
     setCategory(nextCategory)
   }
+
+  // After the new list has rendered — not before. Filtering usually shortens
+  // the page, and a scroll issued while the old (taller) list is still up gets
+  // clamped away the moment it shrinks, which is how you end up stranded in
+  // the middle of the results with the filter row off-screen above.
+  useEffect(() => {
+    if (!filterJump.current || items.length === 0) return
+    filterJump.current = false
+    const rail = filterRailRef.current
+    if (!rail) return
+    const top = rail.getBoundingClientRect().top + window.scrollY
+    window.scrollTo({ top: Math.max(0, top - 12), behavior: 'auto' })
+  }, [items.length, category])
 
   async function loadMore() {
     if (loadingMore || !data.hasMore) return
@@ -343,7 +367,7 @@ export default function ExplorePage() {
               <h2 id="discover-heading" className="mt-1 text-xl font-bold tracking-tight text-[var(--studio-text)] sm:text-2xl">{t('Discover ideas')}</h2>
               <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{t('Explore published work from the community.')}</p>
             </div>
-            <div className="dashboard-filter-rail flex max-w-full gap-1.5 overflow-x-auto" aria-label={t('Site categories')}>
+            <div ref={filterRailRef} className="dashboard-filter-rail flex max-w-full gap-1.5 overflow-x-auto" aria-label={t('Site categories')}>
               {CATEGORIES.map(([id, label]) => (
                 <button
                   key={id || 'all'}

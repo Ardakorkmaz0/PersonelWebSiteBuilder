@@ -409,6 +409,9 @@ export const TURKISH_TRANSLATIONS = {
   'Open the live site': 'Canlı siteyi aç',
   'Favorite': 'Favorilere ekle',
   'Unfavorite': 'Favorilerden çıkar',
+  'This page slipped into another dimension': 'Bu sayfa başka bir boyuta kaydı',
+  'Sending you home in {seconds}s': '{seconds} saniye içinde ana sayfaya gidiyorsunuz',
+  'Go home now': 'Hemen ana sayfaya dön',
   // 'Pinned' already exists further down (pinned projects) and reads the same
   // on this badge — one key, one translation.
   'Pin to the home page': 'Ana sayfaya sabitle',

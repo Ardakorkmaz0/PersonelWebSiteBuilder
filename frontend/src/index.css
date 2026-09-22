@@ -2449,3 +2449,123 @@ button:not(:disabled),
   .guide-art-drop,
   .guide-art-lift { transition: none; }
 }
+
+/* --- 404 -------------------------------------------------------------------
+   A misregistered comic print: the red plate pushed left, the cyan plate
+   pushed right, the black plate on top. No mix-blend-mode — it would erase
+   the coloured plates on the light theme; offset copies at partial opacity
+   read on both. */
+.nf-page {
+  --nf-red: #ff2a6d;
+  --nf-cyan: #05d9e8;
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2rem 1rem;
+  background: var(--studio-shell);
+  color: var(--studio-text);
+  text-align: center;
+}
+/* Ben-Day dots, fading out from the middle so the text stays readable. */
+.nf-halftone {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--studio-text) 22%, transparent) 1px,
+    transparent 1.6px
+  );
+  background-size: 7px 7px;
+  -webkit-mask-image: radial-gradient(circle at 50% 45%, transparent 24%, #000 72%);
+  mask-image: radial-gradient(circle at 50% 45%, transparent 24%, #000 72%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.nf-page > *:not(.nf-halftone) { position: relative; z-index: 1; }
+
+.nf-glyph {
+  position: relative;
+  margin: 0;
+  font-size: clamp(5.5rem, 26vw, 15rem);
+  font-weight: 900;
+  line-height: 0.85;
+  letter-spacing: -0.06em;
+  font-variant-numeric: tabular-nums;
+}
+.nf-glyph::before,
+.nf-glyph::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.nf-glyph::before { color: var(--nf-red); transform: translate3d(-0.055em, 0, 0); }
+.nf-glyph::after { color: var(--nf-cyan); transform: translate3d(0.055em, 0, 0); }
+
+.nf-title {
+  margin: 1.4rem 0 0;
+  max-width: 22ch;
+  font-size: clamp(1.15rem, 4.2vw, 1.75rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.nf-path {
+  margin: 0.7rem 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--studio-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+}
+.nf-note {
+  margin: 1.5rem 0 0;
+  color: var(--studio-text-faint);
+  font-size: 0.9rem;
+}
+.nf-btn {
+  margin-top: 1rem;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  background: var(--studio-accent);
+  padding: 0.7rem 1.4rem;
+  color: #fff;
+  font-weight: 650;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+.nf-btn:hover { background: var(--studio-accent-hover); transform: translateY(-1px); }
+.nf-btn:focus-visible { outline: 2px solid var(--studio-accent-hover); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .nf-glyph::before { animation: nf-plate-left 2.4s steps(1, end) infinite; }
+  .nf-glyph::after { animation: nf-plate-right 2.4s steps(1, end) infinite; }
+  .nf-glyph > span[aria-hidden] { animation: nf-plate-ink 2.4s steps(1, end) infinite; }
+}
+/* steps(1) rather than a tween: a printing plate is either in register or it
+   is not, and sliding between the two reads as a wobble instead of a misprint. */
+@keyframes nf-plate-left {
+  0%, 62%, 100% { transform: translate3d(-0.055em, 0, 0); }
+  66% { transform: translate3d(-0.125em, 0.02em, 0); }
+  72% { transform: translate3d(-0.02em, -0.018em, 0); }
+  78% { transform: translate3d(-0.1em, 0.008em, 0); }
+  84% { transform: translate3d(-0.04em, 0, 0); }
+}
+@keyframes nf-plate-right {
+  0%, 62%, 100% { transform: translate3d(0.055em, 0, 0); }
+  66% { transform: translate3d(0.13em, -0.018em, 0); }
+  72% { transform: translate3d(0.025em, 0.02em, 0); }
+  78% { transform: translate3d(0.095em, -0.01em, 0); }
+  84% { transform: translate3d(0.045em, 0, 0); }
+}
+@keyframes nf-plate-ink {
+  0%, 64%, 100% { transform: none; }
+  68% { transform: translate3d(0.012em, 0, 0); }
+  76% { transform: translate3d(-0.01em, 0.006em, 0); }
+}

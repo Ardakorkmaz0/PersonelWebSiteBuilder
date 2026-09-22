@@ -1,10 +1,11 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import ExplorePage from './pages/ExplorePage.jsx'
+import NotFoundPage from './pages/NotFoundPage.jsx'
 import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import LanguageProvider from './i18n/LanguageProvider.jsx'
 import { useLanguage } from './i18n/useLanguage.js'
@@ -139,7 +140,9 @@ export default function App() {
           <Route path="/site/:slug" element={<PreviewPage />} />
           <Route path="/review/:token" element={<ThemedPage><ReviewPage /></ThemedPage>} />
           <Route path="/u/:id" element={<ThemedPage><PublicProfilePage /></ThemedPage>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* A wrong address used to bounce home without a word. It still
+              ends up home — NotFoundPage just says what happened first. */}
+          <Route path="*" element={<ThemedPage><NotFoundPage /></ThemedPage>} />
               </Routes>
             </Suspense>
           </AppErrorBoundary>

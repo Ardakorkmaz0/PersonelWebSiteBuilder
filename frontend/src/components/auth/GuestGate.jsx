@@ -7,6 +7,7 @@ import { useLanguage } from '../../i18n/useLanguage.js'
 const REASONS = {
   publish: 'Publishing puts your site in front of other people, and that needs an account.',
   share: 'Sharing a block to the community puts it in front of other people, and that needs an account.',
+  share_link: 'A share link lets someone else open your project, and that needs an account behind it.',
   report: 'A report is a claim about someone else’s work, so it has to come from an account.',
   inbox: 'Form submissions arrive in an account’s inbox.',
   analytics: 'Visitor statistics belong to an account.',

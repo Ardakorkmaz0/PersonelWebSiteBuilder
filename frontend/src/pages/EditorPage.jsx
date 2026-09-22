@@ -450,6 +450,9 @@ export default function EditorPage() {
   const [toolsOpen, setToolsOpen] = useState(false)
   const [controlCenterOpen, setControlCenterOpen] = useState(false)
   const [controlCenterFocus, setControlCenterFocus] = useState('')
+  // Which tab the control centre opens on — the Share button goes straight to
+  // sharing instead of landing on readiness and leaving people hunting.
+  const [controlCenterTab, setControlCenterTab] = useState('readiness')
 
   useEffect(() => {
     try { localStorage.setItem(AI_PANEL_LAYOUT_KEY, aiPanelLayout) } catch { /* ignore */ }
@@ -1940,6 +1943,16 @@ export default function EditorPage() {
           <button type="button" onClick={previewCurrentSite} disabled={saving} className="studio-btn hidden lg:inline-flex">
             <EyeIcon size={15} /> {t('Preview')}
           </button>
+          {/* Where everyone looks for it — next to Save and Publish. It used
+              to live inside a tab of the control centre, which is nowhere. */}
+          <button
+            type="button"
+            onClick={() => { if (guestGate('share_link')) return; setControlCenterFocus(''); setControlCenterTab('feedback'); setControlCenterOpen(true) }}
+            title={t('Share this project')}
+            className="studio-btn studio-btn-secondary"
+          >
+            <LinkIcon size={14} /> <span className="hidden xl:inline">{t('Share')}</span>
+          </button>
           <button type="button" onClick={() => save()} disabled={saving} className="studio-btn studio-btn-secondary">
             <SaveIcon size={14} /> <span className="hidden xl:inline">{t('Save')}</span>
           </button>
@@ -1964,7 +1977,8 @@ export default function EditorPage() {
                 <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
                 <div style={{ position: 'fixed', top: menuPos.more?.top, right: menuPos.more?.right }} className="studio-menu z-50 max-h-[calc(100vh-70px)] w-72 overflow-y-auto p-1.5">
                   <button type="button" onClick={() => { setMoreOpen(false); setWizardOpen(true) }} className="studio-menu-item font-semibold text-[var(--studio-accent-hover)]"><SparklesIcon size={15} /> {t('AI Site Wizard')}</button>
-                  <button type="button" onClick={() => { setMoreOpen(false); setControlCenterOpen(true) }} className="studio-menu-item"><CogIcon size={15} /> {t('Site control center')}</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); if (guestGate('share_link')) return; setControlCenterTab('feedback'); setControlCenterOpen(true) }} className="studio-menu-item"><LinkIcon size={15} /> {t('Share this project')}</button>
+                  <button type="button" onClick={() => { setMoreOpen(false); setControlCenterTab('readiness'); setControlCenterOpen(true) }} className="studio-menu-item"><CogIcon size={15} /> {t('Site control center')}</button>
                   <div className="studio-divider my-1 border-t" />
                   <button type="button" onClick={() => { setMoreOpen(false); setTemplateOpen(true) }} className="studio-menu-item">{t('Choose a template...')}</button>
                   <button type="button" onClick={() => { setMoreOpen(false); startBlankHtml() }} className="studio-menu-item">{t('Start blank HTML')}</button>
@@ -3195,7 +3209,8 @@ export default function EditorPage() {
       {controlCenterOpen && <SiteControlCenter
         open={controlCenterOpen}
         focusField={controlCenterFocus}
-        onClose={() => { setControlCenterOpen(false); setControlCenterFocus('') }}
+        initialTab={controlCenterTab}
+        onClose={() => { setControlCenterOpen(false); setControlCenterFocus(''); setControlCenterTab('readiness') }}
         site={{
           id,
           title,

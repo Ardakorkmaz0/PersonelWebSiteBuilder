@@ -1629,6 +1629,7 @@ export const TURKISH_TRANSLATIONS = {
   'Go to the builder': 'Site oluşturucuya git',
   'Static preview': 'Statik önizleme',
   'Share this project': 'Bu projeyi paylaş',
+  'A share link lets someone else open your project, and that needs an account behind it.': 'Paylaşım bağlantısı projeni başkasının açmasına izin verir; bunun arkasında bir hesap olması gerekir.',
   'A link to look at the draft — not the published site.': 'Taslağa bakmak için bir bağlantı; yayınlanmış site değil.',
   'Share link': 'Paylaşım bağlantısı',
   'Add someone by username': 'Kullanıcı adıyla kişi ekle',

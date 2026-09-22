@@ -26,7 +26,7 @@ const TABS = [
   ['inbox', 'Inbox'],
   ['analytics', 'Analytics'],
   ['content', 'Content'],
-  ['feedback', 'Feedback'],
+  ['feedback', 'Share'],
   ['domain', 'Domain'],
 ]
 
@@ -41,6 +41,7 @@ export default function SiteControlCenter({
   schema,
   pageHtmlMap,
   focusField = '',
+  initialTab = 'readiness',
   onSitePatch,
   onHtmlContentChange,
   onSchemaContentChange,
@@ -49,7 +50,7 @@ export default function SiteControlCenter({
   // The three tabs that are an account's own business: a form inbox, visitor
   // numbers and a domain. A guest opening them would only meet a 403.
   const { isGuest, gate: guestGate, dialog: guestDialog } = useGuestGate()
-  const [tab, setTab] = useState('readiness')
+  const [tab, setTab] = useState(initialTab)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [submissions, setSubmissions] = useState([])

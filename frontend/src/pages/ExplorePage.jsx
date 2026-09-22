@@ -214,7 +214,7 @@ export default function ExplorePage() {
           <div className="dashboard-workspace-primary">
             <div className="relative z-10 max-w-2xl">
               <p className="dashboard-kicker">{t('Workspace')}</p>
-              <h1 id="workspace-heading" className="mt-3 text-3xl font-bold tracking-[-0.045em] text-[var(--studio-text)] sm:text-4xl">
+              <h1 id="workspace-heading" className="mt-3 text-3xl font-bold tracking-[-0.045em] text-[var(--studio-text)] [overflow-wrap:anywhere] sm:text-4xl">
                 {t('Welcome back, {name}', { name: displayName })}
               </h1>
               <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--studio-text-muted)]">

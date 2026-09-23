@@ -1,3 +1,4 @@
+import logging
 import json
 from datetime import timedelta
 from ipaddress import ip_address
@@ -92,6 +93,9 @@ from .serializers import (
     UserSerializer,
 )
 
+
+
+logger = logging.getLogger(__name__)
 
 def _favorited_ids(user):
     """Set of site ids the user has favorited (for is_favorited), empty when
@@ -192,7 +196,14 @@ class GoogleLoginView(APIView):
             from google.auth.transport import requests as google_requests
             from google.oauth2 import id_token
             info = id_token.verify_oauth2_token(credential, google_requests.Request(), client_id)
-        except Exception:  # noqa: BLE001 - bad/expired token, or lib missing
+        except Exception as exc:  # noqa: BLE001 - bad/expired token, or lib missing
+            # The caller gets one message for every failure on purpose: which
+            # part of somebody's token did not check out is not their business
+            # and telling them helps an attacker more than a user. But the
+            # operator needs the real reason — a missing dependency once made
+            # every sign-in look like a bad token, with nothing in the log to
+            # say so. The credential itself is never recorded.
+            logger.warning('Google sign-in rejected a token: %s: %s', type(exc).__name__, exc)
             return error_response('google_token_invalid', 'Invalid Google token.')
         email = (info.get('email') or '').strip().lower()
         if not email:

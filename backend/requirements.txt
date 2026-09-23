@@ -3,6 +3,8 @@ djangorestframework==3.17.2
 django-cors-headers==4.9.0
 Pillow==12.3.0
 google-auth==2.41.1           # verifies Google ID tokens for Google sign-in (env-gated)
+requests==2.34.2              # google.auth.transport.requests needs it; without it
+                              # Google sign-in fails as "invalid token" at runtime
 
 # Configuration / production
 python-dotenv==1.2.2          # loads backend/.env

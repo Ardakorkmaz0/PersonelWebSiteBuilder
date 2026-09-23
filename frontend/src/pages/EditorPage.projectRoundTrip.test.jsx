@@ -50,6 +50,13 @@ beforeEach(() => {
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
+// waitFor's own default is one second, while these tests budget thirty. The
+// editor and the HTML workspace are both React.lazy chunks, so under a loaded
+// full-suite run the import alone can outlast that second and the assertion
+// fails on a page that was merely still arriving. Waiting properly is not the
+// same as waiting longer: nothing here sleeps, it just stops giving up early.
+const SLOW = { timeout: 15000 }
+
 async function openEditor() {
   render(
     <UiThemeProvider>
@@ -60,7 +67,7 @@ async function openEditor() {
       </LanguageProvider>
     </UiThemeProvider>,
   )
-  await waitFor(() => expect(document.querySelector('[data-cid="h1"]')).toBeTruthy())
+  await waitFor(() => expect(document.querySelector('[data-cid="h1"]')).toBeTruthy(), SLOW)
 }
 
 async function importProject(project) {
@@ -69,7 +76,7 @@ async function importProject(project) {
   await act(async () => {
     fireEvent.change(input, { target: { files: [file] } })
   })
-  await waitFor(() => expect(useEditorStore.getState().schema.pages.map((p) => p.id)).toEqual(['p_components', 'p_landing']))
+  await waitFor(() => expect(useEditorStore.getState().schema.pages.map((p) => p.id)).toEqual(['p_components', 'p_landing']), SLOW)
 }
 
 function saveNow() {
@@ -81,14 +88,14 @@ describe('project round trip', () => {
     await openEditor()
     await importProject(PROJECT)
     await act(async () => useEditorStore.getState().selectPage('p_landing'))
-    await waitFor(() => expect(screen.getByTitle('site').getAttribute('srcdoc') || '').toContain('Imported landing page'))
+    await waitFor(() => expect(screen.getByTitle('site').getAttribute('srcdoc') || '').toContain('Imported landing page'), SLOW)
   }, 30000)
 
   it('saves the imported document instead of an empty one', async () => {
     await openEditor()
     await importProject(PROJECT)
     await act(async () => saveNow())
-    await waitFor(() => expect(updateSite).toHaveBeenCalled())
+    await waitFor(() => expect(updateSite).toHaveBeenCalled(), SLOW)
     const payload = updateSite.mock.calls.at(-1)[1]
     const landing = payload.schema.pages.find((p) => p.id === 'p_landing')
     expect(landing.html).toContain('Imported landing page')
@@ -128,6 +135,6 @@ describe('project round trip', () => {
     expect(useEditorStore.getState().schema.pages.map((p) => p.id)).toEqual(['old_home'])
     await act(async () => useEditorStore.getState().redo())
     await act(async () => useEditorStore.getState().selectPage('p_landing'))
-    await waitFor(() => expect(screen.getByTitle('site').getAttribute('srcdoc') || '').toContain('Imported landing page'))
+    await waitFor(() => expect(screen.getByTitle('site').getAttribute('srcdoc') || '').toContain('Imported landing page'), SLOW)
   }, 30000)
 })

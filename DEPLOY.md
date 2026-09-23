@@ -284,6 +284,32 @@ location /s/ { proxy_pass http://127.0.0.1:8000; }
 location /   { try_files $uri $uri/ /index.html; }
 ```
 
+### Security headers on the SPA page
+
+Django sets `Strict-Transport-Security`, `X-Content-Type-Options`,
+`Referrer-Policy` and its CSP on its own responses. The SPA's `index.html` is
+served from disk by the proxy, so nothing sets them there unless you do:
+
+```
+header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "same-origin"
+    X-Frame-Options "DENY"
+}
+```
+
+Put that in the block that serves the static files, **not** on `/s/` — those
+responses carry Django's sandbox CSP and must pass through untouched.
+
+**Do not add a Content-Security-Policy to the SPA page.** The editor previews
+the user's page in a `srcdoc` iframe, and a `srcdoc` document inherits the
+parent's policy. Measured, not assumed: inline scripts still run under
+`'unsafe-inline'`, but a `<script src>` to a CDN is blocked — so a page with a
+pasted CDN snippet would look broken in the editor while the published copy
+worked. Serving previews from a separate origin is the fix; weakening the
+policy until it permits everything is not.
+
 The same applies to `/api/`, `/media/`, `/static/` and whatever you set
 `DJANGO_ADMIN_PATH` to — all backend. **`/admin` is not**: that is the app's own
 admin panel and Settings page, served by the SPA. Sending `/admin` to Django

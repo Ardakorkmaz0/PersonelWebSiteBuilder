@@ -257,6 +257,12 @@ REST_FRAMEWORK = {
         # Publishing to the community library is the most spam-prone surface
         # there is, and unlike a save it is other people who see the result.
         'share': os.getenv('DJANGO_THROTTLE_SHARE', '20/hour'),
+        # "Continue without signing in" is the front door, and it used to
+        # share the credential budget above. On one shared address — a
+        # school, an office, a carrier's NAT — ten failed logins then closed
+        # the door on everybody else. Its own scope, wide enough for a room
+        # full of people arriving at once but still a cap on minting rows.
+        'guest': os.getenv('DJANGO_THROTTLE_GUEST', '30/min'),
     },
 }
 

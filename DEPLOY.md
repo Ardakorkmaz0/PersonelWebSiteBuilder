@@ -317,6 +317,7 @@ header at the proxy.**
 | `DJANGO_SSL_REDIRECT` | recommended | `True` | Default `True` in prod; set `False` only if nothing terminates TLS yet. |
 | `SENTRY_DSN` | recommended | `https://…@sentry.io/…` | Error monitoring; off when unset. |
 | `DJANGO_FRONTEND_URL` | if using email | `https://app.example.com` | Builds the password-reset link. |
+| `DJANGO_THROTTLE_GUEST` | no | `30/min` | Per-IP cap on "continue without signing in" and on carrying guest work into an account. Separate from `auth` on purpose: on a shared address those two endpoints must not be closed by other people's failed logins. |
 | `DJANGO_ADMIN_PATH` | recommended | `django-admin` | Where Django's own admin lives. Not `admin`: the SPA serves its admin panel and Settings page at `/admin` and `/admin/settings`, and on a single domain the proxy can only give that path to one of them. Pick something only you know. |
 | `DJANGO_SERVE_MEDIA` | **yes, one of** | `True` | Django serves uploaded images from `MEDIA_ROOT`. Defaults to `DJANGO_DEBUG`, so a production process serves **nothing** under `/media/` unless this is on **or** a proxy/bucket does it (§8a) — uploads then succeed but every image URL 404s. |
 | `DJANGO_HSTS_SECONDS` | optional | `31536000` | HSTS lifetime (1 year default). |

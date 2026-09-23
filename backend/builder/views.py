@@ -346,13 +346,17 @@ class GuestSessionView(APIView):
     most of them leave. This creates a real user row with a made-up name and
     returns the usual token, so the whole app works for them; guests.py holds
     what that identity may not do, and /auth/upgrade/ turns it into an account
-    without losing the work. Throttled on the same scope as the credential
-    endpoints, so it cannot be used to mint rows in bulk.
+    without losing the work.
+
+    Its own throttle scope, not the credential one it used to share: a
+    guest identity is not a password attempt, and on a shared address ten
+    failed logins should not close the front door on everyone behind it.
+    The cap stays — this still cannot be used to mint rows in bulk.
     """
 
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'auth'
+    throttle_scope = 'guest'
 
     def post(self, request):
         user = create_guest_user()
@@ -409,11 +413,16 @@ class GuestAdoptView(APIView):
     The proof is the guest token itself: it is the only way into that identity
     and it came from this browser. A token that is not a guest's, or is the
     caller's own, moves nothing.
+
+    On the guest scope rather than the credential one. Nothing here checks
+    a password — both sides are already proven — and a 429 at this exact
+    moment, right after a successful sign-in, would leave the drafts behind
+    on an identity the person can no longer reach.
     """
 
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'auth'
+    throttle_scope = 'guest'
 
     def post(self, request):
         key = str(request.data.get('guest_token') or '').strip()

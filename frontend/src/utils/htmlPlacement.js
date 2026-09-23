@@ -400,6 +400,27 @@ export function serializeDocument(doc) {
   return '<!DOCTYPE html>\n' + root.outerHTML
 }
 
+// The same text, as the browser would write it back.
+//
+// Opening Edit mode parses the document; reading it out again serializes the
+// DOM, and that is NOT the identity function on hand-written HTML. The parser
+// drops the newline between <html> and <head> (nothing may sit there), the
+// serializer expands a self-closed <path/> into <path></path> (HTML has no
+// self-closing syntax) and writes `open` as `open=""`. A page with one SVG in
+// it comes back a dozen characters different without a single edit — which the
+// editor then reports as unsaved work.
+//
+// So compare like with like: put the author's text through the same mill. If
+// the result matches what came out of the iframe, nothing in the DOM changed
+// and the author's own formatting should be kept exactly as they wrote it.
+export function normalizeDocument(html) {
+  try {
+    return serializeDocument(parseHtmlDocument(html))
+  } catch {
+    return null
+  }
+}
+
 // ---- AI "add this too" placement -------------------------------------------
 // Weak models told to extend a document usually append the new section to the
 // end of <body> no matter what the prompt says. These helpers detect that

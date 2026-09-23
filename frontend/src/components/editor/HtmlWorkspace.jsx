@@ -29,6 +29,7 @@ import {
   insertPositionForY,
   insertSnippet,
   relocateAppendedAfterAnchor,
+  normalizeDocument,
   removePlacementChrome,
   serializeDocument,
   setHoverTarget,
@@ -949,7 +950,13 @@ function HtmlWorkspace({
       try {
         // serializeDocument strips placement chrome (hover/flash hints) so
         // they can never leak into the saved site.
-        return serializeDocument(iframeRef.current.contentDocument) || html
+        const live = serializeDocument(iframeRef.current.contentDocument) || html
+        // A DOM round-trip rewrites hand-written markup even when nothing was
+        // touched (see normalizeDocument). Hand back the serialized form only
+        // when it really differs from the authored text put through the same
+        // round-trip — otherwise merely LOOKING at a page in Edit mode
+        // reformats it and reports unsaved work the author never did.
+        return live === normalizeDocument(html) ? html : live
       } catch {
         return html
       }

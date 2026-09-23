@@ -123,6 +123,84 @@ describe('HTML workspace device chrome', () => {
   })
 })
 
+describe('looking at a page in Edit mode', () => {
+  beforeEach(() => {
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} }
+  })
+
+  // Hand-written markup with the three things a DOM round-trip rewrites: the
+  // newline after <html>, a self-closed SVG tag, and a bare boolean attribute.
+  const NL = String.fromCharCode(10)
+  const AUTHORED = [
+    '<!DOCTYPE html>',
+    '<html lang="tr">',
+    '<head><title>Ada</title></head>',
+    '<body>',
+    '<svg viewBox="0 0 24 24"><path d="M4 4h16"/></svg>',
+    '<details open><summary>S</summary></details>',
+    '</body>',
+    '</html>',
+  ].join(NL)
+
+  // jsdom never parses an iframe's srcdoc, so the edit document would sit
+  // empty and the comparison under test would never run. Writing the same
+  // markup in by hand stands in for the browser and puts the real DOM there.
+  function openEdit() {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const doc = screen.getByTitle('site').contentDocument
+    doc.open()
+    doc.write(AUTHORED)
+    doc.close()
+    return doc
+  }
+
+  function mount(onCommit) {
+    render(
+      <LanguageProvider>
+        <HtmlWorkspace persistKey="roundtrip" html={AUTHORED} onCommit={onCommit} />
+      </LanguageProvider>,
+    )
+  }
+
+  it('hands the author their own text back, byte for byte', () => {
+    // The bug: Edit parsed the document and View serialized it, and those are
+    // not inverses — the page came back reformatted and the editor called it
+    // unsaved work. Opening a page and closing it again must change nothing.
+    const onCommit = vi.fn()
+    mount(onCommit)
+    openEdit()
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    for (const call of onCommit.mock.calls) expect(call[0]).toBe(AUTHORED)
+  })
+
+  it('does not quietly rewrite the svg or the boolean attribute', () => {
+    const onCommit = vi.fn()
+    mount(onCommit)
+    openEdit()
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    const last = onCommit.mock.calls.at(-1)?.[0] ?? AUTHORED
+    expect(last).toContain('<path d="M4 4h16"/>')
+    expect(last).toContain('<details open>')
+    expect(last).not.toContain('open=""')
+  })
+
+  it('still reports a real edit', () => {
+    // The other half: keeping the author's text must not swallow actual work.
+    const onCommit = vi.fn()
+    mount(onCommit)
+    const doc = openEdit()
+    doc.querySelector('summary').textContent = 'Yeni'
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+
+    expect(onCommit).toHaveBeenCalledWith(expect.stringContaining('Yeni'))
+  })
+})
+
 describe('HTML selection quick actions', () => {
   beforeEach(() => {
     document.body.innerHTML = '<main><p id="selected">Hello</p></main>'

@@ -39,6 +39,7 @@ from django.db.models.functions import TruncDate
 from . import runtime_config
 from .api_errors import error_response
 from .access import SHARE_OPEN, SHARE_PRIVATE, is_public, is_reachable, public_sites, share_access
+from .accounts import normalise_username
 from .models import (
     Favorite,
     FormSubmission,
@@ -226,7 +227,7 @@ class GoogleLoginView(APIView):
     def _get_or_create_user(self, email, info):
         user = User.objects.filter(email__iexact=email).first()
         if user is None:
-            base = (email.split('@')[0] or 'user')[:140] or 'user'
+            base = normalise_username(email.split('@')[0])[:140] or 'user'
             username = base
             i = 2
             while User.objects.filter(username=username).exists():
@@ -252,8 +253,14 @@ class LoginView(ObtainAuthToken):
     throttle_scope = 'auth'
 
     def post(self, request, *args, **kwargs):
+        # Names are stored folded, and Django compares them byte for byte. Fold
+        # what is typed as well, or somebody who has always written their name
+        # with a capital is locked out of their own account.
+        data = request.data
+        if data.get('username'):
+            data = {**data, 'username': normalise_username(data['username'])}
         serializer = self.serializer_class(
-            data=request.data, context={'request': request})
+            data=data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
         token, _ = Token.objects.get_or_create(user=user)

@@ -3,9 +3,9 @@ from django.contrib.auth.password_validation import validate_password as dj_vali
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
 
 from .access import DAILY_PUBLISH_LIMIT, publish_blocked
+from .accounts import normalise_email, normalise_username
 from .guests import GUEST_SITE_LIMIT, GUEST_USERNAME_PREFIX, is_guest
 from .models import (
     FormSubmission,
@@ -54,12 +54,10 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(
-        validators=[UniqueValidator(
-            queryset=User.objects.all(),
-            message='This username is already taken.',
-        )],
-    )
+    # No UniqueValidator: it compares exactly, which let `Ada` and `ada` both
+    # exist. validate_username folds the name and checks against every
+    # spelling of it.
+    username = serializers.CharField()
     # Required so every new account is reachable for password reset / receipts
     # once email is wired (see DEPLOY.md). Uniqueness is enforced
     # case-insensitively in validate_email; Google sign-in links by email the
@@ -71,8 +69,18 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'email', 'password')
 
+    def validate_username(self, value):
+        value = normalise_username(value)
+        if not value:
+            raise serializers.ValidationError('Choose a username.')
+        if value.startswith(GUEST_USERNAME_PREFIX):
+            raise serializers.ValidationError('That username is reserved.')
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError('This username is already taken.')
+        return value
+
     def validate_email(self, value):
-        value = value.strip().lower()
+        value = normalise_email(value)
         if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError('An account with this email already exists.')
         return value
@@ -111,17 +119,17 @@ class GuestUpgradeSerializer(serializers.Serializer):
         return User.objects.exclude(pk=user.pk) if user else User.objects.all()
 
     def validate_username(self, value):
-        value = value.strip()
+        value = normalise_username(value)
         if not value:
             raise serializers.ValidationError('Choose a username.')
-        if value.lower().startswith(GUEST_USERNAME_PREFIX):
+        if value.startswith(GUEST_USERNAME_PREFIX):
             raise serializers.ValidationError('That username is reserved.')
         if self._others().filter(username__iexact=value).exists():
             raise serializers.ValidationError('This username is already taken.')
         return value
 
     def validate_email(self, value):
-        value = value.strip().lower()
+        value = normalise_email(value)
         if self._others().filter(email__iexact=value).exists():
             raise serializers.ValidationError('An account with this email already exists.')
         return value

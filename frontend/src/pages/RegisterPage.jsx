@@ -102,11 +102,15 @@ export default function RegisterPage() {
 
       <label className="block">
         <span className="mb-1.5 block text-sm font-medium text-[var(--studio-text-muted)]">{t('Username')}</span>
+        {/* Folded as it is typed, not silently on the server: the name in the
+            field is the name the account will have. */}
         <input
           className="ms-input"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.target.value.toLowerCase())}
           autoComplete="username"
+          spellCheck="false"
+          autoCapitalize="none"
           required
         />
       </label>

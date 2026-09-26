@@ -201,6 +201,62 @@ describe('looking at a page in Edit mode', () => {
   })
 })
 
+describe('editing a page whose styles come from a script', () => {
+  beforeEach(() => {
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} }
+  })
+
+  // Uploaded pages often build their stylesheet in the browser — a CSS
+  // framework loaded from a CDN. Edit never runs scripts, so it borrows the CSS
+  // View's scripts reported. That borrowed CSS used to be matched against the
+  // COMMITTED html, which every edit rewrites: the first change made the match
+  // fail, the srcdoc lost the CSS and changed, and the iframe reloaded from
+  // the seed Edit opened with — so each change snapped the page back.
+  const PAGE = '<html><head><title>T</title></head><body><h1>Eski</h1></body></html>'
+  const EDITED = '<html><head><title>T</title></head><body><h1>Yeni</h1></body></html>'
+  const BUILT_CSS = '.pwb-test-built{color:rgb(1,2,3)}'
+
+  function reportLiveState(html) {
+    const frame = screen.getByTitle('site')
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: frame.contentWindow,
+        data: { type: 'pwb-live-state', styles: [BUILT_CSS], html },
+      }))
+    })
+  }
+
+  function mount(html) {
+    return (
+      <LanguageProvider>
+        <HtmlWorkspace persistKey="script-styled" html={html} onCommit={vi.fn()} />
+      </LanguageProvider>
+    )
+  }
+
+  it('does not reload the edit surface when an edit is committed', () => {
+    const { rerender } = render(mount(PAGE))
+    reportLiveState(PAGE) // View measured the page and its script-built CSS
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const before = screen.getByTitle('site').getAttribute('srcdoc')
+    expect(before).toContain(BUILT_CSS)
+
+    rerender(mount(EDITED)) // the parent received the commit of an in-page edit
+
+    expect(screen.getByTitle('site').getAttribute('srcdoc')).toBe(before)
+  })
+
+  it('keeps the borrowed CSS after the edit, so the page does not go unstyled', () => {
+    const { rerender } = render(mount(PAGE))
+    reportLiveState(PAGE)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+
+    rerender(mount(EDITED))
+
+    expect(screen.getByTitle('site').getAttribute('srcdoc')).toContain(BUILT_CSS)
+  })
+})
+
 describe('HTML selection quick actions', () => {
   beforeEach(() => {
     document.body.innerHTML = '<main><p id="selected">Hello</p></main>'

@@ -702,6 +702,13 @@ function HtmlWorkspace({
   // The committed document, readable from the listener without re-binding it.
   const htmlRef = useRef(html)
   useEffect(() => { htmlRef.current = html }, [html])
+  // Edit seed / surface, readable from the live-state listener. A panel or
+  // in-page edit commits a new `html` prop; that must not rebind the snapshot
+  // to the serialized file or the edit iframe reloads from the old seed.
+  const editSeedRef = useRef(editSeed)
+  useEffect(() => { editSeedRef.current = editSeed }, [editSeed])
+  const modeRef = useRef(mode)
+  useEffect(() => { modeRef.current = mode }, [mode])
   const [docPulse, setDocPulse] = useState(null)
 
 
@@ -912,7 +919,11 @@ function HtmlWorkspace({
         const authored = authoredStyleText(htmlRef.current)
         const css = styles.filter((text) => !authored.has(text)).join('\n')
         const live = typeof e.data.html === 'string' ? e.data.html : ''
-        setGenerated({ key: documentKey(htmlRef.current), css, live })
+        // Bind to the edit seed while editing: the committed `html` string is
+        // rewritten on every serialize, which used to look like a new page
+        // and reseat the iframe on the pre-edit seed ("every change reverts").
+        const bind = modeRef.current === 'edit' ? editSeedRef.current : htmlRef.current
+        setGenerated({ key: documentKey(bind), css, live })
         return
       }
       if (fromMeasure) return
@@ -1712,12 +1723,16 @@ function HtmlWorkspace({
   // Edit renders the document in the state View left it in. Computed here
   // rather than inside the srcDoc expression because it parses the whole
   // document, and this runs on every keystroke of the inspector.
+  //
+  // Do not key the snapshot off the committed `html` prop. Commits rewrite
+  // the file; treating that as a new page rebuilds srcDoc from editSeed and
+  // the iframe snaps back to whatever it was when Edit opened.
   const editDocument = useMemo(() => {
     const seeded = withEditorViewportMeta(editSeed)
-    const live = generated?.key === documentKey(html) ? generated.live : ''
+    const live = generated?.key === documentKey(editSeed) ? generated.live : ''
     if (!live) return seeded
-    return withLiveState(seeded, liveStateDiff(html, live))
-  }, [editSeed, generated, html])
+    return withLiveState(seeded, liveStateDiff(editSeed, live))
+  }, [editSeed, generated])
 
   const viewScrollIndex = scrollOnce && scrollOnce.html === html ? scrollOnce.index : null
   // View mode always gets a viewport meta when the document lacks one, so the
@@ -1728,7 +1743,7 @@ function HtmlWorkspace({
   const viewHtml = assemble ? assembledView : html
   // Only for the document it was measured on: a page that styles itself with a
   // script looks unstyled in Edit otherwise (scripts never run there).
-  const forThisDocument = generated?.key === documentKey(html) ? generated : null
+  const forThisDocument = generated?.key === documentKey(editSeed) ? generated : null
   const generatedCss = forThisDocument?.css || ''
   const srcDoc =
     mode === 'view'

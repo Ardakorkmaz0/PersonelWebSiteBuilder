@@ -409,6 +409,7 @@ export const TURKISH_TRANSLATIONS = {
   'Open the live site': 'Canlı siteyi aç',
   'Favorite': 'Favorilere ekle',
   'Unfavorite': 'Favorilerden çıkar',
+  'A pinned bar covers the top {pixels}px of this element when the page opens.': 'Sabitlenmiş bir çubuk, sayfa açıldığında bu öğenin üst {pixels}px kısmını örtüyor.',
   'This page slipped into another dimension': 'Bu sayfa başka bir boyuta kaydı',
   'Sending you home in {seconds}s': '{seconds} saniye içinde ana sayfaya gidiyorsunuz',
   'Go home now': 'Hemen ana sayfaya dön',

@@ -6,6 +6,7 @@ import PanelGroup from './PanelGroup.jsx'
 import AiComponentEdit from './AiComponentEdit.jsx'
 import { LINKABLE_TYPES } from '../renderer/constants.js'
 import { DEFAULT_THEME, FONT_OPTIONS, THEME_PRESETS, normalizeTheme } from '../../utils/theme.js'
+import { hiddenByPinnedBar } from '../../utils/pinnedCover.js'
 import { presetOptions, presetsForType } from '../../utils/componentPresets.js'
 import {
   appendSnippet,
@@ -44,6 +45,10 @@ import { fitHtmlEmbedLayout } from '../../utils/htmlEmbedMeasure.js'
 import { listEmbedImages, replaceEmbedImage } from '../../utils/embedImages.js'
 import { blockTextHint, linkSectionsFor } from '../../utils/linkTargets.js'
 import { anchorOf, anchorProblem, slugifyAnchor } from '../../utils/anchors.js'
+
+// How far below the top edge a bar can be drawn and still be read as "meant
+// to sit at the top". Above this the Y is a design position, not a gap.
+const PIN_KEEPS_DESIGN_Y = 100
 
 const JS_SNIPPET_GROUPS = groupSnippets(jsSnippets)
 
@@ -668,6 +673,11 @@ export default function PropertiesPanel({
     : -1
   const isAbsoluteNested = parentComponent?.type === 'tabs' || parentComponent?.type === 'container' || parentComponent?.type === 'region'
   const showPositionControls = !isFlow || isAbsoluteNested
+  // A pinned bar leaves the page and sits on the viewport edge, so anything
+  // drawn under that strip is gone before the visitor scrolls — and on an
+  // absolutely positioned page there is no flow to pad. Say so here rather
+  // than letting it be discovered after publishing.
+  const hiddenUnderBar = component ? hiddenByPinnedBar(component, page.components, layoutKey) : 0
   const selectedEntries = selectedIds
     .map((id) => findComponentEntry(page.components, id))
     .filter(Boolean)
@@ -1230,9 +1240,18 @@ export default function PropertiesPanel({
     const defaultPinX = isFlow && !isAbsoluteNested ? 'center' : 'left'
     const defaultPinOffsetX = isFlow && !isAbsoluteNested ? 0 : Math.round(currentLayout.x || 0)
     // A newly pinned element should hug the selected viewport edge. Reusing
-    // its canvas Y coordinate made "Fixed" appear broken (an element at y=600
-    // stayed 600px below the screen top). Users can still set a custom offset.
-    const defaultPinOffsetY = isFlow && !isAbsoluteNested ? 16 : 0
+    // its canvas Y coordinate wholesale made "Fixed" look broken: an element
+    // designed at y=600 stayed 600px below the screen top.
+    //
+    // But throwing the Y away is wrong the other way. A bar drawn a little
+    // below the top edge has a deliberate gap above it — pinning it should
+    // keep the design, not silently flatten it against the edge. So keep a Y
+    // that is already near the top and drop one that plainly is not; the
+    // offset field stays editable either way.
+    const designY = Math.round(currentLayout.y || 0)
+    const defaultPinOffsetY = isFlow && !isAbsoluteNested
+      ? 16
+      : (designY > 0 && designY <= PIN_KEEPS_DESIGN_Y ? designY : 0)
     updateProps(component.id, {
       scrollBehavior: next,
       ...(next === 'normal'
@@ -1889,6 +1908,11 @@ export default function PropertiesPanel({
         )}
         {component.type !== 'region' && (
         <PanelGroup id="scroll" title={t('Scroll')} defaultOpen>
+          {hiddenUnderBar > 0 && (
+            <p className="rounded-lg border border-[var(--studio-warning)] bg-[var(--studio-warning-soft)] px-2.5 py-2 text-[11px] leading-snug text-[var(--studio-text)]">
+              {t('A pinned bar covers the top {pixels}px of this element when the page opens.', { pixels: Math.round(hiddenUnderBar) })}
+            </p>
+          )}
           <LabeledSelect
             label={t('Behavior')}
             value={scrollBehavior}

@@ -138,6 +138,33 @@ describe('CodeActivityOverlay', () => {
     expect(document.querySelector('.code-activity-file').textContent).toBe('about.html:3')
   })
 
+  // A line holding several tags is shown split at them, so its rows share one
+  // line number — which React warned about as duplicate keys on every edit.
+  it('shows every row of a line split at its tags', async () => {
+    const doc = (text) => ['<html>', '<body>', `<p>${text}</p><p>${text}</p>`, '</body>', '</html>'].join('\n')
+    const page = (text) => (
+      <UiThemeProvider>
+        <LanguageProvider>
+          <CodeActivityOverlay document={doc(text)} fileName="index.html" />
+        </LanguageProvider>
+      </UiThemeProvider>
+    )
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { rerender } = render(page('Ilk'))
+      await new Promise((resolve) => window.setTimeout(resolve, 220))
+
+      rerender(page('Yeni'))
+
+      await waitFor(() => expect(document.querySelectorAll('.code-activity-line')).toHaveLength(2), { timeout: 2000 })
+      const rows = [...document.querySelectorAll('.code-activity-number')].map((n) => n.textContent)
+      expect(rows).toEqual(['3', '3'])
+      expect(errors.mock.calls.flat().join(' ')).not.toMatch(/same key/)
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
   it('stays until it is closed when the hold is set to zero', async () => {
     render(
       <UiThemeProvider>

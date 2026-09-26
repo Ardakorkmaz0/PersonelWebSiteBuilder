@@ -218,8 +218,10 @@ export default function CodeActivityOverlay({
         {/* The body is the button: clicking the code opens it in Source, which
             is where you go next when a line surprises you. */}
         <Body as={openSource ? 'button' : 'div'} onClick={openSource} label={openSource ? t('Open in Source') : undefined}>
+          {/* Not keyed by line number: one source line is shown split at its
+              tags, so several rows can share a number. */}
           {lines.map((line, index) => (
-            <span key={line.number} className={`code-activity-line ${line.removed ? 'code-activity-line-removed' : ''}`}>
+            <span key={index} className={`code-activity-line ${line.removed ? 'code-activity-line-removed' : ''}`}>
               <span className="code-activity-number">{line.number}</span>
               <span className="code-activity-sign">{line.removed ? '-' : '+'}</span>
               <span className="code-activity-text">
